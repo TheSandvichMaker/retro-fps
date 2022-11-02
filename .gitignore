@@ -1,0 +1,23 @@
+build
+*.exe
+*.pdb
+*.rdbg
+*.exe.lnk
+.vs
+ctm
+
+tags
+
+!tools/*.exe
+!tools/Trenchbroom
+
+# anything in a folder "generated" is not committed
+generated
+
+# map files
+*.bsp
+*.pts
+*.log
+
+# anything "autosave" is surely not it
+autosave
