@@ -1,6 +1,6 @@
 # retro-fps
 
-A retro-inspired first person game that is very much work in progress.
+A retro-inspired first person game that is very much work in progress. Written from scratch in C11.
 
 ![image](https://user-images.githubusercontent.com/49493579/199616512-2ad899e7-79c7-48bf-a416-3dc85c7b7f22.png)
 
