@@ -213,10 +213,10 @@ void bake_lighting(const light_bake_params_t *params)
 
                     float shadow_throughput = 1.0f - shadow_accum;
 
-                    v3_t up = { 0, 0, 1 };
+                    // v3_t up = { 0, 0, 1 };
 
                     float lambertian = max(0.0f, n_dot_l);
-                    float ambient    = max(0.0f, dot(p.n, up));
+                    float ambient    = 1.0f; // max(0.0f, dot(p.n, up));
 
                     v4_t color;
                     color.x = sun_color.x*shadow_throughput*lambertian;

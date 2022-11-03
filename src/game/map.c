@@ -668,7 +668,7 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
                     texscale_x = (float)image.w;
                     texscale_y = (float)image.h;
                     poly->texture = render->upload_texture(&(upload_texture_t) {
-                        .format = PIXEL_FORMAT_RGBA8,
+                        .format = PIXEL_FORMAT_SRGB8_A8,
                         .w      = image.w,
                         .h      = image.h,
                         .pitch  = image.pitch,

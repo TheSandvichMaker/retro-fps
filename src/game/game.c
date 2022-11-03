@@ -45,7 +45,7 @@ void game_init(void)
         .map           = world->map,
         .sun_direction = { 0.25f, 0.75f, 1 },
         .sun_color     = { 1, 1, 0.7f },
-        .ambient_color = { 0.3f, 0.38f, 0.52f },
+        .ambient_color = { 0.05f, 0.10f, 0.22f },
     });
 
     world->player = m_alloc_struct(&world->arena, player_t);
@@ -93,7 +93,7 @@ void game_init(void)
                 };
 
                 skybox = render->upload_texture(&(upload_texture_t){
-                    .format = PIXEL_FORMAT_RGBA8,
+                    .format = PIXEL_FORMAT_SRGB8_A8,
                     .w     = faces[0].w,
                     .h     = faces[0].h,
                     .pitch = faces[0].pitch,

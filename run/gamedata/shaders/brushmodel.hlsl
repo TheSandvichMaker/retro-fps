@@ -46,7 +46,8 @@ float4 ps(PS_INPUT IN) : SV_TARGET
     float2 uv = fat_pixel(dim, IN.uv);
 
     float4 tex      = albedo.Sample(sampler_linear, uv);
-    float4 lighting = pyramid_blur(lightmap, sampler_linear_clamped, IN.uv_lightmap); // lightmap.Sample(sampler_linear_clamped, IN.uv_lightmap);
+    float4 lighting = lightmap.Sample(sampler_linear_clamped, IN.uv_lightmap);
+    // float4 lighting = pyramid_blur(lightmap, sampler_linear_clamped, IN.uv_lightmap);
     float4 col      = IN.col*float4(lighting.xyz*tex.xyz, 1.0f);
     return col;
 }

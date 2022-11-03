@@ -195,6 +195,15 @@ int init_d3d11(void *hwnd_)
         d3d.skybox_ps = compile_ps(hlsl_file, hlsl, "ps");
     }
 
+    m_scoped(temp)
+    {
+        string_t hlsl_file = strlit("gamedata/shaders/msaa_resolve.hlsl");
+        string_t hlsl = fs_read_entire_file(temp, hlsl_file);
+
+        d3d.msaa_resolve_vs = compile_vs(hlsl_file, hlsl, "vs");
+        d3d.msaa_resolve_ps = compile_ps(hlsl_file, hlsl, "ps");
+    }
+
     // create constant buffers
 
     {
@@ -452,7 +461,7 @@ void render_model(const render_pass_t *pass)
     // set output merger state
     ID3D11DeviceContext_OMSetBlendState(d3d.context, d3d.bs, NULL, ~0U);
     ID3D11DeviceContext_OMSetDepthStencilState(d3d.context, pass->depth ? d3d.dss : d3d.dss_no_depth, 0);
-    ID3D11DeviceContext_OMSetRenderTargets(d3d.context, 1, &d3d.msaa_rt_view, d3d.ds_view);
+    ID3D11DeviceContext_OMSetRenderTargets(d3d.context, 1, &d3d.msaa_rt_rtv, d3d.ds_view);
 
     // draw 
     if (pass->model->icount > 0)
@@ -467,18 +476,19 @@ void render_model(const render_pass_t *pass)
 
 void d3d11_ensure_swapchain_size(int width, int height)
 {
-    if (d3d.rt_view == NULL || width != d3d.current_width || height != d3d.current_height)
+    if (d3d.rt_rtv == NULL || width != d3d.current_width || height != d3d.current_height)
     {
-        if (d3d.rt_view)
+        if (d3d.rt_rtv)
         {
             // release old swap chain buffers
             ID3D11DeviceContext_ClearState(d3d.context);
-            ID3D11RenderTargetView_Release(d3d.rt_view);
+            ID3D11RenderTargetView_Release(d3d.rt_rtv);
             ID3D11Texture2D_Release(d3d.rt_tex);
-            ID3D11RenderTargetView_Release(d3d.msaa_rt_view);
             ID3D11Texture2D_Release(d3d.msaa_rt_tex);
+            ID3D11RenderTargetView_Release(d3d.msaa_rt_rtv);
+            ID3D11RenderTargetView_Release(d3d.msaa_rt_srv);
             ID3D11DepthStencilView_Release(d3d.ds_view);
-            d3d.rt_view = NULL;
+            d3d.rt_rtv = NULL;
         }
 
         // resize to new size for non-zero size
@@ -488,7 +498,7 @@ void d3d11_ensure_swapchain_size(int width, int height)
 
             // create RenderTarget view for new backbuffer texture
             IDXGISwapChain1_GetBuffer(d3d.swap_chain, 0, &IID_ID3D11Texture2D, &d3d.rt_tex);
-            ID3D11Device_CreateRenderTargetView(d3d.device, (ID3D11Resource *)d3d.rt_tex, NULL, &d3d.rt_view);
+            ID3D11Device_CreateRenderTargetView(d3d.device, (ID3D11Resource *)d3d.rt_tex, NULL, &d3d.rt_rtv);
 
             D3D11_TEXTURE2D_DESC msaa_rt_desc = {
                 .Width      = width,
@@ -498,11 +508,12 @@ void d3d11_ensure_swapchain_size(int width, int height)
                 .Format     = DXGI_FORMAT_R8G8B8A8_UNORM,
                 .SampleDesc = { 8, 0 },
                 .Usage      = D3D11_USAGE_DEFAULT,
-                .BindFlags  = D3D11_BIND_RENDER_TARGET,
+                .BindFlags  = D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE,
             };
 
             ID3D11Device_CreateTexture2D(d3d.device, &msaa_rt_desc, NULL, &d3d.msaa_rt_tex);
-            ID3D11Device_CreateRenderTargetView(d3d.device, (ID3D11Resource *)d3d.msaa_rt_tex, NULL, &d3d.msaa_rt_view);
+            ID3D11Device_CreateRenderTargetView(d3d.device, (ID3D11Resource *)d3d.msaa_rt_tex, NULL, &d3d.msaa_rt_rtv);
+            ID3D11Device_CreateShaderResourceView(d3d.device, (ID3D11Resource *)d3d.msaa_rt_tex, NULL, &d3d.msaa_rt_srv);
 
             D3D11_TEXTURE2D_DESC depth_desc = {
                 .Width      = width,
@@ -531,7 +542,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
 {
     d3d11_ensure_swapchain_size(width, height);
 
-    if (d3d.rt_view)
+    if (d3d.rt_rtv)
     {
         D3D11_VIEWPORT viewport =
         {
@@ -545,7 +556,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
 
         // clear screen
         FLOAT color[] = { 0.0f, 0.4f, 0.3f, 1.f };
-        ID3D11DeviceContext_ClearRenderTargetView(d3d.context, d3d.rt_view, color);
+        ID3D11DeviceContext_ClearRenderTargetView(d3d.context, d3d.rt_rtv, color);
         ID3D11DeviceContext_ClearDepthStencilView(d3d.context, d3d.ds_view, D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL, 0.0f, 0);
 
         // render any potential skyboxes
@@ -722,9 +733,28 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                 INVALID_DEFAULT_CASE;
             }
         }
+
+        // set output merger state
+        ID3D11DeviceContext_OMSetBlendState(d3d.context, d3d.bs, NULL, ~0U);
+        ID3D11DeviceContext_OMSetDepthStencilState(d3d.context, d3d.dss_no_depth, 0);
+        ID3D11DeviceContext_OMSetRenderTargets(d3d.context, 1, &d3d.rt_rtv, NULL);
+
+        // set vertex shader
+        ID3D11DeviceContext_VSSetShader(d3d.context, d3d.msaa_resolve_vs, NULL, 0);
+
+        // set rasterizer state
+        ID3D11DeviceContext_RSSetViewports(d3d.context, 1, &viewport);
+        ID3D11DeviceContext_RSSetState(d3d.context, d3d.rs_no_cull);
+
+        // set pixel shader
+        ID3D11DeviceContext_PSSetSamplers(d3d.context, 0, D3D_SAMPLER_COUNT, d3d.samplers);
+        ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 1, &d3d.msaa_rt_srv);
+        ID3D11DeviceContext_PSSetShader(d3d.context, d3d.msaa_resolve_ps, NULL, 0);
+
+        ID3D11DeviceContext_Draw(d3d.context, 3, 0);
     }
 
-    ID3D11DeviceContext_ResolveSubresource(d3d.context, (ID3D11Resource *)d3d.rt_tex, 0, (ID3D11Resource *)d3d.msaa_rt_tex, 0, DXGI_FORMAT_R8G8B8A8_UNORM);
+    // ID3D11DeviceContext_ResolveSubresource(d3d.context, (ID3D11Resource *)d3d.rt_tex, 0, (ID3D11Resource *)d3d.msaa_rt_tex, 0, DXGI_FORMAT_R8G8B8A8_UNORM);
 }
 
 void d3d11_present()

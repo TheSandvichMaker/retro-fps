@@ -66,10 +66,11 @@ typedef struct d3d_state_t
     ID3D11RasterizerState    *rs_no_cull;
     ID3D11DepthStencilState  *dss;
     ID3D11DepthStencilState  *dss_no_depth;
-    ID3D11RenderTargetView   *rt_view;
-    ID3D11RenderTargetView   *msaa_rt_view;
     ID3D11Texture2D          *rt_tex;
+    ID3D11RenderTargetView   *rt_rtv;
     ID3D11Texture2D          *msaa_rt_tex;
+    ID3D11RenderTargetView   *msaa_rt_rtv;
+    ID3D11ShaderResourceView *msaa_rt_srv;
     ID3D11DepthStencilView   *ds_view;
 
     ID3D11InputLayout        *layouts[VERTEX_FORMAT_COUNT];
@@ -81,6 +82,8 @@ typedef struct d3d_state_t
     ID3D11PixelShader        *immediate_ps;
     ID3D11VertexShader       *skybox_vs;
     ID3D11PixelShader        *skybox_ps;
+    ID3D11VertexShader       *msaa_resolve_vs;
+    ID3D11PixelShader        *msaa_resolve_ps;
 } d3d_state_t;
 
 extern d3d_state_t d3d;
