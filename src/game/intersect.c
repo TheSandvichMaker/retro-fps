@@ -41,6 +41,51 @@ float ray_intersect_rect3(v3_t o, v3_t d, rect3_t rect)
         return FLT_MAX;
 }
 
+float ray_intersect_triangle(v3_t o, v3_t d, v3_t a, v3_t b, v3_t c, v3_t *uvw)
+{
+    float epsilon = 0.000000001f;
+
+    v3_t edge1 = sub(b, a);
+    v3_t edge2 = sub(c, a);
+
+    v3_t pvec = cross(d, edge2);
+
+    float det = dot(edge1, pvec);
+
+    if (det > -epsilon && det < epsilon)
+        return FLT_MAX;
+
+    float rcp_det = 1.0f / det;
+
+    v3_t tvec = sub(o, a);
+
+    float v = rcp_det*dot(tvec, pvec);
+
+    if (v < 0.0f || v > 1.0f)
+        return FLT_MAX;
+
+    v3_t qvec = cross(tvec, edge1);
+
+    float w = rcp_det*dot(d, qvec);
+
+    if (w < 0.0f || v + w > 1.0f)
+        return FLT_MAX;
+
+    float t = rcp_det*dot(qvec, edge2);
+
+    if (t < epsilon)
+        return FLT_MAX;
+
+    if (uvw)
+    {
+        uvw->x = 1.0f - v - w;
+        uvw->y = v;
+        uvw->z = w;
+    }
+
+    return t;
+}
+
 v3_t get_normal_rect3(v3_t hit_p, rect3_t rect)
 {
     v3_t p = mul(0.5f, add(rect.min, rect.max));

@@ -24,8 +24,9 @@ static uint32_t pack_color(v4_t color)
 
 typedef struct intersect_result_t
 {
-    map_brush_t *brush;
     float t;
+    map_brush_t *brush;
+    map_plane_t *plane;
 } intersect_result_t;
 
 typedef struct intersect_params_t
@@ -56,6 +57,7 @@ static bool intersect_map(map_t *map, const intersect_params_t *params, intersec
     v3_t d = params->d;
 
     map_brush_t *hit_brush = NULL;
+    map_plane_t *hit_plane = NULL;
 
     for (map_entity_t *e = map->first_entity; e; e = e->next)
     {
@@ -73,18 +75,39 @@ static bool intersect_map(map_t *map, const intersect_params_t *params, intersec
 
             if (!ignore)
             {
-                float hit_t = ray_intersect_rect3(o, d, brush->bounds);
-                if (hit_t >= min_t && t > hit_t)
+                float bounds_hit_t = ray_intersect_rect3(o, d, brush->bounds);
+                if (bounds_hit_t < t)
                 {
-                    t = hit_t;
-                    hit_brush = brush;
+                    for (map_plane_t *plane = brush->first_plane; plane; plane = plane->next)
+                    {
+                        map_poly_t *poly = &brush->polys[plane->poly_index];
+
+                        uint32_t triangle_count = poly->index_count / 3;
+                        for (size_t triangle_index = 0; triangle_index < triangle_count; triangle_index++)
+                        {
+                            v3_t a = poly->vertices[poly->indices[3*triangle_index + 0]].pos;
+                            v3_t b = poly->vertices[poly->indices[3*triangle_index + 1]].pos;
+                            v3_t c = poly->vertices[poly->indices[3*triangle_index + 2]].pos;
+
+                            v3_t uvw;
+                            float triangle_hit_t = ray_intersect_triangle(o, d, a, b, c, &uvw);
+
+                            if (triangle_hit_t >= min_t && t > triangle_hit_t)
+                            {
+                                t = triangle_hit_t;
+                                hit_brush = brush;
+                                hit_plane = plane;
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-    result->brush = hit_brush;
     result->t     = t;
+    result->brush = hit_brush;
+    result->plane = hit_plane;
     
     return t < max_t;
 }

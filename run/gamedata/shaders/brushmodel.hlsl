@@ -21,6 +21,23 @@ PS_INPUT vs(VS_INPUT_BRUSH IN)
     return OUT;
 }
 
+float4 pyramid_blur(Texture2D tex, sampler samp, float2 uv)
+{
+    float2 dim;
+    tex.GetDimensions(dim.x, dim.y);
+
+    float2 offset = 0.5 / dim;
+
+    float4 result = 0;
+    result += tex.Sample(samp, uv + float2( offset.x,  offset.y));
+    result += tex.Sample(samp, uv + float2(-offset.x,  offset.y));
+    result += tex.Sample(samp, uv + float2(-offset.x, -offset.y));
+    result += tex.Sample(samp, uv + float2( offset.x, -offset.y));
+    result *= 0.25f;
+
+    return result;
+}
+
 float4 ps(PS_INPUT IN) : SV_TARGET
 {
     float2 dim;
@@ -29,7 +46,7 @@ float4 ps(PS_INPUT IN) : SV_TARGET
     float2 uv = fat_pixel(dim, IN.uv);
 
     float4 tex      = albedo.Sample(sampler_linear, uv);
-    float4 lighting = lightmap.Sample(sampler_linear_clamped, IN.uv_lightmap);
+    float4 lighting = pyramid_blur(lightmap, sampler_linear_clamped, IN.uv_lightmap); // lightmap.Sample(sampler_linear_clamped, IN.uv_lightmap);
     float4 col      = IN.col*float4(lighting.xyz*tex.xyz, 1.0f);
     return col;
 }

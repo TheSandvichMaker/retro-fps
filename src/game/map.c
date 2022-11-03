@@ -705,7 +705,7 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
                 float t_offset = plane->t.w;
 
                 unsigned vertex_count = sb_count(verts);
-                vertex_brush_t *triangle_vertices = m_alloc_array_nozero(temp, vertex_count, vertex_brush_t);
+                vertex_brush_t *triangle_vertices = m_alloc_array_nozero(arena, vertex_count, vertex_brush_t);
 
                 float lightmap_scale_x = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->tex_maxs.x - plane->tex_mins.x) / LIGHTMAP_SCALE));
                 float lightmap_scale_y = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->tex_maxs.y - plane->tex_mins.y) / LIGHTMAP_SCALE));
@@ -729,7 +729,7 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
 
                 unsigned triangle_count = vertex_count - 2;
                 unsigned index_count    = 3*triangle_count;
-                uint16_t *triangle_indices = m_alloc_array_nozero(temp, index_count, uint16_t);
+                uint16_t *triangle_indices = m_alloc_array_nozero(arena, index_count, uint16_t);
 
                 unsigned triangle_offset = 0;
                 for (uint16_t i = 1; i < vertex_count - 1; i++)
@@ -739,12 +739,17 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
                     triangle_indices[triangle_offset++] = i + 1;
                 }
 
+                poly->index_count  = index_count;
+                poly->vertex_count = vertex_count;
+                poly->indices      = triangle_indices;
+                poly->vertices     = triangle_vertices;
+
                 poly->mesh = render->upload_model(&(upload_model_t) {
                     .vertex_format = VERTEX_FORMAT_BRUSH,
-                    .vertex_count  = vertex_count,
-                    .vertices      = triangle_vertices,
-                    .index_count   = index_count,
-                    .indices       = triangle_indices,
+                    .vertex_count  = poly->vertex_count,
+                    .vertices      = poly->vertices,
+                    .index_count   = poly->index_count,
+                    .indices       = poly->indices,
                 });
             }
         }

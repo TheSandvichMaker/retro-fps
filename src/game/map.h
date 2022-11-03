@@ -24,8 +24,11 @@ typedef struct map_plane_t
 
 typedef struct map_poly_t
 {
-    uint32_t vertex_index;
+    uint32_t index_count;
     uint32_t vertex_count;
+    uint16_t       *indices;
+    vertex_brush_t *vertices;
+
     resource_handle_t mesh;
     resource_handle_t texture;
     resource_handle_t lightmap;
@@ -60,7 +63,6 @@ typedef struct map_entity_t
 typedef struct map_t
 {
     map_entity_t *first_entity;
-    vertex_brush_t *vertices;
 } map_t;
 
 // returns first entity in list
