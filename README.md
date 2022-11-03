@@ -6,7 +6,7 @@ A retro-inspired first person game that is very much work in progress. Written f
 
 
 # How to build
-Run build.bat from the x64 developer command prompt, optionally with one of the following arguments:  
+Run build.bat from the Visual Studio x64 native tools command prompt, optionally with one of the following arguments:  
 ```
 build -release    // build release configuration  
 build -all        // build debug and release configuration  
