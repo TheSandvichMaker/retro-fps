@@ -9,6 +9,7 @@ typedef struct d3d_cbuffer_t
     m4x4_t camera_projection;
     m4x4_t light_projection;
     m4x4_t model_transform;
+    uint32_t frame_index;
 } d3d_cbuffer_t;
 
 typedef struct d3d_model_t
@@ -84,6 +85,8 @@ typedef struct d3d_state_t
     ID3D11PixelShader        *skybox_ps;
     ID3D11VertexShader       *msaa_resolve_vs;
     ID3D11PixelShader        *msaa_resolve_ps;
+
+    uint32_t frame_index;
 } d3d_state_t;
 
 extern d3d_state_t d3d;

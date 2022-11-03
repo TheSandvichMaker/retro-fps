@@ -43,10 +43,15 @@ float4 ps(PS_INPUT IN) : SV_TARGET
     float2 dim;
     albedo.GetDimensions(dim.x, dim.y);
 
+    float2 lm_dim;
+    lightmap.GetDimensions(lm_dim.x, lm_dim.y);
+
     float2 uv = fat_pixel(dim, IN.uv);
+    float2 lm_uv = fat_pixel(lm_dim, IN.uv_lightmap);
 
     float4 tex      = albedo.Sample(sampler_linear, uv);
-    float4 lighting = lightmap.Sample(sampler_linear_clamped, IN.uv_lightmap);
+    // float4 lighting = lightmap.Sample(sampler_linear_clamped, IN.uv_lightmap);
+    float4 lighting = lightmap.Sample(sampler_linear_clamped, lm_uv);
     // float4 lighting = pyramid_blur(lightmap, sampler_linear_clamped, IN.uv_lightmap);
     float4 col      = IN.col*float4(lighting.xyz*tex.xyz, 1.0f);
     return col;

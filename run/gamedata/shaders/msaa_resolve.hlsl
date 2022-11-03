@@ -16,6 +16,13 @@ PS_INPUT vs(uint id : SV_VertexID)
     return OUT;
 }
 
+float4 hash43n(float3 p)
+{
+    p  = frac(p * float3(5.3987, 5.4421, 6.9371));
+    p += dot(p.yzx, p.xyz  + float3(21.5351, 14.3137, 15.3247));
+    return frac(float4(p.x * p.y * 95.4307, p.x * p.y * 97.5901, p.x * p.z * 93.8369, p.y * p.z * 91.6931 ));
+}
+
 float4 ps(PS_INPUT IN) : SV_TARGET
 {
     uint2 dim; uint sample_count;
@@ -31,5 +38,5 @@ float4 ps(PS_INPUT IN) : SV_TARGET
     color *= rcp(sample_count);
     color = pow(color, 1.0 / 2.23);
 
-    return float4(color, 1);
+    return float4(saturate(color), 1);
 }

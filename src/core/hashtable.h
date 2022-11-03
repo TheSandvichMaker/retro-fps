@@ -53,6 +53,10 @@ static inline bool hash_iter_next(hash_iter_t *it)
     bool result = false;
 
     const hash_t *table = it->table;
+
+    if (!table->entries)
+        return false;
+
     while (it->index <= table->mask)
     {
         if (table->entries[it->index].key != UNUSED_KEY_VALUE)

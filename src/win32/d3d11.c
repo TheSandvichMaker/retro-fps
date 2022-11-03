@@ -208,7 +208,7 @@ int init_d3d11(void *hwnd_)
 
     {
         D3D11_BUFFER_DESC desc = {
-            .ByteWidth      = sizeof(d3d_cbuffer_t),
+            .ByteWidth      = (UINT)align_forward(sizeof(d3d_cbuffer_t), 16),
             .Usage          = D3D11_USAGE_DYNAMIC,
             .BindFlags      = D3D11_BIND_CONSTANT_BUFFER,
             .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
@@ -505,7 +505,7 @@ void d3d11_ensure_swapchain_size(int width, int height)
                 .Height     = height,
                 .MipLevels  = 1,
                 .ArraySize  = 1,
-                .Format     = DXGI_FORMAT_R8G8B8A8_UNORM,
+                .Format     = DXGI_FORMAT_R11G11B10_FLOAT,
                 .SampleDesc = { 8, 0 },
                 .Usage      = D3D11_USAGE_DEFAULT,
                 .BindFlags  = D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE,
@@ -540,6 +540,8 @@ void d3d11_ensure_swapchain_size(int width, int height)
 
 void d3d11_draw_list(r_list_t *list, int width, int height)
 {
+    uint32_t frame_index = d3d.frame_index;
+
     d3d11_ensure_swapchain_size(width, height);
 
     if (d3d.rt_rtv)
@@ -587,6 +589,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
 
             d3d_cbuffer_t cbuffer = {
                 .camera_projection = mvp,
+                .frame_index = frame_index,
             };
 
             update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
@@ -643,6 +646,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                         d3d_cbuffer_t cbuffer = {
                             .camera_projection = camera_projection,
                             .model_transform   = command->transform,
+                            .frame_index       = frame_index,
                         };
 
                         update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
@@ -734,12 +738,19 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
             }
         }
 
+        d3d_cbuffer_t cbuffer = {
+            .frame_index       = frame_index,
+        };
+
+        update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
+
         // set output merger state
         ID3D11DeviceContext_OMSetBlendState(d3d.context, d3d.bs, NULL, ~0U);
         ID3D11DeviceContext_OMSetDepthStencilState(d3d.context, d3d.dss_no_depth, 0);
         ID3D11DeviceContext_OMSetRenderTargets(d3d.context, 1, &d3d.rt_rtv, NULL);
 
         // set vertex shader
+        ID3D11DeviceContext_VSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);
         ID3D11DeviceContext_VSSetShader(d3d.context, d3d.msaa_resolve_vs, NULL, 0);
 
         // set rasterizer state
@@ -747,6 +758,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
         ID3D11DeviceContext_RSSetState(d3d.context, d3d.rs_no_cull);
 
         // set pixel shader
+        ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);
         ID3D11DeviceContext_PSSetSamplers(d3d.context, 0, D3D_SAMPLER_COUNT, d3d.samplers);
         ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 1, &d3d.msaa_rt_srv);
         ID3D11DeviceContext_PSSetShader(d3d.context, d3d.msaa_resolve_ps, NULL, 0);
@@ -755,6 +767,8 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
     }
 
     // ID3D11DeviceContext_ResolveSubresource(d3d.context, (ID3D11Resource *)d3d.rt_tex, 0, (ID3D11Resource *)d3d.msaa_rt_tex, 0, DXGI_FORMAT_R8G8B8A8_UNORM);
+
+    d3d.frame_index++;
 }
 
 void d3d11_present()

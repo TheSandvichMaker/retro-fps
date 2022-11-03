@@ -121,6 +121,25 @@ void bake_lighting(const light_bake_params_t *params)
 
     diag_node_t *light_traces = diag_begin(strlit("light traces"));
 
+    int shadow_sample_count = 32;
+    v3_t *jitters = m_alloc_array(temp, shadow_sample_count, v3_t);
+
+    for (int i = 0; i < shadow_sample_count; i++)
+    {
+        v3_t jitter;
+        do
+        {
+            jitter = (v3_t){
+                2.0f*((float)rand() / RAND_MAX) - 1.0f,
+                2.0f*((float)rand() / RAND_MAX) - 1.0f,
+                2.0f*((float)rand() / RAND_MAX) - 1.0f,
+            };
+        } while(vlensq(jitter) > 1.0f);
+        jitter = mul(0.035f, jitter);
+
+        jitters[i] = jitter;
+    }
+
     for (map_entity_t *e = map->first_entity; e; e = e->next)
     {
         int brush_index = 0;
@@ -142,101 +161,94 @@ void bake_lighting(const light_bake_params_t *params)
 
             for (map_plane_t *plane = brush->first_plane; plane; plane = plane->next)
             {
-                plane_t p;
-                plane_from_points(plane->a, plane->b, plane->c, &p);
-
-                float n_dot_l = dot(p.n, sun_direction);
-
-                float scale_x = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->tex_maxs.x - plane->tex_mins.x) / LIGHTMAP_SCALE));
-                float scale_y = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->tex_maxs.y - plane->tex_mins.y) / LIGHTMAP_SCALE));
-
-                int w = (int)(scale_x / LIGHTMAP_SCALE);
-                int h = (int)(scale_y / LIGHTMAP_SCALE);
-
-                uint32_t *lighting = m_alloc_array(temp, w*h, uint32_t);
-
-                int arrow_index = 0;
-
-                for (size_t y = 0; y < h; y++)
-                for (size_t x = 0; x < w; x++)
+                m_scoped(temp)
                 {
-                    float u = ((float)x + 0.5f) / (float)(w);
-                    float v = ((float)y + 0.5f) / (float)(h);
+                    plane_t p;
+                    plane_from_points(plane->a, plane->b, plane->c, &p);
 
-                    v3_t world_p = plane->lm_origin;
-                    world_p = add(world_p, mul(scale_x*u, plane->s.xyz));
-                    world_p = add(world_p, mul(scale_y*v, plane->t.xyz));
+                    float n_dot_l = dot(p.n, sun_direction);
 
-                    v3_t intersect_origin = add(world_p, mul(0.1f, p.n));
+                    float scale_x = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->tex_maxs.x - plane->tex_mins.x) / LIGHTMAP_SCALE));
+                    float scale_y = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->tex_maxs.y - plane->tex_mins.y) / LIGHTMAP_SCALE));
 
-                    float shadow_accum = 0.0f;
-                    int shadow_sample_count = 8;
+                    int w = (int)(scale_x / LIGHTMAP_SCALE);
+                    int h = (int)(scale_y / LIGHTMAP_SCALE);
 
-                    if (n_dot_l > 0.0f)
+                    uint32_t *lighting = m_alloc_array(temp, w*h, uint32_t);
+
+                    int arrow_index = 0;
+
+                    for (size_t y = 0; y < h; y++)
+                    for (size_t x = 0; x < w; x++)
                     {
-                        for (int shadow_samples = 0; shadow_samples < shadow_sample_count; shadow_samples++)
+                        float u = ((float)x + 0.5f) / (float)(w);
+                        float v = ((float)y + 0.5f) / (float)(h);
+
+                        v3_t world_p = plane->lm_origin;
+                        world_p = add(world_p, mul(scale_x*u, plane->s.xyz));
+                        world_p = add(world_p, mul(scale_y*v, plane->t.xyz));
+
+                        v3_t intersect_origin = add(world_p, mul(0.1f, p.n));
+
+                        float shadow_accum = 0.0f;
+
+                        if (n_dot_l > 0.0f)
                         {
-                            v3_t jitter;
-                            do
+
+                            for (int shadow_sample_index = 0; shadow_sample_index < shadow_sample_count; shadow_sample_index++)
                             {
-                                jitter = (v3_t){
-                                    2.0f*((float)rand() / RAND_MAX) - 1.0f,
-                                    2.0f*((float)rand() / RAND_MAX) - 1.0f,
-                                    2.0f*((float)rand() / RAND_MAX) - 1.0f,
+                                v3_t jitter = jitters[shadow_sample_index];
+                                v3_t shadow_direction = normalize(add(sun_direction, jitter));
+
+                                intersect_params_t intersect_params = {
+                                    .o                  = intersect_origin,
+                                    .d                  = shadow_direction,
+                                    .ignore_brush_count = 1,
+                                    .ignore_brushes     = &brush,
                                 };
-                            } while(vlensq(jitter) > 1.0f);
-                            jitter = mul(0.035f, jitter);
 
-                            v3_t shadow_direction = normalize(add(sun_direction, jitter));
-
-                            intersect_params_t intersect_params = {
-                                .o                  = intersect_origin,
-                                .d                  = shadow_direction,
-                                .ignore_brush_count = 1,
-                                .ignore_brushes     = &brush,
-                            };
-
-                            intersect_result_t intersect;
-                            if (intersect_map(map, &intersect_params, &intersect))
-                            {
-                                if (false)
+                                intersect_result_t intersect;
+                                if (intersect_map(map, &intersect_params, &intersect))
                                 {
-                                    diag_node_t *arrow = diag_add_arrow(brush_diag, diag_color, intersect_origin, add(intersect_origin, mul(intersect.t, shadow_direction)));
-                                    diag_set_name(arrow, string_format(temp, "arrow %d", arrow_index++));
+                                    if (false)
+                                    {
+                                        diag_node_t *arrow = diag_add_arrow(brush_diag, diag_color, intersect_origin, add(intersect_origin, mul(intersect.t, shadow_direction)));
+                                        diag_set_name(arrow, string_format(temp, "arrow %d", arrow_index++));
+                                    }
+                                    shadow_accum += 1.0f;
                                 }
-                                shadow_accum += 1.0f;
                             }
                         }
+
+                        shadow_accum /= (float)shadow_sample_count;
+
+                        float shadow_throughput = 1.0f - shadow_accum;
+
+                        // v3_t up = { 0, 0, 1 };
+
+                        float lambertian = max(0.0f, n_dot_l);
+                        float ambient    = 1.0f; // max(0.0f, dot(p.n, up));
+
+                        v4_t color;
+                        color.x = sun_color.x*shadow_throughput*lambertian;
+                        color.y = sun_color.y*shadow_throughput*lambertian;
+                        color.z = sun_color.z*shadow_throughput*lambertian;
+                        color.w = 1.0f;
+
+                        color.xyz = add(color.xyz, mul(ambient, params->ambient_color));
+
+                        lighting[y*w + x] = pack_color(color);
                     }
 
-                    shadow_accum /= (float)shadow_sample_count;
-
-                    float shadow_throughput = 1.0f - shadow_accum;
-
-                    // v3_t up = { 0, 0, 1 };
-
-                    float lambertian = max(0.0f, n_dot_l);
-                    float ambient    = 1.0f; // max(0.0f, dot(p.n, up));
-
-                    v4_t color;
-                    color.x = sun_color.x*shadow_throughput*lambertian;
-                    color.y = sun_color.y*shadow_throughput*lambertian;
-                    color.z = sun_color.z*shadow_throughput*lambertian;
-                    color.w = 1.0f;
-
-                    color.xyz = add(color.xyz, mul(ambient, params->ambient_color));
-
-                    lighting[y*w + x] = pack_color(color);
+                    map_poly_t *poly = &brush->polys[plane->poly_index];
+                    poly->lightmap = render->upload_texture(&(upload_texture_t) {
+                        .format = PIXEL_FORMAT_RGBA8,
+                        .w      = w,
+                        .h      = h,
+                        .pitch  = sizeof(uint32_t)*w,
+                        .pixels = lighting,
+                    });
                 }
-
-                map_poly_t *poly = &brush->polys[plane->poly_index];
-                poly->lightmap = render->upload_texture(&(upload_texture_t) {
-                    .format = PIXEL_FORMAT_RGBA8,
-                    .w      = w,
-                    .h      = h,
-                    .pitch  = sizeof(uint32_t)*w,
-                    .pixels = lighting,
-                });
             }
         }
     }
