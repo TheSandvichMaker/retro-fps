@@ -1,6 +1,6 @@
 # retro-fps
 
-A retro-inspired first person game that is very much work in progress. Being written from scratch in C11, using D3D11.
+A retro-inspired first person game that is very much work in progress. Being written from scratch in C11, using D3D11. Parses Quake 2 (Valve) .map files produced by [Trenchbroom](https://trenchbroom.github.io/).
 
 ![image](https://user-images.githubusercontent.com/49493579/200149308-717f776d-b553-43a0-839c-19130f73e094.png)
 
