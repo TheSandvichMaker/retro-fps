@@ -12,3 +12,6 @@ build -all        // build debug and release configuration
 ```
   
 By default, it only builds the debug configuration.
+
+# Credits
+Textures by [Ben "Makkon" Hale](https://twitter.com/makkon_art/)
