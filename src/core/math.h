@@ -605,10 +605,10 @@ static inline m4x4_t m4x4_mul(m4x4_t b, m4x4_t a)
 static inline v4_t m4x4_mulv(m4x4_t a, v4_t b)
 {
     v4_t result;
-    result.x = b.x*a.e[0][0] + b.y*a.e[0][1] + b.z*a.e[0][2] + b.w*a.e[0][3];
-    result.y = b.x*a.e[1][0] + b.y*a.e[1][1] + b.z*a.e[1][2] + b.w*a.e[1][3];
-    result.z = b.x*a.e[2][0] + b.y*a.e[2][1] + b.z*a.e[2][2] + b.w*a.e[2][3];
-    result.w = b.x*a.e[3][0] + b.y*a.e[3][1] + b.z*a.e[3][2] + b.w*a.e[3][3];
+    result.x = a.e[0][0]*b.x + a.e[1][0]*b.y + a.e[2][0]*b.z + a.e[3][0]*b.w;
+    result.y = a.e[0][1]*b.x + a.e[1][1]*b.y + a.e[2][1]*b.z + a.e[3][1]*b.w;
+    result.z = a.e[0][2]*b.x + a.e[1][2]*b.y + a.e[2][2]*b.z + a.e[3][2]*b.w;
+    result.w = a.e[0][3]*b.x + a.e[1][3]*b.y + a.e[2][3]*b.z + a.e[3][3]*b.w;
     return result;
 }
 
@@ -846,6 +846,15 @@ static inline rect3_t rect3_grow_to_contain(rect3_t rect, v3_t p)
     return result;
 }
 
+static inline rect3_t rect3_union(rect3_t a, rect3_t b)
+{
+    rect3_t result = {
+        .min = min(a.min, b.min),
+        .max = max(a.max, b.max),
+    };
+    return result;
+}
+
 static inline rect3_t rect3_add(rect3_t a, rect3_t b)
 {
     rect3_t result = {
@@ -861,6 +870,35 @@ static inline rect3_t rect3_grow_radius(rect3_t rect, v3_t radius)
         .min = sub(rect.min, radius),
         .max = add(rect.max, radius),
     };
+    return result;
+}
+
+static inline v3_t rect3_center(rect3_t rect)
+{
+    return mul(0.5f, add(rect.min, rect.max));
+}
+
+static inline uint8_t rect3_largest_axis(rect3_t rect)
+{
+    v3_t dim = {
+        rect.max.x - rect.min.x,
+        rect.max.y - rect.min.y,
+        rect.max.z - rect.min.z,
+    };
+
+    uint8_t result = 0;
+
+    float largest = dim.x;
+    if (dim.y > largest)
+    {
+        result = 1;
+        largest = dim.y;
+    }
+    if (dim.z > largest)
+    {
+        result = 2;
+    }
+
     return result;
 }
 

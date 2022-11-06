@@ -697,6 +697,8 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
             {
                 plane_t p;
                 plane_from_points(plane->a, plane->b, plane->c, &p);
+                
+                poly->normal = p.n;
 
                 v3_t  s_vec    = { plane->s.x, plane->s.y, plane->s.z };
                 float s_offset = plane->s.w;
@@ -758,18 +760,197 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
     m_reset_to_marker(temp, temp_marker);
 }
 
+typedef struct partition_result_t
+{
+    uint8_t split_axis;
+    uint32_t split_index;
+    rect3_t  l_bounds;
+    rect3_t  r_bounds;
+} partition_result_t;
+
+static void partition_brushes(map_t *map, uint32_t first, uint32_t count, rect3_t bv, partition_result_t *result)
+{
+    map_brush_t **brushes = map->brushes + first;
+
+    uint8_t split_axis = rect3_largest_axis(bv);
+    float   pivot      = 0.5f*(bv.min.e[split_axis] + bv.max.e[split_axis]);
+
+    int64_t i = -1;
+    int64_t j = (int64_t)count;
+
+    for (;;)
+    {
+        for (;;)
+        {
+            i += 1;
+
+            if (i >= count)
+                break;
+
+            float p = 0.5f*(brushes[i]->bounds.min.e[split_axis] + 
+                            brushes[i]->bounds.max.e[split_axis]);
+
+            if (p > pivot)
+                break;
+        }
+
+        for (;;)
+        {
+            j -= 1;
+
+            if (j < 0)
+                break;
+
+            float p = 0.5f*(brushes[j]->bounds.min.e[split_axis] + 
+                            brushes[j]->bounds.max.e[split_axis]);
+
+            if (p < pivot)
+                break;
+        }
+
+        if (i >= j)
+            break;
+
+        SWAP(map_brush_t *, brushes[i], brushes[j]);
+    }
+
+    result->split_axis  = split_axis;
+    result->split_index = (uint32_t)i;
+
+#ifdef DEBUG_SLOW
+    for (size_t brush_index = 0; brush_index < count; brush_index++)
+    {
+        float p = 0.5f*(brushes[brush_index]->bounds.min.e[split_axis] + 
+                        brushes[brush_index]->bounds.max.e[split_axis]);
+        if (brush_index < result->split_index)
+        {
+            ASSERT(p <= pivot);
+        }
+        else
+        {
+            ASSERT(p >= pivot);
+        }
+    }
+#endif
+
+    // awkward, debatable whether it's good to do this
+    if (result->split_index == count)
+        result->split_index -= 1;
+}
+
+static rect3_t compute_bounding_volume(map_t *map, uint32_t first, uint32_t count)
+{
+    rect3_t bv = rect3_inverted_infinity();
+
+    map_brush_t **brushes = map->brushes + first;
+    for (size_t i = 0; i < count; i++)
+    {
+        map_brush_t *brush = brushes[i];
+        bv = rect3_union(bv, brush->bounds);
+    }
+
+    return bv;
+}
+
+static void build_bvh_recursively(map_t *map, map_bvh_node_t *parent, uint32_t first, uint32_t count)
+{
+    rect3_t bv = compute_bounding_volume(map, first, count);
+    parent->bounds = bv;
+
+    bool leaf = (count == 1);
+
+    if (!leaf)
+    {
+        partition_result_t partition;
+        partition_brushes(map, first, count, bv, &partition);
+
+        uint32_t max_index = count - 1;
+
+        if (partition.split_index == 0 ||
+            partition.split_index == max_index)
+        {
+            leaf = true;
+        }
+        else
+        {
+            parent->split_axis = partition.split_axis;
+
+            uint32_t l_node_index = map->node_count++;
+            uint32_t r_node_index = map->node_count++;
+
+            parent->left_first = l_node_index;
+
+            map_bvh_node_t *l = &map->nodes[l_node_index];
+            uint32_t l_split_index = first;
+            uint32_t l_split_count = partition.split_index;
+            build_bvh_recursively(map, l, l_split_index, l_split_count);
+
+            map_bvh_node_t *r = &map->nodes[r_node_index];
+            uint32_t r_split_index = first + partition.split_index;
+            uint32_t r_split_count = count - partition.split_index;
+            build_bvh_recursively(map, r, r_split_index, r_split_count);
+        }
+    }
+
+    if (leaf)
+    {        
+        // TOOD: Write some trapped casts already
+        if (NEVER(count > UINT16_MAX))
+            count = UINT16_MAX;
+
+        parent->left_first = first;
+        parent->count      = (uint16_t)count;
+    }
+}
+
+static void build_bvh(arena_t *arena, map_t *map)
+{
+    size_t max_nodes_count = 2ull*map->brush_count;
+
+    if (NEVER(max_nodes_count > UINT32_MAX)) 
+        max_nodes_count = UINT32_MAX;
+
+    map->nodes = m_alloc_nozero(arena, max_nodes_count*sizeof(map_bvh_node_t), 64); 
+
+    map_bvh_node_t *root = &map->nodes[map->node_count++];
+    map->node_count++; // leave a gap after the root to make pairs of nodes end up on the same cache line
+
+    build_bvh_recursively(map, root, 0, map->brush_count);
+}
+
 map_t *load_map(arena_t *arena, string_t path)
 {
     map_t *map = m_alloc_struct(arena, map_t);
     map->first_entity = parse_map(arena, path);
+
+    uint32_t brush_count = 0;
 
     for (map_entity_t *entity = map->first_entity; entity; entity = entity->next)
     {
         for (map_brush_t *brush = entity->first_brush; brush; brush = brush->next)
         {
             generate_points_for_brush(arena, brush);
+            brush_count++;
         }
     }
+
+    map->brush_count = brush_count;
+
+    // TODO: bad code, bad man.
+
+    map->brushes = m_alloc_array_nozero(arena, brush_count, map_brush_t *);
+
+    size_t brush_index = 0;
+
+    for (map_entity_t *entity = map->first_entity; entity; entity = entity->next)
+    {
+        for (map_brush_t *brush = entity->first_brush; brush; brush = brush->next)
+        {
+            map->brushes[brush_index++] = brush;
+        }
+    }
+
+    build_bvh(arena, map);
 
     return map;
 }

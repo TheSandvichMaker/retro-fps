@@ -36,7 +36,10 @@ float4 ps(PS_INPUT IN) : SV_TARGET
         color += rendertarget.Load(co, i);
     }
     color *= rcp(sample_count);
-    color = pow(color, 1.0 / 2.23);
+    color = pow(abs(color), 1.0 / 2.23);
+
+    float3 dither = hash43n(float3(IN.uv, frame_index)).xyz;
+    color += (dither - 0.5) / 255.0;
 
     return float4(saturate(color), 1);
 }

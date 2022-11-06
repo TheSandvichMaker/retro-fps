@@ -103,8 +103,8 @@ diag_node_t *diag_add_arrow(diag_node_t *parent, v3_t color, v3_t start, v3_t en
 {
     diag_node_t *diag = diag_new_child(parent, DIAG_ARROW);
     diag->color = color;
-    diag->start = start;
-    diag->end   = end;
+    diag->p0 = start;
+    diag->p1 = end;
     return diag;
 }
 
@@ -116,7 +116,17 @@ diag_node_t *diag_add_box(diag_node_t *parent, v3_t color, rect3_t bounds)
     return diag;
 }
 
-static void diag_draw_children(diag_node_t *parent)
+diag_node_t *diag_add_text(diag_node_t *parent, v3_t color, v3_t position, string_t text)
+{
+    // TODO: text lifetime
+    diag_node_t *diag = diag_new_child(parent, DIAG_TEXT);
+    diag->color = color;
+    diag->text  = text;
+    diag->p0 = position;
+    return diag;
+}
+
+static void diag_draw_children(diag_node_t *parent, const bitmap_font_t *font)
 {
     diag_node_t *prev = NULL;
     for (diag_node_t *diag = parent->first_child; diag; diag = diag->next)
@@ -125,7 +135,7 @@ static void diag_draw_children(diag_node_t *parent)
         {
             case DIAG_GROUP:
             {
-                diag_draw_children(diag);
+                diag_draw_children(diag, font);
             } break;
 
             case DIAG_ARROW:
@@ -133,7 +143,7 @@ static void diag_draw_children(diag_node_t *parent)
                 //float shaft_ratio = 0.95f;
                 float head_size = 1.0f;
 
-                v3_t  arrow_vector = sub(diag->end, diag->start);
+                v3_t  arrow_vector = sub(diag->p1, diag->p0);
                 float arrow_length = vlen(arrow_vector);
 
                 v3_t arrow_direction = normalize_or_zero(arrow_vector);
@@ -141,7 +151,7 @@ static void diag_draw_children(diag_node_t *parent)
                 float shaft_length = max(0.0f, arrow_length - 3.0f*head_size);
 
                 v3_t shaft_vector = mul(shaft_length, arrow_direction);
-                v3_t shaft_end    = add(diag->start, shaft_vector);
+                v3_t shaft_end    = add(diag->p0, shaft_vector);
 
                 v3_t t, b;
                 get_tangent_vectors(arrow_direction, &t, &b);
@@ -162,10 +172,10 @@ static void diag_draw_children(diag_node_t *parent)
                     v3_t v1 = add(shaft_end, add(mul(t, head_size*s1), mul(b, head_size*c1)));
                     r_immediate_line(v0, v1, diag->color);
 
-                    r_immediate_line(v0, diag->end, diag->color);
+                    r_immediate_line(v0, diag->p1, diag->color);
                 }
 
-                r_immediate_line(diag->start, shaft_end, diag->color);
+                r_immediate_line(diag->p0, shaft_end, diag->color);
             } break;
 
             case DIAG_BOX:
@@ -198,20 +208,31 @@ static void diag_draw_children(diag_node_t *parent)
                 r_immediate_line(v010, v011, diag->color);
                 r_immediate_line(v110, v111, diag->color);
             } break;
+
+            case DIAG_TEXT:
+            {
+                r_view_t *view = r_get_top_view();
+
+                v3_t p = r_to_view_space(view, diag->p0, 1);
+                if (p.z > 0.0f)
+                {
+                    r_immediate_text(font, p.xy, diag->color, diag->text);
+                }
+            } break;
         }
 
         prev = diag;
     }
 }
 
-void diag_draw_all(void)
+void diag_draw_all(const bitmap_font_t *font)
 {
     r_immediate_topology(R_PRIMITIVE_TOPOLOGY_LINELIST);
     r_immediate_depth_test(true);
     for (hash_iter_t it = hash_iter(&g_diag_state.hash); hash_iter_next(&it);)
     {
         diag_node_t *root = it.ptr;
-        diag_draw_children(root);
+        diag_draw_children(root, font);
     }
     r_immediate_flush();
 }

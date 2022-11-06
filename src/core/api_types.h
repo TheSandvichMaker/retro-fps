@@ -83,6 +83,7 @@ typedef union v2_t
 typedef union v3_t
 {
     struct { float x, y, z; };
+    struct { v2_t xy; float z0; };
     float e[3];
 } v3_t;
 

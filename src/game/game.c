@@ -513,7 +513,7 @@ void game_tick(game_io_t *io, float dt)
         }
     }
 
-    diag_draw_all();
+    diag_draw_all(&font);
 
     r_immediate_text(&font, (v2_t){ 32, 32 }, (v3_t){ 1, 1, 1 }, 
                      strlit("You know what they call a quarter pounder with cheese in paris?"));

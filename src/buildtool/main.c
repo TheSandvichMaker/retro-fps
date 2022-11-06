@@ -155,6 +155,7 @@ int main(int argc, char **argv)
     bool ndebug    = false;
     bool release   = false;
     bool stub      = false;
+    bool not_slow  = false;
     backend_compiler_t backend = BACKEND_MSVC;
 
     cmd_args_t *args = &(cmd_args_t){0};
@@ -177,6 +178,10 @@ int main(int argc, char **argv)
         else if (args_match(args, "-ndebug"))
         {
             ndebug = true;
+        }
+        else if (args_match(args, "-not_slow"))
+        {
+            not_slow = true;
         }
         else if (args_match(args, "-stub"))
         {
@@ -253,7 +258,8 @@ int main(int argc, char **argv)
         .defines = slist_from_array(temp, array_expand(string_t,
             strlit("_CRT_SECURE_NO_WARNINGS"),
             strlit("UNICODE"),
-            ndebug ? strlit("NDEBUG") : strlit("DEBUG")
+            ndebug ? strlit("NDEBUG") : strlit("DEBUG"),
+            not_slow ? strlit("DEBUG_FAST") : strlit("DEBUG_SLOW"),
         )),
 
         .include_paths = slist_from_array(temp, array_expand(string_t,

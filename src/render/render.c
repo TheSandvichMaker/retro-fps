@@ -1,5 +1,7 @@
 #include "render.h"
 
+#define SCREENSPACE_VIEW_INDEX (1)
+
 static render_api_i inst;
 const render_api_i *const render = &inst;
 
@@ -19,6 +21,7 @@ static r_list_t *g_list;
 void r_set_command_list(r_list_t *new_list)
 {
     g_list = new_list;
+    r_reset_command_list();
 }
 
 void r_reset_command_list(void)
@@ -30,6 +33,9 @@ void r_reset_command_list(void)
     r_view_t view;
     r_default_view(&view);
     r_push_view(&view);
+
+    // TODO: This view situation is a disaster
+    r_push_view_screenspace();
 }
 
 static STRING_STORAGE(64) g_next_command_identifier;
@@ -146,9 +152,28 @@ void r_default_view(r_view_t *view)
     view->projection = m4x4_identity;
 }
 
-void r_get_view(r_view_t *view)
+static thread_local r_view_t g_null_view; // should never be necessary
+
+r_view_t *r_get_top_view(void)
 {
-    if (g_list->view_stack_at > 0)
+    r_view_t *result = NULL; 
+
+    if (ALWAYS(g_list->view_stack_at > 0))
+    {
+        result = &g_list->views[g_list->view_stack[g_list->view_stack_at-1]];
+    }
+    else
+    {
+        result = &g_null_view;
+        r_default_view(result);
+    }
+
+    return result;
+}
+
+void r_copy_top_view(r_view_t *view)
+{
+    if (ALWAYS(g_list->view_stack_at > 0))
     {
         *view = g_list->views[g_list->view_stack[g_list->view_stack_at-1]];
     }
@@ -284,9 +309,39 @@ void r_immediate_flush(void)
     }
 }
 
+v3_t r_to_view_space(const r_view_t *view, v3_t p, float w)
+{
+    v4_t pw = { p.x, p.y, p.z, w };
+
+    pw = mul(view->camera, pw);
+    pw = mul(view->projection, pw);
+    pw.xyz = div(pw.xyz, pw.w);
+
+    int width, height;
+    render->get_resolution(&width, &height);
+
+    pw.x += 1.0f;
+    pw.y += 1.0f;
+    pw.x *= 0.5f*(float)width;
+    pw.y *= 0.5f*(float)height;
+
+    return pw.xyz;
+}
+
 void r_immediate_text(const bitmap_font_t *font, v2_t p, v3_t color, string_t string)
 {
-    r_push_view_screenspace();
+    // r_push_view_screenspace();
+
+    if (ALWAYS(g_list->view_count < R_MAX_VIEWS))
+    {
+        r_view_index_t index = SCREENSPACE_VIEW_INDEX;
+
+        if (ALWAYS(g_list->view_stack_at < R_MAX_VIEWS))
+        {
+            g_list->view_stack[g_list->view_stack_at++] = index;
+        }
+    }
+    
     r_immediate_texture(font->texture);
     r_immediate_topology(R_PRIMITIVE_TOPOLOGY_TRIANGELIST);
     r_immediate_depth_test(false);

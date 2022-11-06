@@ -4,7 +4,11 @@
 #include "core/core.h"
 #include "render/render.h"
 
-#define LIGHTMAP_SCALE 1
+#if DEBUG
+#define LIGHTMAP_SCALE 8
+#else
+#define LIGHTMAP_SCALE 2
+#endif
 
 typedef struct map_plane_t
 {
@@ -28,6 +32,8 @@ typedef struct map_poly_t
     uint32_t vertex_count;
     uint16_t       *indices;
     vertex_brush_t *vertices;
+
+    v3_t normal;
 
     resource_handle_t mesh;
     resource_handle_t texture;
@@ -60,9 +66,23 @@ typedef struct map_entity_t
     map_brush_t *first_brush, *last_brush;
 } map_entity_t;
 
+typedef struct map_bvh_node_t 
+{
+    rect3_t bounds;
+    uint32_t left_first;
+    uint16_t count;
+    uint16_t split_axis;
+} map_bvh_node_t;
+
 typedef struct map_t
 {
     map_entity_t *first_entity;
+
+    uint32_t node_count;
+    uint32_t brush_count;
+
+    map_bvh_node_t *nodes;
+    map_brush_t **brushes;
 } map_t;
 
 // returns first entity in list
