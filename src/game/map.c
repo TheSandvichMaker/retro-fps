@@ -422,7 +422,7 @@ map_entity_t *parse_map(arena_t *arena, string_t path)
 
 typedef struct map_cached_texture_t
 {
-    STRING_STORAGE(64) name;
+    STRING_STORAGE(256) name;
 
     unsigned w, h;
     resource_handle_t gpu_handle;
@@ -660,9 +660,15 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
         {
             m_scoped(temp)
             {
-                string_t texture_path = string_format(temp, "gamedata/textures/%.*s.png", strexpand(plane->texture));
+                // TODO: pretty sad... handle file formats properly...
+                string_t texture_path_png = string_format(temp, "gamedata/textures/%.*s.png", strexpand(plane->texture));
+                string_t texture_path_tga = string_format(temp, "gamedata/textures/%.*s.tga", strexpand(plane->texture));
 
-                image_t image = load_image(temp, texture_path);
+                image_t image = load_image(temp, texture_path_png);
+
+                if (!image.pixels)
+                    image = load_image(temp, texture_path_tga);
+
                 if (image.pixels)
                 {
                     texscale_x = (float)image.w;
@@ -762,18 +768,14 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
 
 typedef struct partition_result_t
 {
-    uint8_t split_axis;
     uint32_t split_index;
-    rect3_t  l_bounds;
-    rect3_t  r_bounds;
 } partition_result_t;
 
-static void partition_brushes(map_t *map, uint32_t first, uint32_t count, rect3_t bv, partition_result_t *result)
+static void partition_brushes(map_t *map, uint32_t first, uint32_t count, rect3_t bv, uint8_t split_axis, partition_result_t *result)
 {
     map_brush_t **brushes = map->brushes + first;
 
-    uint8_t split_axis = rect3_largest_axis(bv);
-    float   pivot      = 0.5f*(bv.min.e[split_axis] + bv.max.e[split_axis]);
+    float pivot = 0.5f*(bv.min.e[split_axis] + bv.max.e[split_axis]);
 
     int64_t i = -1;
     int64_t j = (int64_t)count;
@@ -814,7 +816,6 @@ static void partition_brushes(map_t *map, uint32_t first, uint32_t count, rect3_
         SWAP(map_brush_t *, brushes[i], brushes[j]);
     }
 
-    result->split_axis  = split_axis;
     result->split_index = (uint32_t)i;
 
 #ifdef DEBUG_SLOW
@@ -859,36 +860,35 @@ static void build_bvh_recursively(map_t *map, map_bvh_node_t *parent, uint32_t f
 
     bool leaf = (count == 1);
 
+    partition_result_t partition = {0};
+    uint8_t split_axis = rect3_largest_axis(bv);
+
     if (!leaf)
     {
-        partition_result_t partition;
-        partition_brushes(map, first, count, bv, &partition);
-
-        uint32_t max_index = count - 1;
-
-        if (partition.split_index == 0 ||
-            partition.split_index == max_index)
+        if (count == 2)
         {
-            leaf = true;
+            partition.split_index = 1;
         }
         else
         {
-            parent->split_axis = partition.split_axis;
+            leaf = true;
+            for (size_t i = 0; i < 3; i++)
+            {
+                partition_brushes(map, first, count, bv, split_axis, &partition);
 
-            uint32_t l_node_index = map->node_count++;
-            uint32_t r_node_index = map->node_count++;
+                uint32_t max_index = count - 1;
 
-            parent->left_first = l_node_index;
-
-            map_bvh_node_t *l = &map->nodes[l_node_index];
-            uint32_t l_split_index = first;
-            uint32_t l_split_count = partition.split_index;
-            build_bvh_recursively(map, l, l_split_index, l_split_count);
-
-            map_bvh_node_t *r = &map->nodes[r_node_index];
-            uint32_t r_split_index = first + partition.split_index;
-            uint32_t r_split_count = count - partition.split_index;
-            build_bvh_recursively(map, r, r_split_index, r_split_count);
+                if (partition.split_index == 0 ||
+                    partition.split_index == max_index)
+                {
+                    split_axis = (split_axis + 1) % 3;
+                }
+                else
+                {
+                    leaf = false;
+                    break;
+                }
+            }
         }
     }
 
@@ -901,6 +901,26 @@ static void build_bvh_recursively(map_t *map, map_bvh_node_t *parent, uint32_t f
         parent->left_first = first;
         parent->count      = (uint16_t)count;
     }
+    else
+    {
+        parent->split_axis = split_axis;
+
+        uint32_t l_node_index = map->node_count++;
+        uint32_t r_node_index = map->node_count++;
+
+        parent->left_first = l_node_index;
+
+        map_bvh_node_t *l = &map->nodes[l_node_index];
+        uint32_t l_split_index = first;
+        uint32_t l_split_count = partition.split_index;
+        build_bvh_recursively(map, l, l_split_index, l_split_count);
+
+        map_bvh_node_t *r = &map->nodes[r_node_index];
+        uint32_t r_split_index = first + partition.split_index;
+        uint32_t r_split_count = count - partition.split_index;
+        build_bvh_recursively(map, r, r_split_index, r_split_count);
+    }
+
 }
 
 static void build_bvh(arena_t *arena, map_t *map)

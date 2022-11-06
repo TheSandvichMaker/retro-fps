@@ -8,6 +8,13 @@
 #define MAX_IMMEDIATE_INDICES  (16384)
 #define MAX_IMMEDIATE_VERTICES (8192)
 
+extern v3_t g_debug_colors[6];
+
+static inline v3_t r_debug_color(size_t i)
+{
+    return g_debug_colors[i % ARRAY_COUNT(g_debug_colors)];
+}
+
 typedef enum pixel_format_e
 {
     PIXEL_FORMAT_R8,

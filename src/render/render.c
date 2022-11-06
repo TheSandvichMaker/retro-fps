@@ -2,6 +2,15 @@
 
 #define SCREENSPACE_VIEW_INDEX (1)
 
+v3_t g_debug_colors[] = {
+    { 1, 0, 0 },
+    { 0, 1, 0 },
+    { 0, 0, 1 },
+    { 1, 1, 0 },
+    { 1, 0, 1 },
+    { 0, 1, 1 },
+};
+
 static render_api_i inst;
 const render_api_i *const render = &inst;
 

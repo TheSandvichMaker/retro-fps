@@ -488,30 +488,38 @@ void game_tick(game_io_t *io, float dt)
 
     // render map geometry
 
-    for (map_entity_t *entity = world->map->first_entity;
-         entity;
-         entity = entity->next)
-    {
-        for (map_brush_t *brush = entity->first_brush;
-             brush;
-             brush = brush->next)
-        {
-            for (size_t poly_index = 0; poly_index < brush->poly_count; poly_index++)
-            {
-                map_poly_t *poly = &brush->polys[poly_index];
+    map_t *map = world->map;
 
-                r_submit_command(&(r_command_model_t) {
-                    .base = {
-                        .kind = R_COMMAND_MODEL,
-                    },
-                    .model     = poly->mesh,
-                    .texture   = poly->texture,
-                    .lightmap  = poly->lightmap,
-                    .transform = m4x4_identity,
-                });
-            }
+    for (size_t brush_index = 0; brush_index < map->brush_count; brush_index++)
+    {
+        map_brush_t *brush = map->brushes[brush_index];
+
+        for (size_t poly_index = 0; poly_index < brush->poly_count; poly_index++)
+        {
+            map_poly_t *poly = &brush->polys[poly_index];
+
+            r_submit_command(&(r_command_model_t) {
+                .base = {
+                    .kind = R_COMMAND_MODEL,
+                },
+                .model     = poly->mesh,
+                .texture   = poly->texture,
+                .lightmap  = poly->lightmap,
+                .transform = m4x4_identity,
+            });
         }
     }
+
+#if 0
+    diag_node_t *bvh_diag = diag_begin(strlit("bvh"));
+
+    for (size_t i = 0; i < map->node_count; i++)
+    {
+        map_bvh_node_t *node = &map->nodes[i];
+
+        diag_add_box(bvh_diag, r_debug_color(i), node->bounds);
+    }
+#endif
 
     diag_draw_all(&font);
 
