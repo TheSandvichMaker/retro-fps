@@ -44,8 +44,8 @@ void game_init(void)
         .arena         = &world->arena,
         .map           = world->map,
         .sun_direction = { 0.25f, 0.75f, 1 },
-        .sun_color     = { 1, 1, 0.7f },
-        .ambient_color = { 0.05f, 0.10f, 0.22f },
+        .sun_color     = { 4, 4, 3.5f },
+        .ambient_color = { 0.15f, 0.30f, 0.62f },
     });
 
     world->player = m_alloc_struct(&world->arena, player_t);

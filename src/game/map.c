@@ -426,6 +426,7 @@ typedef struct map_cached_texture_t
 
     unsigned w, h;
     resource_handle_t gpu_handle;
+    image_t image;
 } map_cached_texture_t;
 
 static hash_t g_texture_cache_hash;
@@ -652,6 +653,7 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
             texscale_x = (float)cached->w;
             texscale_y = (float)cached->h;
             poly->texture = cached->gpu_handle;
+            poly->texture_cpu = cached->image;
         }
 
         // load texture if required
@@ -664,13 +666,15 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
                 string_t texture_path_png = string_format(temp, "gamedata/textures/%.*s.png", strexpand(plane->texture));
                 string_t texture_path_tga = string_format(temp, "gamedata/textures/%.*s.tga", strexpand(plane->texture));
 
-                image_t image = load_image(temp, texture_path_png);
+                image_t image = load_image(arena, texture_path_png);
 
                 if (!image.pixels)
-                    image = load_image(temp, texture_path_tga);
+                    image = load_image(arena, texture_path_tga);
 
                 if (image.pixels)
                 {
+                    poly->texture_cpu = image;
+
                     texscale_x = (float)image.w;
                     texscale_y = (float)image.h;
                     poly->texture = render->upload_texture(&(upload_texture_t) {
@@ -685,6 +689,7 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
                     cached->w          = image.w;
                     cached->h          = image.h;
                     cached->gpu_handle = poly->texture;
+                    cached->image      = poly->texture_cpu;
                     STRING_INTO_STORAGE(cached->name, plane->texture);
 
                     resource_handle_t handle = bd_get_handle(&g_texture_cache, cached);

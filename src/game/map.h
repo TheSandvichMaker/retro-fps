@@ -3,11 +3,12 @@
 
 #include "core/core.h"
 #include "render/render.h"
+#include "game/asset.h"
 
 #if DEBUG
 #define LIGHTMAP_SCALE 8
 #else
-#define LIGHTMAP_SCALE 2
+#define LIGHTMAP_SCALE 4
 #endif
 
 typedef struct map_plane_t
@@ -34,6 +35,8 @@ typedef struct map_poly_t
     vertex_brush_t *vertices;
 
     v3_t normal;
+
+    image_t texture_cpu;
 
     resource_handle_t mesh;
     resource_handle_t texture;

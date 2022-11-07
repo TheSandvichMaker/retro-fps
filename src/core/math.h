@@ -182,6 +182,15 @@ DECLARE_VECTOR2_OP(sub, -)
 DECLARE_VECTOR2_OP(mul, *)
 DECLARE_VECTOR2_OP(div, /)
 
+static inline v2_t v2_add3(v2_t a, v2_t b, v2_t c)
+{
+    v2_t result = {
+        a.x + b.x + c.x,
+        a.y + b.y + c.y,
+    };
+    return result;
+}
+
 static inline float v2_dot(v2_t l, v2_t r)
 {
     return l.x*r.x + l.y*r.y;
@@ -306,6 +315,16 @@ DECLARE_VECTOR3_OP(add, +)
 DECLARE_VECTOR3_OP(sub, -)
 DECLARE_VECTOR3_OP(mul, *)
 DECLARE_VECTOR3_OP(div, /)
+
+static inline v3_t v3_add3(v3_t a, v3_t b, v3_t c)
+{
+    v3_t result = {
+        a.x + b.x + c.x,
+        a.y + b.y + c.y,
+        a.z + b.z + c.z,
+    };
+    return result;
+}
 
 static inline float v3_dot(v3_t l, v3_t r)
 {

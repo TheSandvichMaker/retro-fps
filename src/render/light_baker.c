@@ -9,25 +9,14 @@
 #include "core/core.h"
 #include "core/random.h"
 
-static uint32_t pack_color(v4_t color)
-{
-    color.x = CLAMP(color.x, 0.0f, 1.0f);
-    color.y = CLAMP(color.x, 0.0f, 1.0f);
-    color.z = CLAMP(color.x, 0.0f, 1.0f);
-    color.w = CLAMP(color.x, 0.0f, 1.0f);
-
-    uint32_t result = (((uint32_t)(255.0f*color.x) <<  0) |
-                       ((uint32_t)(255.0f*color.y) <<  8) |
-                       ((uint32_t)(255.0f*color.z) << 16) |
-                       ((uint32_t)(255.0f*color.w) << 24));
-    return result;
-}
-
 typedef struct intersect_result_t
 {
     float t;
     map_poly_t *poly;
     map_brush_t *brush;
+
+    v3_t uvw;
+    uint32_t triangle_offset;
 } intersect_result_t;
 
 typedef struct intersect_params_t
@@ -35,13 +24,14 @@ typedef struct intersect_params_t
     v3_t o;
     v3_t d;
 
+    bool occlusion_test;
+
     float min_t, max_t;
 
     size_t ignore_brush_count;
     map_brush_t **ignore_brushes;
 } intersect_params_t;
 
-#if 0
 static bool intersect_map(map_t *map, const intersect_params_t *params, intersect_result_t *result)
 {
     float min_t = params->min_t;
@@ -58,78 +48,8 @@ static bool intersect_map(map_t *map, const intersect_params_t *params, intersec
     v3_t o = params->o;
     v3_t d = params->d;
 
-    map_brush_t *hit_brush = NULL;
-    map_plane_t *hit_plane = NULL;
-
-    for (map_entity_t *e = map->first_entity; e; e = e->next)
-    {
-        for (map_brush_t *brush = e->first_brush; brush; brush = brush->next)
-        {
-            bool ignore = false;
-            for (size_t ignore_brush_index = 0; ignore_brush_index < params->ignore_brush_count; ignore_brush_index++)
-            {
-                if (brush == params->ignore_brushes[ignore_brush_index])
-                {
-                    ignore = true;
-                    break;
-                }
-            }
-
-            if (!ignore)
-            {
-                float bounds_hit_t = ray_intersect_rect3(o, d, brush->bounds);
-                if (bounds_hit_t < t)
-                {
-                    for (map_plane_t *plane = brush->first_plane; plane; plane = plane->next)
-                    {
-                        map_poly_t *poly = &brush->polys[plane->poly_index];
-
-                        uint32_t triangle_count = poly->index_count / 3;
-                        for (size_t triangle_index = 0; triangle_index < triangle_count; triangle_index++)
-                        {
-                            v3_t a = poly->vertices[poly->indices[3*triangle_index + 0]].pos;
-                            v3_t b = poly->vertices[poly->indices[3*triangle_index + 1]].pos;
-                            v3_t c = poly->vertices[poly->indices[3*triangle_index + 2]].pos;
-
-                            v3_t uvw;
-                            float triangle_hit_t = ray_intersect_triangle(o, d, a, b, c, &uvw);
-
-                            if (triangle_hit_t >= min_t && t > triangle_hit_t)
-                            {
-                                t = triangle_hit_t;
-                                hit_brush = brush;
-                                hit_plane = plane;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    result->t     = t;
-    result->brush = hit_brush;
-    result->plane = hit_plane;
-    
-    return t < max_t;
-}
-#endif
-
-static bool intersect_map(map_t *map, const intersect_params_t *params, intersect_result_t *result)
-{
-    float min_t = params->min_t;
-    float max_t = params->max_t;
-
-    if (min_t == 0.0f) 
-        min_t = 0.001f;
-
-    if (max_t == 0.0f)
-        max_t = FLT_MAX;
-
-    float t = max_t;
-
-    v3_t o = params->o;
-    v3_t d = params->d;
+    v3_t hit_uvw = {0};
+    uint32_t hit_triangle_offset = 0;
 
     map_brush_t *hit_brush = NULL;
     map_poly_t  *hit_poly  = NULL;
@@ -180,9 +100,14 @@ static bool intersect_map(map_t *map, const intersect_params_t *params, intersec
                             if (triangle_hit_t >= min_t &&
                                 triangle_hit_t < t)
                             {
+                                if (params->occlusion_test)
+                                    return true;
+
                                 t = triangle_hit_t;
                                 hit_brush = brush;
                                 hit_poly  = poly;
+                                hit_triangle_offset = (uint32_t)(3*triangle_index);
+                                hit_uvw = uvw;
                             }
                         }
                     }
@@ -206,9 +131,11 @@ static bool intersect_map(map_t *map, const intersect_params_t *params, intersec
         }
     }
 
-    result->t    = t;
-    result->poly = hit_poly;
-    result->brush = hit_brush;
+    result->t               = t;
+    result->poly            = hit_poly;
+    result->brush           = hit_brush;
+    result->triangle_offset = hit_triangle_offset;
+    result->uvw             = hit_uvw;
     
     return t < max_t;
 }
@@ -231,23 +158,115 @@ v3_t map_to_cosine_weighted_hemisphere(v2_t sample)
     return result;
 }
 
-void bake_lighting(const light_bake_params_t *params)
+static v3_t evaluate_lighting(const light_bake_params_t *params, map_t *map, random_series_t *entropy, v3_t hit_p, v3_t hit_n, map_brush_t *brush)
 {
-    random_series_t entropy = { 1 };
+    (void)entropy; // will be used later
 
-    map_t *map = params->map;
+    v3_t lighting = {0,0,0};
 
     v3_t sun_direction = normalize(params->sun_direction);
-    v3_t sun_color     = params->sun_color;
+    float ndotl = max(0.0f, dot(sun_direction, hit_n));
 
-    diag_node_t *light_traces = diag_begin(strlit("light traces"));
+    if (ndotl > 0.0f)
+    {
+        intersect_result_t shadow;
+        if (!intersect_map(map, &(intersect_params_t) {
+                .o                  = hit_p,
+                .d                  = sun_direction,
+                .ignore_brush_count = 1,
+                .ignore_brushes     = &brush,
+                .occlusion_test     = true,
+            }, &shadow))
+        {
+            lighting = params->sun_color;
+            lighting = mul(lighting, ndotl);
+        }
+    }
 
-#if DEBUG
-    int shadow_sample_count = 8;
-#else
-    int shadow_sample_count = 32;
-#endif
-    v3_t *jitters = m_alloc_array(temp, shadow_sample_count, v3_t);
+    return lighting;
+}
+
+static v3_t pathtrace_recursively(const light_bake_params_t *params, map_t *map, random_series_t *entropy, v3_t o, v3_t d, map_brush_t *brush, int recursion)
+{
+    if (recursion == 0) 
+        return (v3_t){0,0,0};
+
+    intersect_params_t intersect_params = {
+        .o                  = o,
+        .d                  = d,
+        .ignore_brush_count = 1,
+        .ignore_brushes     = &brush,
+    };
+
+    v3_t color = { 0, 0, 0 };
+
+    intersect_result_t intersect;
+    if (intersect_map(map, &intersect_params, &intersect))
+    {
+        map_poly_t *hit_poly = intersect.poly;
+
+        v3_t uvw = intersect.uvw;
+        uint32_t triangle_offset = intersect.triangle_offset;
+
+        vertex_brush_t t0 = hit_poly->vertices[hit_poly->indices[triangle_offset + 0]];
+        vertex_brush_t t1 = hit_poly->vertices[hit_poly->indices[triangle_offset + 0]];
+        vertex_brush_t t2 = hit_poly->vertices[hit_poly->indices[triangle_offset + 0]];
+
+        v2_t tex = v2_add3(mul(uvw.x, t0.tex),
+                           mul(uvw.y, t1.tex),
+                           mul(uvw.z, t2.tex));
+
+        v3_t albedo = {0, 0, 0};
+
+        image_t *texture = &hit_poly->texture_cpu;
+        if (texture->pixels)
+        {
+            // TODO: Enforce pow2 textures?
+            uint32_t tex_x = (uint32_t)((float)texture->w*tex.x) % texture->w;
+            uint32_t tex_y = (uint32_t)((float)texture->h*tex.y) % texture->h;
+
+            v4_t texture_sample = unpack_color(texture->pixels[texture->w*tex_y + tex_x]);
+            albedo = texture_sample.xyz;
+        }
+
+        v3_t n = hit_poly->normal;
+
+        v3_t t, b;
+        get_tangent_vectors(n, &t, &b);
+
+        v3_t hit_p = add(intersect_params.o, mul(intersect.t, intersect_params.d));
+
+        v3_t lighting = evaluate_lighting(params, map, entropy, hit_p, n, brush);
+
+        v2_t sample = random_unilateral2(entropy);
+        v3_t unrotated_dir = map_to_cosine_weighted_hemisphere(sample);
+
+        v3_t bounce_dir = mul(unrotated_dir.x, t);
+        bounce_dir = add(bounce_dir, mul(unrotated_dir.y, b));
+        bounce_dir = add(bounce_dir, mul(unrotated_dir.z, n));
+
+        lighting = add(lighting, mul(albedo, pathtrace_recursively(params, map, entropy, hit_p, bounce_dir, intersect.brush, recursion - 1)));
+        color = mul(albedo, lighting);
+    }
+    else
+    {
+        // sky
+        color = params->ambient_color; // (v3_t){ 1, 1, 1 };
+    }
+
+    return color;
+}
+
+typedef struct bake_light_job_t
+{
+    const light_bake_params_t *params;
+    map_brush_t *brush;
+    map_plane_t *plane;
+} bake_light_job_t;
+
+static void bake_light_job(void *userdata)
+{
+    bake_light_job_t *job = userdata;
 
 #if DEBUG
     int diffuse_ray_count = 16;
@@ -255,190 +274,122 @@ void bake_lighting(const light_bake_params_t *params)
     int diffuse_ray_count = 64;
 #endif
 
-    for (int i = 0; i < shadow_sample_count; i++)
-    {
-        v3_t jitter;
-        do
-        {
-            jitter = (v3_t){
-                2.0f*((float)rand() / RAND_MAX) - 1.0f,
-                2.0f*((float)rand() / RAND_MAX) - 1.0f,
-                2.0f*((float)rand() / RAND_MAX) - 1.0f,
-            };
-        } while(vlensq(jitter) > 1.0f);
-        jitter = mul(0.035f, jitter);
+    const light_bake_params_t *params = job->params;
 
-        jitters[i] = jitter;
+    map_t *map = params->map;
+    map_brush_t *brush = job->brush;
+    map_plane_t *plane = job->plane;
+
+    random_series_t entropy = {
+        (uint32_t)(uintptr_t)plane,
+    };
+
+    m_scoped(temp)
+    {
+        plane_t p;
+        plane_from_points(plane->a, plane->b, plane->c, &p);
+
+        v3_t t, b;
+        get_tangent_vectors(p.n, &t, &b);
+
+        v3_t n = p.n;
+
+        float scale_x = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->tex_maxs.x - plane->tex_mins.x) / LIGHTMAP_SCALE));
+        float scale_y = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->tex_maxs.y - plane->tex_mins.y) / LIGHTMAP_SCALE));
+
+        int w = (int)(scale_x / LIGHTMAP_SCALE);
+        int h = (int)(scale_y / LIGHTMAP_SCALE);
+
+        uint32_t *lighting = m_alloc_array(temp, w*h, uint32_t);
+
+        /* int arrow_index = 0; */
+
+        for (size_t y = 0; y < h; y++)
+        for (size_t x = 0; x < w; x++)
+        {
+            float u = ((float)x + 0.5f) / (float)(w);
+            float v = ((float)y + 0.5f) / (float)(h);
+
+            v3_t world_p = plane->lm_origin;
+            world_p = add(world_p, mul(scale_x*u, plane->s.xyz));
+            world_p = add(world_p, mul(scale_y*v, plane->t.xyz));
+
+            v3_t primary_hit_lighting = evaluate_lighting(params, map, &entropy, world_p, n, brush);
+            v3_t color_accum = {0, 0, 0};
+
+            for (int i = 0; i < diffuse_ray_count; i++)
+            {
+                v2_t sample = random_unilateral2(&entropy);
+                v3_t unrotated_dir = map_to_cosine_weighted_hemisphere(sample);
+
+                v3_t dir = mul(unrotated_dir.x, t);
+                dir = add(dir, mul(unrotated_dir.y, b));
+                dir = add(dir, mul(unrotated_dir.z, n));
+
+                color_accum = add(color_accum, primary_hit_lighting);
+                color_accum = add(color_accum, pathtrace_recursively(params, map, &entropy, world_p, dir, brush, 8));
+            }
+
+            v4_t color;
+            color.xyz = mul(color_accum, 1.0f / diffuse_ray_count);
+            color.w   = 1.0f;
+
+            v3_t dither = random_in_unit_cube(&entropy);
+
+            color.x += (dither.x - 0.5f) / 255.0f;
+            color.y += (dither.y - 0.5f) / 255.0f;
+            color.z += (dither.z - 0.5f) / 255.0f;
+
+            lighting[y*w + x] = pack_color(color);
+        }
+
+        map_poly_t *poly = &brush->polys[plane->poly_index];
+        poly->lightmap = render->upload_texture(&(upload_texture_t) {
+            .format = PIXEL_FORMAT_RGBA8,
+            .w      = w,
+            .h      = h,
+            .pitch  = sizeof(uint32_t)*w,
+            .pixels = lighting,
+        });
+    }
+}
+
+void bake_lighting(const light_bake_params_t *params)
+{
+    map_t *map = params->map;
+
+    size_t plane_count = 0;
+    for (size_t brush_index = 0; brush_index < map->brush_count; brush_index++)
+    {
+        map_brush_t *brush = map->brushes[brush_index];
+
+        for (map_plane_t *plane = brush->first_plane; plane; plane = plane->next)
+        {
+            plane_count++;
+        }
     }
 
-    for (map_entity_t *e = map->first_entity; e; e = e->next)
+    size_t job_count = 0;
+    bake_light_job_t *jobs = m_alloc_array(temp, plane_count, bake_light_job_t);
+
+    for (size_t brush_index = 0; brush_index < map->brush_count; brush_index++)
     {
-        int brush_index = 0;
-        for (map_brush_t *brush = e->first_brush; brush; brush = brush->next, brush_index++)
+        map_brush_t *brush = map->brushes[brush_index];
+
+        for (map_plane_t *plane = brush->first_plane; plane; plane = plane->next)
         {
-            diag_node_t *brush_diag = diag_add_group(light_traces, string_format(temp, "brush %d", brush_index));
-
-            v3_t colors[] = {
-                { 1, 0, 0 },
-                { 0, 1, 0 },
-                { 0, 0, 1 },
-                { 1, 1, 0 },
-                { 1, 0, 1 },
-                { 0, 1, 1 },
+            jobs[job_count++] = (bake_light_job_t) {
+                .params = params,
+                .brush  = brush,
+                .plane  = plane,
             };
-            v3_t diag_color = colors[brush_index % ARRAY_COUNT(colors)];
-
-            /* diag_add_box(brush_diag, diag_color, rect3_grow_radius(brush->bounds, (v3_t){0.1f, 0.1f, 0.1f})); */
-
-            for (map_plane_t *plane = brush->first_plane; plane; plane = plane->next)
-            {
-                m_scoped(temp)
-                {
-                    plane_t p;
-                    plane_from_points(plane->a, plane->b, plane->c, &p);
-
-                    v3_t t, b;
-                    get_tangent_vectors(p.n, &t, &b);
-
-                    v3_t n = p.n;
-
-                    float n_dot_l = dot(p.n, sun_direction);
-
-                    float scale_x = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->tex_maxs.x - plane->tex_mins.x) / LIGHTMAP_SCALE));
-                    float scale_y = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->tex_maxs.y - plane->tex_mins.y) / LIGHTMAP_SCALE));
-
-                    int w = (int)(scale_x / LIGHTMAP_SCALE);
-                    int h = (int)(scale_y / LIGHTMAP_SCALE);
-
-                    uint32_t *lighting = m_alloc_array(temp, w*h, uint32_t);
-
-                    int arrow_index = 0;
-
-                    for (size_t y = 0; y < h; y++)
-                    for (size_t x = 0; x < w; x++)
-                    {
-                        float u = ((float)x + 0.5f) / (float)(w);
-                        float v = ((float)y + 0.5f) / (float)(h);
-
-                        v3_t world_p = plane->lm_origin;
-                        world_p = add(world_p, mul(scale_x*u, plane->s.xyz));
-                        world_p = add(world_p, mul(scale_y*v, plane->t.xyz));
-
-                        if ((x == 0 || x == w - 1) &&
-                            (y == 0 || y == h - 1))
-                        {
-                            // diag_add_text(brush_diag, diag_color, world_p, 
-                              //            string_format(temp, "%f, %f, %f", world_p.x, world_p.y, world_p.z));
-                        }
-
-                        v3_t intersect_origin = add(world_p, mul(0.1f, p.n));
-
-                        float shadow_accum = 0.0f;
-
-                        if (n_dot_l > 0.0f)
-                        {
-                            for (int shadow_sample_index = 0; shadow_sample_index < shadow_sample_count; shadow_sample_index++)
-                            {
-                                v3_t jitter = jitters[shadow_sample_index];
-                                v3_t shadow_direction = normalize(add(sun_direction, jitter));
-
-                                intersect_params_t intersect_params = {
-                                    .o                  = intersect_origin,
-                                    .d                  = shadow_direction,
-                                    .ignore_brush_count = 1,
-                                    .ignore_brushes     = &brush,
-                                };
-
-                                intersect_result_t intersect;
-                                if (intersect_map(map, &intersect_params, &intersect))
-                                {
-                                    if (false)
-                                    {
-                                        diag_node_t *arrow = diag_add_arrow(brush_diag, diag_color, intersect_origin, add(intersect_origin, mul(intersect.t, shadow_direction)));
-                                        diag_set_name(arrow, string_format(temp, "arrow %d", arrow_index++));
-                                    }
-                                    shadow_accum += 1.0f;
-                                }
-                            }
-                        }
-
-                        float ao = 0.0f;
-
-                        for (int i = 0; i < diffuse_ray_count; i++)
-                        {
-                            v2_t sample = random_unilateral2(&entropy);
-                            v3_t unrotated_dir = map_to_cosine_weighted_hemisphere(sample);
-
-                            v3_t dir = mul(unrotated_dir.x, t);
-                            dir = add(dir, mul(unrotated_dir.y, b));
-                            dir = add(dir, mul(unrotated_dir.z, n));
-
-                            // diag_add_arrow(brush_diag, diag_color, intersect_origin, add(intersect_origin, mul(10.0f, dir)));
-
-                            intersect_params_t intersect_params = {
-                                .o                  = intersect_origin,
-                                .d                  = dir,
-                                .ignore_brush_count = 1,
-                                .ignore_brushes     = &brush,
-                            };
-
-                            intersect_result_t intersect;
-                            if (intersect_map(map, &intersect_params, &intersect))
-                            {
-                                float max_ao_distance = 75.0f;
-                                float ao_t = min(intersect.t / max_ao_distance, 1.0f);
-
-                                if (intersect.t <= max_ao_distance)
-                                {
-                                    // diag_add_arrow(brush_diag, diag_color, intersect_origin, add(intersect_origin, mul(intersect.t, dir)));
-                                }
-                                
-                                ao += 1.0f - ao_t;
-                            }
-                            else
-                            {
-                                ao += 1.0f;
-                            }
-                        }
-
-                        ao /= (float)diffuse_ray_count;
-
-                        shadow_accum /= (float)shadow_sample_count;
-
-                        float shadow_throughput = 1.0f - shadow_accum;
-
-                        // v3_t up = { 0, 0, 1 };
-
-                        float lambertian = max(0.0f, n_dot_l);
-                        float ambient    = 1.0f - ao; // max(0.0f, dot(p.n, up));
-
-                        v4_t color;
-                        color.x = sun_color.x*shadow_throughput*lambertian;
-                        color.y = sun_color.y*shadow_throughput*lambertian;
-                        color.z = sun_color.z*shadow_throughput*lambertian;
-                        color.w = 1.0f;
-
-                        color.xyz = add(color.xyz, mul(ambient, params->ambient_color));
-
-                        v3_t dither = random_in_unit_cube(&entropy);
-
-                        color.x += (dither.x - 0.5f) / 255.0f;
-                        color.y += (dither.y - 0.5f) / 255.0f;
-                        color.z += (dither.z - 0.5f) / 255.0f;
-
-                        lighting[y*w + x] = pack_color(color);
-                    }
-
-                    map_poly_t *poly = &brush->polys[plane->poly_index];
-                    poly->lightmap = render->upload_texture(&(upload_texture_t) {
-                        .format = PIXEL_FORMAT_RGBA8,
-                        .w      = w,
-                        .h      = h,
-                        .pitch  = sizeof(uint32_t)*w,
-                        .pixels = lighting,
-                    });
-                }
-            }
+            // add_job_to_queue(&queue, bake_light_job, &job);
         }
+    }
+    // wait_on_queue(&queue);
+
+    for (size_t job_index = 0; job_index < job_count; job_index++)
+    {
+        bake_light_job(&jobs[job_index]);
     }
 }

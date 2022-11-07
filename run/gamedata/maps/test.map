@@ -365,6 +365,33 @@
 ( 64 64 16 ) ( 65 64 16 ) ( 64 64 17 ) environment/makkon_concrete_textures/conc_w_17_gry3 [ -1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
 ( 64 64 16 ) ( 64 64 17 ) ( 64 65 16 ) environment/makkon_concrete_textures/conc_w_17_gry3 [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1
 }
+// brush 38
+{
+( -272 -64 0 ) ( -272 -63 0 ) ( -272 -64 1 ) environment/makkon_concrete_textures/conc_w03_teal [ 0 -1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -272 -64 0 ) ( -272 -64 1 ) ( -271 -64 0 ) environment/makkon_concrete_textures/conc_w03_teal [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -272 -64 0 ) ( -271 -64 0 ) ( -272 -63 0 ) environment/makkon_concrete_textures/conc_w03_teal [ -1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( -128 -48 128 ) ( -128 -47 128 ) ( -127 -48 128 ) environment/makkon_concrete_textures/conc_w03_teal [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( -128 -48 128 ) ( -127 -48 128 ) ( -128 -48 129 ) environment/makkon_concrete_textures/conc_w03_teal [ -1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -128 -48 128 ) ( -128 -48 129 ) ( -128 -47 128 ) environment/makkon_concrete_textures/conc_w03_teal [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+}
+// brush 39
+{
+( -272 -64 128 ) ( -272 -63 128 ) ( -272 -64 129 ) environment/makkon_concrete_textures/conc_w03_teal [ 0 -1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -272 -64 128 ) ( -272 -64 129 ) ( -271 -64 128 ) environment/makkon_concrete_textures/conc_w03_teal [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -272 -64 128 ) ( -271 -64 128 ) ( -272 -63 128 ) environment/makkon_concrete_textures/conc_w03_teal [ -1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( -128 16 144 ) ( -128 17 144 ) ( -127 16 144 ) environment/makkon_concrete_textures/conc_w03_teal [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( -128 -16 144 ) ( -127 -16 144 ) ( -128 -16 145 ) environment/makkon_concrete_textures/conc_w03_teal [ -1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -128 16 144 ) ( -128 16 145 ) ( -128 17 144 ) environment/makkon_concrete_textures/conc_w03_teal [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+}
+// brush 40
+{
+( -272 16 0 ) ( -272 17 0 ) ( -272 16 1 ) environment/makkon_concrete_textures/conc_w02_wht [ 0 -1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -272 16 0 ) ( -272 16 1 ) ( -271 16 0 ) environment/makkon_concrete_textures/conc_w02_wht [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -272 16 0 ) ( -271 16 0 ) ( -272 17 0 ) environment/makkon_concrete_textures/conc_w02_wht [ -1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( -192 32 64 ) ( -192 33 64 ) ( -191 32 64 ) environment/makkon_concrete_textures/conc_w02_wht [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( -192 32 64 ) ( -191 32 64 ) ( -192 32 65 ) environment/makkon_concrete_textures/conc_w02_wht [ -1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -192 32 64 ) ( -192 32 65 ) ( -192 33 64 ) environment/makkon_concrete_textures/conc_w02_wht [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+}
 }
 // entity 1
 {

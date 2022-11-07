@@ -59,7 +59,7 @@ image_t load_image(arena_t *arena, string_t path)
         .w      = (unsigned)w,
         .h      = (unsigned)h,
         .pitch  = sizeof(uint32_t)*w,
-        .pixels = pixels,
+        .pixels = (uint32_t *)pixels,
     };
 
     return result;
