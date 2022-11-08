@@ -2,7 +2,7 @@
 
 A retro-inspired first person game that is very much work in progress. Being written from scratch in C11, using D3D11. Parses Quake 2 (Valve) .map files produced by [Trenchbroom](https://trenchbroom.github.io/).
 
-![image](https://user-images.githubusercontent.com/49493579/200149308-717f776d-b553-43a0-839c-19130f73e094.png)
+![image](https://user-images.githubusercontent.com/49493579/200447343-83e1e6ae-15da-428d-b758-c80793f37ad7.png)
 
 # How to build
 Run build.bat from the Visual Studio x64 native tools command prompt, optionally with one of the following arguments:  
