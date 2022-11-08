@@ -53,7 +53,7 @@ float4 ps(PS_INPUT IN) : SV_TARGET
     // float4 lighting = lightmap.Sample(sampler_linear_clamped, IN.uv_lightmap);
     // float4 lighting = lightmap.Sample(sampler_linear_clamped, lm_uv);
     float4 lighting = pyramid_blur(lightmap, sampler_linear_clamped, IN.uv_lightmap);
-    float4 col      = IN.col*float4(lighting.xyz*tex.xyz, 1.0f);
-    col.w = 1.0f;
+    float4 col      = IN.col*float4(lighting.xyz, 1)*tex;
+
     return col;
 }

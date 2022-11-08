@@ -10,137 +10,6 @@
 #include "core/random.h"
 #include "core/job_queue.h"
 
-typedef struct intersect_result_t
-{
-    float t;
-    map_poly_t *poly;
-    map_brush_t *brush;
-
-    v3_t uvw;
-    uint32_t triangle_offset;
-} intersect_result_t;
-
-typedef struct intersect_params_t
-{
-    v3_t o;
-    v3_t d;
-
-    bool occlusion_test;
-
-    float min_t, max_t;
-
-    size_t ignore_brush_count;
-    map_brush_t **ignore_brushes;
-} intersect_params_t;
-
-static bool intersect_map(map_t *map, const intersect_params_t *params, intersect_result_t *result)
-{
-    float min_t = params->min_t;
-    float max_t = params->max_t;
-
-    if (min_t == 0.0f) 
-        min_t = 0.001f;
-
-    if (max_t == 0.0f)
-        max_t = FLT_MAX;
-
-    float t = max_t;
-
-    v3_t o = params->o;
-    v3_t d = params->d;
-
-    v3_t hit_uvw = {0};
-    uint32_t hit_triangle_offset = 0;
-
-    map_brush_t *hit_brush = NULL;
-    map_poly_t  *hit_poly  = NULL;
-
-    bool d_is_negative[3] = {
-        d.x < 0.0f,
-        d.y < 0.0f,
-        d.z < 0.0f,
-    };
-
-    uint32_t node_stack_at = 0;
-    uint32_t node_stack[64];
-
-    node_stack[node_stack_at++] = 0;
-
-    while (node_stack_at > 0)
-    {
-        uint32_t node_index = node_stack[--node_stack_at];
-
-        map_bvh_node_t *node = &map->nodes[node_index];
-
-        float bounds_hit_t = ray_intersect_rect3(o, d, node->bounds);
-        if (bounds_hit_t < t)
-        {
-            if (node->count > 0)
-            {
-                uint32_t first = node->left_first;
-                uint16_t count = node->count;
-
-                for (size_t brush_index = 0; brush_index < count; brush_index++)
-                {
-                    map_brush_t *brush = map->brushes[first + brush_index];
-
-                    for (size_t poly_index = 0; poly_index < brush->poly_count; poly_index++)
-                    {
-                        map_poly_t *poly = &brush->polys[poly_index];
-
-                        uint32_t triangle_count = poly->index_count / 3;
-                        for (size_t triangle_index = 0; triangle_index < triangle_count; triangle_index++)
-                        {
-                            v3_t a = poly->vertices[poly->indices[3*triangle_index + 0]].pos;
-                            v3_t b = poly->vertices[poly->indices[3*triangle_index + 1]].pos;
-                            v3_t c = poly->vertices[poly->indices[3*triangle_index + 2]].pos;
-
-                            v3_t uvw;
-                            float triangle_hit_t = ray_intersect_triangle(o, d, a, b, c, &uvw);
-
-                            if (triangle_hit_t >= min_t &&
-                                triangle_hit_t < t)
-                            {
-                                if (params->occlusion_test)
-                                    return true;
-
-                                t = triangle_hit_t;
-                                hit_brush = brush;
-                                hit_poly  = poly;
-                                hit_triangle_offset = (uint32_t)(3*triangle_index);
-                                hit_uvw = uvw;
-                            }
-                        }
-                    }
-                }
-            }
-            else
-            {
-                uint32_t left = node->left_first;
-
-                if (d_is_negative[node->split_axis])
-                {
-                    node_stack[node_stack_at++] = left;
-                    node_stack[node_stack_at++] = left + 1;
-                }
-                else
-                {
-                    node_stack[node_stack_at++] = left + 1;
-                    node_stack[node_stack_at++] = left;
-                }
-            }
-        }
-    }
-
-    result->t               = t;
-    result->poly            = hit_poly;
-    result->brush           = hit_brush;
-    result->triangle_offset = hit_triangle_offset;
-    result->uvw             = hit_uvw;
-    
-    return t < max_t;
-}
-
 v3_t map_to_cosine_weighted_hemisphere(v2_t sample)
 {
     float azimuth = 2.0f*PI32*sample.x;
@@ -170,14 +39,13 @@ static v3_t evaluate_lighting(const light_bake_params_t *params, map_t *map, ran
 
     if (ndotl > 0.0f)
     {
-        intersect_result_t shadow;
         if (!intersect_map(map, &(intersect_params_t) {
                 .o                  = hit_p,
                 .d                  = sun_direction,
                 .ignore_brush_count = 1,
                 .ignore_brushes     = &brush,
                 .occlusion_test     = true,
-            }, &shadow))
+            }, NULL))
         {
             lighting = params->sun_color;
             lighting = mul(lighting, ndotl);
@@ -275,9 +143,9 @@ static void bake_light_job(void *userdata)
     bake_light_job_t *job = userdata;
 
 #if DEBUG
-    int diffuse_ray_count = 16;
+    int diffuse_ray_count = 64;
 #else
-    int diffuse_ray_count = 256;
+    int diffuse_ray_count = 128;
 #endif
 
     const light_bake_params_t *params = job->params;
@@ -300,8 +168,8 @@ static void bake_light_job(void *userdata)
 
     v3_t n = p.n;
 
-    float scale_x = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->tex_maxs.x - plane->tex_mins.x) / LIGHTMAP_SCALE));
-    float scale_y = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->tex_maxs.y - plane->tex_mins.y) / LIGHTMAP_SCALE));
+    float scale_x = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->lm_tex_maxs.x - plane->lm_tex_mins.x) / LIGHTMAP_SCALE));
+    float scale_y = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->lm_tex_maxs.y - plane->lm_tex_mins.y) / LIGHTMAP_SCALE));
 
     int w = (int)(scale_x / LIGHTMAP_SCALE);
     int h = (int)(scale_y / LIGHTMAP_SCALE);
@@ -321,7 +189,7 @@ static void bake_light_job(void *userdata)
         world_p = add(world_p, mul(scale_y*v, plane->t.xyz));
 
         v3_t primary_hit_lighting = evaluate_lighting(params, map, &entropy, world_p, n, brush);
-        v3_t color_accum = {0, 0, 0};
+        v3_t color_accum = mul(primary_hit_lighting, (float)diffuse_ray_count);
 
         for (int i = 0; i < diffuse_ray_count; i++)
         {
@@ -332,7 +200,6 @@ static void bake_light_job(void *userdata)
             dir = add(dir, mul(unrotated_dir.y, b));
             dir = add(dir, mul(unrotated_dir.z, n));
 
-            color_accum = add(color_accum, primary_hit_lighting);
             color_accum = add(color_accum, pathtrace_recursively(params, map, &entropy, world_p, dir, brush, 8));
         }
 

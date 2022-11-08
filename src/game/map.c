@@ -567,8 +567,8 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
         v3_t t, b;
         get_tangent_vectors(p.n, &t, &b);
 
-        v2_t tex_mins = { FLT_MAX, FLT_MAX };
-        v2_t tex_maxs = {-FLT_MAX,-FLT_MAX };
+        v2_t lm_tex_mins = { FLT_MAX, FLT_MAX };
+        v2_t lm_tex_maxs = {-FLT_MAX,-FLT_MAX };
 
         v3_t v_mean = { 0, 0, 0 };
         for (size_t i = 0; i < vertex_count; i++)
@@ -578,20 +578,20 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
 
             bounds = rect3_grow_to_contain(bounds, v);
 
-            v2_t st = { dot(v, plane->s.xyz) + plane->s.w, dot(v, plane->t.xyz) + plane->t.w };
+            v2_t st = { dot(v, plane->s.xyz), dot(v, plane->t.xyz) };
 
-            if (st.x <= tex_mins.x && st.y <= tex_mins.y)
-            {
-                plane->lm_origin = v;
-            }
-
-            tex_mins = min(tex_mins, st);
-            tex_maxs = max(tex_maxs, st);
+            lm_tex_mins = min(lm_tex_mins, st);
+            lm_tex_maxs = max(lm_tex_maxs, st);
         }
         v_mean = div(v_mean, (float)vertex_count);
 
-        plane->tex_mins = tex_mins;
-        plane->tex_maxs = tex_maxs;
+        v3_t lm_origin = mul(p.n, p.d);
+        lm_origin = add(lm_origin, mul(plane->s.xyz, lm_tex_mins.x));
+        lm_origin = add(lm_origin, mul(plane->t.xyz, lm_tex_mins.y));
+
+        plane->lm_tex_mins  = lm_tex_mins;
+        plane->lm_tex_maxs  = lm_tex_maxs;
+        plane->lm_origin = lm_origin;
 
         m_scoped(temp)
         {
@@ -720,8 +720,8 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
                 unsigned vertex_count = sb_count(verts);
                 vertex_brush_t *triangle_vertices = m_alloc_array_nozero(arena, vertex_count, vertex_brush_t);
 
-                float lightmap_scale_x = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->tex_maxs.x - plane->tex_mins.x) / LIGHTMAP_SCALE));
-                float lightmap_scale_y = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->tex_maxs.y - plane->tex_mins.y) / LIGHTMAP_SCALE));
+                float lightmap_scale_x = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->lm_tex_maxs.x - plane->lm_tex_mins.x) / LIGHTMAP_SCALE));
+                float lightmap_scale_y = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->lm_tex_maxs.y - plane->lm_tex_mins.y) / LIGHTMAP_SCALE));
 
                 for (size_t i = 0; i < vertex_count; i++)
                 {
@@ -733,8 +733,8 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
                             .y = (dot(pos, t_vec) + t_offset) / texscale_y / plane->scale_y,
                         },
                         .tex_lightmap = {
-                            .x = ((dot(pos, s_vec) + s_offset) - plane->tex_mins.x) / lightmap_scale_x,
-                            .y = ((dot(pos, t_vec) + t_offset) - plane->tex_mins.y) / lightmap_scale_y,
+                            .x = (dot(pos, s_vec) - plane->lm_tex_mins.x) / lightmap_scale_x,
+                            .y = (dot(pos, t_vec) - plane->lm_tex_mins.y) / lightmap_scale_y,
                         },
                         .col = { 1, 1, 1 },
                     };

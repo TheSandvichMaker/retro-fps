@@ -20,8 +20,8 @@ typedef struct map_plane_t
     v4_t s, t;
     float rot, scale_x, scale_y;
 
-    v2_t tex_mins;
-    v2_t tex_maxs;
+    v2_t lm_tex_mins;
+    v2_t lm_tex_maxs;
     v3_t lm_origin;
 
     unsigned poly_index;
