@@ -2,6 +2,7 @@
 #define CORE_H
 
 #include "common.h"
+#include "atomics.h"
 #include "intrin.h"
 #include "math.h"
 #include "os.h"

@@ -127,8 +127,9 @@ void m_release(arena_t *arena)
 {
     if (arena->owns_memory)
     {
-        vm_release(arena->buffer);
+        void *buffer = arena->buffer;
         zero_struct(arena);
+        vm_release(buffer);
     }
     else
     {

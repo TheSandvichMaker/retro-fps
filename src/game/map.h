@@ -8,7 +8,7 @@
 #if DEBUG
 #define LIGHTMAP_SCALE 8
 #else
-#define LIGHTMAP_SCALE 4
+#define LIGHTMAP_SCALE 2
 #endif
 
 typedef struct map_plane_t
