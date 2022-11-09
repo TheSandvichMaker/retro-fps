@@ -20,5 +20,5 @@ If you run into the issue that stdalign.h doesn't exist, try getting the latest 
 After building, run build\debug\retro.exe or build\release\retro.exe with the "run" folder as the working directory.
 
 # Credits
-Textures by [Ben "Makkon" Hale](https://twitter.com/makkon_art/)
+Textures by [Ben "Makkon" Hale](https://twitter.com/makkon_art/)  
 Textures not included in the repo, because I don't want to pay for git LFS bandwidth.
