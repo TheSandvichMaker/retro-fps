@@ -184,14 +184,14 @@ bool intersect_map(map_t *map, const intersect_params_t *params, intersect_resul
                             if (triangle_hit_t >= min_t &&
                                 triangle_hit_t < t)
                             {
-                                if (params->occlusion_test)
-                                    return true;
-
                                 t                   = triangle_hit_t;
                                 hit_brush           = brush;
                                 hit_poly            = poly;
                                 hit_triangle_offset = (uint32_t)(3*triangle_index);
                                 hit_uvw             = uvw;
+
+                                if (params->occlusion_test)
+                                    goto early_exit;
                             }
                         }
                     }
@@ -214,6 +214,8 @@ bool intersect_map(map_t *map, const intersect_params_t *params, intersect_resul
             }
         }
     }
+
+early_exit:
 
     if (result)
     {

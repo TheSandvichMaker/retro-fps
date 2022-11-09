@@ -316,6 +316,11 @@ DECLARE_VECTOR3_OP(sub, -)
 DECLARE_VECTOR3_OP(mul, *)
 DECLARE_VECTOR3_OP(div, /)
 
+static inline v3_t make_v3(float x, float y, float z)
+{
+    return (v3_t){x,y,z};
+}
+
 static inline v3_t v3_add3(v3_t a, v3_t b, v3_t c)
 {
     v3_t result = {

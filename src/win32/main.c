@@ -211,6 +211,8 @@ int wWinMain(HINSTANCE instance,
             if (GetAsyncKeyState(VK_SHIFT))   input.button_states |= BUTTON_RUN;
             if (GetAsyncKeyState(VK_ESCAPE))  input.button_states |= BUTTON_ESCAPE;
             if (GetAsyncKeyState('V'))        input.button_states |= BUTTON_TOGGLE_NOCLIP;
+            if (GetAsyncKeyState(VK_LBUTTON)) input.button_states |= BUTTON_FIRE1;
+            if (GetAsyncKeyState(VK_RBUTTON)) input.button_states |= BUTTON_FIRE2;
 
             input.mouse_x = cursor.x;
             input.mouse_y = cursor.y;

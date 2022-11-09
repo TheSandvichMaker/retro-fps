@@ -48,6 +48,20 @@
         if ((n)->next) (n)->next->prev = (n)->prev; \
     } while (0)
 
+#define sll_append(fd, ld, fs, ls) \
+    do {                           \
+        if (!(fd))                 \
+        {                          \
+            (fd) = (fs);           \
+            (ld) = (ls);           \
+        }                          \
+        else                       \
+        {                          \
+            (ld)->next = (fs);     \
+            (ld) = (ls);           \
+        }                          \
+    } while(0)
+
 void set_memory(void *memory, size_t size, char value);
 #define zero_memory(memory, size) set_memory(memory, size, 0)
 #define zero_struct(memory)       set_memory(memory, sizeof(*memory), 0)

@@ -16,6 +16,7 @@ typedef enum warning_level_t
 typedef enum warning_t
 {
     WARNING_ANONYMOUS_STRUCT,
+    WARNING_TYPE_DEFINITION_IN_PARENTHESIS,
     WARNING_COUNT,
 } warning_t;
 
@@ -27,7 +28,8 @@ typedef enum warning_state_t
 } warning_state_t;
 
 static warning_state_t warning_defaults[WARNING_COUNT] = {
-    [WARNING_ANONYMOUS_STRUCT] = WARNING_STATE_DISABLED,
+    [WARNING_ANONYMOUS_STRUCT]               = WARNING_STATE_DISABLED,
+    [WARNING_TYPE_DEFINITION_IN_PARENTHESIS] = WARNING_STATE_DISABLED,
 };
 
 typedef enum backend_compiler_t

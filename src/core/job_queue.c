@@ -39,9 +39,21 @@ typedef struct job_queue_internal_t
     HANDLE semaphore;
 } job_queue_internal_t;
 
+typedef struct job_proc_params_t
+{
+    job_queue_internal_t *queue;
+    int thread_index;
+} job_proc_params_t;
+
 static DWORD WINAPI job_queue_thread_proc(void *userdata)
 {
-    job_queue_internal_t *queue = userdata;
+    job_proc_params_t *params = userdata;
+
+    job_queue_internal_t *queue = params->queue;
+
+    job_context_t context = {
+        .thread_index = params->thread_index,
+    };
 
     for (;;)
     {
@@ -54,7 +66,7 @@ static DWORD WINAPI job_queue_thread_proc(void *userdata)
             if (exchanged_index == entry_index)
             {
                 job_queue_entry_t *entry = &queue->entries[entry_index % queue->queue_size];
-                entry->job(entry->userdata);
+                entry->job(&context, entry->userdata);
 
                 uint32_t jobs_count = InterlockedDecrement((volatile long *)&queue->jobs_in_flight);
 
@@ -90,10 +102,17 @@ job_queue_t create_job_queue(size_t thread_count, size_t queue_size)
 
     queue->semaphore = CreateSemaphoreA(NULL, 0, (LONG)thread_count, NULL);
 
+    // just keep these around who cares
+    job_proc_params_t *params = m_alloc_array(&queue->arena, thread_count, job_proc_params_t);
+
     for (size_t thread_index = 0; thread_index < thread_count; thread_index++)
     {
+        job_proc_params_t *param = &params[thread_index];
+        param->queue        = queue;
+        param->thread_index = (int)thread_index;
+
         job_thread_t *thread = &queue->threads[thread_index];
-        thread->handle = CreateThread(NULL, 0, job_queue_thread_proc, queue, 0, NULL);
+        thread->handle = CreateThread(NULL, 0, job_queue_thread_proc, param, 0, NULL);
     }
 
     job_queue_t result = { queue };

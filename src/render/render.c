@@ -276,6 +276,76 @@ void r_immediate_line(v3_t start, v3_t end, v3_t color)
     r_immediate_index(i1);
 }
 
+void r_immediate_arrow(v3_t start, v3_t end, v3_t color)
+{
+    float head_size = 1.0f;
+
+    v3_t  arrow_vector = sub(end, start);
+    float arrow_length = vlen(arrow_vector);
+
+    v3_t arrow_direction = normalize_or_zero(arrow_vector);
+
+    float shaft_length = max(0.0f, arrow_length - 3.0f*head_size);
+
+    v3_t shaft_vector = mul(shaft_length, arrow_direction);
+    v3_t shaft_end    = add(start, shaft_vector);
+
+    v3_t t, b;
+    get_tangent_vectors(arrow_direction, &t, &b);
+
+    size_t arrow_segment_count = 8;
+    for (size_t i = 0; i < arrow_segment_count; i++)
+    {
+        float circ0 = 2.0f*PI32*((float)(i + 0) / (float)arrow_segment_count);
+        float circ1 = 2.0f*PI32*((float)(i + 1) / (float)arrow_segment_count);
+
+        float s0, c0;
+        sincos_ss(circ0, &s0, &c0);
+
+        float s1, c1;
+        sincos_ss(circ1, &s1, &c1);
+
+        v3_t v0 = add(shaft_end, add(mul(t, head_size*s0), mul(b, head_size*c0)));
+        v3_t v1 = add(shaft_end, add(mul(t, head_size*s1), mul(b, head_size*c1)));
+        r_immediate_line(v0, v1, color);
+
+        r_immediate_line(v0, end, color);
+    }
+
+    r_immediate_line(start, shaft_end, color);
+}
+
+void r_immediate_box(rect3_t bounds, v3_t color)
+{
+    v3_t v000 = { bounds.min.x, bounds.min.y, bounds.min.z };
+    v3_t v100 = { bounds.max.x, bounds.min.y, bounds.min.z };
+    v3_t v010 = { bounds.min.x, bounds.max.y, bounds.min.z };
+    v3_t v110 = { bounds.max.x, bounds.max.y, bounds.min.z };
+
+    v3_t v001 = { bounds.min.x, bounds.min.y, bounds.max.z };
+    v3_t v101 = { bounds.max.x, bounds.min.y, bounds.max.z };
+    v3_t v011 = { bounds.min.x, bounds.max.y, bounds.max.z };
+    v3_t v111 = { bounds.max.x, bounds.max.y, bounds.max.z };
+
+    // bottom plane
+    r_immediate_line(v000, v100, color);
+    r_immediate_line(v100, v110, color);
+    r_immediate_line(v110, v010, color);
+    r_immediate_line(v010, v000, color);
+
+    // top plane
+    r_immediate_line(v001, v101, color);
+    r_immediate_line(v101, v111, color);
+    r_immediate_line(v111, v011, color);
+    r_immediate_line(v011, v001, color);
+
+    // "pillars"
+    r_immediate_line(v000, v001, color);
+    r_immediate_line(v100, v101, color);
+    r_immediate_line(v010, v011, color);
+    r_immediate_line(v110, v111, color);
+}
+
 static bool r_immediate_submit_vertices(void)
 {
     if (g_immediate_state.vcount > 0)

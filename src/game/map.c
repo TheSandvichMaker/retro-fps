@@ -393,6 +393,9 @@ map_entity_t *parse_map(arena_t *arena, string_t path)
                         map_parse_tex_vec(&parser, &plane->s);
                         map_parse_tex_vec(&parser, &plane->t);
 
+                        plane->lm_s = normalize_or_zero(plane->s.xyz);
+                        plane->lm_t = normalize_or_zero(plane->t.xyz);
+
                         map_parse_number(&parser, &plane->rot);
                         map_parse_number(&parser, &plane->scale_x);
                         map_parse_number(&parser, &plane->scale_y);
@@ -578,7 +581,7 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
 
             bounds = rect3_grow_to_contain(bounds, v);
 
-            v2_t st = { dot(v, plane->s.xyz), dot(v, plane->t.xyz) };
+            v2_t st = { dot(v, plane->lm_s), dot(v, plane->lm_t) };
 
             lm_tex_mins = min(lm_tex_mins, st);
             lm_tex_maxs = max(lm_tex_maxs, st);
@@ -586,12 +589,12 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
         v_mean = div(v_mean, (float)vertex_count);
 
         v3_t lm_origin = mul(p.n, p.d);
-        lm_origin = add(lm_origin, mul(plane->s.xyz, lm_tex_mins.x));
-        lm_origin = add(lm_origin, mul(plane->t.xyz, lm_tex_mins.y));
+        lm_origin = add(lm_origin, mul(plane->lm_s, lm_tex_mins.x));
+        lm_origin = add(lm_origin, mul(plane->lm_t, lm_tex_mins.y));
 
-        plane->lm_tex_mins  = lm_tex_mins;
-        plane->lm_tex_maxs  = lm_tex_maxs;
-        plane->lm_origin = lm_origin;
+        plane->lm_tex_mins = lm_tex_mins;
+        plane->lm_tex_maxs = lm_tex_maxs;
+        plane->lm_origin   = lm_origin;
 
         m_scoped(temp)
         {
@@ -733,8 +736,8 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
                             .y = (dot(pos, t_vec) + t_offset) / texscale_y / plane->scale_y,
                         },
                         .tex_lightmap = {
-                            .x = (dot(pos, s_vec) - plane->lm_tex_mins.x) / lightmap_scale_x,
-                            .y = (dot(pos, t_vec) - plane->lm_tex_mins.y) / lightmap_scale_y,
+                            .x = (dot(pos, plane->lm_s) - plane->lm_tex_mins.x) / lightmap_scale_x,
+                            .y = (dot(pos, plane->lm_t) - plane->lm_tex_mins.y) / lightmap_scale_y,
                         },
                         .col = { 1, 1, 1 },
                     };

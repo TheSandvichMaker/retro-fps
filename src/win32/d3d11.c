@@ -766,8 +766,6 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
         ID3D11DeviceContext_Draw(d3d.context, 3, 0);
     }
 
-    // ID3D11DeviceContext_ResolveSubresource(d3d.context, (ID3D11Resource *)d3d.rt_tex, 0, (ID3D11Resource *)d3d.msaa_rt_tex, 0, DXGI_FORMAT_R8G8B8A8_UNORM);
-
     d3d.frame_index++;
 }
 

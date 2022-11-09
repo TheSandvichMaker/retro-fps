@@ -1,5 +1,6 @@
 static string_t msvc_warning_to_string[WARNING_COUNT] = {
-    [WARNING_ANONYMOUS_STRUCT] = strinit("/wd4201"),
+    [WARNING_ANONYMOUS_STRUCT]               = strinit("/wd4201"),
+    [WARNING_TYPE_DEFINITION_IN_PARENTHESIS] = strinit("/wd4115"),
 };
 
 static build_result_t msvc_build(build_context_t *context, const source_files_t *files_, const build_job_t *job)
@@ -56,7 +57,7 @@ static build_result_t msvc_build(build_context_t *context, const source_files_t 
         if (job->warnings[i] == WARNING_STATE_SANE_DEFAULT)
             enabled = warning_defaults[i] == WARNING_STATE_ENABLED;
 
-        if (enabled)
+        if (!enabled)
             slist_appends(&cl_flags, temp, msvc_warning_to_string[i]);
     }
 

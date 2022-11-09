@@ -14,7 +14,12 @@ typedef struct job_queue_t
 job_queue_t create_job_queue(size_t thread_count, size_t queue_size);
 void destroy_job_queue(job_queue_t queue);
 
-typedef void (*job_t)(void *userdata);
+typedef struct job_context_t
+{
+    int thread_index;
+} job_context_t;
+
+typedef void (*job_t)(job_context_t *context, void *userdata);
 void add_job_to_queue(job_queue_t queue, job_t job, void *userdata);
 void wait_on_queue(job_queue_t queue);
 

@@ -6,7 +6,7 @@
 #include "game/asset.h"
 
 #if DEBUG
-#define LIGHTMAP_SCALE 8
+#define LIGHTMAP_SCALE 4
 #else
 #define LIGHTMAP_SCALE 2
 #endif
@@ -23,6 +23,7 @@ typedef struct map_plane_t
     v2_t lm_tex_mins;
     v2_t lm_tex_maxs;
     v3_t lm_origin;
+    v3_t lm_s, lm_t;
 
     unsigned poly_index;
 } map_plane_t;

@@ -21,6 +21,8 @@ static bitmap_font_t font;
 static size_t map_vertex_count;
 static v3_t map_vertices[MAX_VERTICES];
 
+static bake_light_results_t bake_results;
+
 void game_init(void)
 {
     {
@@ -40,13 +42,22 @@ void game_init(void)
 
     world = m_bootstrap(world_t, arena);
     world->map = load_map(&world->arena, strlit("gamedata/maps/test.map"));
-    bake_lighting(&(light_bake_params_t) {
+
+    bake_lighting(&(bake_light_params_t) {
         .arena         = &world->arena,
         .map           = world->map,
-        .sun_direction = { 0.25f, 0.75f, 1 },
-        .sun_color     = { 4, 4, 3.5f },
-        .ambient_color = { 0.15f, 0.30f, 0.62f },
-    });
+        .sun_direction = make_v3(0.25f, 0.75f, 1),
+        .sun_color     = mul(1.0f, make_v3(4, 4, 3.5f)),
+        .ambient_color = mul(1.0f, make_v3(0.15f, 0.30f, 0.62f)),
+
+#if DEBUG
+        .ray_count     = 32,
+        .ray_recursion = 2,
+#else
+        .ray_count     = 128,
+        .ray_recursion = 8,
+#endif
+    }, &bake_results);
 
     world->player = m_alloc_struct(&world->arena, player_t);
 
@@ -437,6 +448,8 @@ static v3_t player_view_direction(player_t *player)
     return dir;
 }
 
+static bool g_debug_lightmaps;
+
 void game_tick(game_io_t *io, float dt)
 {
     if (!initialized)
@@ -508,6 +521,74 @@ void game_tick(game_io_t *io, float dt)
                 .transform = m4x4_identity,
             });
         }
+    }
+
+    if (button_pressed(BUTTON_FIRE2))
+        g_debug_lightmaps = !g_debug_lightmaps;
+
+    if (g_debug_lightmaps)
+    {
+        static map_brush_t *selected_brush = NULL;
+
+        r_immediate_topology(R_PRIMITIVE_TOPOLOGY_LINELIST);
+
+        intersect_result_t intersect;
+        if (intersect_map(map, &(intersect_params_t) {
+                .o = player_view_origin(player),
+                .d = player_view_direction(player),
+            }, &intersect))
+        {
+            if (button_pressed(BUTTON_FIRE1))
+                selected_brush = intersect.brush;
+
+            if (!selected_brush)
+                r_immediate_box(intersect.brush->bounds, make_v3(1, 0, 0));
+        }
+        else
+        {
+            if (button_pressed(BUTTON_FIRE1))
+                selected_brush = NULL;
+        }
+
+        if (selected_brush)
+        {
+            r_immediate_box(selected_brush->bounds, make_v3(0, 1, 0));
+            r_immediate_depth_test(false);
+
+            for (map_plane_t *plane = selected_brush->first_plane;
+                 plane;
+                 plane = plane->next)
+            {
+                r_immediate_arrow(plane->lm_origin, add(plane->lm_origin, mul(10.0f, plane->s.xyz)), make_v3(1, 0, 1));
+                r_immediate_arrow(plane->lm_origin, add(plane->lm_origin, mul(10.0f, plane->t.xyz)), make_v3(0, 0, 1));
+
+                v3_t square_v0 = add(plane->lm_origin, mul(2.5f, plane->s.xyz));
+                v3_t square_v1 = add(plane->lm_origin, mul(2.5f, plane->t.xyz));
+                v3_t square_v2 = v3_add3(plane->lm_origin, mul(2.5f, plane->s.xyz), mul(2.5f, plane->t.xyz));
+
+                r_immediate_line(square_v0, square_v2, make_v3(0, 1, 0));
+                r_immediate_line(square_v1, square_v2, make_v3(0, 1, 0));
+            }
+        }
+
+        for (bake_light_debug_ray_t *ray = bake_results.debug_data.direct_rays.first;
+             ray;
+             ray = ray->next)
+        {
+            if (ray->spawn_brush == selected_brush)
+            {
+                if (ray->t != FLT_MAX)
+                {
+                    r_immediate_arrow(ray->o, add(ray->o, mul(ray->t, ray->d)), make_v3(1, 0, 0));
+                }
+                else
+                {
+                    r_immediate_arrow(ray->o, add(ray->o, mul(15.0f, ray->d)), make_v3(0, 1, 0));
+                }
+            }
+        }
+
+        r_immediate_flush();
     }
 
 #if 0

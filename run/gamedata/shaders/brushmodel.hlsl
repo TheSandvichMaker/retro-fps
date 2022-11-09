@@ -21,6 +21,20 @@ PS_INPUT vs(VS_INPUT_BRUSH IN)
     return OUT;
 }
 
+#if 0
+float3 unpack_lightmap_color(float4 color)
+{
+    float multiplier = exp(16.0f*color.w);
+
+    float3 result = {
+        color.x*multiplier,
+        color.y*multiplier,
+        color.z*multiplier,
+    };
+    return result;
+}
+#endif
+
 float4 pyramid_blur(Texture2D tex, sampler samp, float2 uv)
 {
     float2 dim;
@@ -52,8 +66,14 @@ float4 ps(PS_INPUT IN) : SV_TARGET
     float4 tex      = albedo.Sample(sampler_linear, uv);
     // float4 lighting = lightmap.Sample(sampler_linear_clamped, IN.uv_lightmap);
     // float4 lighting = lightmap.Sample(sampler_linear_clamped, lm_uv);
+
     float4 lighting = pyramid_blur(lightmap, sampler_linear_clamped, IN.uv_lightmap);
+
+    // float3 lighting = unpack_lightmap_color(lightmap.Sample(sampler_linear_clamped, IN.uv_lightmap));
+
     float4 col      = IN.col*float4(lighting.xyz, 1)*tex;
+
+    //col.xyz = 1 - exp(-lighting.xyz);
 
     return col;
 }
