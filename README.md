@@ -13,6 +13,8 @@ build -all        // build debug and release configuration
   
 By default, it only builds the debug configuration.
 
+If you run into the issue that stdalign.h doesn't exist, try getting the latest Visual Studio 2022 build tools and using those. stdalign.h is a surprisingly recent addition to the Visual Studio C standard library offerings.
+
 # How to run
 
 After building, run build\debug\retro.exe or build\release\retro.exe with the "run" folder as the working directory.
