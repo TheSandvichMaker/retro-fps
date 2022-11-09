@@ -13,5 +13,9 @@ build -all        // build debug and release configuration
   
 By default, it only builds the debug configuration.
 
+# How to run
+
+After building, run build\debug\retro.exe or build\release\retro.exe with the "run" folder as the working directory.
+
 # Credits
 Textures by [Ben "Makkon" Hale](https://twitter.com/makkon_art/)
