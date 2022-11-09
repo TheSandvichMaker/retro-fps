@@ -21,3 +21,4 @@ After building, run build\debug\retro.exe or build\release\retro.exe with the "r
 
 # Credits
 Textures by [Ben "Makkon" Hale](https://twitter.com/makkon_art/)
+Textures not included in the repo, because I don't want to pay for git LFS bandwidth.
