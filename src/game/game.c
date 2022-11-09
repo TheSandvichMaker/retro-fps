@@ -50,8 +50,9 @@ void game_init(void)
         .sun_color     = mul(1.0f, make_v3(4, 4, 3.5f)),
         .ambient_color = mul(1.0f, make_v3(0.15f, 0.30f, 0.62f)),
 
+        // TODO: Have a macro for optimization level to check instead of DEBUG
 #if DEBUG
-        .ray_count     = 32,
+        .ray_count     = 16,
         .ray_recursion = 2,
 #else
         .ray_count     = 128,
@@ -450,6 +451,24 @@ static v3_t player_view_direction(player_t *player)
 
 static bool g_debug_lightmaps;
 
+static void draw_brush_wireframe(map_brush_t *brush, v3_t color)
+{
+    for (size_t poly_index = 0; poly_index < brush->poly_count; poly_index++)
+    {
+        map_poly_t *poly = &brush->polys[poly_index];
+        for (size_t triangle_index = 0; triangle_index < poly->index_count / 3; triangle_index++)
+        {
+            v3_t a = poly->vertices[poly->indices[3*triangle_index + 0]].pos;
+            v3_t b = poly->vertices[poly->indices[3*triangle_index + 1]].pos;
+            v3_t c = poly->vertices[poly->indices[3*triangle_index + 2]].pos;
+
+            r_immediate_line(a, b, color);
+            r_immediate_line(a, c, color);
+            r_immediate_line(b, c, color);
+        }
+    }
+}
+
 void game_tick(game_io_t *io, float dt)
 {
     if (!initialized)
@@ -523,14 +542,20 @@ void game_tick(game_io_t *io, float dt)
         }
     }
 
+    static map_brush_t *selected_brush = NULL;
+
     if (button_pressed(BUTTON_FIRE2))
-        g_debug_lightmaps = !g_debug_lightmaps;
+    {
+        if (selected_brush)
+            selected_brush = NULL;
+        else
+            g_debug_lightmaps = !g_debug_lightmaps;
+    }
 
     if (g_debug_lightmaps)
     {
-        static map_brush_t *selected_brush = NULL;
-
         r_immediate_topology(R_PRIMITIVE_TOPOLOGY_LINELIST);
+        r_immediate_depth_bias(0.005f);
 
         intersect_result_t intersect;
         if (intersect_map(map, &(intersect_params_t) {
@@ -542,7 +567,7 @@ void game_tick(game_io_t *io, float dt)
                 selected_brush = intersect.brush;
 
             if (!selected_brush)
-                r_immediate_box(intersect.brush->bounds, make_v3(1, 0, 0));
+                draw_brush_wireframe(intersect.brush, make_v3(1, 0, 0));
         }
         else
         {
@@ -552,8 +577,7 @@ void game_tick(game_io_t *io, float dt)
 
         if (selected_brush)
         {
-            r_immediate_box(selected_brush->bounds, make_v3(0, 1, 0));
-            r_immediate_depth_test(false);
+            // r_immediate_box(selected_brush->bounds, make_v3(0, 1, 0));
 
             for (map_plane_t *plane = selected_brush->first_plane;
                  plane;
@@ -569,6 +593,8 @@ void game_tick(game_io_t *io, float dt)
                 r_immediate_line(square_v0, square_v2, make_v3(0, 1, 0));
                 r_immediate_line(square_v1, square_v2, make_v3(0, 1, 0));
             }
+
+            draw_brush_wireframe(selected_brush, make_v3(0, 1, 0));
         }
 
         for (bake_light_debug_ray_t *ray = bake_results.debug_data.direct_rays.first;

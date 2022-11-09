@@ -682,6 +682,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                     d3d_cbuffer_t cbuffer = {
                         .camera_projection = camera_projection,
                         .model_transform   = command->transform,
+                        .depth_bias        = command->depth_bias,
                     };
 
                     update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));

@@ -151,6 +151,8 @@ typedef struct r_command_immediate_t
     resource_handle_t      texture;
     r_primitive_topology_t topology;
 
+    float                  depth_bias;
+
     uint32_t               icount;
     uint16_t              *ibuffer;
 
@@ -163,6 +165,7 @@ typedef struct r_command_immediate_t
 void     r_immediate_topology(r_primitive_topology_t topology);
 void     r_immediate_texture(resource_handle_t texture);
 void     r_immediate_depth_test(bool enabled);
+void     r_immediate_depth_bias(float bias);
 void     r_immediate_transform(const m4x4_t *transform);
 uint16_t r_immediate_vertex(const vertex_pos_tex_col_t *vertex);
 void     r_immediate_index(uint16_t index);
@@ -170,7 +173,6 @@ void     r_immediate_line(v3_t start, v3_t end, v3_t color);
 void     r_immediate_arrow(v3_t start, v3_t end, v3_t color);
 void     r_immediate_box(rect3_t bounds, v3_t color);
 void     r_immediate_flush(void);
-
 
 typedef struct bitmap_font_t
 {

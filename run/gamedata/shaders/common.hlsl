@@ -33,6 +33,7 @@ cbuffer cbuffer0 : register(b0)
     float4x4 light_projection;
     float4x4 model_transform;
     uint     frame_index;
+    float    depth_bias;
 }
 
 float2 fat_pixel(float2 tex_dim, float2 in_uv)

@@ -210,6 +210,8 @@ typedef struct r_immediate_state_s
     resource_handle_t      texture;
     r_primitive_topology_t topology;
 
+    float                  depth_bias;
+
     uint32_t               icount;
     uint16_t               ibuffer[MAX_IMMEDIATE_INDICES];
 
@@ -236,6 +238,11 @@ void r_immediate_texture(resource_handle_t texture)
 void r_immediate_depth_test(bool enabled)
 {
     g_immediate_state.no_depth_test = !enabled;
+}
+
+void r_immediate_depth_bias(float bias)
+{
+    g_immediate_state.depth_bias = bias;
 }
 
 void r_immediate_transform(const m4x4_t *transform)
@@ -357,6 +364,7 @@ static bool r_immediate_submit_vertices(void)
 
             .transform     = g_immediate_state.transform,
             .no_depth_test = g_immediate_state.no_depth_test,
+            .depth_bias    = g_immediate_state.depth_bias,
 
             .texture       = g_immediate_state.texture,
             .topology      = g_immediate_state.topology,
@@ -385,6 +393,7 @@ void r_immediate_flush(void)
         g_immediate_state.no_depth_test = false;
         g_immediate_state.texture       = (resource_handle_t){0};
         g_immediate_state.topology      = R_PRIMITIVE_TOPOLOGY_TRIANGELIST;
+        g_immediate_state.depth_bias    = 0.0f;
     }
 }
 

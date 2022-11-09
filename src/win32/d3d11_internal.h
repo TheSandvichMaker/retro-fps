@@ -10,6 +10,7 @@ typedef struct d3d_cbuffer_t
     m4x4_t light_projection;
     m4x4_t model_transform;
     uint32_t frame_index;
+    float    depth_bias;
 } d3d_cbuffer_t;
 
 typedef struct d3d_model_t

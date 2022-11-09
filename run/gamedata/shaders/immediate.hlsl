@@ -21,6 +21,7 @@ PS_INPUT vs(VS_INPUT IN)
 {
     PS_INPUT OUT;
     OUT.pos = mul(mul(camera_projection, model_transform), float4(IN.pos, 1));
+    OUT.pos.z += depth_bias;
     OUT.uv  = IN.uv;
     OUT.col = float4(IN.col, 1);
     return OUT;
