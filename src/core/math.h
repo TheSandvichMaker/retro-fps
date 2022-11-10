@@ -182,6 +182,11 @@ DECLARE_VECTOR2_OP(sub, -)
 DECLARE_VECTOR2_OP(mul, *)
 DECLARE_VECTOR2_OP(div, /)
 
+static inline v2_t make_v2(float x, float y)
+{
+    return (v2_t){x,y};
+}
+
 static inline v2_t v2_add3(v2_t a, v2_t b, v2_t c)
 {
     v2_t result = {
@@ -472,6 +477,11 @@ DECLARE_VECTOR4_OP(add, +)
 DECLARE_VECTOR4_OP(sub, -)
 DECLARE_VECTOR4_OP(mul, *)
 DECLARE_VECTOR4_OP(div, /)
+
+static inline v4_t make_v4(float x, float y, float z, float w)
+{
+    return (v4_t){x,y,z,w};
+}
 
 static inline float v4_dot(v4_t l, v4_t r)
 {
@@ -846,6 +856,16 @@ static inline m4x4_t make_perspective_matrix(float vfov, float w_over_h, float n
     );
 
     return result;
+}
+
+//
+// rect2
+//
+
+static inline bool rect2_contains_point(rect2_t rect, v2_t point)
+{
+    return (point.x >= rect.min.x && point.x < rect.max.x &&
+            point.y >= rect.min.y && point.y < rect.max.y);
 }
 
 //

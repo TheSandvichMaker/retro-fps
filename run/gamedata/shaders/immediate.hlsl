@@ -4,7 +4,7 @@ struct VS_INPUT
 {
     float3 pos : POSITION;
     float2 uv  : TEXCOORD;
-    float3 col : COLOR;
+    uint   col : COLOR;
 };
 
 struct PS_INPUT
@@ -23,7 +23,12 @@ PS_INPUT vs(VS_INPUT IN)
     OUT.pos = mul(mul(camera_projection, model_transform), float4(IN.pos, 1));
     OUT.pos.z += depth_bias;
     OUT.uv  = IN.uv;
-    OUT.col = float4(IN.col, 1);
+
+    OUT.col = float4((float)((IN.col >>  0) & 0xFF) / 255.0f,
+                     (float)((IN.col >>  8) & 0xFF) / 255.0f,
+                     (float)((IN.col >> 16) & 0xFF) / 255.0f,
+                     (float)((IN.col >> 24) & 0xFF) / 255.0f);
+
     return OUT;
 }
 

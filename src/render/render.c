@@ -20,9 +20,9 @@ void equip_render_api(render_api_i *api)
 }
 
 uint32_t vertex_format_size[VERTEX_FORMAT_COUNT] = {
-    [VERTEX_FORMAT_POS]         = sizeof(v3_t),
-    [VERTEX_FORMAT_POS_TEX_COL] = sizeof(vertex_pos_tex_col_t),
-    [VERTEX_FORMAT_BRUSH ]      = sizeof(vertex_brush_t),
+    [VERTEX_FORMAT_POS]       = sizeof(vertex_pos_t),
+    [VERTEX_FORMAT_IMMEDIATE] = sizeof(vertex_immediate_t),
+    [VERTEX_FORMAT_BRUSH]     = sizeof(vertex_brush_t),
 };
 
 static r_list_t *g_list;
@@ -39,12 +39,37 @@ void r_reset_command_list(void)
     g_list->view_count    = 0;
     g_list->view_stack_at = 0;
 
-    r_view_t view;
-    r_default_view(&view);
-    r_push_view(&view);
+    r_view_t default_view;
+    r_default_view(&default_view);
+    r_push_view(&default_view);
 
     // TODO: This view situation is a disaster
-    r_push_view_screenspace();
+    {
+        r_view_t view = { 0 };
+
+        int w, h;
+        render->get_resolution(&w, &h);
+
+        view.clip_rect = (rect2_t) {
+            .x0 = 0.0f,
+            .y0 = 0.0f,
+            .x1 = (float)w,
+            .y1 = (float)h,
+        };
+
+        float a = 2.0f / (float)w;
+        float b = 2.0f / (float)h;
+
+        view.camera = make_m4x4(
+            a, 0, 0, -1,
+            0, b, 0, -1,
+            0, 0, 1,  0,
+            0, 0, 0,  1
+        );
+        view.projection = m4x4_identity;
+
+        r_push_view(&view);
+    }
 }
 
 static STRING_STORAGE(64) g_next_command_identifier;
@@ -117,30 +142,15 @@ void r_push_view(const r_view_t *view)
 
 void r_push_view_screenspace(void)
 {
-    r_view_t view = { 0 };
+    if (ALWAYS(g_list->view_count < R_MAX_VIEWS))
+    {
+        r_view_index_t index = SCREENSPACE_VIEW_INDEX;
 
-    int w, h;
-    render->get_resolution(&w, &h);
-
-    view.clip_rect = (rect2_t) {
-        .x0 = 0.0f,
-        .y0 = 0.0f,
-        .x1 = (float)w,
-        .y1 = (float)h,
-    };
-
-    float a = 2.0f / (float)w;
-    float b = 2.0f / (float)h;
-
-    view.camera = make_m4x4(
-        a, 0, 0, -1,
-        0, b, 0, -1,
-        0, 0, 1,  0,
-        0, 0, 0,  1
-    );
-    view.projection = m4x4_identity;
-
-    r_push_view(&view);
+        if (ALWAYS(g_list->view_stack_at < R_MAX_VIEWS))
+        {
+            g_list->view_stack[g_list->view_stack_at++] = index;
+        }
+    }
 }
 
 void r_default_view(r_view_t *view)
@@ -216,12 +226,19 @@ typedef struct r_immediate_state_s
     uint16_t               ibuffer[MAX_IMMEDIATE_INDICES];
 
     uint32_t               vcount;
-    vertex_pos_tex_col_t   vbuffer[MAX_IMMEDIATE_VERTICES];
+    vertex_immediate_t   vbuffer[MAX_IMMEDIATE_VERTICES];
 } r_immediate_state_t;
 
 static r_immediate_state_t g_immediate_state = {
     .transform = M4X4_IDENTITY_INIT,
 };
+
+//
+// this immediate mode rendering API makes me so sad
+// I will now take a break and stop streaming for a while
+//
+// I will come back and make the API unsad.
+//
 
 void r_immediate_topology(r_primitive_topology_t topology)
 {
@@ -250,7 +267,7 @@ void r_immediate_transform(const m4x4_t *transform)
     g_immediate_state.transform = *transform;
 }
 
-uint16_t r_immediate_vertex(const vertex_pos_tex_col_t *vertex)
+uint16_t r_immediate_vertex(const vertex_immediate_t *vertex)
 {
     uint16_t result = UINT16_MAX;
 
@@ -275,15 +292,45 @@ void r_immediate_index(uint16_t index)
     g_immediate_state.ibuffer[g_immediate_state.icount++] = index;
 }
 
-void r_immediate_line(v3_t start, v3_t end, v3_t color)
+void r_immediate_line(v3_t start, v3_t end, uint32_t color)
 {
-    uint16_t i0 = r_immediate_vertex(&(vertex_pos_tex_col_t){ .pos = start, .col = color });
+    uint16_t i0 = r_immediate_vertex(&(vertex_immediate_t){ .pos = start, .col = color });
     r_immediate_index(i0);
-    uint16_t i1 = r_immediate_vertex(&(vertex_pos_tex_col_t){ .pos = end,   .col = color });
+    uint16_t i1 = r_immediate_vertex(&(vertex_immediate_t){ .pos = end,   .col = color });
     r_immediate_index(i1);
 }
 
-void r_immediate_arrow(v3_t start, v3_t end, v3_t color)
+void r_immediate_filled_rect2(rect2_t rect, uint32_t color)
+{
+    uint16_t i0 = r_immediate_vertex(&(vertex_immediate_t){ 
+        .pos = { rect.min.x, rect.min.y, 0.0f }, 
+        .col = color 
+    });
+    uint16_t i1 = r_immediate_vertex(&(vertex_immediate_t){ 
+        .pos = { rect.max.x, rect.min.y, 0.0f }, 
+        .col = color 
+    });
+    uint16_t i2 = r_immediate_vertex(&(vertex_immediate_t){ 
+        .pos = { rect.max.x, rect.max.y, 0.0f }, 
+        .col = color 
+    });
+    uint16_t i3 = r_immediate_vertex(&(vertex_immediate_t){ 
+        .pos = { rect.min.x, rect.max.y, 0.0f }, 
+        .col = color 
+    });
+
+    // triangle 1
+    r_immediate_index(i0);
+    r_immediate_index(i1);
+    r_immediate_index(i2);
+
+    // triangle 2
+    r_immediate_index(i0);
+    r_immediate_index(i2);
+    r_immediate_index(i3);
+}
+
+void r_immediate_arrow(v3_t start, v3_t end, uint32_t color)
 {
     float head_size = 1.0f;
 
@@ -322,7 +369,7 @@ void r_immediate_arrow(v3_t start, v3_t end, v3_t color)
     r_immediate_line(start, shaft_end, color);
 }
 
-void r_immediate_box(rect3_t bounds, v3_t color)
+void r_immediate_box(rect3_t bounds, uint32_t color)
 {
     v3_t v000 = { bounds.min.x, bounds.min.y, bounds.min.z };
     v3_t v100 = { bounds.max.x, bounds.min.y, bounds.min.z };
@@ -416,19 +463,14 @@ v3_t r_to_view_space(const r_view_t *view, v3_t p, float w)
     return pw.xyz;
 }
 
-void r_immediate_text(const bitmap_font_t *font, v2_t p, v3_t color, string_t string)
+void r_immediate_text(const bitmap_font_t *font, v2_t p, uint32_t color, string_t string)
 {
-    // r_push_view_screenspace();
+    // this is stupid, r_immediate_* is supposed to just be putting vertices, really,
+    // but r_immediate_text is a full draw call by itself that pushes a view and everything
 
-    if (ALWAYS(g_list->view_count < R_MAX_VIEWS))
-    {
-        r_view_index_t index = SCREENSPACE_VIEW_INDEX;
+    // unintuitive and weird.
 
-        if (ALWAYS(g_list->view_stack_at < R_MAX_VIEWS))
-        {
-            g_list->view_stack[g_list->view_stack_at++] = index;
-        }
-    }
+    r_push_view_screenspace();
     
     r_immediate_texture(font->texture);
     r_immediate_topology(R_PRIMITIVE_TOPOLOGY_TRIANGELIST);
@@ -463,27 +505,27 @@ void r_immediate_text(const bitmap_font_t *font, v2_t p, v3_t color, string_t st
             float v0 = cy / 16.0f;
             float v1 = v0 + (1.0f / 16.0f);
 
-            uint16_t i0 = r_immediate_vertex(&(vertex_pos_tex_col_t) {
-                .pos = (v3_t) { at.x, at.y, 0.0f }, // TODO: Use Z?
-                .tex = (v2_t) { u0, v1 },
+            uint16_t i0 = r_immediate_vertex(&(vertex_immediate_t) {
+                .pos = { at.x, at.y, 0.0f }, // TODO: Use Z?
+                .tex = { u0, v1 },
                 .col = color,
             });
 
-            uint16_t i1 = r_immediate_vertex(&(vertex_pos_tex_col_t) {
-                .pos = (v3_t) { at.x + cw, at.y, 0.0f }, // TODO: Use Z?
-                .tex = (v2_t) { u1, v1 },
+            uint16_t i1 = r_immediate_vertex(&(vertex_immediate_t) {
+                .pos = { at.x + cw, at.y, 0.0f }, // TODO: Use Z?
+                .tex = { u1, v1 },
                 .col = color,
             });
 
-            uint16_t i2 = r_immediate_vertex(&(vertex_pos_tex_col_t) {
-                .pos = (v3_t) { at.x + cw, at.y + ch, 0.0f }, // TODO: Use Z?
-                .tex = (v2_t) { u1, v0 },
+            uint16_t i2 = r_immediate_vertex(&(vertex_immediate_t) {
+                .pos = { at.x + cw, at.y + ch, 0.0f }, // TODO: Use Z?
+                .tex = { u1, v0 },
                 .col = color,
             });
 
-            uint16_t i3 = r_immediate_vertex(&(vertex_pos_tex_col_t) {
-                .pos = (v3_t) { at.x, at.y + ch, 0.0f }, // TODO: Use Z?
-                .tex = (v2_t) { u0, v0 },
+            uint16_t i3 = r_immediate_vertex(&(vertex_immediate_t) {
+                .pos = { at.x, at.y + ch, 0.0f }, // TODO: Use Z?
+                .tex = { u0, v0 },
                 .col = color,
             });
 

@@ -62,6 +62,9 @@
         }                          \
     } while(0)
 
+#define has_flags_any(field, flags) (!!((field) & (flags)))
+#define has_flags_all(field, flags) (((field) & (flags)) == (flags))
+
 void set_memory(void *memory, size_t size, char value);
 #define zero_memory(memory, size) set_memory(memory, size, 0)
 #define zero_struct(memory)       set_memory(memory, sizeof(*memory), 0)

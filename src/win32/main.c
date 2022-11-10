@@ -215,7 +215,7 @@ int wWinMain(HINSTANCE instance,
             if (GetAsyncKeyState(VK_RBUTTON)) input.button_states |= BUTTON_FIRE2;
 
             input.mouse_x = cursor.x;
-            input.mouse_y = cursor.y;
+            input.mouse_y = height - cursor.y - 1;
 
             input.mouse_dx = cursor.x - prev_cursor.x;
             input.mouse_dy = cursor.y - prev_cursor.y;

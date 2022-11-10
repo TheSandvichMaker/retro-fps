@@ -12,11 +12,11 @@ struct VS_INPUT_POS
     float3 pos : POSITION;
 };
 
-struct VS_INPUT_POS_TEX_COL
+struct VS_INPUT_IMMEDIATE
 {
     float3 pos : POSITION;
     float2 uv  : TEXCOORD;
-    float3 col : COLOR;
+    float4 col : COLOR;
 };
 
 struct VS_INPUT_BRUSH
@@ -24,7 +24,6 @@ struct VS_INPUT_BRUSH
     float3 pos         : POSITION;
     float2 uv          : TEXCOORD;
     float2 uv_lightmap : TEXCOORD_LIGHTMAP;
-    float3 col         : COLOR;
 };
 
 cbuffer cbuffer0 : register(b0)

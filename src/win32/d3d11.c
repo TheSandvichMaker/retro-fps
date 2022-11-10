@@ -136,34 +136,29 @@ int init_d3d11(void *hwnd_)
 
     m_scoped(temp)
     {
+        D3D11_INPUT_ELEMENT_DESC layout_immediate[] = {
+            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,     0, offsetof(vertex_immediate_t, pos), D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,        0, offsetof(vertex_immediate_t, tex), D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "COLOR",    0, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 0, offsetof(vertex_immediate_t, col), D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        };
+
+        D3D11_INPUT_ELEMENT_DESC layout_brush[] = {
+            { "POSITION",          0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(vertex_brush_t,     pos),          D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "TEXCOORD",          0, DXGI_FORMAT_R32G32_FLOAT,    0, offsetof(vertex_brush_t,     tex),          D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "TEXCOORD_LIGHTMAP", 0, DXGI_FORMAT_R32G32_FLOAT,    0, offsetof(vertex_brush_t,     tex_lightmap), D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        };
+
         string_t hlsl_file = strlit("gamedata/shaders/input_layout_nonsense.hlsl");
         string_t hlsl = fs_read_entire_file(temp, hlsl_file);
 
-        ID3DBlob *pos         = compile_shader(hlsl_file, hlsl, "pos", "vs_5_0");
-        ID3DBlob *pos_tex_col = compile_shader(hlsl_file, hlsl, "pos_tex_col", "vs_5_0");
-        ID3DBlob *brush       = compile_shader(hlsl_file, hlsl, "brush", "vs_5_0");
+        ID3DBlob *vs_immediate = compile_shader(hlsl_file, hlsl, "immediate", "vs_5_0");
+        ID3DBlob *vs_brush     = compile_shader(hlsl_file, hlsl, "brush", "vs_5_0");
 
-        D3D11_INPUT_ELEMENT_DESC desc[] = {
-            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(vertex_pos_tex_col_t, pos), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-            { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, offsetof(vertex_pos_tex_col_t, tex), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-            { "COLOR",    0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(vertex_pos_tex_col_t, col), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        };
+        ID3D11Device_CreateInputLayout(d3d.device, layout_immediate, ARRAY_COUNT(layout_immediate), ID3D10Blob_GetBufferPointer(vs_immediate), ID3D10Blob_GetBufferSize(vs_immediate), &d3d.layouts[VERTEX_FORMAT_IMMEDIATE]);
+        ID3D11Device_CreateInputLayout(d3d.device, layout_brush, ARRAY_COUNT(layout_brush), ID3D10Blob_GetBufferPointer(vs_brush),     ID3D10Blob_GetBufferSize(vs_brush),     &d3d.layouts[VERTEX_FORMAT_BRUSH]);
 
-        ID3D11Device_CreateInputLayout(d3d.device, desc, 1, ID3D10Blob_GetBufferPointer(pos),         ID3D10Blob_GetBufferSize(pos),         &d3d.layouts[VERTEX_FORMAT_POS]);
-        ID3D11Device_CreateInputLayout(d3d.device, desc, 3, ID3D10Blob_GetBufferPointer(pos_tex_col), ID3D10Blob_GetBufferSize(pos_tex_col), &d3d.layouts[VERTEX_FORMAT_POS_TEX_COL]);
-
-        D3D11_INPUT_ELEMENT_DESC desc2[] = {
-            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(vertex_brush_t, pos), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-            { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, offsetof(vertex_brush_t, tex), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-            { "TEXCOORD_LIGHTMAP", 0, DXGI_FORMAT_R32G32_FLOAT,    0, offsetof(vertex_brush_t, tex_lightmap), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-            { "COLOR",    0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(vertex_brush_t, col), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        };
-
-        ID3D11Device_CreateInputLayout(d3d.device, desc2, ARRAY_COUNT(desc2), ID3D10Blob_GetBufferPointer(brush), ID3D10Blob_GetBufferSize(brush), &d3d.layouts[VERTEX_FORMAT_BRUSH]);
-
-        ID3D10Blob_Release(pos);
-        ID3D10Blob_Release(pos_tex_col);
-        ID3D10Blob_Release(brush);
+        ID3D10Blob_Release(vs_immediate);
+        ID3D10Blob_Release(vs_brush);
     }
 
     // compile shaders
@@ -412,7 +407,7 @@ int init_d3d11(void *hwnd_)
     }
 
     {
-        size_t stride = vertex_format_size[VERTEX_FORMAT_POS_TEX_COL];
+        size_t stride = vertex_format_size[VERTEX_FORMAT_IMMEDIATE];
         size_t vcount = MAX_IMMEDIATE_VERTICES;
 
         D3D11_BUFFER_DESC desc = {
@@ -557,7 +552,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
         };
 
         // clear screen
-        FLOAT color[] = { 0.0f, 0.4f, 0.3f, 1.f };
+        FLOAT color[] = { 0.4f, 0.0f, 0.3f, 1.f };
         ID3D11DeviceContext_ClearRenderTargetView(d3d.context, d3d.rt_rtv, color);
         ID3D11DeviceContext_ClearDepthStencilView(d3d.context, d3d.ds_view, D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL, 0.0f, 0);
 
@@ -707,7 +702,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                     }
 
                     d3d_model_t immediate_model = {
-                        .vertex_format      = VERTEX_FORMAT_POS_TEX_COL,
+                        .vertex_format      = VERTEX_FORMAT_IMMEDIATE,
                         .primitive_topology = topology,
                         .vcount             = vcount,
                         .vbuffer            = d3d.immediate_vbuffer,
@@ -749,6 +744,8 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
         ID3D11DeviceContext_OMSetBlendState(d3d.context, d3d.bs, NULL, ~0U);
         ID3D11DeviceContext_OMSetDepthStencilState(d3d.context, d3d.dss_no_depth, 0);
         ID3D11DeviceContext_OMSetRenderTargets(d3d.context, 1, &d3d.rt_rtv, NULL);
+
+        ID3D11DeviceContext_IASetInputLayout(d3d.context, NULL);
 
         // set vertex shader
         ID3D11DeviceContext_VSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);

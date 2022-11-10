@@ -739,7 +739,6 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
                             .x = (dot(pos, plane->lm_s) - plane->lm_tex_mins.x) / lightmap_scale_x,
                             .y = (dot(pos, plane->lm_t) - plane->lm_tex_mins.y) / lightmap_scale_y,
                         },
-                        .col = { 1, 1, 1 },
                     };
                 }
 

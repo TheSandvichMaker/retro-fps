@@ -156,6 +156,7 @@ int main(int argc, char **argv)
     bool release   = false;
     bool stub      = false;
     bool not_slow  = false;
+    bool asan      = false;
     backend_compiler_t backend = BACKEND_MSVC;
 
     cmd_args_t *args = &(cmd_args_t){0};
@@ -182,6 +183,10 @@ int main(int argc, char **argv)
         else if (args_match(args, "-not_slow"))
         {
             not_slow = true;
+        }
+        else if (args_match(args, "-asan"))
+        {
+            asan = true;
         }
         else if (args_match(args, "-stub"))
         {
@@ -239,6 +244,8 @@ int main(int argc, char **argv)
         .single_translation_unit = stub,
 
         .backend                 = backend,
+
+        .address_sanitizer       = asan,
 
         .warnings_are_errors     = true,
         .warning_level           = W4,

@@ -5,7 +5,6 @@ struct PS_INPUT
     float4 pos         : SV_POSITION;
     float2 uv          : TEXCOORD;
     float2 uv_lightmap : TEXCOORD_LIGHTMAP;
-    float4 col         : COLOR;
 };
 
 Texture2D albedo   : register(t0);
@@ -17,23 +16,8 @@ PS_INPUT vs(VS_INPUT_BRUSH IN)
     OUT.pos         = mul(mul(camera_projection, model_transform), float4(IN.pos, 1));
     OUT.uv          = IN.uv;
     OUT.uv_lightmap = IN.uv_lightmap;
-    OUT.col         = float4(IN.col, 1);
     return OUT;
 }
-
-#if 0
-float3 unpack_lightmap_color(float4 color)
-{
-    float multiplier = exp(16.0f*color.w);
-
-    float3 result = {
-        color.x*multiplier,
-        color.y*multiplier,
-        color.z*multiplier,
-    };
-    return result;
-}
-#endif
 
 float4 pyramid_blur(Texture2D tex, sampler samp, float2 uv)
 {
@@ -71,7 +55,7 @@ float4 ps(PS_INPUT IN) : SV_TARGET
 
     // float3 lighting = unpack_lightmap_color(lightmap.Sample(sampler_linear_clamped, IN.uv_lightmap));
 
-    float4 col      = IN.col*float4(lighting.xyz, 1)*tex;
+    float4 col      = float4(lighting.xyz, 1)*tex;
 
     //col.xyz = 1 - exp(-lighting.xyz);
 

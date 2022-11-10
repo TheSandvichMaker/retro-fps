@@ -99,7 +99,7 @@ diag_node_t *diag_add_group(diag_node_t *parent, string_t name)
     return group;
 }
 
-diag_node_t *diag_add_arrow(diag_node_t *parent, v3_t color, v3_t start, v3_t end)
+diag_node_t *diag_add_arrow(diag_node_t *parent, uint32_t color, v3_t start, v3_t end)
 {
     diag_node_t *diag = diag_new_child(parent, DIAG_ARROW);
     diag->color = color;
@@ -108,7 +108,7 @@ diag_node_t *diag_add_arrow(diag_node_t *parent, v3_t color, v3_t start, v3_t en
     return diag;
 }
 
-diag_node_t *diag_add_box(diag_node_t *parent, v3_t color, rect3_t bounds)
+diag_node_t *diag_add_box(diag_node_t *parent, uint32_t color, rect3_t bounds)
 {
     diag_node_t *diag = diag_new_child(parent, DIAG_BOX);
     diag->color  = color;
@@ -116,7 +116,7 @@ diag_node_t *diag_add_box(diag_node_t *parent, v3_t color, rect3_t bounds)
     return diag;
 }
 
-diag_node_t *diag_add_text(diag_node_t *parent, v3_t color, v3_t position, string_t text)
+diag_node_t *diag_add_text(diag_node_t *parent, uint32_t color, v3_t position, string_t text)
 {
     // TODO: text lifetime
     diag_node_t *diag = diag_new_child(parent, DIAG_TEXT);

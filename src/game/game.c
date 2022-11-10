@@ -7,6 +7,7 @@
 #include "input.h"
 #include "asset.h"
 #include "intersect.h"
+#include "ui.h"
 #include "render/light_baker.h"
 #include "render/render.h"
 #include "render/diagram.h"
@@ -43,6 +44,7 @@ void game_init(void)
     world = m_bootstrap(world_t, arena);
     world->map = load_map(&world->arena, strlit("gamedata/maps/test.map"));
 
+#if 1
     bake_lighting(&(bake_light_params_t) {
         .arena         = &world->arena,
         .map           = world->map,
@@ -52,13 +54,14 @@ void game_init(void)
 
         // TODO: Have a macro for optimization level to check instead of DEBUG
 #if DEBUG
-        .ray_count     = 16,
+        .ray_count     = 8,
         .ray_recursion = 2,
 #else
         .ray_count     = 128,
         .ray_recursion = 8,
 #endif
     }, &bake_results);
+#endif
 
     world->player = m_alloc_struct(&world->arena, player_t);
 
@@ -132,10 +135,8 @@ void game_init(void)
     initialized = true;
 }
 
-void player_freecam(player_t *player, float dt)
+void player_mouse_move(player_t *player, float dt)
 {
-    player->support = NULL;
-
     int dxi, dyi;
     get_mouse_delta(&dxi, &dyi);
 
@@ -150,6 +151,11 @@ void player_freecam(player_t *player, float dt)
 
     player->look_yaw   = fmodf(player->look_yaw, 360.0f);
     player->look_pitch = CLAMP(player->look_pitch, -85.0f, 85.0f);
+}
+
+void player_freecam(player_t *player, float dt)
+{
+    player->support = NULL;
 
     float move_speed = 200.0f;
     v3_t move_delta = { 0 };
@@ -176,25 +182,7 @@ void player_freecam(player_t *player, float dt)
 
 void player_movement(player_t *player, float dt)
 {
-    // mouselook
-
-    int dxi, dyi;
-    get_mouse_delta(&dxi, &dyi);
-
-    float dx = (float)dxi;
-    float dy = (float)dyi;
-
-    float look_speed_x = 10.0f;
-    float look_speed_y = 10.0f;
-
-    player->look_yaw   -= look_speed_x*dt*dx;
-    player->look_pitch += look_speed_y*dt*dy;
-
-    player->look_yaw   = fmodf(player->look_yaw, 360.0f);
-    player->look_pitch = CLAMP(player->look_pitch, -85.0f, 85.0f);
-
-    // quat_t qpitch = make_quat_axis_angle((v3_t){ 0, 1, 0 }, DEG_TO_RAD*player->look_pitch);
-    quat_t qyaw   = make_quat_axis_angle((v3_t){ 0, 0, 1 }, DEG_TO_RAD*player->look_yaw);
+    quat_t qyaw = make_quat_axis_angle((v3_t){ 0, 0, 1 }, DEG_TO_RAD*player->look_yaw);
 
     // movement
 
@@ -450,8 +438,9 @@ static v3_t player_view_direction(player_t *player)
 }
 
 static bool g_debug_lightmaps;
+static bool g_cursor_locked;
 
-static void draw_brush_wireframe(map_brush_t *brush, v3_t color)
+static void draw_brush_wireframe(map_brush_t *brush, uint32_t color)
 {
     for (size_t poly_index = 0; poly_index < brush->poly_count; poly_index++)
     {
@@ -477,7 +466,34 @@ void game_tick(game_io_t *io, float dt)
     }
 
     update_input_state(io->input_state);
-    io->cursor_locked = io->has_focus;
+
+    // I suppose for UI eating input, I will just check if the UI is focused and then
+    // stop any game code from seeing the input.
+
+    bool ui_focused = ui_begin(&font);
+
+    if (ui_focused)
+    {
+        // no more input for you, game
+        // but the UI code still needs to see input
+        // the way I did a lot of the code base for this project is sort of different
+        // from how I usually do things, just to keep me on my toes, but as a result
+        // a lot of it is kind of... bad. the input included. it receives a game_io_t
+        // struct from the platform layer just like in handmade hero, but then instead
+        // of passing down the input state to functions that need it, update_input_state
+        // will set some global stuff which can then be accessed anywhere in the code,
+        // so there is no obvious way to control who gets to query input.
+
+        // instead it will be just, hey, before any other game code runs, maybe eat the
+        // inputs.
+
+        suppress_game_input(true);
+    }
+
+    if (button_pressed(BUTTON_FIRE2))
+        g_cursor_locked = !g_cursor_locked;
+
+    io->cursor_locked = g_cursor_locked;
 
     player_t *player = world->player;
 
@@ -488,6 +504,9 @@ void game_tick(game_io_t *io, float dt)
         else
             player->move_mode = PLAYER_MOVE_NORMAL;
     }
+
+    if (io->cursor_locked)
+        player_mouse_move(player, dt);
 
     switch (player->move_mode)
     {
@@ -544,18 +563,17 @@ void game_tick(game_io_t *io, float dt)
 
     static map_brush_t *selected_brush = NULL;
 
-    if (button_pressed(BUTTON_FIRE2))
-    {
-        if (selected_brush)
-            selected_brush = NULL;
-        else
-            g_debug_lightmaps = !g_debug_lightmaps;
-    }
+    rect2_t panel_bounds = {
+        .min = { 32, 32  },
+        .max = { 512, 256 },
+    };
 
     if (g_debug_lightmaps)
     {
         r_immediate_topology(R_PRIMITIVE_TOPOLOGY_LINELIST);
         r_immediate_depth_bias(0.005f);
+
+        // r_immediate_line(make_v3(0, 0, 0), make_v3(0, 0, 1), make_v3(1, 0, 0));
 
         intersect_result_t intersect;
         if (intersect_map(map, &(intersect_params_t) {
@@ -567,7 +585,7 @@ void game_tick(game_io_t *io, float dt)
                 selected_brush = intersect.brush;
 
             if (!selected_brush)
-                draw_brush_wireframe(intersect.brush, make_v3(1, 0, 0));
+                draw_brush_wireframe(intersect.brush, COLOR32_RED);
         }
         else
         {
@@ -577,24 +595,22 @@ void game_tick(game_io_t *io, float dt)
 
         if (selected_brush)
         {
-            // r_immediate_box(selected_brush->bounds, make_v3(0, 1, 0));
-
             for (map_plane_t *plane = selected_brush->first_plane;
                  plane;
                  plane = plane->next)
             {
-                r_immediate_arrow(plane->lm_origin, add(plane->lm_origin, mul(10.0f, plane->s.xyz)), make_v3(1, 0, 1));
-                r_immediate_arrow(plane->lm_origin, add(plane->lm_origin, mul(10.0f, plane->t.xyz)), make_v3(0, 0, 1));
+                r_immediate_arrow(plane->lm_origin, add(plane->lm_origin, mul(10.0f, plane->s.xyz)), COLOR32_RED);
+                r_immediate_arrow(plane->lm_origin, add(plane->lm_origin, mul(10.0f, plane->t.xyz)), COLOR32_BLUE);
 
                 v3_t square_v0 = add(plane->lm_origin, mul(2.5f, plane->s.xyz));
                 v3_t square_v1 = add(plane->lm_origin, mul(2.5f, plane->t.xyz));
                 v3_t square_v2 = v3_add3(plane->lm_origin, mul(2.5f, plane->s.xyz), mul(2.5f, plane->t.xyz));
 
-                r_immediate_line(square_v0, square_v2, make_v3(0, 1, 0));
-                r_immediate_line(square_v1, square_v2, make_v3(0, 1, 0));
+                r_immediate_line(square_v0, square_v2, COLOR32_GREEN);
+                r_immediate_line(square_v1, square_v2, COLOR32_GREEN);
             }
 
-            draw_brush_wireframe(selected_brush, make_v3(0, 1, 0));
+            draw_brush_wireframe(selected_brush, COLOR32_GREEN);
         }
 
         for (bake_light_debug_ray_t *ray = bake_results.debug_data.direct_rays.first;
@@ -605,17 +621,27 @@ void game_tick(game_io_t *io, float dt)
             {
                 if (ray->t != FLT_MAX)
                 {
-                    r_immediate_arrow(ray->o, add(ray->o, mul(ray->t, ray->d)), make_v3(1, 0, 0));
+                    r_immediate_arrow(ray->o, add(ray->o, mul(ray->t, ray->d)), COLOR32_RED);
                 }
                 else
                 {
-                    r_immediate_arrow(ray->o, add(ray->o, mul(15.0f, ray->d)), make_v3(0, 1, 0));
+                    r_immediate_arrow(ray->o, add(ray->o, mul(15.0f, ray->d)), COLOR32_GREEN);
                 }
             }
         }
 
+        r_command_identifier(strlit("lightmap debug"));
         r_immediate_flush();
     }
+
+    ui_begin_panel(panel_bounds);
+    {
+        if (ui_button(strlit("lightmap debugger")))
+        {
+            g_debug_lightmaps = !g_debug_lightmaps;
+        }
+    }
+    ui_end_panel();
 
 #if 0
     diag_node_t *bvh_diag = diag_begin(strlit("bvh"));
@@ -628,10 +654,9 @@ void game_tick(game_io_t *io, float dt)
     }
 #endif
 
-    diag_draw_all(&font);
+    // diag_draw_all(&font);
 
-    r_immediate_text(&font, (v2_t){ 32, 32 }, (v3_t){ 1, 1, 1 }, 
-                     strlit("You know what they call a quarter pounder with cheese in paris?"));
+    ui_end();
 
     if (button_pressed(BUTTON_ESCAPE))
     {

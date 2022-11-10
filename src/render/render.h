@@ -10,6 +10,20 @@
 
 extern v3_t g_debug_colors[6];
 
+#define COLOR32_WHITE   pack_rgba(1, 1, 1, 1)
+#define COLOR32_RED     pack_rgba(1, 0, 0, 1)
+#define COLOR32_GREEN   pack_rgba(0, 1, 0, 1)
+#define COLOR32_BLUE    pack_rgba(0, 0, 1, 1)
+#define COLOR32_MAGENTA pack_rgba(1, 0, 1, 1)
+#define COLOR32_CYAN    pack_rgba(0, 1, 1, 1)
+#define COLOR32_YELLOW  pack_rgba(1, 1, 0, 1)
+
+typedef struct bitmap_font_t
+{
+    unsigned w, h, cw, ch;
+    resource_handle_t texture;
+} bitmap_font_t;
+
 static inline v3_t r_debug_color(size_t i)
 {
     return g_debug_colors[i % ARRAY_COUNT(g_debug_colors)];
@@ -43,7 +57,7 @@ typedef struct upload_texture_s
 typedef enum vertex_format_e
 {
     VERTEX_FORMAT_POS,
-    VERTEX_FORMAT_POS_TEX_COL,
+    VERTEX_FORMAT_IMMEDIATE,
     VERTEX_FORMAT_BRUSH,
     VERTEX_FORMAT_COUNT,
 } vertex_format_t;
@@ -59,19 +73,23 @@ typedef enum r_primitive_topology_e
 
 extern uint32_t vertex_format_size[VERTEX_FORMAT_COUNT];
 
-typedef struct vertex_pos_tex_col_s
+typedef struct vertex_pos_t
+{
+    v3_t pos;
+} vertex_pos_t;
+
+typedef struct vertex_immediate_t
 {
     v3_t pos;
     v2_t tex;
-    v3_t col;
-} vertex_pos_tex_col_t;
+    uint32_t col;
+} vertex_immediate_t;
 
 typedef struct vertex_brush_t
 {
     v3_t pos;
     v2_t tex;
     v2_t tex_lightmap;
-    v3_t col;
 } vertex_brush_t;
 
 typedef struct upload_model_s
@@ -157,7 +175,7 @@ typedef struct r_command_immediate_t
     uint16_t              *ibuffer;
 
     uint32_t               vcount;
-    vertex_pos_tex_col_t  *vbuffer;
+    vertex_immediate_t    *vbuffer;
 } r_command_immediate_t;
 
 // immediate mode API
@@ -167,20 +185,16 @@ void     r_immediate_texture(resource_handle_t texture);
 void     r_immediate_depth_test(bool enabled);
 void     r_immediate_depth_bias(float bias);
 void     r_immediate_transform(const m4x4_t *transform);
-uint16_t r_immediate_vertex(const vertex_pos_tex_col_t *vertex);
+uint16_t r_immediate_vertex(const vertex_immediate_t *vertex);
 void     r_immediate_index(uint16_t index);
-void     r_immediate_line(v3_t start, v3_t end, v3_t color);
-void     r_immediate_arrow(v3_t start, v3_t end, v3_t color);
-void     r_immediate_box(rect3_t bounds, v3_t color);
+// TODO: I want these to support alpha
+void     r_immediate_line(v3_t start, v3_t end, uint32_t color);
+void     r_immediate_arrow(v3_t start, v3_t end, uint32_t color);
+void     r_immediate_filled_rect2(rect2_t rect, uint32_t color);
+void     r_immediate_box(rect3_t bounds, uint32_t color);
 void     r_immediate_flush(void);
 
-typedef struct bitmap_font_t
-{
-    unsigned w, h, cw, ch;
-    resource_handle_t texture;
-} bitmap_font_t;
-
-void r_immediate_text(const bitmap_font_t *font, v2_t p, v3_t color, string_t string);
+void r_immediate_text(const bitmap_font_t *font, v2_t p, uint32_t color, string_t string);
 
 enum { R_MAX_VIEWS = 32 };
 typedef unsigned char r_view_index_t;
@@ -210,5 +224,63 @@ void r_copy_top_view(r_view_t *view);
 r_view_t *r_get_top_view(void);
 v3_t r_to_view_space(const r_view_t *view, v3_t p, float w);
 void r_pop_view(void);
+
+static inline v4_t linear_to_srgb(v4_t color)
+{
+    // TODO: more accurate srgb transforms?
+    color.xyz = (v3_t){
+        .x = sqrt_ss(color.x),
+        .y = sqrt_ss(color.y),
+        .z = sqrt_ss(color.z),
+    };
+    return color;
+}
+
+static inline v4_t srgb_to_linear(v4_t color)
+{
+    // TODO: more accurate srgb transforms?
+    color.xyz = (v3_t){
+        .x = color.x*color.x,
+        .y = color.y*color.y,
+        .z = color.z*color.z,
+    };
+    return color;
+}
+
+static inline uint32_t pack_color(v4_t color)
+{
+    color.x = CLAMP(color.x, 0.0f, 1.0f);
+    color.y = CLAMP(color.y, 0.0f, 1.0f);
+    color.z = CLAMP(color.z, 0.0f, 1.0f);
+    color.w = CLAMP(color.w, 0.0f, 1.0f);
+
+    uint32_t result = (((uint32_t)(255.0f*color.x) <<  0) |
+                       ((uint32_t)(255.0f*color.y) <<  8) |
+                       ((uint32_t)(255.0f*color.z) << 16) |
+                       ((uint32_t)(255.0f*color.w) << 24));
+    return result;
+}
+
+static inline uint32_t pack_rgba(float r, float g, float b, float a)
+{
+    return pack_color((v4_t){r, g, b, a});
+}
+
+static inline uint32_t pack_rgb(float r, float g, float b)
+{
+    return pack_color((v4_t){r, g, b, 1.0f});
+}
+
+static inline v4_t unpack_color(uint32_t color)
+{
+    float rcp_255 = 1.0f / 255.0f;
+
+    v4_t result;
+    result.x = rcp_255*(float)((color >>  0) & 0xFF);
+    result.y = rcp_255*(float)((color >>  8) & 0xFF);
+    result.z = rcp_255*(float)((color >> 16) & 0xFF);
+    result.w = rcp_255*(float)((color >> 24) & 0xFF);
+    return result;
+}
 
 #endif /* RENDER_H */
