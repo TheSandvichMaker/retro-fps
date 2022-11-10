@@ -1,6 +1,7 @@
 #ifndef DIAGRAM_H
 #define DIAGRAM_H
 
+#if 0
 #include "core/api_types.h"
 
 #define DIAG_NODE_MAX_NAME_SIZE (64)
@@ -49,5 +50,6 @@ diag_node_t *diag_add_text(diag_node_t *parent, uint32_t color, v3_t position, s
 void diag_set_name(diag_node_t *node, string_t name);
 
 void diag_draw_all(const bitmap_font_t *font);
+#endif
 
 #endif /* DIAGRAM_H */

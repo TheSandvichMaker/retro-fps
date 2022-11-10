@@ -35,9 +35,14 @@ void r_set_command_list(r_list_t *new_list)
 
 void r_reset_command_list(void)
 {
+    g_list->immediate_draw_call = NULL;
+
     g_list->command_list_at = g_list->command_list_base;
     g_list->view_count    = 0;
     g_list->view_stack_at = 0;
+
+    g_list->immediate_icount = 0;
+    g_list->immediate_vcount = 0;
 
     r_view_t default_view;
     r_default_view(&default_view);
@@ -79,51 +84,43 @@ void r_command_identifier(string_t identifier)
     STRING_INTO_STORAGE(g_next_command_identifier, identifier);
 }
 
-void r_submit_command(void *command)
+static void *r_submit_command(r_command_kind_t kind, size_t command_size)
 {
     ASSERT(g_list);
 
-    r_command_base_t *base = command;
+    void *result = NULL;
 
-    if (ALWAYS(g_list->view_stack_at > 0))
+    if (ALWAYS(kind > R_COMMAND_NONE && kind < R_COMMAND_COUNT))
     {
-        base->view = g_list->view_stack[g_list->view_stack_at-1];
-    }
-    else
-    {
-        base->view = 0;
-    }
-
-#ifndef NDEBUG
-    if (g_next_command_identifier.count > 0)
-    {
-        base->identifier = string_copy(temp, STRING_FROM_STORAGE(g_next_command_identifier));
-    }
-    g_next_command_identifier.count = 0;
-#endif
-
-    if (ALWAYS(base->kind > R_COMMAND_NONE && base->kind < R_COMMAND_COUNT))
-    {
-        size_t command_size = 0;
-
-        switch (base->kind)
-        {
-            case R_COMMAND_MODEL:     command_size = sizeof(r_command_model_t); break;
-            case R_COMMAND_IMMEDIATE: command_size = sizeof(r_command_immediate_t); break;
-
-            INVALID_DEFAULT_CASE;
-        }
-
         size_t size_used = align_forward(g_list->command_list_at - g_list->command_list_base, RENDER_COMMAND_ALIGN);
         size_t size_left = g_list->command_list_size - size_used;
         if (ALWAYS(size_left >= command_size))
         {
             char *at = align_address(g_list->command_list_at, RENDER_COMMAND_ALIGN);
-            copy_memory(at, command, command_size);
+            zero_memory(at, command_size);
+
+            r_command_base_t *base = (void *)at;
+            base->kind = kind;
+
+            if (ALWAYS(g_list->view_stack_at > 0))
+                base->view = g_list->view_stack[g_list->view_stack_at-1];
+            else
+                base->view = 0;
+
+#ifndef NDEBUG
+            if (g_next_command_identifier.count > 0)
+                base->identifier = string_copy(temp, STRING_FROM_STORAGE(g_next_command_identifier));
+
+            g_next_command_identifier.count = 0;
+#endif
 
             g_list->command_list_at = at + command_size;
+
+            result = at;
         }
     }
+
+    return result;
 }
 
 void r_push_view(const r_view_t *view)
@@ -210,134 +207,6 @@ void r_pop_view(void)
     }
 }
 
-static bool r_immediate_submit_vertices(void);
-
-typedef struct r_immediate_state_s
-{
-    m4x4_t                 transform;
-    bool                   no_depth_test;
-
-    resource_handle_t      texture;
-    r_primitive_topology_t topology;
-
-    float                  depth_bias;
-
-    uint32_t               icount;
-    uint16_t               ibuffer[MAX_IMMEDIATE_INDICES];
-
-    uint32_t               vcount;
-    vertex_immediate_t   vbuffer[MAX_IMMEDIATE_VERTICES];
-} r_immediate_state_t;
-
-static r_immediate_state_t g_immediate_state = {
-    .transform = M4X4_IDENTITY_INIT,
-};
-
-//
-// this immediate mode rendering API makes me so sad
-// I will now take a break and stop streaming for a while
-//
-// I will come back and make the API unsad.
-//
-
-void r_immediate_topology(r_primitive_topology_t topology)
-{
-    if (g_immediate_state.icount > 0)
-        r_immediate_flush(); // flush if necessary
-
-    g_immediate_state.topology = topology;
-}
-
-void r_immediate_texture(resource_handle_t texture)
-{
-    if (g_immediate_state.icount > 0)
-        r_immediate_flush(); // flush if necessary
-
-    g_immediate_state.texture = texture;
-}
-
-void r_immediate_depth_test(bool enabled)
-{
-    g_immediate_state.no_depth_test = !enabled;
-}
-
-void r_immediate_depth_bias(float bias)
-{
-    g_immediate_state.depth_bias = bias;
-}
-
-void r_immediate_transform(const m4x4_t *transform)
-{
-    g_immediate_state.transform = *transform;
-}
-
-uint16_t r_immediate_vertex(const vertex_immediate_t *vertex)
-{
-    uint16_t result = UINT16_MAX;
-
-    if (g_immediate_state.vcount >= MAX_IMMEDIATE_VERTICES)
-    {
-        r_immediate_submit_vertices();
-    }
-
-    result = (uint16_t)g_immediate_state.vcount++;
-    g_immediate_state.vbuffer[result] = *vertex;
-
-    return result;
-}
-
-void r_immediate_index(uint16_t index)
-{
-    if (g_immediate_state.icount >= MAX_IMMEDIATE_INDICES)
-    {
-        r_immediate_submit_vertices();
-    }
-
-    g_immediate_state.ibuffer[g_immediate_state.icount++] = index;
-}
-
-static bool r_immediate_submit_vertices(void)
-{
-    if (g_immediate_state.vcount > 0)
-    {
-        r_submit_command(&(r_command_immediate_t){
-            .base = {
-                .kind = R_COMMAND_IMMEDIATE,
-            },
-
-            .transform     = g_immediate_state.transform,
-            .no_depth_test = g_immediate_state.no_depth_test,
-            .depth_bias    = g_immediate_state.depth_bias,
-
-            .texture       = g_immediate_state.texture,
-            .topology      = g_immediate_state.topology,
-
-            .icount        = g_immediate_state.icount,
-            .ibuffer       = m_copy_array(temp, g_immediate_state.ibuffer, g_immediate_state.icount),
-
-            .vcount        = g_immediate_state.vcount,
-            .vbuffer       = m_copy_array(temp, g_immediate_state.vbuffer, g_immediate_state.vcount),
-        });
-
-        g_immediate_state.vcount = 0;
-        g_immediate_state.icount = 0;
-
-        return true;
-    }
-
-    return false;
-}
-
-void r_immediate_flush(void)
-{
-    r_immediate_submit_vertices();
-    g_immediate_state.transform     = m4x4_identity;
-    g_immediate_state.no_depth_test = false;
-    g_immediate_state.texture       = (resource_handle_t){0};
-    g_immediate_state.topology      = R_PRIMITIVE_TOPOLOGY_TRIANGELIST;
-    g_immediate_state.depth_bias    = 0.0f;
-}
-
 v3_t r_to_view_space(const r_view_t *view, v3_t p, float w)
 {
     v4_t pw = { p.x, p.y, p.z, w };
@@ -355,4 +224,76 @@ v3_t r_to_view_space(const r_view_t *view, v3_t p, float w)
     pw.y *= 0.5f*(float)height;
 
     return pw.xyz;
+}
+
+void r_draw_model(m4x4_t transform, resource_handle_t model, resource_handle_t texture, resource_handle_t lightmap)
+{
+    r_command_model_t *command = r_submit_command(R_COMMAND_MODEL, sizeof(r_command_model_t));
+    command->transform = transform;
+    command->model     = model;
+    command->texture   = texture;
+    command->lightmap  = lightmap;
+}
+
+r_immediate_draw_t *r_immediate_draw_begin(const r_immediate_draw_t *draw_call)
+{
+    r_command_immediate_t *command = r_submit_command(R_COMMAND_IMMEDIATE, sizeof(r_command_immediate_t));
+
+    if (draw_call)
+        copy_struct(&command->draw_call, draw_call);
+
+    command->draw_call.ioffset = g_list->immediate_icount;
+    command->draw_call.voffset = g_list->immediate_vcount;
+
+    if (command->draw_call.clip_rect.min.x == 0 &&
+        command->draw_call.clip_rect.min.y == 0 &&
+        command->draw_call.clip_rect.max.x == 0 &&
+        command->draw_call.clip_rect.max.y == 0)
+    {
+        int w, h;
+        render->get_resolution(&w, &h);
+
+        command->draw_call.clip_rect.max = make_v2((float)w, (float)h);
+    }
+
+    g_list->immediate_draw_call = &command->draw_call;
+
+    return &command->draw_call;
+}
+
+uint16_t r_immediate_vertex(r_immediate_draw_t *draw_call, const vertex_immediate_t *vertex)
+{
+    ASSERT(draw_call == g_list->immediate_draw_call);
+
+    uint16_t result = UINT16_MAX;
+
+    if (ALWAYS(g_list->immediate_vcount < g_list->max_immediate_vcount))
+    {
+        draw_call->vcount += 1;
+
+        result = (uint16_t)g_list->immediate_vcount++;
+        g_list->immediate_vertices[result] = *vertex;
+    }
+
+    return result;
+}
+
+void r_immediate_index(r_immediate_draw_t *draw_call, uint16_t index)
+{
+    ASSERT(draw_call == g_list->immediate_draw_call);
+
+    if (ALWAYS(g_list->immediate_icount < g_list->max_immediate_icount))
+    {
+        draw_call->icount += 1;
+
+        g_list->immediate_indices[g_list->immediate_icount++] = index;
+    }
+}
+
+void r_immediate_draw_end(r_immediate_draw_t *draw_call)
+{
+    (void)draw_call;
+    ASSERT(draw_call == g_list->immediate_draw_call);
+
+    g_list->immediate_draw_call = NULL;
 }

@@ -1,6 +1,6 @@
 #include "common.hlsl"
 
-float4 pos_only(VS_INPUT_POS IN) : SV_POSITION
+float4 pos(VS_INPUT_POS IN) : SV_POSITION
 {
     return 0;
 }

@@ -52,6 +52,7 @@ typedef struct input_state_t
 
     int mouse_x,  mouse_y;
     int mouse_dx, mouse_dy;
+    int scroll_dx, scroll_dy;
 
     uint64_t button_states;
     float    axis_values[AXIS_COUNT];

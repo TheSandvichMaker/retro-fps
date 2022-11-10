@@ -14,12 +14,15 @@ typedef struct ui_style_t
     uint32_t text_color;
 } ui_style_t;
 
-bool ui_begin(struct bitmap_font_t *font, ui_style_t *style);
+bool ui_begin(struct bitmap_font_t *font, const ui_style_t *style);
 
 void ui_begin_panel(rect2_t bounds);
 void ui_end_panel(void);
 void ui_label(string_t label);
 bool ui_button(string_t label);
+void ui_image(resource_handle_t image);
+void ui_image_scaled(resource_handle_t image, v2_t size);
+void ui_image_viewer(resource_handle_t image);
 
 void ui_end(void);
 

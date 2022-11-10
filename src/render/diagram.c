@@ -1,3 +1,8 @@
+static inline void dummy(void)
+{
+}
+
+#if 0
 #include "diagram.h"
 #include "render.h"
 #include "render_helpers.h"
@@ -183,3 +188,4 @@ void diag_set_name(diag_node_t *node, string_t name)
 {
     STRING_INTO_STORAGE(node->name, name);
 }
+#endif

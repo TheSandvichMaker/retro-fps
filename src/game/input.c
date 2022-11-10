@@ -1,4 +1,4 @@
-#include "game.h"
+#include "input.h"
 
 static input_kind_t input_kind;
 

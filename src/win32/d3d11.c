@@ -136,10 +136,14 @@ int init_d3d11(void *hwnd_)
 
     m_scoped(temp)
     {
+        D3D11_INPUT_ELEMENT_DESC layout_pos[] = {
+            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,     0, offsetof(vertex_pos_t, pos), D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        };
+
         D3D11_INPUT_ELEMENT_DESC layout_immediate[] = {
             { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,     0, offsetof(vertex_immediate_t, pos), D3D11_INPUT_PER_VERTEX_DATA, 0 },
             { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,        0, offsetof(vertex_immediate_t, tex), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-            { "COLOR",    0, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 0, offsetof(vertex_immediate_t, col), D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "COLOR",    0, DXGI_FORMAT_R32_UINT,            0, offsetof(vertex_immediate_t, col), D3D11_INPUT_PER_VERTEX_DATA, 0 },
         };
 
         D3D11_INPUT_ELEMENT_DESC layout_brush[] = {
@@ -151,12 +155,23 @@ int init_d3d11(void *hwnd_)
         string_t hlsl_file = strlit("gamedata/shaders/input_layout_nonsense.hlsl");
         string_t hlsl = fs_read_entire_file(temp, hlsl_file);
 
+        ID3DBlob *vs_pos       = compile_shader(hlsl_file, hlsl, "pos", "vs_5_0");
         ID3DBlob *vs_immediate = compile_shader(hlsl_file, hlsl, "immediate", "vs_5_0");
         ID3DBlob *vs_brush     = compile_shader(hlsl_file, hlsl, "brush", "vs_5_0");
 
-        ID3D11Device_CreateInputLayout(d3d.device, layout_immediate, ARRAY_COUNT(layout_immediate), ID3D10Blob_GetBufferPointer(vs_immediate), ID3D10Blob_GetBufferSize(vs_immediate), &d3d.layouts[VERTEX_FORMAT_IMMEDIATE]);
-        ID3D11Device_CreateInputLayout(d3d.device, layout_brush, ARRAY_COUNT(layout_brush), ID3D10Blob_GetBufferPointer(vs_brush),     ID3D10Blob_GetBufferSize(vs_brush),     &d3d.layouts[VERTEX_FORMAT_BRUSH]);
+        ID3D11Device_CreateInputLayout(d3d.device, layout_pos, ARRAY_COUNT(layout_pos), 
+                                       ID3D10Blob_GetBufferPointer(vs_pos), ID3D10Blob_GetBufferSize(vs_pos), 
+                                       &d3d.layouts[VERTEX_FORMAT_POS]);
 
+        ID3D11Device_CreateInputLayout(d3d.device, layout_immediate, ARRAY_COUNT(layout_immediate), 
+                                       ID3D10Blob_GetBufferPointer(vs_immediate), ID3D10Blob_GetBufferSize(vs_immediate), 
+                                       &d3d.layouts[VERTEX_FORMAT_IMMEDIATE]);
+
+        ID3D11Device_CreateInputLayout(d3d.device, layout_brush, ARRAY_COUNT(layout_brush), 
+                                       ID3D10Blob_GetBufferPointer(vs_brush), ID3D10Blob_GetBufferSize(vs_brush),
+                                       &d3d.layouts[VERTEX_FORMAT_BRUSH]);
+
+        ID3D10Blob_Release(vs_pos);
         ID3D10Blob_Release(vs_immediate);
         ID3D10Blob_Release(vs_brush);
     }
@@ -288,6 +303,7 @@ int init_d3d11(void *hwnd_)
         D3D11_RASTERIZER_DESC desc = {
             .FillMode = D3D11_FILL_SOLID,
             .CullMode = D3D11_CULL_BACK,
+            .ScissorEnable = TRUE,
         };
         ID3D11Device_CreateRasterizerState(d3d.device, &desc, &d3d.rs);
     }
@@ -298,6 +314,7 @@ int init_d3d11(void *hwnd_)
         D3D11_RASTERIZER_DESC desc = {
             .FillMode = D3D11_FILL_SOLID,
             .CullMode = D3D11_CULL_NONE,
+            .ScissorEnable = TRUE,
         };
         ID3D11Device_CreateRasterizerState(d3d.device, &desc, &d3d.rs_no_cull);
     }
@@ -336,10 +353,14 @@ int init_d3d11(void *hwnd_)
         uint32_t pixel = 0xFFFFFFFF;
 
         resource_handle_t handle = upload_texture(&(upload_texture_t){
-            .format = PIXEL_FORMAT_RGBA8,
-            .w      = 1,
-            .h      = 1,
-            .pixels = &pixel,
+            .desc = {
+                .format = PIXEL_FORMAT_RGBA8,
+                .w      = 1,
+                .h      = 1,
+            },
+            .data = {
+                .pixels = &pixel,
+            },
         });
         d3d.white_texture = bd_get(&d3d_textures, handle);
     }
@@ -366,25 +387,33 @@ int init_d3d11(void *hwnd_)
         }
 
         resource_handle_t handle = upload_texture(&(upload_texture_t){
-            .format = PIXEL_FORMAT_RGBA8,
-            .w      = w,
-            .h      = h,
-            .pixels = pixels,
+            .desc = {
+                .format = PIXEL_FORMAT_RGBA8,
+                .w      = w,
+                .h      = h,
+            },
+            .data = {
+                .pixels = pixels,
+            },
         });
         d3d.missing_texture = bd_get(&d3d_textures, handle);
 
         resource_handle_t cubemap_handle = upload_texture(&(upload_texture_t){
-            .format = PIXEL_FORMAT_RGBA8,
-            .w      = w,
-            .h      = h,
-            .flags  = TEXTURE_FLAG_CUBEMAP,
-            .faces  = {
-                pixels,
-                pixels,
-                pixels,
-                pixels,
-                pixels,
-                pixels,
+            .desc = {
+                .format = PIXEL_FORMAT_RGBA8,
+                .w      = w,
+                .h      = h,
+                .flags  = TEXTURE_FLAG_CUBEMAP,
+            },
+            .data = {
+                .faces = {
+                    pixels,
+                    pixels,
+                    pixels,
+                    pixels,
+                    pixels,
+                    pixels,
+                },
             },
         });
         d3d.missing_texture_cubemap = bd_get(&d3d_textures, cubemap_handle);
@@ -447,8 +476,12 @@ void render_model(const render_pass_t *pass)
     ID3D11DeviceContext_RSSetViewports(d3d.context, 1, &pass->viewport);
     ID3D11DeviceContext_RSSetState(d3d.context, pass->cull ? d3d.rs : d3d.rs_no_cull);
 
+    if (pass->scissor)
+        ID3D11DeviceContext_RSSetScissorRects(d3d.context, 1, &pass->scissor_rect);
+    else
+        ID3D11DeviceContext_RSSetScissorRects(d3d.context, 1, (&(D3D11_RECT){ 0, 0, d3d.current_width, d3d.current_height }));
+
     // set pixel shader
-    // ID3D11DeviceContext_PSSetSamplers(d3d.context, 0, 1, pass->sample_linear ? &d3d.linear_sampler : &d3d.point_sampler);
     ID3D11DeviceContext_PSSetSamplers(d3d.context, 0, D3D_SAMPLER_COUNT, d3d.samplers);
     ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, pass->srv_count, pass->srvs);
     ID3D11DeviceContext_PSSetShader(d3d.context, pass->ps, NULL, 0);
@@ -460,13 +493,9 @@ void render_model(const render_pass_t *pass)
 
     // draw 
     if (pass->model->icount > 0)
-    {
-        ID3D11DeviceContext_DrawIndexed(d3d.context, pass->model->icount, 0, 0);
-    }
+        ID3D11DeviceContext_DrawIndexed(d3d.context, pass->model->icount, pass->ioffset, 0);
     else
-    {
-        ID3D11DeviceContext_Draw(d3d.context, pass->model->vcount, 0);
-    }
+        ID3D11DeviceContext_Draw(d3d.context, pass->model->vcount, pass->voffset);
 }
 
 void d3d11_ensure_swapchain_size(int width, int height)
@@ -612,6 +641,10 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
             });
         }
 
+        // update immediate index/vertex buffer
+        update_buffer(d3d.immediate_ibuffer, list->immediate_indices,  sizeof(list->immediate_indices[0])*list->immediate_icount);
+        update_buffer(d3d.immediate_vbuffer, list->immediate_vertices, sizeof(list->immediate_vertices[0])*list->immediate_vcount);
+
         // meat and potatoes
         for (char *at = list->command_list_base; at < list->command_list_at;)
         {
@@ -670,29 +703,22 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                     r_command_immediate_t *command = (r_command_immediate_t *)base;
                     at = align_address(at + sizeof(*command), RENDER_COMMAND_ALIGN);
 
+                    r_immediate_draw_t *draw_call = &command->draw_call;
+
                     m4x4_t camera_projection = m4x4_identity;
                     camera_projection = mul(camera_projection, view->projection);
                     camera_projection = mul(camera_projection, view->camera);
 
                     d3d_cbuffer_t cbuffer = {
                         .camera_projection = camera_projection,
-                        .model_transform   = command->transform,
-                        .depth_bias        = command->depth_bias,
+                        .model_transform   = m4x4_identity,
+                        .depth_bias        = draw_call->depth_bias,
                     };
 
                     update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
 
-                    uint32_t icount = MIN(command->icount, MAX_IMMEDIATE_INDICES);
-                    bool use_ibuffer = icount > 0;
-
-                    if (use_ibuffer)
-                        update_buffer(d3d.immediate_ibuffer, command->ibuffer, sizeof(command->ibuffer[0])*icount);
-
-                    uint32_t vcount = MIN(command->vcount, MAX_IMMEDIATE_VERTICES);
-                    update_buffer(d3d.immediate_vbuffer, command->vbuffer, sizeof(command->vbuffer[0])*vcount);
-
                     D3D11_PRIMITIVE_TOPOLOGY topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-                    switch (command->topology)
+                    switch (draw_call->topology)
                     {
                         case R_PRIMITIVE_TOPOLOGY_TRIANGELIST: topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST; break;
                         case R_PRIMITIVE_TOPOLOGY_LINELIST:    topology = D3D11_PRIMITIVE_TOPOLOGY_LINELIST; break;
@@ -701,16 +727,17 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                         INVALID_DEFAULT_CASE;
                     }
 
+                    // TODO: index/vertex count is specified here, but the offset is in the pass. feels a bit janky.
                     d3d_model_t immediate_model = {
                         .vertex_format      = VERTEX_FORMAT_IMMEDIATE,
                         .primitive_topology = topology,
-                        .vcount             = vcount,
-                        .vbuffer            = d3d.immediate_vbuffer,
-                        .icount             = icount,
+                        .icount             = draw_call->icount,
                         .ibuffer            = d3d.immediate_ibuffer,
+                        .vcount             = draw_call->vcount,
+                        .vbuffer            = d3d.immediate_vbuffer,
                     };
 
-                    d3d_texture_t *texture = bd_get(&d3d_textures, command->texture);
+                    d3d_texture_t *texture = bd_get(&d3d_textures, draw_call->texture);
                     if (!texture)  texture = d3d.white_texture;
 
                     render_model(&(render_pass_t) {
@@ -719,14 +746,24 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                         .vs = d3d.immediate_vs,
                         .ps = d3d.immediate_ps,
 
+                        .ioffset = draw_call->ioffset,
+                        .voffset = draw_call->voffset,
+
                         .cbuffer_count = 1,
                         .cbuffers      = (ID3D11Buffer *[]) { d3d.ubuffer },
                         .srv_count     = 1,
                         .srvs          = (ID3D11ShaderResourceView *[]) { texture->srv },
 
-                        .depth    = !command->no_depth_test,
+                        .depth    = draw_call->depth_test,
                         .cull     = false,
                         .viewport = viewport,
+                        .scissor  = true,
+                        .scissor_rect = {
+                            .left   = (LONG)draw_call->clip_rect.min.x,
+                            .right  = (LONG)draw_call->clip_rect.max.x,
+                            .bottom = height - (LONG)draw_call->clip_rect.min.y - 1,
+                            .top    = height - (LONG)draw_call->clip_rect.max.y - 1,
+                        },
                     });
                 } break;
 
@@ -735,7 +772,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
         }
 
         d3d_cbuffer_t cbuffer = {
-            .frame_index       = frame_index,
+            .frame_index = frame_index,
         };
 
         update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
@@ -754,6 +791,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
         // set rasterizer state
         ID3D11DeviceContext_RSSetViewports(d3d.context, 1, &viewport);
         ID3D11DeviceContext_RSSetState(d3d.context, d3d.rs_no_cull);
+        ID3D11DeviceContext_RSSetScissorRects(d3d.context, 1, (&(D3D11_RECT){ 0, 0, width, height }));
 
         // set pixel shader
         ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);
@@ -785,17 +823,17 @@ resource_handle_t upload_texture(const upload_texture_t *params)
 {
     resource_handle_t result = { 0 };
 
-    if (!params->pixels)
+    if (!params->data.pixels)
         return result;
 
     d3d_texture_t *resource = bd_add(&d3d_textures);
     if (resource)
     {
-        resource->flags = params->flags;
+        resource->desc = params->desc;
 
         uint32_t pixel_size = 1;
         DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
-        switch (params->format)
+        switch (params->desc.format)
         {
             case PIXEL_FORMAT_R8:       pixel_size = 1; format = DXGI_FORMAT_R8_UNORM;            break;
             case PIXEL_FORMAT_RG8:      pixel_size = 2; format = DXGI_FORMAT_R8G8_UNORM;          break;
@@ -805,8 +843,8 @@ resource_handle_t upload_texture(const upload_texture_t *params)
         }
 
         D3D11_TEXTURE2D_DESC desc = {
-            .Width      = params->w,
-            .Height     = params->h,
+            .Width      = params->desc.w,
+            .Height     = params->desc.h,
             .MipLevels  = 1,
             .ArraySize  = 1,
             .Format     = format,
@@ -815,12 +853,12 @@ resource_handle_t upload_texture(const upload_texture_t *params)
             .BindFlags  = D3D11_BIND_SHADER_RESOURCE,
         };
 
-        uint32_t pitch = params->pitch;
+        uint32_t pitch = params->desc.pitch;
 
         if (!pitch)  
-            pitch = params->w*pixel_size;
+            pitch = params->desc.w*pixel_size;
 
-        if (params->flags & TEXTURE_FLAG_CUBEMAP)
+        if (params->desc.flags & TEXTURE_FLAG_CUBEMAP)
         {
             desc.ArraySize = 6;
             desc.MiscFlags |= D3D11_RESOURCE_MISC_TEXTURECUBE;
@@ -829,7 +867,7 @@ resource_handle_t upload_texture(const upload_texture_t *params)
             for (size_t i = 0; i < 6; i++)
             {
                 data[i] = (D3D11_SUBRESOURCE_DATA){
-                    .pSysMem     = params->faces[i],
+                    .pSysMem     = params->data.faces[i],
                     .SysMemPitch = pitch,
                 };
             }
@@ -851,8 +889,8 @@ resource_handle_t upload_texture(const upload_texture_t *params)
             desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
             desc.MiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
 
-            ID3D11Device_CreateTexture2D(d3d.device, &desc, NULL /*&data*/, &resource->tex[0]);
-            ID3D11DeviceContext_UpdateSubresource(d3d.context, (ID3D11Resource *)resource->tex[0], 0, NULL, params->pixels, pitch, params->h*pitch);
+            ID3D11Device_CreateTexture2D(d3d.device, &desc, NULL, &resource->tex[0]);
+            ID3D11DeviceContext_UpdateSubresource(d3d.context, (ID3D11Resource *)resource->tex[0], 0, NULL, params->data.pixels, pitch, params->desc.h*pitch);
 
             D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {
                 .Format              = desc.Format,
@@ -1013,10 +1051,25 @@ void set_model_buffers(d3d_model_t *model)
     ID3D11DeviceContext_IASetIndexBuffer(d3d.context, model->ibuffer, DXGI_FORMAT_R16_UINT, 0);
 }
 
+void describe_texture(resource_handle_t handle, texture_desc_t *result)
+{
+    d3d_texture_t *texture = bd_get(&d3d_textures, handle);
+    if (texture)
+    {
+        copy_struct(result, &texture->desc);
+    }
+    else
+    {
+        copy_struct(result, &d3d.missing_texture->desc);
+    }
+}
+
 render_api_i *d3d11_get_api()
 {
     static render_api_i api = {
         .get_resolution  = get_resolution,
+
+        .describe_texture = describe_texture,
 
         .upload_texture  = upload_texture,
         .destroy_texture = destroy_texture,

@@ -34,11 +34,15 @@ void game_init(void)
         font.cw = 10;
         font.ch = 12;
         font.texture = render->upload_texture(&(upload_texture_t) {
-            .format = PIXEL_FORMAT_RGBA8,
-            .w      = font_image.w,
-            .h      = font_image.h,
-            .pitch  = font_image.pitch,
-            .pixels = font_image.pixels,
+            .desc = {
+                .format = PIXEL_FORMAT_RGBA8,
+                .w      = font_image.w,
+                .h      = font_image.h,
+                .pitch  = font_image.pitch,
+            },
+            .data = {
+                .pixels = font_image.pixels,
+            },
         });
     }
 
@@ -58,8 +62,8 @@ void game_init(void)
         .ray_count     = 8,
         .ray_recursion = 2,
 #else
-        .ray_count     = 128,
-        .ray_recursion = 8,
+        .ray_count     = 64,
+        .ray_recursion = 6,
 #endif
     }, &bake_results);
 #endif
@@ -109,18 +113,22 @@ void game_init(void)
                 };
 
                 skybox = render->upload_texture(&(upload_texture_t){
-                    .format = PIXEL_FORMAT_SRGB8_A8,
-                    .w     = faces[0].w,
-                    .h     = faces[0].h,
-                    .pitch = faces[0].pitch,
-                    .flags = TEXTURE_FLAG_CUBEMAP,
-                    .faces = {
-                        faces[0].pixels,
-                        faces[1].pixels,
-                        faces[2].pixels,
-                        faces[3].pixels,
-                        faces[4].pixels,
-                        faces[5].pixels,
+                    .desc = {
+                        .format = PIXEL_FORMAT_SRGB8_A8,
+                        .w     = faces[0].w,
+                        .h     = faces[0].h,
+                        .pitch = faces[0].pitch,
+                        .flags = TEXTURE_FLAG_CUBEMAP,
+                    },
+                    .data = {
+                        .faces = {
+                            faces[0].pixels,
+                            faces[1].pixels,
+                            faces[2].pixels,
+                            faces[3].pixels,
+                            faces[4].pixels,
+                            faces[5].pixels,
+                        },
                     },
                 });
 #endif
@@ -148,7 +156,7 @@ void player_mouse_move(player_t *player, float dt)
     float look_speed_y = 10.0f;
 
     player->look_yaw   -= look_speed_x*dt*dx;
-    player->look_pitch += look_speed_y*dt*dy;
+    player->look_pitch -= look_speed_y*dt*dy;
 
     player->look_yaw   = fmodf(player->look_yaw, 360.0f);
     player->look_pitch = CLAMP(player->look_pitch, -85.0f, 85.0f);
@@ -441,7 +449,7 @@ static v3_t player_view_direction(player_t *player)
 static bool g_debug_lightmaps;
 static bool g_cursor_locked;
 
-static void draw_brush_wireframe(map_brush_t *brush, uint32_t color)
+static void push_brush_wireframe(r_immediate_draw_t *draw_call, map_brush_t *brush, uint32_t color)
 {
     for (size_t poly_index = 0; poly_index < brush->poly_count; poly_index++)
     {
@@ -452,9 +460,9 @@ static void draw_brush_wireframe(map_brush_t *brush, uint32_t color)
             v3_t b = poly->vertices[poly->indices[3*triangle_index + 1]].pos;
             v3_t c = poly->vertices[poly->indices[3*triangle_index + 2]].pos;
 
-            r_push_line(a, b, color);
-            r_push_line(a, c, color);
-            r_push_line(b, c, color);
+            r_push_line(draw_call, a, b, color);
+            r_push_line(draw_call, a, c, color);
+            r_push_line(draw_call, b, c, color);
         }
     }
 }
@@ -470,6 +478,11 @@ void game_tick(game_io_t *io, float dt)
 
     // I suppose for UI eating input, I will just check if the UI is focused and then
     // stop any game code from seeing the input.
+
+    int res_x, res_y;
+    render->get_resolution(&res_x, &res_y);
+
+    v2_t resolution = make_v2((float)res_x, (float)res_y);
 
     ui_style_t ui_style = {
         .element_margins = { 4.0f, 4.0f },
@@ -561,32 +574,25 @@ void game_tick(game_io_t *io, float dt)
         for (size_t poly_index = 0; poly_index < brush->poly_count; poly_index++)
         {
             map_poly_t *poly = &brush->polys[poly_index];
-
-            r_submit_command(&(r_command_model_t) {
-                .base = {
-                    .kind = R_COMMAND_MODEL,
-                },
-                .model     = poly->mesh,
-                .texture   = poly->texture,
-                .lightmap  = poly->lightmap,
-                .transform = m4x4_identity,
-            });
+            r_draw_model(m4x4_identity, poly->mesh, poly->texture, poly->lightmap);
         }
     }
 
     static map_brush_t *selected_brush = NULL;
 
     rect2_t panel_bounds = {
-        .min = { 32,  32  },
-        .max = { 512, 256 },
+        .min = { 32,  resolution.y - 256 },
+        .max = { 512, resolution.y - 32  },
     };
 
     if (g_debug_lightmaps)
     {
-        r_immediate_topology(R_PRIMITIVE_TOPOLOGY_LINELIST);
-        r_immediate_depth_bias(0.005f);
-
-        // r_immediate_line(make_v3(0, 0, 0), make_v3(0, 0, 1), make_v3(1, 0, 0));
+        r_command_identifier(strlit("lightmap debug"));
+        r_immediate_draw_t *draw_call = r_immediate_draw_begin(&(r_immediate_draw_t){
+            .topology   = R_PRIMITIVE_TOPOLOGY_LINELIST,
+            .depth_bias = 0.005f,
+            .depth_test = true,
+        });
 
         intersect_result_t intersect;
         if (intersect_map(map, &(intersect_params_t) {
@@ -598,7 +604,7 @@ void game_tick(game_io_t *io, float dt)
                 selected_brush = intersect.brush;
 
             if (!selected_brush)
-                draw_brush_wireframe(intersect.brush, COLOR32_RED);
+                push_brush_wireframe(draw_call, intersect.brush, COLOR32_RED);
         }
         else
         {
@@ -612,18 +618,18 @@ void game_tick(game_io_t *io, float dt)
                  plane;
                  plane = plane->next)
             {
-                r_push_arrow(plane->lm_origin, add(plane->lm_origin, mul(10.0f, plane->s.xyz)), COLOR32_RED);
-                r_push_arrow(plane->lm_origin, add(plane->lm_origin, mul(10.0f, plane->t.xyz)), COLOR32_BLUE);
+                r_push_arrow(draw_call, plane->lm_origin, add(plane->lm_origin, mul(10.0f, plane->s.xyz)), COLOR32_RED);
+                r_push_arrow(draw_call, plane->lm_origin, add(plane->lm_origin, mul(10.0f, plane->t.xyz)), COLOR32_BLUE);
 
                 v3_t square_v0 = add(plane->lm_origin, mul(2.5f, plane->s.xyz));
                 v3_t square_v1 = add(plane->lm_origin, mul(2.5f, plane->t.xyz));
                 v3_t square_v2 = v3_add3(plane->lm_origin, mul(2.5f, plane->s.xyz), mul(2.5f, plane->t.xyz));
 
-                r_push_line(square_v0, square_v2, COLOR32_GREEN);
-                r_push_line(square_v1, square_v2, COLOR32_GREEN);
+                r_push_line(draw_call, square_v0, square_v2, COLOR32_GREEN);
+                r_push_line(draw_call, square_v1, square_v2, COLOR32_GREEN);
             }
 
-            draw_brush_wireframe(selected_brush, COLOR32_GREEN);
+            push_brush_wireframe(draw_call, selected_brush, COLOR32_GREEN);
         }
 
         for (bake_light_debug_ray_t *ray = bake_results.debug_data.direct_rays.first;
@@ -634,23 +640,24 @@ void game_tick(game_io_t *io, float dt)
             {
                 if (ray->t != FLT_MAX)
                 {
-                    r_push_arrow(ray->o, add(ray->o, mul(ray->t, ray->d)), COLOR32_RED);
+                    r_push_arrow(draw_call, ray->o, add(ray->o, mul(ray->t, ray->d)), COLOR32_RED);
                 }
                 else
                 {
-                    r_push_arrow(ray->o, add(ray->o, mul(15.0f, ray->d)), COLOR32_GREEN);
+                    r_push_arrow(draw_call, ray->o, add(ray->o, mul(15.0f, ray->d)), COLOR32_GREEN);
                 }
             }
         }
 
-        r_command_identifier(strlit("lightmap debug"));
-        r_immediate_flush();
+        r_immediate_draw_end(draw_call);
     }
+
+    r_push_view_screenspace();
 
     ui_begin_panel(panel_bounds);
     {
         if (g_debug_lightmaps)
-            ui_label(strlit("lightmap debugger enabled!!!!"));
+            ui_label(strlit("lightmap debugger enabled  :)"));
         else
             ui_label(strlit("lightmap debugger disabled :("));
 
@@ -658,23 +665,19 @@ void game_tick(game_io_t *io, float dt)
         {
             g_debug_lightmaps = !g_debug_lightmaps;
         }
+
+        if (selected_brush)
+        {
+            for (size_t i = 0; i < selected_brush->poly_count; i++)
+            {
+                map_poly_t *poly = &selected_brush->polys[i];
+                ui_image_viewer(poly->lightmap);
+            }
+        }
     }
     ui_end_panel();
 
-#if 0
-    diag_node_t *bvh_diag = diag_begin(strlit("bvh"));
-
-    for (size_t i = 0; i < map->node_count; i++)
-    {
-        map_bvh_node_t *node = &map->nodes[i];
-
-        diag_add_box(bvh_diag, r_debug_color(i), node->bounds);
-    }
-#endif
-
-    // diag_draw_all(&font);
-
-    ui_end();
+    r_pop_view();
 
     if (button_pressed(BUTTON_ESCAPE))
     {

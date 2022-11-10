@@ -380,11 +380,15 @@ void bake_lighting(const bake_light_params_t *params_init, bake_light_results_t 
             image_t *result = &job->result;
 
             poly->lightmap = render->upload_texture(&(upload_texture_t) {
-                .format = PIXEL_FORMAT_RGBA8,
-                .w      = result->w,
-                .h      = result->h,
-                .pitch  = sizeof(uint32_t)*result->w,
-                .pixels = result->pixels,
+                .desc = {
+                    .format = PIXEL_FORMAT_RGBA8,
+                    .w      = result->w,
+                    .h      = result->h,
+                    .pitch  = sizeof(uint32_t)*result->w,
+                },
+                .data = {
+                    .pixels = result->pixels,
+                },
             });
 
         }

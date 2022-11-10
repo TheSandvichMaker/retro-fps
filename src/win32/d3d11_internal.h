@@ -27,7 +27,8 @@ typedef struct d3d_model_t
 
 typedef struct d3d_texture_t
 {
-    uint32_t flags;
+    texture_desc_t desc;
+
     ID3D11Texture2D          *tex[6];
     ID3D11ShaderResourceView *srv;
 } d3d_texture_t;
@@ -120,11 +121,16 @@ typedef struct render_pass_t
     UINT srv_count;
     ID3D11ShaderResourceView **srvs;
 
+    uint32_t ioffset;
+    uint32_t voffset;
+
     bool depth;
     bool cull;
     bool sample_linear;
+    bool scissor;
 
     D3D11_VIEWPORT viewport;
+    D3D11_RECT     scissor_rect;
 } render_pass_t;
 
 void render_model(const render_pass_t *pass);

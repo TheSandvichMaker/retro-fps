@@ -74,6 +74,19 @@ typedef struct arena_marker_t
     char *at;
 } arena_marker_t;
 
+typedef union v2i_t
+{
+    struct { int x, y; };
+    int e[2];
+} v2i_t;
+
+typedef union v3i_t
+{
+    struct { int x, y, z; };
+    struct { v2i_t xy; float z0; };
+    int e[3];
+} v3i_t;
+
 typedef union v2_t
 {
     struct { float x, y; };

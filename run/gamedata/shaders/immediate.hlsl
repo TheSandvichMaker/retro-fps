@@ -1,12 +1,5 @@
 #include "common.hlsl"
 
-struct VS_INPUT
-{
-    float3 pos : POSITION;
-    float2 uv  : TEXCOORD;
-    uint   col : COLOR;
-};
-
 struct PS_INPUT
 {
     float4 pos : SV_POSITION;
@@ -17,7 +10,7 @@ struct PS_INPUT
 sampler   sampler0 : register(s0);
 Texture2D texture0 : register(t0);
 
-PS_INPUT vs(VS_INPUT IN)
+PS_INPUT vs(VS_INPUT_IMMEDIATE IN)
 {
     PS_INPUT OUT;
     OUT.pos = mul(mul(camera_projection, model_transform), float4(IN.pos, 1));

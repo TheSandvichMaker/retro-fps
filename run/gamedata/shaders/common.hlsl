@@ -16,7 +16,7 @@ struct VS_INPUT_IMMEDIATE
 {
     float3 pos : POSITION;
     float2 uv  : TEXCOORD;
-    float4 col : COLOR;
+    uint   col : COLOR;
 };
 
 struct VS_INPUT_BRUSH
