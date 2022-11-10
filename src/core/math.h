@@ -862,6 +862,24 @@ static inline m4x4_t make_perspective_matrix(float vfov, float w_over_h, float n
 // rect2
 //
 
+static inline rect2_t rect2_add_radius(rect2_t rect, v2_t radius)
+{
+    rect2_t result = {
+        .min = sub(rect.min, radius),
+        .max = add(rect.max, radius),
+    };
+    return result;
+}
+
+static inline rect2_t rect2_sub_radius(rect2_t rect, v2_t radius)
+{
+    rect2_t result = {
+        .min = add(rect.min, radius),
+        .max = sub(rect.max, radius),
+    };
+    return result;
+}
+
 static inline bool rect2_contains_point(rect2_t rect, v2_t point)
 {
     return (point.x >= rect.min.x && point.x < rect.max.x &&

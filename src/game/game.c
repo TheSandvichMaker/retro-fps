@@ -10,6 +10,7 @@
 #include "ui.h"
 #include "render/light_baker.h"
 #include "render/render.h"
+#include "render/render_helpers.h"
 #include "render/diagram.h"
 
 static bool initialized = false;
@@ -451,9 +452,9 @@ static void draw_brush_wireframe(map_brush_t *brush, uint32_t color)
             v3_t b = poly->vertices[poly->indices[3*triangle_index + 1]].pos;
             v3_t c = poly->vertices[poly->indices[3*triangle_index + 2]].pos;
 
-            r_immediate_line(a, b, color);
-            r_immediate_line(a, c, color);
-            r_immediate_line(b, c, color);
+            r_push_line(a, b, color);
+            r_push_line(a, c, color);
+            r_push_line(b, c, color);
         }
     }
 }
@@ -470,7 +471,19 @@ void game_tick(game_io_t *io, float dt)
     // I suppose for UI eating input, I will just check if the UI is focused and then
     // stop any game code from seeing the input.
 
-    bool ui_focused = ui_begin(&font);
+    ui_style_t ui_style = {
+        .element_margins = { 4.0f, 4.0f },
+        .text_margins    = { 4.0f, 4.0f },
+
+        .panel_background_color            = pack_rgb(0.125f, 0.125f, 0.125f),
+
+        .button_background_color           = pack_rgb(0.2f, 0.2f, 0.2f),
+        .button_background_highlight_color = pack_rgb(0.2f, 0.22f, 0.3f),
+
+        .text_color                        = pack_rgb(0.9f, 0.9f, 0.9f),
+    };
+
+    bool ui_focused = ui_begin(&font, &ui_style);
 
     if (ui_focused)
     {
@@ -564,7 +577,7 @@ void game_tick(game_io_t *io, float dt)
     static map_brush_t *selected_brush = NULL;
 
     rect2_t panel_bounds = {
-        .min = { 32, 32  },
+        .min = { 32,  32  },
         .max = { 512, 256 },
     };
 
@@ -599,15 +612,15 @@ void game_tick(game_io_t *io, float dt)
                  plane;
                  plane = plane->next)
             {
-                r_immediate_arrow(plane->lm_origin, add(plane->lm_origin, mul(10.0f, plane->s.xyz)), COLOR32_RED);
-                r_immediate_arrow(plane->lm_origin, add(plane->lm_origin, mul(10.0f, plane->t.xyz)), COLOR32_BLUE);
+                r_push_arrow(plane->lm_origin, add(plane->lm_origin, mul(10.0f, plane->s.xyz)), COLOR32_RED);
+                r_push_arrow(plane->lm_origin, add(plane->lm_origin, mul(10.0f, plane->t.xyz)), COLOR32_BLUE);
 
                 v3_t square_v0 = add(plane->lm_origin, mul(2.5f, plane->s.xyz));
                 v3_t square_v1 = add(plane->lm_origin, mul(2.5f, plane->t.xyz));
                 v3_t square_v2 = v3_add3(plane->lm_origin, mul(2.5f, plane->s.xyz), mul(2.5f, plane->t.xyz));
 
-                r_immediate_line(square_v0, square_v2, COLOR32_GREEN);
-                r_immediate_line(square_v1, square_v2, COLOR32_GREEN);
+                r_push_line(square_v0, square_v2, COLOR32_GREEN);
+                r_push_line(square_v1, square_v2, COLOR32_GREEN);
             }
 
             draw_brush_wireframe(selected_brush, COLOR32_GREEN);
@@ -621,11 +634,11 @@ void game_tick(game_io_t *io, float dt)
             {
                 if (ray->t != FLT_MAX)
                 {
-                    r_immediate_arrow(ray->o, add(ray->o, mul(ray->t, ray->d)), COLOR32_RED);
+                    r_push_arrow(ray->o, add(ray->o, mul(ray->t, ray->d)), COLOR32_RED);
                 }
                 else
                 {
-                    r_immediate_arrow(ray->o, add(ray->o, mul(15.0f, ray->d)), COLOR32_GREEN);
+                    r_push_arrow(ray->o, add(ray->o, mul(15.0f, ray->d)), COLOR32_GREEN);
                 }
             }
         }
@@ -636,6 +649,11 @@ void game_tick(game_io_t *io, float dt)
 
     ui_begin_panel(panel_bounds);
     {
+        if (g_debug_lightmaps)
+            ui_label(strlit("lightmap debugger enabled!!!!"));
+        else
+            ui_label(strlit("lightmap debugger disabled :("));
+
         if (ui_button(strlit("lightmap debugger")))
         {
             g_debug_lightmaps = !g_debug_lightmaps;

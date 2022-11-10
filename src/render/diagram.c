@@ -1,5 +1,6 @@
 #include "diagram.h"
 #include "render.h"
+#include "render_helpers.h"
 #include "core/string.h"
 #include "core/node_iter.h"
 #include "core/hashtable.h"
@@ -140,12 +141,12 @@ static void diag_draw_children(diag_node_t *parent, const bitmap_font_t *font)
 
             case DIAG_ARROW:
             {
-                r_immediate_arrow(diag->p0, diag->p1, diag->color);
+                r_push_arrow(diag->p0, diag->p1, diag->color);
             } break;
 
             case DIAG_BOX:
             {
-                r_immediate_box(diag->bounds, diag->color);
+                r_push_rect3_outline(diag->bounds, diag->color);
             } break;
 
             case DIAG_TEXT:
@@ -155,7 +156,9 @@ static void diag_draw_children(diag_node_t *parent, const bitmap_font_t *font)
                 v3_t p = r_to_view_space(view, diag->p0, 1);
                 if (p.z > 0.0f)
                 {
-                    r_immediate_text(font, p.xy, diag->color, diag->text);
+                    // FIXME: This fucks with the draw call set up in diag_draw_all
+                    // FIXME: API too implicit!!!
+                    r_draw_text(font, p.xy, diag->color, diag->text);
                 }
             } break;
         }

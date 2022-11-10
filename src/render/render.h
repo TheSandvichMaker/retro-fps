@@ -8,6 +8,12 @@
 #define MAX_IMMEDIATE_INDICES  (16384)
 #define MAX_IMMEDIATE_VERTICES (8192)
 
+typedef struct bitmap_font_t
+{
+    unsigned w, h, cw, ch;
+    resource_handle_t texture;
+} bitmap_font_t;
+
 extern v3_t g_debug_colors[6];
 
 #define COLOR32_WHITE   pack_rgba(1, 1, 1, 1)
@@ -17,12 +23,6 @@ extern v3_t g_debug_colors[6];
 #define COLOR32_MAGENTA pack_rgba(1, 0, 1, 1)
 #define COLOR32_CYAN    pack_rgba(0, 1, 1, 1)
 #define COLOR32_YELLOW  pack_rgba(1, 1, 0, 1)
-
-typedef struct bitmap_font_t
-{
-    unsigned w, h, cw, ch;
-    resource_handle_t texture;
-} bitmap_font_t;
 
 static inline v3_t r_debug_color(size_t i)
 {
@@ -179,7 +179,6 @@ typedef struct r_command_immediate_t
 } r_command_immediate_t;
 
 // immediate mode API
-
 void     r_immediate_topology(r_primitive_topology_t topology);
 void     r_immediate_texture(resource_handle_t texture);
 void     r_immediate_depth_test(bool enabled);
@@ -187,14 +186,7 @@ void     r_immediate_depth_bias(float bias);
 void     r_immediate_transform(const m4x4_t *transform);
 uint16_t r_immediate_vertex(const vertex_immediate_t *vertex);
 void     r_immediate_index(uint16_t index);
-// TODO: I want these to support alpha
-void     r_immediate_line(v3_t start, v3_t end, uint32_t color);
-void     r_immediate_arrow(v3_t start, v3_t end, uint32_t color);
-void     r_immediate_filled_rect2(rect2_t rect, uint32_t color);
-void     r_immediate_box(rect3_t bounds, uint32_t color);
 void     r_immediate_flush(void);
-
-void r_immediate_text(const bitmap_font_t *font, v2_t p, uint32_t color, string_t string);
 
 enum { R_MAX_VIEWS = 32 };
 typedef unsigned char r_view_index_t;
@@ -282,5 +274,10 @@ static inline v4_t unpack_color(uint32_t color)
     result.w = rcp_255*(float)((color >> 24) & 0xFF);
     return result;
 }
+
+#define R_DRAWCALL_SCREENSPACE \
+    for (int i__ = (r_immediate_depth_test(false), r_push_view_screenspace(), 1); \
+         i__; \
+         i__ = (r_immediate_flush(), r_pop_view(), 0))
 
 #endif /* RENDER_H */
