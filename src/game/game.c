@@ -25,126 +25,33 @@ static v3_t map_vertices[MAX_VERTICES];
 
 static bake_light_results_t bake_results;
 
-void game_init(void)
+v3_t forward_vector_from_pitch_yaw(float pitch, float yaw)
 {
-    {
-        image_t font_image = load_image(temp, strlit("gamedata/textures/font.png"));
-        font.w = font_image.w;
-        font.h = font_image.h;
-        font.cw = 10;
-        font.ch = 12;
-        font.texture = render->upload_texture(&(upload_texture_t) {
-            .desc = {
-                .format = PIXEL_FORMAT_RGBA8,
-                .w      = font_image.w,
-                .h      = font_image.h,
-                .pitch  = font_image.pitch,
-            },
-            .data = {
-                .pixels = font_image.pixels,
-            },
-        });
-    }
+    quat_t qpitch = make_quat_axis_angle((v3_t){ 0, 1, 0 }, DEG_TO_RAD*pitch);
+    quat_t qyaw   = make_quat_axis_angle((v3_t){ 0, 0, 1 }, DEG_TO_RAD*yaw);
 
-    world = m_bootstrap(world_t, arena);
-    world->map = load_map(&world->arena, strlit("gamedata/maps/test.map"));
+    v3_t forward = { 1, 0, 0 };
+    forward = quat_rotatev(qpitch, forward);
+    forward = quat_rotatev(qyaw, forward);
 
-#if 1
-    bake_lighting(&(bake_light_params_t) {
-        .arena         = &world->arena,
-        .map           = world->map,
-        .sun_direction = make_v3(0.25f, 0.75f, 1),
-        .sun_color     = mul(1.0f, make_v3(4, 4, 3.5f)),
-        .ambient_color = mul(1.0f, make_v3(0.15f, 0.30f, 0.62f)),
-
-        // TODO: Have a macro for optimization level to check instead of DEBUG
-#if DEBUG
-        .ray_count     = 8,
-        .ray_recursion = 2,
-#else
-        .ray_count     = 64,
-        .ray_recursion = 6,
-#endif
-    }, &bake_results);
-#endif
-
-    world->player = m_alloc_struct(&world->arena, player_t);
-
-    for (map_entity_t *e = world->map->first_entity; e; e = e->next)
-    {
-        if (is_class(e, strlit("worldspawn")))
-        {
-            string_t skytex = value_from_key(e, strlit("skytex"));
-            m_scoped(temp)
-            {
-                // TODO: Distinguish between cubemap formats (single image or separate faces)
-#if 0
-                image_t skytex_img = load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s.png", strexpand(skytex)));
-                if (skytex_img.pixels)
-                {
-                    image_t faces[6];
-                    if (split_image_into_cubemap_faces(skytex_img, faces))
-                    {
-                        skybox = render->upload_texture(&(upload_texture_t){
-                            .format = PIXEL_FORMAT_SRGB8_A8,
-                            .w     = faces[0].w,
-                            .h     = faces[0].h,
-                            .pitch = faces[0].pitch,
-                            .flags = TEXTURE_FLAG_CUBEMAP,
-                            .faces = {
-                                faces[0].pixels,
-                                faces[1].pixels,
-                                faces[2].pixels,
-                                faces[3].pixels,
-                                faces[4].pixels,
-                                faces[5].pixels,
-                            },
-                        });
-                    }
-                }
-#else
-                image_t faces[6] = {
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/posx.jpg", strexpand(skytex))),
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/negx.jpg", strexpand(skytex))),
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/posy.jpg", strexpand(skytex))),
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/negy.jpg", strexpand(skytex))),
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/posz.jpg", strexpand(skytex))),
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/negz.jpg", strexpand(skytex))),
-                };
-
-                skybox = render->upload_texture(&(upload_texture_t){
-                    .desc = {
-                        .format = PIXEL_FORMAT_SRGB8_A8,
-                        .w     = faces[0].w,
-                        .h     = faces[0].h,
-                        .pitch = faces[0].pitch,
-                        .flags = TEXTURE_FLAG_CUBEMAP,
-                    },
-                    .data = {
-                        .faces = {
-                            faces[0].pixels,
-                            faces[1].pixels,
-                            faces[2].pixels,
-                            faces[3].pixels,
-                            faces[4].pixels,
-                            faces[5].pixels,
-                        },
-                    },
-                });
-#endif
-            }
-        }
-        else if (is_class(e, strlit("info_player_start")))
-        {
-            world->player->p = v3_from_key(e, strlit("origin"));
-            world->player->p.z += 10.0f;
-        }
-    }
-
-    initialized = true;
+    return forward;
 }
 
-void player_mouse_move(player_t *player, float dt)
+static v3_t player_view_origin(player_t *player)
+{
+    v3_t result = player->p;
+    float player_height = lerp(56.0f, 32.0f, smootherstep(player->crouch_t));
+    result.z += player_height;
+    return result;
+}
+
+void compute_camera_axes(camera_t *camera)
+{
+    v3_t forward = forward_vector_from_pitch_yaw(camera->pitch, camera->yaw);
+    basis_vectors(forward, make_v3(0, 0, 1), &camera->computed_x, &camera->computed_y, &camera->computed_z);
+}
+
+void update_camera_rotation(camera_t *camera, float dt)
 {
     int dxi, dyi;
     get_mouse_delta(&dxi, &dyi);
@@ -155,15 +62,22 @@ void player_mouse_move(player_t *player, float dt)
     float look_speed_x = 10.0f;
     float look_speed_y = 10.0f;
 
-    player->look_yaw   -= look_speed_x*dt*dx;
-    player->look_pitch -= look_speed_y*dt*dy;
+    camera->yaw   -= look_speed_x*dt*dx;
+    camera->pitch -= look_speed_y*dt*dy;
 
-    player->look_yaw   = fmodf(player->look_yaw, 360.0f);
-    player->look_pitch = CLAMP(player->look_pitch, -85.0f, 85.0f);
+    camera->yaw   = fmodf(camera->yaw, 360.0f);
+    camera->pitch = CLAMP(camera->pitch, -85.0f, 85.0f);
+
+    compute_camera_axes(camera);
 }
 
 void player_freecam(player_t *player, float dt)
 {
+    camera_t *camera = player->attached_camera;
+
+    if (!camera)
+        return;
+
     player->support = NULL;
 
     float move_speed = 200.0f;
@@ -176,8 +90,8 @@ void player_freecam(player_t *player, float dt)
     if (button_down(BUTTON_LEFT))     move_delta.y += move_speed;
     if (button_down(BUTTON_RIGHT))    move_delta.y -= move_speed;
 
-    quat_t qpitch = make_quat_axis_angle((v3_t){ 0, 1, 0 }, DEG_TO_RAD*player->look_pitch);
-    quat_t qyaw   = make_quat_axis_angle((v3_t){ 0, 0, 1 }, DEG_TO_RAD*player->look_yaw);
+    quat_t qpitch = make_quat_axis_angle((v3_t){ 0, 1, 0 }, DEG_TO_RAD*camera->pitch);
+    quat_t qyaw   = make_quat_axis_angle((v3_t){ 0, 0, 1 }, DEG_TO_RAD*camera->yaw);
 
     move_delta = quat_rotatev(qpitch, move_delta);
     move_delta = quat_rotatev(qyaw,   move_delta);
@@ -186,12 +100,19 @@ void player_freecam(player_t *player, float dt)
     if (button_down(BUTTON_CROUCH))   move_delta.z -= move_speed;
 
     player->dp = move_delta;
-    player->p = add(player->p, mul(dt, player->dp));
+    player->p  = add(player->p, mul(dt, player->dp));
+
+    camera->p = player_view_origin(player);
 }
 
 void player_movement(player_t *player, float dt)
 {
-    quat_t qyaw = make_quat_axis_angle((v3_t){ 0, 0, 1 }, DEG_TO_RAD*player->look_yaw);
+    camera_t *camera = player->attached_camera;
+
+    if (!camera)
+        return;
+
+    quat_t qyaw = make_quat_axis_angle((v3_t){ 0, 0, 1 }, DEG_TO_RAD*camera->yaw);
 
     // movement
 
@@ -424,20 +345,19 @@ void player_movement(player_t *player, float dt)
         .color = { 0, 0, 1 },
     });
 #endif
-}
 
-static v3_t player_view_origin(player_t *player)
-{
-    v3_t result = player->p;
-    float player_height = lerp(56.0f, 32.0f, smootherstep(player->crouch_t));
-    result.z += player_height;
-    return result;
+    camera->p = player_view_origin(player);
 }
 
 static v3_t player_view_direction(player_t *player)
 {
-    quat_t qpitch = make_quat_axis_angle((v3_t){ 0, 1, 0 }, DEG_TO_RAD*player->look_pitch);
-    quat_t qyaw   = make_quat_axis_angle((v3_t){ 0, 0, 1 }, DEG_TO_RAD*player->look_yaw);
+    camera_t *camera = player->attached_camera;
+
+    if (!camera)
+        return make_v3(1, 0, 0);
+    
+    quat_t qpitch = make_quat_axis_angle(make_v3(0, 1, 0), DEG_TO_RAD*camera->pitch);
+    quat_t qyaw   = make_quat_axis_angle(make_v3(0, 0, 1), DEG_TO_RAD*camera->yaw);
 
     v3_t dir = { 1, 0, 0 };
     dir = quat_rotatev(qpitch, dir);
@@ -465,6 +385,150 @@ static void push_brush_wireframe(r_immediate_draw_t *draw_call, map_brush_t *bru
             r_push_line(draw_call, b, c, color);
         }
     }
+}
+
+static camera_t g_camera = {
+    .vfov = 60.0f,
+};
+
+static void view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
+{
+    r_default_view(view);
+
+    view->clip_rect = viewport;
+
+    v3_t p = camera->p;
+    v3_t d = negate(camera->computed_z);
+
+    v3_t up = { 0, 0, 1 };
+    view->camera = make_view_matrix(p, d, up);
+
+    float w = viewport.max.x - viewport.min.x;
+    float h = viewport.max.y - viewport.min.y;
+
+    float aspect = w / h;
+    view->projection = make_perspective_matrix(camera->vfov, aspect, 1.0f);
+}
+
+void game_init(void)
+{
+    update_camera_rotation(&g_camera, 0.0f);
+
+    {
+        image_t font_image = load_image(temp, strlit("gamedata/textures/font.png"));
+        font.w = font_image.w;
+        font.h = font_image.h;
+        font.cw = 10;
+        font.ch = 12;
+        font.texture = render->upload_texture(&(upload_texture_t) {
+            .desc = {
+                .format = PIXEL_FORMAT_RGBA8,
+                .w      = font_image.w,
+                .h      = font_image.h,
+                .pitch  = font_image.pitch,
+            },
+            .data = {
+                .pixels = font_image.pixels,
+            },
+        });
+    }
+
+    world = m_bootstrap(world_t, arena);
+    world->map = load_map(&world->arena, strlit("gamedata/maps/test.map"));
+
+#if 1
+    bake_lighting(&(bake_light_params_t) {
+        .arena         = &world->arena,
+        .map           = world->map,
+        .sun_direction = make_v3(0.25f, 0.75f, 1),
+        .sun_color     = mul(1.0f, make_v3(4, 4, 3.5f)),
+        .ambient_color = mul(1.0f, make_v3(0.15f, 0.30f, 0.62f)),
+
+        // TODO: Have a macro for optimization level to check instead of DEBUG
+#if DEBUG
+        .ray_count     = 8,
+        .ray_recursion = 2,
+#else
+        .ray_count     = 64,
+        .ray_recursion = 6,
+#endif
+    }, &bake_results);
+#endif
+
+    world->player = m_alloc_struct(&world->arena, player_t);
+
+    for (map_entity_t *e = world->map->first_entity; e; e = e->next)
+    {
+        if (is_class(e, strlit("worldspawn")))
+        {
+            string_t skytex = value_from_key(e, strlit("skytex"));
+            m_scoped(temp)
+            {
+                // TODO: Distinguish between cubemap formats (single image or separate faces)
+#if 0
+                image_t skytex_img = load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s.png", strexpand(skytex)));
+                if (skytex_img.pixels)
+                {
+                    image_t faces[6];
+                    if (split_image_into_cubemap_faces(skytex_img, faces))
+                    {
+                        skybox = render->upload_texture(&(upload_texture_t){
+                            .format = PIXEL_FORMAT_SRGB8_A8,
+                            .w     = faces[0].w,
+                            .h     = faces[0].h,
+                            .pitch = faces[0].pitch,
+                            .flags = TEXTURE_FLAG_CUBEMAP,
+                            .faces = {
+                                faces[0].pixels,
+                                faces[1].pixels,
+                                faces[2].pixels,
+                                faces[3].pixels,
+                                faces[4].pixels,
+                                faces[5].pixels,
+                            },
+                        });
+                    }
+                }
+#else
+                image_t faces[6] = {
+                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/posx.jpg", strexpand(skytex))),
+                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/negx.jpg", strexpand(skytex))),
+                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/posy.jpg", strexpand(skytex))),
+                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/negy.jpg", strexpand(skytex))),
+                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/posz.jpg", strexpand(skytex))),
+                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/negz.jpg", strexpand(skytex))),
+                };
+
+                skybox = render->upload_texture(&(upload_texture_t){
+                    .desc = {
+                        .format = PIXEL_FORMAT_SRGB8_A8,
+                        .w     = faces[0].w,
+                        .h     = faces[0].h,
+                        .pitch = faces[0].pitch,
+                        .flags = TEXTURE_FLAG_CUBEMAP,
+                    },
+                    .data = {
+                        .faces = {
+                            faces[0].pixels,
+                            faces[1].pixels,
+                            faces[2].pixels,
+                            faces[3].pixels,
+                            faces[4].pixels,
+                            faces[5].pixels,
+                        },
+                    },
+                });
+#endif
+            }
+        }
+        else if (is_class(e, strlit("info_player_start")))
+        {
+            world->player->p = v3_from_key(e, strlit("origin"));
+            world->player->p.z += 10.0f;
+        }
+    }
+
+    initialized = true;
 }
 
 void game_tick(game_io_t *io, float dt)
@@ -524,6 +588,9 @@ void game_tick(game_io_t *io, float dt)
     io->cursor_locked = g_cursor_locked;
 
     player_t *player = world->player;
+    player->attached_camera = &g_camera;
+
+    camera_t *camera = player->attached_camera;
 
     if (button_pressed(BUTTON_TOGGLE_NOCLIP))
     {
@@ -534,7 +601,7 @@ void game_tick(game_io_t *io, float dt)
     }
 
     if (io->cursor_locked)
-        player_mouse_move(player, dt);
+        update_camera_rotation(camera, dt);
 
     switch (player->move_mode)
     {
@@ -542,28 +609,16 @@ void game_tick(game_io_t *io, float dt)
         case PLAYER_MOVE_FREECAM: player_freecam(player, dt); break;
     }
 
-    {
-        // set up view
+    rect2_t viewport = {
+        0, 0, (float)res_x, (float)res_y,
+    };
 
-        r_view_t view;
-        r_default_view(&view);
+    r_view_t view;
+    view_for_camera(camera, viewport, &view);
 
-        view.skybox = skybox;
+    view.skybox = skybox;
 
-        v3_t p = player_view_origin(player);
-        v3_t d = player_view_direction(player);
-
-        v3_t up  = { 0, 0, 1 };
-        view.camera = make_view_matrix(p, d, up);
-
-        int w, h;
-        render->get_resolution(&w, &h);
-
-        float aspect = (float)w / (float)h;
-        view.projection = make_perspective_matrix(60.0f, aspect, 1.0f);
-
-        r_push_view(&view);
-    }
+    r_push_view(&view);
 
     // render map geometry
 
@@ -686,7 +741,7 @@ void game_tick(game_io_t *io, float dt)
     {
         if (g_debug_lightmaps)
         {
-            ui_label(strlit("lightmap debugger enabled\nhaha:)"));
+            ui_label(strlit("lightmap debugger enabled haha:)"));
         }
         else
         {

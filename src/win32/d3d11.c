@@ -301,9 +301,10 @@ int init_d3d11(void *hwnd_)
 
     {
         D3D11_RASTERIZER_DESC desc = {
-            .FillMode = D3D11_FILL_SOLID,
-            .CullMode = D3D11_CULL_BACK,
-            .ScissorEnable = TRUE,
+            .FillMode              = D3D11_FILL_SOLID,
+            .CullMode              = D3D11_CULL_BACK,
+            .ScissorEnable         = TRUE,
+            .AntialiasedLineEnable = TRUE,
         };
         ID3D11Device_CreateRasterizerState(d3d.device, &desc, &d3d.rs);
     }
@@ -312,9 +313,10 @@ int init_d3d11(void *hwnd_)
 
     {
         D3D11_RASTERIZER_DESC desc = {
-            .FillMode = D3D11_FILL_SOLID,
-            .CullMode = D3D11_CULL_NONE,
-            .ScissorEnable = TRUE,
+            .FillMode              = D3D11_FILL_SOLID,
+            .CullMode              = D3D11_CULL_NONE,
+            .ScissorEnable         = TRUE,
+            .AntialiasedLineEnable = TRUE,
         };
         ID3D11Device_CreateRasterizerState(d3d.device, &desc, &d3d.rs_no_cull);
     }

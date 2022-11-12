@@ -21,21 +21,38 @@ typedef struct game_io_t
 
 void game_tick(game_io_t *io, float dt);
 
-typedef enum player_move_mode_e
+typedef enum player_move_mode_t
 {
     PLAYER_MOVE_NORMAL,
     PLAYER_MOVE_FREECAM,
-} player_move_mode_e;
+} player_move_mode_t;
+
+typedef struct camera_t
+{
+    v3_t p;
+
+    float distance;
+    float pitch;
+    float yaw;
+    float roll;
+
+    float vfov; // degrees
+
+    // axes computed from the pitch, yaw, roll values
+    v3_t computed_x;
+    v3_t computed_y;
+    v3_t computed_z;
+} camera_t;
 
 typedef struct player_t
 {
-    player_move_mode_e move_mode;
+    camera_t *attached_camera;
+
+    player_move_mode_t move_mode;
     map_brush_t *support;
 
     v3_t p;
     v3_t dp;
-    float look_pitch;
-    float look_yaw;
 
     bool crouched;
     float crouch_t;

@@ -42,6 +42,18 @@ typedef struct ui_size_t
     float strictness;
 } ui_size_t;
 
+static inline ui_size_t ui_pct(float value, float strictness)
+{
+    ui_size_t result = { UI_SIZE_PERCENTAGE_OF_PARENT, value, strictness };
+    return result;
+}
+
+static inline ui_size_t ui_txt(float strictness)
+{
+    ui_size_t result = { UI_SIZE_TEXT_CONTENT, 0.0f, strictness };
+    return result;
+}
+
 typedef struct ui_box_t
 {
     struct ui_box_t *parent;
@@ -49,6 +61,8 @@ typedef struct ui_box_t
     struct ui_box_t *first, *last;
 
     struct ui_box_t *next_in_hash;
+
+    uint64_t debug_ordinal;
 
     uint64_t last_touched_frame;
     uint32_t flags;
@@ -76,6 +90,11 @@ typedef struct ui_box_t
 
     float current_t;
 } ui_box_t;
+
+static inline void ui_set_size(ui_box_t *box, axis2_t axis, ui_size_t size)
+{
+    box->semantic_size[axis] = size;
+}
 
 typedef struct ui_interaction_t
 {

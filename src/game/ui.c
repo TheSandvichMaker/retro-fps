@@ -22,6 +22,7 @@ typedef struct ui_state_t
     arena_t arena;
 
     uint64_t frame_index;
+    uint64_t next_box_debug_ordinal;
 
     ui_box_t *first_free_box;
     ui_box_t *box_hash[4096];
@@ -48,37 +49,52 @@ static ui_state_t g_ui;
 
 ui_box_t *ui_get_or_create_box(string_t key_string)
 {
+    bool anonymous = key_string.count == 0;
+
     ui_key_t key   = ui_key(key_string);
     uint64_t index = key % ARRAY_COUNT(g_ui.box_hash); 
 
     ui_box_t *box = NULL;
-    for (ui_box_t *hash_probe = g_ui.box_hash[index];
-         hash_probe;
-         hash_probe = hash_probe->next_in_hash)
+
+    if (!anonymous)
     {
-        if (hash_probe->key == key)
+        for (ui_box_t *hash_probe = g_ui.box_hash[index];
+             hash_probe;
+             hash_probe = hash_probe->next_in_hash)
         {
-            box = hash_probe;
-            break;
+            if (hash_probe->key == key)
+            {
+                box = hash_probe;
+                break;
+            }
         }
     }
 
     if (!box)
     {
-        if (!g_ui.first_free_box)
+        if (anonymous)
         {
-            g_ui.first_free_box = m_alloc_struct(&g_ui.arena, ui_box_t);
+            box = m_alloc_struct(&g_ui.frame_arena, ui_box_t);
+            box->key_string = strlit("anonymous");
         }
-        box = sll_pop(g_ui.first_free_box);
-        zero_struct(box);
+        else
+        {
+            if (!g_ui.first_free_box)
+            {
+                g_ui.first_free_box = m_alloc_struct(&g_ui.arena, ui_box_t);
+            }
+            box = sll_pop(g_ui.first_free_box);
+            zero_struct(box);
 
-        box->next_in_hash = g_ui.box_hash[index];
-        g_ui.box_hash[index] = box;
+            box->next_in_hash = g_ui.box_hash[index];
+            g_ui.box_hash[index] = box;
 
-        box->key = key;
+            box->key        = key;
+            box->key_string = string_copy(&g_ui.frame_arena, key_string);
+        }
     }
 
-    box->key_string = string_copy(&g_ui.frame_arena, key_string);
+    box->debug_ordinal = g_ui.next_box_debug_ordinal++;
 
     box->parent = g_ui.current_parent;
     ASSERT(box->parent != box);
@@ -196,6 +212,16 @@ ui_interaction_t ui_interaction_from_box(ui_box_t *box)
     return result;
 }
 
+axis2_t ui_layout_axis(void)
+{
+    return g_ui.current_parent->layout_axis;
+}
+
+axis2_t ui_cross_axis(void)
+{
+    return (g_ui.current_parent->layout_axis + 1) % 2;
+}
+
 ui_box_t *ui_box(string_t key, uint32_t flags)
 {
     ui_box_t *box = ui_get_or_create_box(key);
@@ -204,6 +230,8 @@ ui_box_t *ui_box(string_t key, uint32_t flags)
     box->layout_axis      = AXIS2_Y;
     box->foreground_color = g_ui.style.text_color;
     box->background_color = g_ui.style.panel_background_color;
+
+    ui_set_size(box, ui_cross_axis(), ui_pct(1.0f, 0.0f));
 
     return box;
 }
@@ -252,8 +280,9 @@ ui_box_t *ui_label(string_t text)
 {
     ui_box_t *box = ui_box(text, 0);
 
-    box->semantic_size[AXIS2_X] = (ui_size_t){ UI_SIZE_PERCENTAGE_OF_PARENT, 1.0f, 1.0f };
-    box->semantic_size[AXIS2_Y] = (ui_size_t){ UI_SIZE_TEXT_CONTENT,         1.0f, 1.0f };
+    ui_set_size(box, AXIS2_X, ui_txt(1.0f));
+    ui_set_size(box, AXIS2_Y, ui_txt(1.0f));
+
     box->text = string_copy(&g_ui.frame_arena, text);
 
     return box;
@@ -263,8 +292,8 @@ ui_interaction_t ui_button(string_t text)
 {
     ui_box_t *box = ui_box(text, UI_CLICKABLE|UI_DRAW_BACKGROUND|UI_DRAW_OUTLINE);
 
-    box->semantic_size[AXIS2_X] = (ui_size_t){ UI_SIZE_PERCENTAGE_OF_PARENT, 1.0f, 1.0f };
-    box->semantic_size[AXIS2_Y] = (ui_size_t){ UI_SIZE_TEXT_CONTENT,         1.0f, 1.0f };
+    ui_set_size(box, AXIS2_Y, ui_txt(1.0f));
+
     box->background_color           = g_ui.style.button_background_color;
     box->background_highlight_color = g_ui.style.button_background_highlight_color;
     box->text = string_copy(&g_ui.frame_arena, text);
@@ -275,25 +304,45 @@ ui_interaction_t ui_button(string_t text)
     return ui_interaction_from_box(box);
 }
 
-ui_interaction_t ui_checkbox(string_t text, bool *toggle)
+void ui_spacer(ui_size_t size)
 {
-    ui_box_t *container = ui_box(string_format(temp, "%.*s##container", strexpand(text)), 0);
-    container->layout_axis = AXIS2_X;
-    container->semantic_size[AXIS2_X] = (ui_size_t){ UI_SIZE_PERCENTAGE_OF_PARENT, 1.0f, 1.0f };
-    container->semantic_size[AXIS2_Y] = (ui_size_t){ UI_SIZE_TEXT_CONTENT,         1.0f, 1.0f };
+    ui_box_t *spacer = ui_box(strnull, 0);
+    ui_set_size(spacer, ui_layout_axis(), size);
+    ui_set_size(spacer, ui_cross_axis (), ui_pct(1.0f, 0.0f));
+}
+
+ui_box_t *ui_begin_container(axis2_t layout_axis, ui_size_t size)
+{
+    ui_box_t *container = ui_box(strnull, 0);
+
+    ui_set_size(container, ui_layout_axis(), size);
+
+    container->layout_axis = layout_axis;
 
     ui_push_parent(container);
 
-    ui_box_t *label = ui_box(text, UI_DRAW_OUTLINE);
-    label->semantic_size[AXIS2_X] = (ui_size_t){ UI_SIZE_PERCENTAGE_OF_PARENT, 0.9f, 1.0f };
-    label->semantic_size[AXIS2_Y] = (ui_size_t){ UI_SIZE_PERCENTAGE_OF_PARENT, 1.0f, 1.0f };
-    label->text = string_copy(&g_ui.frame_arena, text);
+    return container;
+}
+
+void ui_end_container(void)
+{
+    ui_pop_parent();
+}
+
+ui_interaction_t ui_checkbox(string_t text, bool *toggle)
+{
+    ui_begin_container(AXIS2_X, ui_txt(1.0f));
+
+    ui_box_t *label = ui_label(text);
+    label->flags |= UI_DRAW_OUTLINE;
+
+    ui_spacer(ui_pct(1.0f, 0.0f));
 
     ui_box_t *button = ui_box(string_format(temp, "%.*s##button", strexpand(text)), UI_CLICKABLE|UI_DRAW_BACKGROUND|UI_DRAW_OUTLINE);
-    button->semantic_size[AXIS2_X] = (ui_size_t){ UI_SIZE_PERCENTAGE_OF_PARENT, 0.1f, 1.0f };
-    button->semantic_size[AXIS2_Y] = (ui_size_t){ UI_SIZE_PERCENTAGE_OF_PARENT, 1.0f, 1.0f };
+    ui_set_size(button, AXIS2_X, ui_pct(0.1f, 1.0f));
+    ui_set_size(button, AXIS2_Y, ui_pct(1.0f, 1.0f));
 
-    ui_pop_parent();
+    ui_end_container();
 
     ui_interaction_t interaction = ui_interaction_from_box(button);
     if (interaction.clicked)
@@ -459,8 +508,34 @@ static void ui_layout_solve_downwards_dependent_sizes(ui_box_t *root, axis2_t ax
 
 static void ui_layout_solve_size_violations(ui_box_t *root, axis2_t axis)
 {
-    (void)root;
-    (void)axis;
+    for (ui_box_t *box = root; box; box = ui_box_next_depth_first_pre_order(box))
+    {
+        if (axis != box->layout_axis)
+            continue;
+
+        float target_size = box->computed_size[axis];
+
+        float offset = 0.0f;
+        float child_sum_strictness = 0.0f;
+        float child_sum_size = 0.0f;
+        for (ui_box_t *child = box->first; child; child = child->next)
+        {
+            child_sum_size       = max(child_sum_size, offset + child->computed_size[axis]);
+            child_sum_strictness += 1.0f - child->semantic_size[axis].strictness;
+
+            offset += child->computed_size[axis];
+        }
+
+        float violation_size = child_sum_size - target_size;
+        if (violation_size > 0.0f && child_sum_strictness > 0.01f)
+        {
+            for (ui_box_t *child = box->first; child; child = child->next)
+            {
+                float strictness_ratio = 1.0f - child->semantic_size[axis].strictness;
+                child->computed_size[axis] -= violation_size*(strictness_ratio / child_sum_strictness);
+            }
+        }
+    }
 }
 
 static void ui_layout_solve_finalize_positions(ui_box_t *root, axis2_t axis)
