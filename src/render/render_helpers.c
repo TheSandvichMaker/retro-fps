@@ -121,7 +121,20 @@ void r_push_text(r_immediate_draw_t *draw_call, const bitmap_font_t *font, v2_t 
     ASSERT(font->w % font->cw ==  0);
     ASSERT(font->h / font->ch >= 16);
 
+    float cw = (float)font->cw;
+    float ch = (float)font->ch;
+
+    float newline_offset = 0;
+    for (size_t i = 0; i < string.count; i++)
+    {
+        if (i + 1 < string.count && string.data[i] == '\n')
+        {
+            newline_offset += ch;
+        }
+    }
+
     v2_t at = p;
+    at.y += newline_offset;
 
     for (size_t i = 0; i < string.count; i++)
     {
@@ -130,12 +143,9 @@ void r_push_text(r_immediate_draw_t *draw_call, const bitmap_font_t *font, v2_t 
         float cx = (float)(c % 16);
         float cy = (float)(c / 16);
 
-        float cw = (float)font->cw;
-        float ch = (float)font->ch;
-
         if (is_newline(c))
         {
-            at.y += ch;
+            at.y -= ch;
             at.x  = p.x;
         }
         else

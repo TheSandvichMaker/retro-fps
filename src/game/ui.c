@@ -5,6 +5,12 @@
 #include "render/render.h"
 #include "render/render_helpers.h"
 
+static inline string_t ui_display_text(string_t key_string)
+{
+    string_t result = substring(key_string, 0, string_find_first(key_string, strlit("##")));
+    return result;
+}
+
 static inline ui_key_t ui_key(string_t string)
 {
     return string_hash(string);
@@ -331,7 +337,6 @@ static inline ui_box_t *ui_box_next_depth_first_pre_order(ui_box_t *node)
     return next;
 }
 
-#if 0
 static inline ui_box_t *ui_box_next_depth_first_post_order(ui_box_t *node)
 {
     ui_box_t *next = NULL;
@@ -355,9 +360,9 @@ static inline ui_box_t *ui_box_next_depth_first_post_order(ui_box_t *node)
             ui_box_t *p = node->parent;
             while (p)
             {
-                if (p->first)
+                if (p->next)
                 {
-                    next = p->first;
+                    next = p->next;
                     break;
                 }
 
@@ -368,86 +373,87 @@ static inline ui_box_t *ui_box_next_depth_first_post_order(ui_box_t *node)
 
     return next;
 }
-#endif
 
-static void ui_layout_solve_independent_sizes(ui_box_t *box, axis2_t axis)
+static void ui_layout_solve_independent_sizes(ui_box_t *root, axis2_t axis)
 {
-    if (!box)
-        return;
-
-    ui_size_t *size = &box->semantic_size[axis];
-    ASSERT(size->kind != UI_SIZE_NONE);
-
-    switch (size->kind)
+    for (ui_box_t *box = root; box; box = ui_box_next_depth_first_pre_order(box))
     {
-        case UI_SIZE_PIXELS:
+        ui_size_t *size = &box->semantic_size[axis];
+        ASSERT(size->kind != UI_SIZE_NONE);
+
+        switch (size->kind)
         {
-            box->computed_size[axis] = size->value;
-        } break;
-
-        case UI_SIZE_TEXT_CONTENT:
-        {
-            uint32_t font_w = g_ui.font->cw;
-            uint32_t font_h = g_ui.font->ch;
-
-            if (axis == AXIS2_X)
+            case UI_SIZE_PIXELS:
             {
-                box->computed_size[axis] = (float)(box->text.count*font_w);
-            }
-            else
-            {
-                ASSERT(axis == AXIS2_Y);
-                box->computed_size[axis] = (float)font_h;
-            }
+                box->computed_size[axis] = size->value;
+            } break;
 
-            box->computed_size[axis] += 2.0f*g_ui.style.text_margins.e[axis];
-        } break;
+            case UI_SIZE_TEXT_CONTENT:
+            {
+                uint32_t font_w = g_ui.font->cw;
+                uint32_t font_h = g_ui.font->ch;
+
+                string_t display_text = ui_display_text(box->text);
+
+                size_t newline_count = 1;
+                for (size_t i = 0; i < display_text.count; i++)
+                {
+                    if (i + 1 < display_text.count && display_text.data[i] == '\n')
+                    {
+                        newline_count += 1;
+                    }
+                }
+
+                if (axis == AXIS2_X)
+                {
+                    box->computed_size[axis] = (float)(display_text.count*font_w);
+                }
+                else
+                {
+                    ASSERT(axis == AXIS2_Y);
+                    box->computed_size[axis] = (float)newline_count*(float)font_h;
+                }
+
+                box->computed_size[axis] += 2.0f*g_ui.style.text_margins.e[axis];
+            } break;
+        }
     }
-
-    ui_layout_solve_independent_sizes(box->first, axis);
-    ui_layout_solve_independent_sizes(box->next, axis);
 }
 
-static void ui_layout_solve_upwards_dependent_sizes(ui_box_t *box, axis2_t axis)
+static void ui_layout_solve_upwards_dependent_sizes(ui_box_t *root, axis2_t axis)
 {
-    if (!box)
-        return;
-
-    ui_size_t *size = &box->semantic_size[axis];
-    ASSERT(size->kind != UI_SIZE_NONE);
-
-    switch (size->kind)
+    for (ui_box_t *box = root; box; box = ui_box_next_depth_first_pre_order(box))
     {
-        case UI_SIZE_PERCENTAGE_OF_PARENT:
-        {
-            box->computed_size[axis] = box->parent->computed_size[axis]*size->value;
-        } break;
-    }
+        ui_size_t *size = &box->semantic_size[axis];
+        ASSERT(size->kind != UI_SIZE_NONE);
 
-    ui_layout_solve_upwards_dependent_sizes(box->first, axis);
-    ui_layout_solve_upwards_dependent_sizes(box->next, axis);
+        switch (size->kind)
+        {
+            case UI_SIZE_PERCENTAGE_OF_PARENT:
+            {
+                box->computed_size[axis] = box->parent->computed_size[axis]*size->value;
+            } break;
+        }
+    }
 }
 
-static void ui_layout_solve_downwards_dependent_sizes(ui_box_t *box, axis2_t axis)
+static void ui_layout_solve_downwards_dependent_sizes(ui_box_t *root, axis2_t axis)
 {
-    if (!box)
-        return;
-
-    ui_layout_solve_downwards_dependent_sizes(box->first, axis);
-    ui_layout_solve_downwards_dependent_sizes(box->next, axis);
-
-    ui_size_t *size = &box->semantic_size[axis];
-    ASSERT(size->kind != UI_SIZE_NONE);
-
-    switch (size->kind)
+    for (ui_box_t *box = root; box; box = ui_box_next_depth_first_post_order(box))
     {
-        case UI_SIZE_SUM_OF_CHILDREN:
+        ui_size_t *size = &box->semantic_size[axis];
+        ASSERT(size->kind != UI_SIZE_NONE);
+
+        switch (size->kind)
         {
-            for (ui_box_t *child = box->first; child; child = child->next)
+            case UI_SIZE_SUM_OF_CHILDREN:
             {
-                box->computed_size[axis] += child->computed_size[axis];
-            }
-        } break;
+                for (ui_box_t *child = box->first; child; child = child->next)
+                {
+                    box->computed_size[axis] += child->computed_size[axis];
+                }
+            } break;
+        }
     }
 }
 
@@ -548,8 +554,7 @@ static void ui_draw(void)
             v4_t color = box->background_color;
 
             if (has_flags_any(box->flags, UI_CLICKABLE|UI_DRAGGABLE) &&
-                box == g_ui.hot ||
-                box == g_ui.active)
+                (box == g_ui.hot || box == g_ui.active))
             {
                 color = box->background_highlight_color;
             }
@@ -652,8 +657,10 @@ static void ui_draw(void)
 
             p = add(p, make_v2(0.0f, box->current_t));
 
-            r_push_text(text, g_ui.font, add(p, make_v2(1, -1)), pack_rgba(0.0f, 0.0f, 0.0f, 0.5f), box->text);
-            r_push_text(text, g_ui.font, p, pack_color(box->foreground_color), box->text);
+            string_t display_text = ui_display_text(box->text);
+
+            r_push_text(text, g_ui.font, add(p, make_v2(1, -1)), pack_rgba(0.0f, 0.0f, 0.0f, 0.5f), display_text);
+            r_push_text(text, g_ui.font, p, pack_color(box->foreground_color), display_text);
 
             r_immediate_draw_end(text);
         }

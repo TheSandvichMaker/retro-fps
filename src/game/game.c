@@ -685,9 +685,13 @@ void game_tick(game_io_t *io, float dt)
     ui_push_parent(panel);
     {
         if (g_debug_lightmaps)
-            ui_label(strlit("lightmap debugger enabled  :)"));
+        {
+            ui_label(strlit("lightmap debugger enabled\nhaha:)"));
+        }
         else
-            ui_label(strlit("lightmap debugger disabled :("));
+        {
+            ui_label(strlit("lightmap debugger disabled\nnoo:("));
+        }
 
         ui_checkbox(strlit("lightmap debugger"), &g_debug_lightmaps);
     }
