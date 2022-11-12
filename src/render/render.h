@@ -277,6 +277,9 @@ static inline uint32_t pack_color(v4_t color)
 
 static inline uint32_t pack_rgba(float r, float g, float b, float a)
 {
+    r *= a;
+    g *= a;
+    b *= a;
     return pack_color((v4_t){r, g, b, a});
 }
 

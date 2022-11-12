@@ -13,7 +13,7 @@ Texture2D texture0 : register(t0);
 PS_INPUT vs(VS_INPUT_IMMEDIATE IN)
 {
     PS_INPUT OUT;
-    OUT.pos = mul(mul(camera_projection, model_transform), float4(IN.pos, 1));
+    OUT.pos = mul(camera_projection, float4(IN.pos, 1));
     OUT.pos.z += depth_bias;
     OUT.uv  = IN.uv;
 
@@ -21,6 +21,7 @@ PS_INPUT vs(VS_INPUT_IMMEDIATE IN)
                      (float)((IN.col >>  8) & 0xFF) / 255.0f,
                      (float)((IN.col >> 16) & 0xFF) / 255.0f,
                      (float)((IN.col >> 24) & 0xFF) / 255.0f);
+    OUT.col.xyz = OUT.col.xyz*OUT.col.xyz;
 
     return OUT;
 }

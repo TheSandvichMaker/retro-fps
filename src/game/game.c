@@ -482,15 +482,14 @@ void game_tick(game_io_t *io, float dt)
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);
 
-    v2_t resolution = make_v2((float)res_x, (float)res_y);
-
     ui_style_t ui_style = {
         .element_margins = { 4.0f, 4.0f },
         .text_margins    = { 4.0f, 4.0f },
 
-        .panel_background_color            = pack_rgb(0.125f, 0.125f, 0.125f),
+        .panel_background_color            = pack_rgba(0.125f, 0.125f, 0.125f, 0.95f),
 
-        .button_background_color           = pack_rgb(0.2f, 0.2f, 0.2f),
+        .button_outline_color              = pack_rgb(0.35f, 0.35f, 0.65f),
+        .button_background_color           = pack_rgb(0.25f, 0.25f, 0.25f),
         .button_background_highlight_color = pack_rgb(0.2f, 0.22f, 0.3f),
 
         .text_color                        = pack_rgb(0.9f, 0.9f, 0.9f),
@@ -580,11 +579,6 @@ void game_tick(game_io_t *io, float dt)
 
     static map_brush_t *selected_brush = NULL;
 
-    rect2_t panel_bounds = {
-        .min = { 32,  resolution.y - 256 },
-        .max = { 512, resolution.y - 32  },
-    };
-
     if (g_debug_lightmaps)
     {
         r_command_identifier(strlit("lightmap debug"));
@@ -603,7 +597,7 @@ void game_tick(game_io_t *io, float dt)
             if (button_pressed(BUTTON_FIRE1))
                 selected_brush = intersect.brush;
 
-            if (!selected_brush)
+            if (selected_brush != intersect.brush)
                 push_brush_wireframe(draw_call, intersect.brush, COLOR32_RED);
         }
         else
@@ -652,32 +646,23 @@ void game_tick(game_io_t *io, float dt)
         r_immediate_draw_end(draw_call);
     }
 
-    r_push_view_screenspace();
+    ui_box_t *panel = ui_panel(strlit("lightmap debugger panel"), 0, 32, 32, 486, 512);
 
-    ui_begin_panel(panel_bounds);
+    ui_push_parent(panel);
     {
         if (g_debug_lightmaps)
             ui_label(strlit("lightmap debugger enabled  :)"));
         else
             ui_label(strlit("lightmap debugger disabled :("));
 
-        if (ui_button(strlit("lightmap debugger")))
+        if (ui_button(strlit("lightmap debugger")).clicked)
         {
             g_debug_lightmaps = !g_debug_lightmaps;
         }
-
-        if (selected_brush)
-        {
-            for (size_t i = 0; i < selected_brush->poly_count; i++)
-            {
-                map_poly_t *poly = &selected_brush->polys[i];
-                ui_image_viewer(poly->lightmap);
-            }
-        }
     }
-    ui_end_panel();
+    ui_pop_parent();
 
-    r_pop_view();
+    ui_end();
 
     if (button_pressed(BUTTON_ESCAPE))
     {

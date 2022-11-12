@@ -169,6 +169,7 @@ typedef union resource_handle_t
 
 #define NULL_RESOURCE_HANDLE ((resource_handle_t) { 0, 0 })
 #define RESOURCE_HANDLE_VALID(x) ((x).index != 0)
+#define RESOURCE_HANDLES_EQUAL(a, b) ((a).value == (b).value)
 
 typedef struct node_t
 {
@@ -181,5 +182,12 @@ typedef struct node_t
     struct type *parent;                   \
     struct type *first_child, *last_child; \
     struct type *next, *prev;
+
+typedef enum axis2_t
+{
+    AXIS2_X,
+    AXIS2_Y,
+    AXIS2_COUNT,
+} axis2_t;
 
 #endif /* API_TYPES_H */

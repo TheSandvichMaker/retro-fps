@@ -113,20 +113,9 @@ void r_push_rect3_outline(r_immediate_draw_t *draw_call, rect3_t bounds, uint32_
     r_push_line(draw_call, v110, v111, color);
 }
 
-void r_draw_text(const bitmap_font_t *font, v2_t p, uint32_t color, string_t string)
+void r_push_text(r_immediate_draw_t *draw_call, const bitmap_font_t *font, v2_t p, uint32_t color, string_t string)
 {
-    // this is stupid, r_immediate_* is supposed to just be putting vertices, really,
-    // but r_immediate_text is a full draw call by itself that pushes a view and everything
-
-    // unintuitive and weird.
-
-    r_push_view_screenspace();
-
-    r_command_identifier(string_format(temp, "text: %.*s", strexpand(string)));
-
-    r_immediate_draw_t *draw_call = r_immediate_draw_begin(&(r_immediate_draw_t){
-        .texture = font->texture,
-    });
+    ASSERT(RESOURCE_HANDLES_EQUAL(draw_call->texture, font->texture));
 
     ASSERT(font->w / font->cw == 16);
     ASSERT(font->w % font->cw ==  0);
@@ -191,8 +180,4 @@ void r_draw_text(const bitmap_font_t *font, v2_t p, uint32_t color, string_t str
             at.x += cw;
         }
     }
-
-    r_immediate_draw_end(draw_call);
-
-    r_pop_view();
 }

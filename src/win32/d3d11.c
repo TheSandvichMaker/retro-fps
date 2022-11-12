@@ -761,7 +761,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                         .scissor_rect = {
                             .left   = (LONG)draw_call->clip_rect.min.x,
                             .right  = (LONG)draw_call->clip_rect.max.x,
-                            .bottom = height - (LONG)draw_call->clip_rect.min.y - 1,
+                            .bottom = height - (LONG)draw_call->clip_rect.min.y,
                             .top    = height - (LONG)draw_call->clip_rect.max.y - 1,
                         },
                     });
