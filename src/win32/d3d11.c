@@ -422,7 +422,7 @@ int init_d3d11(void *hwnd_)
     // create immediate rendering buffers
 
     {
-        size_t stride = sizeof(uint16_t);
+        size_t stride = sizeof(uint32_t);
         size_t icount = MAX_IMMEDIATE_INDICES;
 
         D3D11_BUFFER_DESC desc = {
@@ -465,8 +465,11 @@ int init_d3d11(void *hwnd_)
 
 void render_model(const render_pass_t *pass)
 {
+    ASSERT(pass->index_format == DXGI_FORMAT_R16_UINT ||
+           pass->index_format == DXGI_FORMAT_R32_UINT);
+
     // set vertex buffer and friends
-    set_model_buffers(pass->model);
+    set_model_buffers(pass->model, pass->index_format);
 
     // set vertex shader
     ID3D11DeviceContext_VSSetConstantBuffers(d3d.context, 0, pass->cbuffer_count, pass->cbuffers);
@@ -629,6 +632,8 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                 .vs = d3d.skybox_vs,
                 .ps = d3d.skybox_ps,
 
+                .index_format = DXGI_FORMAT_R16_UINT,
+
                 .cbuffer_count = 1,
                 .cbuffers      = (ID3D11Buffer *[]) { d3d.ubuffer },
                 .srv_count     = 1,
@@ -681,6 +686,8 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
 
                         render_model(&(render_pass_t) {
                             .model = model,
+
+                            .index_format = DXGI_FORMAT_R16_UINT,
 
                             .vs = d3d.world_vs,
                             .ps = d3d.world_ps,
@@ -745,6 +752,8 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
 
                         .vs = d3d.immediate_vs,
                         .ps = d3d.immediate_ps,
+
+                        .index_format = DXGI_FORMAT_R32_UINT,
 
                         .ioffset = draw_call->ioffset,
                         .voffset = draw_call->voffset,
@@ -1041,14 +1050,14 @@ void update_buffer(ID3D11Buffer *buffer, const void *data, size_t size)
     ID3D11DeviceContext_Unmap(d3d.context, (ID3D11Resource *)buffer, 0);
 }
 
-void set_model_buffers(d3d_model_t *model)
+void set_model_buffers(d3d_model_t *model, DXGI_FORMAT index_format)
 {
     ID3D11DeviceContext_IASetInputLayout(d3d.context, d3d.layouts[model->vertex_format]);
     ID3D11DeviceContext_IASetPrimitiveTopology(d3d.context, model->primitive_topology);
     UINT stride = vertex_format_size[model->vertex_format];
     UINT offset = 0;
     ID3D11DeviceContext_IASetVertexBuffers(d3d.context, 0, 1, &model->vbuffer, &stride, &offset);
-    ID3D11DeviceContext_IASetIndexBuffer(d3d.context, model->ibuffer, DXGI_FORMAT_R16_UINT, 0);
+    ID3D11DeviceContext_IASetIndexBuffer(d3d.context, model->ibuffer, index_format, 0);
 }
 
 void describe_texture(resource_handle_t handle, texture_desc_t *result)

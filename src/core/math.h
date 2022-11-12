@@ -862,6 +862,15 @@ static inline m4x4_t make_perspective_matrix(float vfov, float w_over_h, float n
 // rect2
 //
 
+static inline rect2_t rect2_center_dim(v2_t center, v2_t dim)
+{
+    rect2_t result = {
+        .min = sub(center, mul(0.5f, dim)),
+        .max = add(center, mul(0.5f, dim)),
+    };
+    return result;
+}
+
 static inline rect2_t rect2_add_radius(rect2_t rect, v2_t radius)
 {
     rect2_t result = {

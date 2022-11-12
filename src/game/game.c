@@ -482,17 +482,20 @@ void game_tick(game_io_t *io, float dt)
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);
 
+    v2_t res = make_v2((float)res_x, (float)res_y);
+
     ui_style_t ui_style = {
         .element_margins = { 4.0f, 4.0f },
         .text_margins    = { 4.0f, 4.0f },
 
-        .panel_background_color            = pack_rgba(0.125f, 0.125f, 0.125f, 0.95f),
+        .panel_background_color            = make_v4(0.125f, 0.125f, 0.125f, 0.95f),
 
-        .button_outline_color              = pack_rgb(0.35f, 0.35f, 0.65f),
-        .button_background_color           = pack_rgb(0.25f, 0.25f, 0.25f),
-        .button_background_highlight_color = pack_rgb(0.2f, 0.22f, 0.3f),
+        .button_outline_color              = make_v4(0.35f, 0.35f, 0.65f, 1.0f),
+        .button_background_color           = make_v4(0.25f, 0.25f, 0.25f, 1.0f),
+        .button_background_highlight_color = make_v4(0.2f, 0.22f, 0.3f, 1.0f),
+        .button_background_active_color    = make_v4(0.3f, 0.32f, 0.4f, 1.0f),
 
-        .text_color                        = pack_rgb(0.9f, 0.9f, 0.9f),
+        .text_color                        = make_v4(0.9f, 0.9f, 0.9f, 1.0f),
     };
 
     bool ui_focused = ui_begin(&font, &ui_style);
@@ -588,22 +591,34 @@ void game_tick(game_io_t *io, float dt)
             .depth_test = true,
         });
 
-        intersect_result_t intersect;
-        if (intersect_map(map, &(intersect_params_t) {
-                .o = player_view_origin(player),
-                .d = player_view_direction(player),
-            }, &intersect))
+        if (g_cursor_locked)
         {
-            if (button_pressed(BUTTON_FIRE1))
-                selected_brush = intersect.brush;
+            intersect_result_t intersect;
+            if (intersect_map(map, &(intersect_params_t) {
+                    .o = player_view_origin(player),
+                    .d = player_view_direction(player),
+                }, &intersect))
+            {
+                if (button_pressed(BUTTON_FIRE1))
+                {
+                    if (selected_brush == intersect.brush)
+                    {
+                        selected_brush = NULL;
+                    }
+                    else
+                    {
+                        selected_brush = intersect.brush;
+                    }
+                }
 
-            if (selected_brush != intersect.brush)
-                push_brush_wireframe(draw_call, intersect.brush, COLOR32_RED);
-        }
-        else
-        {
-            if (button_pressed(BUTTON_FIRE1))
-                selected_brush = NULL;
+                if (selected_brush != intersect.brush)
+                    push_brush_wireframe(draw_call, intersect.brush, COLOR32_RED);
+            }
+            else
+            {
+                if (button_pressed(BUTTON_FIRE1))
+                    selected_brush = NULL;
+            }
         }
 
         if (selected_brush)
@@ -646,7 +661,26 @@ void game_tick(game_io_t *io, float dt)
         r_immediate_draw_end(draw_call);
     }
 
-    ui_box_t *panel = ui_panel(strlit("lightmap debugger panel"), 0, 32, 32, 486, 512);
+    if (g_cursor_locked)
+    {
+        // reticle 
+
+        r_push_view_screenspace();
+        r_immediate_draw_t *draw_call = r_immediate_draw_begin(NULL);
+
+        v2_t center = mul(0.5f, res);
+        v2_t dim    = make_v2(4, 4);
+
+        rect2_t inner_rect = rect2_center_dim(center, dim);
+        rect2_t outer_rect = rect2_add_radius(inner_rect, make_v2(1, 1));
+
+        r_push_rect2_filled(draw_call, outer_rect, pack_rgba(0, 0, 0, 0.85f));
+        r_push_rect2_filled(draw_call, inner_rect, COLOR32_WHITE);
+
+        r_pop_view();
+    }
+
+    ui_box_t *panel = ui_panel(strlit("lightmap debugger panel"), 0, 32, 32, 300, 512);
 
     ui_push_parent(panel);
     {
@@ -655,14 +689,11 @@ void game_tick(game_io_t *io, float dt)
         else
             ui_label(strlit("lightmap debugger disabled :("));
 
-        if (ui_button(strlit("lightmap debugger")).clicked)
-        {
-            g_debug_lightmaps = !g_debug_lightmaps;
-        }
+        ui_checkbox(strlit("lightmap debugger"), &g_debug_lightmaps);
     }
     ui_pop_parent();
 
-    ui_end();
+    ui_end(dt);
 
     if (button_pressed(BUTTON_ESCAPE))
     {

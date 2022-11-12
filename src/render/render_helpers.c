@@ -3,30 +3,30 @@
 
 void r_push_line(r_immediate_draw_t *draw_call, v3_t start, v3_t end, uint32_t color)
 {
-    uint16_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ .pos = start, .col = color });
+    uint32_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ .pos = start, .col = color });
     r_immediate_index(draw_call, i0);
-    uint16_t i1 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ .pos = end,   .col = color });
+    uint32_t i1 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ .pos = end,   .col = color });
     r_immediate_index(draw_call, i1);
 }
 
 void r_push_rect2_filled(r_immediate_draw_t *draw_call, rect2_t rect, uint32_t color)
 {
-    uint16_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
+    uint32_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
         .pos = { rect.min.x, rect.min.y, 0.0f }, 
         .tex = { 0, 0 },
         .col = color 
     });
-    uint16_t i1 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
+    uint32_t i1 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
         .pos = { rect.max.x, rect.min.y, 0.0f }, 
         .tex = { 1, 0 },
         .col = color 
     });
-    uint16_t i2 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
+    uint32_t i2 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
         .pos = { rect.max.x, rect.max.y, 0.0f }, 
         .tex = { 1, 1 },
         .col = color 
     });
-    uint16_t i3 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
+    uint32_t i3 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
         .pos = { rect.min.x, rect.max.y, 0.0f }, 
         .tex = { 0, 1 },
         .col = color 
@@ -146,25 +146,25 @@ void r_push_text(r_immediate_draw_t *draw_call, const bitmap_font_t *font, v2_t 
             float v0 = cy / 16.0f;
             float v1 = v0 + (1.0f / 16.0f);
 
-            uint16_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t) {
+            uint32_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t) {
                 .pos = { at.x, at.y, 0.0f }, // TODO: Use Z?
                 .tex = { u0, v1 },
                 .col = color,
             });
 
-            uint16_t i1 = r_immediate_vertex(draw_call, &(vertex_immediate_t) {
+            uint32_t i1 = r_immediate_vertex(draw_call, &(vertex_immediate_t) {
                 .pos = { at.x + cw, at.y, 0.0f }, // TODO: Use Z?
                 .tex = { u1, v1 },
                 .col = color,
             });
 
-            uint16_t i2 = r_immediate_vertex(draw_call, &(vertex_immediate_t) {
+            uint32_t i2 = r_immediate_vertex(draw_call, &(vertex_immediate_t) {
                 .pos = { at.x + cw, at.y + ch, 0.0f }, // TODO: Use Z?
                 .tex = { u1, v0 },
                 .col = color,
             });
 
-            uint16_t i3 = r_immediate_vertex(draw_call, &(vertex_immediate_t) {
+            uint32_t i3 = r_immediate_vertex(draw_call, &(vertex_immediate_t) {
                 .pos = { at.x, at.y + ch, 0.0f }, // TODO: Use Z?
                 .tex = { u0, v0 },
                 .col = color,

@@ -17,6 +17,7 @@ typedef struct bitmap_font_t
 extern v3_t g_debug_colors[6];
 
 #define COLOR32_WHITE   pack_rgba(1, 1, 1, 1)
+#define COLOR32_BLACK   pack_rgba(0, 0, 0, 1)
 #define COLOR32_RED     pack_rgba(1, 0, 0, 1)
 #define COLOR32_GREEN   pack_rgba(0, 1, 0, 1)
 #define COLOR32_BLUE    pack_rgba(0, 0, 1, 1)
@@ -195,8 +196,8 @@ typedef struct r_command_immediate_t
 } r_command_immediate_t;
 
 r_immediate_draw_t *r_immediate_draw_begin(const r_immediate_draw_t *draw_call);
-uint16_t            r_immediate_vertex    (r_immediate_draw_t *draw_call, const vertex_immediate_t *vertex);
-void                r_immediate_index     (r_immediate_draw_t *draw_call, uint16_t index);
+uint32_t            r_immediate_vertex    (r_immediate_draw_t *draw_call, const vertex_immediate_t *vertex);
+void                r_immediate_index     (r_immediate_draw_t *draw_call, uint32_t index);
 void                r_immediate_draw_end  (r_immediate_draw_t *draw_call);
 
 enum { R_MAX_VIEWS = 32 };
@@ -218,7 +219,7 @@ typedef struct r_list_t
 
     uint32_t max_immediate_icount;
     uint32_t immediate_icount;
-    uint16_t *immediate_indices;
+    uint32_t *immediate_indices;
 
     uint32_t max_immediate_vcount;
     uint32_t immediate_vcount;
@@ -267,6 +268,10 @@ static inline uint32_t pack_color(v4_t color)
     color.y = CLAMP(color.y, 0.0f, 1.0f);
     color.z = CLAMP(color.z, 0.0f, 1.0f);
     color.w = CLAMP(color.w, 0.0f, 1.0f);
+
+    color.x *= color.w;
+    color.y *= color.w;
+    color.z *= color.w;
 
     uint32_t result = (((uint32_t)(255.0f*color.x) <<  0) |
                        ((uint32_t)(255.0f*color.y) <<  8) |

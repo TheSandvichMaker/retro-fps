@@ -40,8 +40,9 @@ typedef struct ui_state_t
 
 static ui_state_t g_ui;
 
-ui_box_t *ui_get_or_create_box(uint64_t key)
+ui_box_t *ui_get_or_create_box(string_t key_string)
 {
+    ui_key_t key   = ui_key(key_string);
     uint64_t index = key % ARRAY_COUNT(g_ui.box_hash); 
 
     ui_box_t *box = NULL;
@@ -71,7 +72,10 @@ ui_box_t *ui_get_or_create_box(uint64_t key)
         box->key = key;
     }
 
+    box->key_string = string_copy(&g_ui.frame_arena, key_string);
+
     box->parent = g_ui.current_parent;
+    ASSERT(box->parent != box);
 
     box->first = NULL;
     box->last  = NULL;
@@ -85,6 +89,8 @@ ui_box_t *ui_get_or_create_box(uint64_t key)
 
     if (box->parent)
         dll_push_back(box->parent->first, box->parent->last, box);
+
+    ASSERT(box->first != box);
 
     box->last_touched_frame = g_ui.frame_index;
 
@@ -113,7 +119,9 @@ bool ui_begin(bitmap_font_t *font, const ui_style_t *style)
         }
     }
 
-    g_ui.root = ui_get_or_create_box(ui_key(strlit("root")));
+    g_ui.current_parent = NULL;
+
+    g_ui.root = ui_get_or_create_box(strlit("root"));
     g_ui.current_parent = g_ui.root;
 
     g_ui.root->semantic_size[AXIS2_X] = (ui_size_t){ UI_SIZE_SUM_OF_CHILDREN, 0.0f, 1.0f };
@@ -184,7 +192,7 @@ ui_interaction_t ui_interaction_from_box(ui_box_t *box)
 
 ui_box_t *ui_box(string_t key, uint32_t flags)
 {
-    ui_box_t *box = ui_get_or_create_box(ui_key(key));
+    ui_box_t *box = ui_get_or_create_box(key);
 
     box->flags            = flags;
     box->layout_axis      = AXIS2_Y;
@@ -196,7 +204,7 @@ ui_box_t *ui_box(string_t key, uint32_t flags)
 
 ui_box_t *ui_panel(string_t key, uint32_t flags, float x, float y, float w, float h)
 {
-    ui_box_t *box = ui_box(key, UI_DRAW_BACKGROUND|flags);
+    ui_box_t *box = ui_box(string_format(temp, "%.*s##panel", strexpand(key)), UI_DRAW_BACKGROUND|flags);
 
     box->semantic_size[AXIS2_X] = (ui_size_t){ UI_SIZE_PIXELS, w, 1.0f };
     box->semantic_size[AXIS2_Y] = (ui_size_t){ UI_SIZE_PIXELS, h, 1.0f };
@@ -209,7 +217,6 @@ ui_box_t *ui_push_parent(ui_box_t *parent)
 {
     ui_box_t *result = g_ui.current_parent;
 
-    parent->parent = g_ui.current_parent;
     g_ui.current_parent = parent;
 
     return result;
@@ -220,7 +227,7 @@ ui_box_t *ui_pop_parent(void)
     ui_box_t *result = g_ui.current_parent;
 
     if (ALWAYS(result))
-        g_ui.current_parent = result->next;
+        g_ui.current_parent = result->parent;
 
     return result;
 }
@@ -256,7 +263,45 @@ ui_interaction_t ui_button(string_t text)
     box->background_highlight_color = g_ui.style.button_background_highlight_color;
     box->text = string_copy(&g_ui.frame_arena, text);
 
+    box->hot_t    =  0.0f;
+    box->active_t = -1.0f;
+
     return ui_interaction_from_box(box);
+}
+
+ui_interaction_t ui_checkbox(string_t text, bool *toggle)
+{
+    ui_box_t *container = ui_box(string_format(temp, "%.*s##container", strexpand(text)), 0);
+    container->layout_axis = AXIS2_X;
+    container->semantic_size[AXIS2_X] = (ui_size_t){ UI_SIZE_PERCENTAGE_OF_PARENT, 1.0f, 1.0f };
+    container->semantic_size[AXIS2_Y] = (ui_size_t){ UI_SIZE_TEXT_CONTENT,         1.0f, 1.0f };
+
+    ui_push_parent(container);
+
+    ui_box_t *label = ui_box(text, UI_DRAW_OUTLINE);
+    label->semantic_size[AXIS2_X] = (ui_size_t){ UI_SIZE_PERCENTAGE_OF_PARENT, 0.9f, 1.0f };
+    label->semantic_size[AXIS2_Y] = (ui_size_t){ UI_SIZE_PERCENTAGE_OF_PARENT, 1.0f, 1.0f };
+    label->text = string_copy(&g_ui.frame_arena, text);
+
+    ui_box_t *button = ui_box(string_format(temp, "%.*s##button", strexpand(text)), UI_CLICKABLE|UI_DRAW_BACKGROUND|UI_DRAW_OUTLINE);
+    button->semantic_size[AXIS2_X] = (ui_size_t){ UI_SIZE_PERCENTAGE_OF_PARENT, 0.1f, 1.0f };
+    button->semantic_size[AXIS2_Y] = (ui_size_t){ UI_SIZE_PERCENTAGE_OF_PARENT, 1.0f, 1.0f };
+
+    ui_pop_parent();
+
+    ui_interaction_t interaction = ui_interaction_from_box(button);
+    if (interaction.clicked)
+    {
+        if (toggle)
+            *toggle = !*toggle;
+    }
+
+    bool toggled = (toggle ? *toggle : false);
+
+    button->background_color           = toggled ? g_ui.style.button_background_active_color : g_ui.style.button_background_color;
+    button->background_highlight_color = toggled ? g_ui.style.button_background_active_color : g_ui.style.button_background_highlight_color;
+
+    return interaction;
 }
 
 static inline ui_box_t *ui_box_next_depth_first_pre_order(ui_box_t *node)
@@ -416,16 +461,16 @@ static void ui_layout_solve_finalize_positions(ui_box_t *root, axis2_t axis)
 {
     for (ui_box_t *box = root; box; box = ui_box_next_depth_first_pre_order(box))
     {
-        if (box->layout_axis == axis)
-        {
-            if (box->prev)
-            {
-                box->computed_rel_position[axis] = box->prev->computed_rel_position[axis] + box->prev->computed_size[axis];
-            }
-        }
-
         if (box->parent)
         {
+            if (box->parent->layout_axis == axis)
+            {
+                if (box->prev)
+                {
+                    box->computed_rel_position[axis] = box->prev->computed_rel_position[axis] + box->prev->computed_size[axis];
+                }
+            }
+
             if (axis == AXIS2_Y)
             {
                 box->rect.min.e[axis] = box->parent->rect.max.e[axis] - box->computed_rel_position[axis] - box->computed_size[axis];
@@ -437,6 +482,22 @@ static void ui_layout_solve_finalize_positions(ui_box_t *root, axis2_t axis)
         }
 
         box->rect.max.e[axis] = box->rect.min.e[axis] + box->computed_size[axis];
+    }
+}
+
+static void ui_animate(float dt)
+{
+    for (ui_box_t *box = g_ui.root; box; box = ui_box_next_depth_first_pre_order(box))
+    {
+        float target_t = 0.0f;
+
+        if (box == g_ui.hot)
+            target_t = box->hot_t;
+
+        if (box == g_ui.active)
+            target_t = box->active_t;
+
+        box->current_t += 32.0f*dt*(target_t - box->current_t);
     }
 }
 
@@ -484,20 +545,55 @@ static void ui_draw(void)
 
         if (box->flags & UI_DRAW_BACKGROUND)
         {
-            uint32_t color = box->background_color;
+            v4_t color = box->background_color;
 
             if (has_flags_any(box->flags, UI_CLICKABLE|UI_DRAGGABLE) &&
-                box == g_ui.hot)
+                box == g_ui.hot ||
+                box == g_ui.active)
             {
                 color = box->background_highlight_color;
             }
+
+            v4_t color_bottom = color;
+            color_bottom.xyz = mul(0.65f, color_bottom.xyz);
             
-            r_push_rect2_filled(background, box->rect, color);
+            rect2_t rect = box->rect;
+
+            uint32_t i0 = r_immediate_vertex(background, &(vertex_immediate_t){ 
+                .pos = { rect.min.x, rect.min.y, 0.0f }, 
+                .tex = { 0, 0 },
+                .col = pack_color(color_bottom)
+            });
+            uint32_t i1 = r_immediate_vertex(background, &(vertex_immediate_t){ 
+                .pos = { rect.max.x, rect.min.y, 0.0f }, 
+                .tex = { 1, 0 },
+                .col = pack_color(color_bottom)
+            });
+            uint32_t i2 = r_immediate_vertex(background, &(vertex_immediate_t){ 
+                .pos = { rect.max.x, rect.max.y, 0.0f }, 
+                .tex = { 1, 1 },
+                .col = pack_color(color) 
+            });
+            uint32_t i3 = r_immediate_vertex(background, &(vertex_immediate_t){ 
+                .pos = { rect.min.x, rect.max.y, 0.0f }, 
+                .tex = { 0, 1 },
+                .col = pack_color(color) 
+            });
+
+            // triangle 1
+            r_immediate_index(background, i0);
+            r_immediate_index(background, i1);
+            r_immediate_index(background, i2);
+
+            // triangle 2
+            r_immediate_index(background, i0);
+            r_immediate_index(background, i2);
+            r_immediate_index(background, i3);
         }
 
         if (box->flags & UI_DRAW_OUTLINE)
         {
-            uint32_t color = g_ui.style.button_outline_color;
+            v4_t color = g_ui.style.button_outline_color;
 
             rect2_t h0 = {
                 .min = { box->rect.min.x,     box->rect.min.y     },
@@ -519,10 +615,10 @@ static void ui_draw(void)
                 .max = { box->rect.max.x,     box->rect.max.y     },
             };
 
-            r_push_rect2_filled(background, h0, color);
-            r_push_rect2_filled(background, h1, color);
-            r_push_rect2_filled(background, v0, color);
-            r_push_rect2_filled(background, v1, color);
+            r_push_rect2_filled(background, h0, pack_color(color));
+            r_push_rect2_filled(background, h1, pack_color(color));
+            r_push_rect2_filled(background, v0, pack_color(color));
+            r_push_rect2_filled(background, v1, pack_color(color));
         }
 
         r_immediate_draw_end(background);
@@ -552,8 +648,12 @@ static void ui_draw(void)
                 .texture   = g_ui.font->texture,
             });
 
-            r_push_text(text, g_ui.font, v2_add3(box->rect.min, g_ui.style.text_margins, make_v2(1, -1)), pack_rgba(0.0f, 0.0f, 0.0f, 0.5f), box->text);
-            r_push_text(text, g_ui.font, add(box->rect.min, g_ui.style.text_margins), box->foreground_color, box->text);
+            v2_t p = add(box->rect.min, g_ui.style.text_margins);
+
+            p = add(p, make_v2(0.0f, box->current_t));
+
+            r_push_text(text, g_ui.font, add(p, make_v2(1, -1)), pack_rgba(0.0f, 0.0f, 0.0f, 0.5f), box->text);
+            r_push_text(text, g_ui.font, p, pack_color(box->foreground_color), box->text);
 
             r_immediate_draw_end(text);
         }
@@ -562,8 +662,9 @@ static void ui_draw(void)
     r_pop_view();
 }
 
-void ui_end(void)
+void ui_end(float dt)
 {
+    ui_animate(dt);
     ui_solve_layout();
     ui_process_interactions();
     ui_draw();

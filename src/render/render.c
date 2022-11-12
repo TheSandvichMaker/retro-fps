@@ -261,24 +261,24 @@ r_immediate_draw_t *r_immediate_draw_begin(const r_immediate_draw_t *draw_call)
     return &command->draw_call;
 }
 
-uint16_t r_immediate_vertex(r_immediate_draw_t *draw_call, const vertex_immediate_t *vertex)
+uint32_t r_immediate_vertex(r_immediate_draw_t *draw_call, const vertex_immediate_t *vertex)
 {
     ASSERT(draw_call == g_list->immediate_draw_call);
 
-    uint16_t result = UINT16_MAX;
+    uint32_t result = UINT16_MAX;
 
     if (ALWAYS(g_list->immediate_vcount < g_list->max_immediate_vcount))
     {
         draw_call->vcount += 1;
 
-        result = (uint16_t)g_list->immediate_vcount++;
+        result = (uint32_t)g_list->immediate_vcount++;
         g_list->immediate_vertices[result] = *vertex;
     }
 
     return result;
 }
 
-void r_immediate_index(r_immediate_draw_t *draw_call, uint16_t index)
+void r_immediate_index(r_immediate_draw_t *draw_call, uint32_t index)
 {
     ASSERT(draw_call == g_list->immediate_draw_call);
 

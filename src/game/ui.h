@@ -10,11 +10,12 @@ typedef struct ui_style_t
     v2_t element_margins;
     v2_t text_margins;
 
-    uint32_t panel_background_color;
-    uint32_t button_outline_color;
-    uint32_t button_background_color;
-    uint32_t button_background_highlight_color;
-    uint32_t text_color;
+    v4_t panel_background_color;
+    v4_t button_outline_color;
+    v4_t button_background_color;
+    v4_t button_background_highlight_color;
+    v4_t button_background_active_color;
+    v4_t text_color;
 } ui_style_t;
 
 typedef enum ui_flags_t
@@ -60,17 +61,20 @@ typedef struct ui_box_t
 
     resource_handle_t texture;
 
-    uint32_t foreground_color;
-    uint32_t background_color;
-    uint32_t background_highlight_color;
+    v4_t foreground_color;
+    v4_t background_color;
+    v4_t background_highlight_color;
 
     rect2_t rect;
 
     ui_key_t key;
+    string_t key_string;
     string_t text;
 
     float hot_t;
     float active_t;
+
+    float current_t;
 } ui_box_t;
 
 typedef struct ui_interaction_t
@@ -96,10 +100,11 @@ ui_interaction_t ui_interaction_from_box(ui_box_t *box);
 ui_box_t *ui_panel(string_t key, uint32_t flags, float x, float y, float w, float h);
 ui_box_t *ui_label(string_t text);
 ui_interaction_t ui_button(string_t text);
+ui_interaction_t ui_checkbox(string_t text, bool *toggle);
 // void ui_image(resource_handle_t image);
 // void ui_image_scaled(resource_handle_t image, v2_t size);
 // void ui_image_viewer(resource_handle_t image);
 
-void ui_end(void);
+void ui_end(float dt);
 
 #endif /* UI_H */

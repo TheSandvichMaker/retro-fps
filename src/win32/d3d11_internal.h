@@ -104,7 +104,7 @@ ID3D11PixelShader *compile_ps(string_t hlsl_file, string_t hlsl, const char *ent
 ID3D11VertexShader *compile_vs(string_t hlsl_file, string_t hlsl, const char *entry_point);
 
 void update_buffer(ID3D11Buffer *buffer, const void *data, size_t size);
-void set_model_buffers(d3d_model_t *model);
+void set_model_buffers(d3d_model_t *model, DXGI_FORMAT index_format);
 
 void get_resolution(int *w, int *h);
 
@@ -120,6 +120,8 @@ typedef struct render_pass_t
 
     UINT srv_count;
     ID3D11ShaderResourceView **srvs;
+
+    DXGI_FORMAT index_format;
 
     uint32_t ioffset;
     uint32_t voffset;

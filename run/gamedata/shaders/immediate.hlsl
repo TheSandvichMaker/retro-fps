@@ -7,7 +7,6 @@ struct PS_INPUT
     float4 col : COLOR;
 };
 
-sampler   sampler0 : register(s0);
 Texture2D texture0 : register(t0);
 
 PS_INPUT vs(VS_INPUT_IMMEDIATE IN)
@@ -28,6 +27,6 @@ PS_INPUT vs(VS_INPUT_IMMEDIATE IN)
 
 float4 ps(PS_INPUT IN) : SV_TARGET
 {
-    float4 tex = texture0.Sample(sampler0, IN.uv);
+    float4 tex = texture0.Sample(sampler_point, IN.uv);
     return IN.col*tex;
 }
