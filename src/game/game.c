@@ -446,8 +446,8 @@ void game_init(void)
         .arena         = &world->arena,
         .map           = world->map,
         .sun_direction = make_v3(0.25f, 0.75f, 1),
-        .sun_color     = mul(1.0f, make_v3(4, 4, 3.5f)),
-        .ambient_color = mul(1.0f, make_v3(0.15f, 0.30f, 0.62f)),
+        .sun_color     = mul(0.0f, make_v3(1, 1, 0.75f)),
+        .ambient_color = mul(0.0f, make_v3(0.15f, 0.30f, 0.62f)),
 
         // TODO: Have a macro for optimization level to check instead of DEBUG
 #if DEBUG
@@ -455,7 +455,7 @@ void game_init(void)
         .ray_recursion = 2,
 #else
         .ray_count     = 64,
-        .ray_recursion = 6,
+        .ray_recursion = 4,
 #endif
     }, &bake_results);
 #endif
@@ -643,7 +643,7 @@ void game_tick(game_io_t *io, float dt)
     r_view_t view;
     view_for_camera(camera, viewport, &view);
 
-    view.skybox = skybox;
+    // view.skybox = skybox;
 
     r_push_view(&view);
 
@@ -653,14 +653,27 @@ void game_tick(game_io_t *io, float dt)
 
     map_t *map = world->map;
 
-    for (size_t brush_index = 0; brush_index < map->brush_count; brush_index++)
+    for (map_entity_t *entity = map->first_entity; entity; entity = entity->next)
     {
-        map_brush_t *brush = map->brushes[brush_index];
-
-        for (size_t poly_index = 0; poly_index < brush->poly_count; poly_index++)
+        if (is_class(entity, strlit("point_light")))
         {
-            map_poly_t *poly = &brush->polys[poly_index];
-            r_draw_model(m4x4_identity, poly->mesh, poly->texture, poly->lightmap);
+            r_immediate_draw_t *draw_call = r_immediate_draw_begin(&(r_immediate_draw_t){
+                .topology   = R_PRIMITIVE_TOPOLOGY_LINELIST,
+                .depth_test = true,
+            });
+
+            r_push_rect3_outline(draw_call, rect3_center_radius(v3_from_key(entity, strlit("origin")), make_v3(8, 8, 8)), COLOR32_YELLOW);
+
+            r_immediate_draw_end(draw_call);
+        }
+
+        for (map_brush_t *brush = entity->first_brush; brush; brush = brush->next)
+        {
+            for (size_t poly_index = 0; poly_index < brush->poly_count; poly_index++)
+            {
+                map_poly_t *poly = &brush->polys[poly_index];
+                r_draw_model(m4x4_identity, poly->mesh, poly->texture, poly->lightmap);
+            }
         }
     }
 

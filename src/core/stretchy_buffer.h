@@ -18,7 +18,7 @@ typedef struct sb_t
 #define sb_arena(sb) (sb ? sb__header(sb)->arena : NULL)
 #define sb_count(sb) (sb ? sb__header(sb)->count : 0)
 #define sb_capacity(sb) (sb ? sb__header(sb)->capacity : 0)
-#define sb_copy(arena, sb) (m_copy(sb_arena(sb), sb, sb_count(sb)*sizeof(*sb)))
+#define sb_copy(arena, sb) (m_copy(arena, sb, sb_count(sb)*sizeof(*sb)))
 #define sb_remove_unordered(sb, index) (sb ? (sb)[index] = (sb)[--sb__header(sb)->count] : 0)
 #define sb_remove_ordered(sb, index) do { for (size_t rem_i_ = index; rem_i_ < sb_count(sb) - 1; rem_i_++) { sb[rem_i_] = sb[rem_i_ + 1]; } } while(0)
 

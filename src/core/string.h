@@ -108,6 +108,7 @@ string_t string_split_word(string_t *string);
 string_t string_split_line(string_t *string);
 
 bool string_parse_int(string_t *string, int64_t *value);
+bool string_parse_float(string_t *string, float *value);
 
 string16_t utf16_from_utf8(arena_t *arena, string_t   string);
 string_t   utf8_from_utf16(arena_t *arena, string16_t string);

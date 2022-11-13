@@ -36,6 +36,8 @@ typedef enum pixel_format_t
     PIXEL_FORMAT_RG8,
     PIXEL_FORMAT_RGBA8,
     PIXEL_FORMAT_SRGB8_A8,
+    PIXEL_FORMAT_R32G32B32,
+    PIXEL_FORMAT_R32G32B32A32,
 } pixel_format_t;
 
 typedef enum texture_flags_t

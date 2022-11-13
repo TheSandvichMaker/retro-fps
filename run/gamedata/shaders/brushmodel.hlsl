@@ -47,6 +47,7 @@ float4 ps(PS_INPUT IN) : SV_TARGET
     float2 uv = fat_pixel(dim, IN.uv);
     float2 lm_uv = fat_pixel(lm_dim, IN.uv_lightmap);
 
+    // float4 tex = albedo.Sample(sampler_linear, IM.uv);
     float4 tex      = albedo.Sample(sampler_linear, uv);
     // float4 lighting = lightmap.Sample(sampler_linear_clamped, IN.uv_lightmap);
     // float4 lighting = lightmap.Sample(sampler_linear_clamped, lm_uv);

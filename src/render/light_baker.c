@@ -54,9 +54,9 @@ static v3_t evaluate_lighting(bake_light_thread_context_t *context, random_serie
     v3_t lighting = {0,0,0};
 
     v3_t sun_direction = params->sun_direction;
-    float ndotl = max(0.0f, dot(sun_direction, hit_n));
+    float sun_ndotl = max(0.0f, dot(sun_direction, hit_n));
 
-    if (ndotl > 0.0f)
+    if (sun_ndotl > 0.0f)
     {
         intersect_result_t shadow_intersect;
         if (!intersect_map(map, &(intersect_params_t) {
@@ -68,8 +68,9 @@ static v3_t evaluate_lighting(bake_light_thread_context_t *context, random_serie
             }, &shadow_intersect))
         {
             lighting = params->sun_color;
-            lighting = mul(lighting, ndotl);
+            lighting = mul(lighting, sun_ndotl);
 
+#if 0
             if (is_primary_hit)
             {
                 bake_light_debug_data_t *debug = &context->debug;
@@ -81,19 +82,82 @@ static v3_t evaluate_lighting(bake_light_thread_context_t *context, random_serie
                     .spawn_poly = poly,
                 });
             }
+#endif
         }
         else
         {
+#if 0
             if (is_primary_hit)
             {
                 bake_light_debug_data_t *debug = &context->debug;
                 lm_record_debug_ray(&debug->direct_rays, &context->arena, &(bake_light_debug_ray_t){
-                    .o = hit_p, 
-                    .d = sun_direction, 
-                    .t = shadow_intersect.t, 
+                    .o           = hit_p, 
+                    .d           = sun_direction, 
+                    .t           = shadow_intersect.t, 
                     .spawn_brush = brush,
-                    .spawn_poly = poly,
+                    .spawn_poly  = poly,
                 });
+            }
+#endif
+        }
+    }
+
+    for (size_t i = 0; i < map->light_count; i++)
+    {
+        map_point_light_t *light = &map->lights[i];
+
+        v3_t  light_vector   = sub(light->p, hit_p);
+        float light_distance = vlen(light_vector);
+
+        v3_t light_direction = div(light_vector, light_distance);
+
+        float light_ndotl    = dot(hit_n, light_direction);
+
+        if (light_ndotl > 0.0f)
+        {
+            intersect_result_t shadow_intersect;
+            if (!intersect_map(map, &(intersect_params_t) {
+                    .o                  = hit_p,
+                    .d                  = light_direction,
+                    .ignore_brush_count = 1,
+                    .ignore_brushes     = &brush,
+                    .occlusion_test     = true,
+
+                    .max_t              = light_distance,
+                }, &shadow_intersect))
+            {
+                v3_t contribution = light->color;
+
+                contribution = mul(contribution, light_ndotl);
+                contribution = mul(contribution, 1.0f / (light_distance*light_distance));
+
+                if (is_primary_hit)
+                {
+                    bake_light_debug_data_t *debug = &context->debug;
+                    lm_record_debug_ray(&debug->direct_rays, &context->arena, &(bake_light_debug_ray_t){
+                        .o = hit_p, 
+                        .d = light_direction, 
+                        .t = FLT_MAX, 
+                        .spawn_brush = brush,
+                        .spawn_poly = poly,
+                    });
+                }
+
+                lighting = add(lighting, contribution);
+            }
+            else
+            {
+                if (is_primary_hit)
+                {
+                    bake_light_debug_data_t *debug = &context->debug;
+                    lm_record_debug_ray(&debug->direct_rays, &context->arena, &(bake_light_debug_ray_t){
+                        .o           = hit_p, 
+                        .d           = light_direction, 
+                        .t           = shadow_intersect.t, 
+                        .spawn_brush = brush,
+                        .spawn_poly  = poly,
+                    });
+                }
             }
         }
     }
@@ -246,7 +310,8 @@ static void bake_light_job(job_context_t *job_context, void *userdata)
     int w = plane->lm_tex_w;
     int h = plane->lm_tex_h;
 
-    uint32_t *lighting = m_alloc_array(arena, w*h, uint32_t);
+    v4_t   *direct_lighting_pixels = m_alloc_array(arena, w*h, v4_t);
+    v4_t *indirect_lighting_pixels = m_alloc_array(arena, w*h, v4_t);
 
     /* int arrow_index = 0; */
 
@@ -260,8 +325,8 @@ static void bake_light_job(job_context_t *job_context, void *userdata)
         world_p = add(world_p, mul(scale_x*u, plane->lm_s));
         world_p = add(world_p, mul(scale_y*v, plane->lm_t));
 
-        v3_t primary_hit_lighting = evaluate_lighting(bake_context, &entropy, world_p, n, brush, poly, true);
-        v3_t color_accum = mul(primary_hit_lighting, (float)ray_count);
+        v3_t   direct_lighting = evaluate_lighting(bake_context, &entropy, world_p, n, brush, poly, true);
+        v3_t indirect_lighting    = { 0 }; // mul(primary_hit_lighting, (float)ray_count);
 
         for (int i = 0; i < ray_count; i++)
         {
@@ -272,27 +337,121 @@ static void bake_light_job(job_context_t *job_context, void *userdata)
             dir = add(dir, mul(unrotated_dir.y, b));
             dir = add(dir, mul(unrotated_dir.z, n));
 
-            color_accum = add(color_accum, pathtrace_recursively(bake_context, &entropy, world_p, dir, brush, poly, ray_recursion));
+            indirect_lighting = add(indirect_lighting, pathtrace_recursively(bake_context, &entropy, world_p, dir, brush, poly, ray_recursion));
         }
 
-        v4_t color;
-        color.xyz = mul(color_accum, 1.0f / ray_count);
-        color.w   = 1.0f;
+        indirect_lighting = mul(indirect_lighting, 1.0f / ray_count);
 
-        v3_t dither = random_in_unit_cube(&entropy);
+          direct_lighting_pixels[y*w + x] = (v4_t){ .xyz = direct_lighting   };
+        indirect_lighting_pixels[y*w + x] = (v4_t){ .xyz = indirect_lighting };
+    }
 
-        color.x += (dither.x - 0.5f) / 255.0f;
-        color.y += (dither.y - 0.5f) / 255.0f;
-        color.z += (dither.z - 0.5f) / 255.0f;
+    for (int k = 0; k < 32; k++)
+    {
+        for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++)
+        {
+            v3_t color = { 0 };
 
-        lighting[y*w + x] = pack_color(color);
+            float weight = 0.0f;
+
+            for (int o = -1; o <= 1; o++)
+            {
+                int xo = x + o;
+                if (xo >= 0 && xo < w)
+                {
+                    color   = add(color, indirect_lighting_pixels[y*w + xo].xyz);
+                    weight += 1.0f;
+                }
+            }
+
+            color = mul(color, 1.0f / weight);
+
+            indirect_lighting_pixels[y*w + x].xyz = color;
+        }
+
+        for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++)
+        {
+            v3_t color = { 0 };
+
+            float weight = 0.0f;
+
+            for (int o = -1; o <= 1; o++)
+            {
+                int yo = y + o;
+                if (yo >= 0 && yo < h)
+                {
+                    color   = add(color, indirect_lighting_pixels[yo*w + x].xyz);
+                    weight += 1.0f;
+                }
+            }
+
+            color = mul(color, 1.0f / weight);
+
+            indirect_lighting_pixels[y*w + x].xyz = color;
+        }
+    }
+
+    for (int k = 0; k < 1; k++)
+    {
+        for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++)
+        {
+            v3_t color = { 0 };
+
+            float weight = 0.0f;
+
+            for (int o = -1; o <= 1; o++)
+            {
+                int xo = x + o;
+                if (xo >= 0 && xo < w)
+                {
+                    color   = add(color, direct_lighting_pixels[y*w + xo].xyz);
+                    weight += 1.0f;
+                }
+            }
+
+            color = mul(color, 1.0f / weight);
+
+            direct_lighting_pixels[y*w + x].xyz = color;
+        }
+
+        for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++)
+        {
+            v3_t color = { 0 };
+
+            float weight = 0.0f;
+
+            for (int o = -1; o <= 1; o++)
+            {
+                int yo = y + o;
+                if (yo >= 0 && yo < h)
+                {
+                    color   = add(color, direct_lighting_pixels[yo*w + x].xyz);
+                    weight += 1.0f;
+                }
+            }
+
+            color = mul(color, 1.0f / weight);
+
+            direct_lighting_pixels[y*w + x].xyz = color;
+        }
+    }
+
+    for (int y = 0; y < h; y++)
+    for (int x = 0; x < w; x++)
+    {
+        direct_lighting_pixels[y*w + x].xyz = add(direct_lighting_pixels[y*w + x].xyz, indirect_lighting_pixels[y*w + x].xyz);
+        direct_lighting_pixels[y*w + x].w   = 1.0f;
     }
 
     job->result = (image_t){
         .w      = w,
         .h      = h,
-        .pitch  = sizeof(uint32_t)*w,
-        .pixels = lighting,
+        .pitch  = sizeof(v4_t)*w,
+        .pixels = (uint32_t *)direct_lighting_pixels,
     };
 
 #if 0
@@ -384,10 +543,10 @@ void bake_lighting(const bake_light_params_t *params_init, bake_light_results_t 
 
             poly->lightmap = render->upload_texture(&(upload_texture_t) {
                 .desc = {
-                    .format = PIXEL_FORMAT_RGBA8,
+                    .format = PIXEL_FORMAT_R32G32B32A32,
                     .w      = result->w,
                     .h      = result->h,
-                    .pitch  = sizeof(uint32_t)*result->w,
+                    .pitch  = sizeof(v4_t)*result->w,
                 },
                 .data = {
                     .pixels = result->pixels,

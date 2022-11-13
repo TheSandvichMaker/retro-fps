@@ -1020,6 +1020,29 @@ static void build_bvh(arena_t *arena, map_t *map)
     build_bvh_recursively(map, root, 0, map->brush_count);
 }
 
+static void gather_lights(arena_t *arena, map_t *map)
+{
+    map_point_light_t *lights = NULL;
+
+    for (map_entity_t *entity = map->first_entity; entity; entity = entity->next)
+    {
+        if (is_class(entity, strlit("point_light")))
+        {
+            float brightness = float_from_key(entity, strlit("brightness"));
+            v3_t  color      = v3_from_key(entity, strlit("_color"));
+
+            map_point_light_t light = {
+                .p     = v3_from_key(entity, strlit("origin")),
+                .color = mul(brightness, color),
+            };
+            sb_push(lights, light);
+        }
+    }
+
+    map->light_count = sb_count(lights);
+    map->lights = sb_copy(arena, lights);
+}
+
 map_t *load_map(arena_t *arena, string_t path)
 {
     map_t *map = m_alloc_struct(arena, map_t);
@@ -1053,6 +1076,8 @@ map_t *load_map(arena_t *arena, string_t path)
     }
 
     build_bvh(arena, map);
+
+    gather_lights(arena, map);
 
     return map;
 }
@@ -1088,15 +1113,25 @@ int int_from_key(map_entity_t *entity, string_t key)
     return (int)result;
 }
 
+float float_from_key(map_entity_t *entity, string_t key)
+{
+    string_t value = value_from_key(entity, key);
+
+    float result = 0.0f;
+    string_parse_float(&value, &result);
+
+    return result;
+}
+
 v3_t v3_from_key(map_entity_t *entity, string_t key)
 {
     string_t value = value_from_key(entity, key);
 
-    int64_t x, y, z;
+    v3_t v3 = { 0 };
 
-    string_parse_int(&value, &x); 
-    string_parse_int(&value, &y); 
-    string_parse_int(&value, &z); 
+    string_parse_float(&value, &v3.x); 
+    string_parse_float(&value, &v3.y); 
+    string_parse_float(&value, &v3.z); 
 
-    return (v3_t){ (float)x, (float)y, (float)z };
+    return v3;
 }

@@ -33,7 +33,10 @@ float4 ps(PS_INPUT IN) : SV_TARGET
     float3 color = 0;
     for (uint i = 0; i < sample_count; i++)
     {
-        color += rendertarget.Load(co, i);
+        float3 s = rendertarget.Load(co, i);
+        s = 1.0f - exp(-s);
+
+        color += s;
     }
     color *= rcp(sample_count);
     color = pow(abs(color), 1.0 / 2.23);

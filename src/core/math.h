@@ -967,6 +967,15 @@ static inline v3_t rect3_center(rect3_t rect)
     return mul(0.5f, add(rect.min, rect.max));
 }
 
+static inline rect3_t rect3_center_radius(v3_t center, v3_t radius)
+{
+    rect3_t result = {
+        .min = sub(center, radius),
+        .max = add(center, radius),
+    };
+    return result;
+}
+
 static inline uint8_t rect3_largest_axis(rect3_t rect)
 {
     v3_t dim = {

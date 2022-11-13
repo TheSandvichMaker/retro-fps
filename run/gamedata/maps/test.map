@@ -6,6 +6,7 @@
 "classname" "worldspawn"
 "_tb_textures" "textures;textures/environment;textures/environment/makkon4_horror_textures;textures/environment/makkon_building_textures;textures/environment/makkon_concrete_textures;textures/environment/makkon_marble_textures;textures/environment/makkon_metal_textures;textures/environment/makkon_nature_textures;textures/environment/makkon_stone_textures;textures/environment/makkon_tech_textures"
 "skytex" "storforsen"
+"_tb_def" "external:gamedata/RetroShooter.fgd"
 // brush 0
 {
 ( 16 -48 128 ) ( 48 -16 128 ) ( 48 -16 256 ) environment/makkon4_horror_textures/bek_prpl1_w06_1 [ 3.090862038535036e-08 3.090862038535036e-08 0.9999999999999991 0 ] [ -0.7071067811865469 -0.7071067811865469 4.371139006309477e-08 0 ] -90 1 1
@@ -414,4 +415,18 @@
 {
 "classname" "info_player_start"
 "origin" "-144 48 24"
+}
+// entity 2
+{
+"classname" "point_light"
+"origin" "-8 8 104"
+"_color" "1 0.968627 0"
+"brightness" "1500"
+}
+// entity 3
+{
+"classname" "point_light"
+"origin" "-408 -24 24"
+"_color" "0.360784 0.647059 1"
+"brightness" "150000"
 }

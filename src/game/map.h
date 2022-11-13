@@ -65,6 +65,12 @@ typedef struct map_brush_t
     rect3_t bounds;
 } map_brush_t;
 
+typedef struct map_point_light_t
+{
+    v3_t p;
+    v3_t color;
+} map_point_light_t;
+
 typedef struct map_entity_t
 {
     struct map_entity_t *next;
@@ -87,9 +93,11 @@ typedef struct map_t
 
     uint32_t node_count;
     uint32_t brush_count;
+    uint32_t light_count;
 
     map_bvh_node_t *nodes;
     map_brush_t **brushes;
+    map_point_light_t *lights;
 } map_t;
 
 // returns first entity in list
@@ -99,6 +107,7 @@ map_t *load_map(arena_t *arena, string_t path);
 bool is_class(map_entity_t *entity, string_t classname);
 string_t value_from_key(map_entity_t *entity, string_t key);
 int int_from_key(map_entity_t *entity, string_t key);
+float float_from_key(map_entity_t *entity, string_t key);
 v3_t v3_from_key(map_entity_t *entity, string_t key);
 
 #endif /* MAP_H */

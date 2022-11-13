@@ -42,6 +42,31 @@ float ray_intersect_rect3(v3_t o, v3_t d, rect3_t rect)
         return FLT_MAX;
 }
 
+bool ray_intersect_rect3_bvh(v3_t o, v3_t d, rect3_t rect, float max_t)
+{
+    v3_t inv_d = { 1.0f / d.x, 1.0f / d.y, 1.0f / d.z };
+
+    float tx1 = inv_d.x*(rect.min.x - o.x);
+    float tx2 = inv_d.x*(rect.max.x - o.x);
+
+    float t_min = min(tx1, tx2);
+    float t_max = max(tx1, tx2);
+
+    float ty1 = inv_d.y*(rect.min.y - o.y);
+    float ty2 = inv_d.y*(rect.max.y - o.y);
+
+    t_min = max(t_min, min(ty1, ty2));
+    t_max = min(t_max, max(ty1, ty2));
+
+    float tz1 = inv_d.z*(rect.min.z - o.z);
+    float tz2 = inv_d.z*(rect.max.z - o.z);
+
+    t_min = max(t_min, min(tz1, tz2));
+    t_max = min(t_max, max(tz1, tz2));
+
+    return (t_max >= t_min) && (t_min <= max_t);
+}
+
 float ray_intersect_triangle(v3_t o, v3_t d, v3_t a, v3_t b, v3_t c, v3_t *uvw)
 {
     float epsilon = 0.000000001f;
@@ -142,8 +167,7 @@ bool intersect_map(map_t *map, const intersect_params_t *params, intersect_resul
 
         map_bvh_node_t *node = &map->nodes[node_index];
 
-        float bounds_hit_t = ray_intersect_rect3(o, d, node->bounds);
-        if (bounds_hit_t < t)
+        if (ray_intersect_rect3_bvh(o, d, node->bounds, t))
         {
             if (node->count > 0)
             {

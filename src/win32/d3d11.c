@@ -586,8 +586,9 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
         };
 
         // clear screen
-        FLOAT color[] = { 0.4f, 0.0f, 0.3f, 1.f };
+        FLOAT color[] = { 0.0f, 0.0f, 0.0f, 1.0f };
         ID3D11DeviceContext_ClearRenderTargetView(d3d.context, d3d.rt_rtv, color);
+        ID3D11DeviceContext_ClearRenderTargetView(d3d.context, d3d.msaa_rt_rtv, color);
         ID3D11DeviceContext_ClearDepthStencilView(d3d.context, d3d.ds_view, D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL, 0.0f, 0);
 
         // render any potential skyboxes
@@ -846,10 +847,12 @@ resource_handle_t upload_texture(const upload_texture_t *params)
         DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
         switch (params->desc.format)
         {
-            case PIXEL_FORMAT_R8:       pixel_size = 1; format = DXGI_FORMAT_R8_UNORM;            break;
-            case PIXEL_FORMAT_RG8:      pixel_size = 2; format = DXGI_FORMAT_R8G8_UNORM;          break;
-            case PIXEL_FORMAT_RGBA8:    pixel_size = 4; format = DXGI_FORMAT_R8G8B8A8_UNORM;      break;
-            case PIXEL_FORMAT_SRGB8_A8: pixel_size = 4; format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB; break;
+            case PIXEL_FORMAT_R8:           pixel_size = 1;            format = DXGI_FORMAT_R8_UNORM;            break;
+            case PIXEL_FORMAT_RG8:          pixel_size = 2;            format = DXGI_FORMAT_R8G8_UNORM;          break;
+            case PIXEL_FORMAT_RGBA8:        pixel_size = 4;            format = DXGI_FORMAT_R8G8B8A8_UNORM;      break;
+            case PIXEL_FORMAT_SRGB8_A8:     pixel_size = 4;            format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB; break;
+            case PIXEL_FORMAT_R32G32B32:    pixel_size = sizeof(v3_t); format = DXGI_FORMAT_R32G32B32_FLOAT;     break;
+            case PIXEL_FORMAT_R32G32B32A32: pixel_size = sizeof(v4_t); format = DXGI_FORMAT_R32G32B32A32_FLOAT;  break;
             INVALID_DEFAULT_CASE;
         }
 
