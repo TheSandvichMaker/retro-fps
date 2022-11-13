@@ -10,16 +10,10 @@
 #include "core/random.h"
 #include "core/job_queue.h"
 
-static inline void lm_record_debug_ray(bake_light_debug_ray_list_t *dest,
-                                       arena_t *arena, v3_t o, v3_t d, float t, map_brush_t *spawn_brush)
+static inline void lm_record_debug_ray(bake_light_debug_ray_list_t *dest, arena_t *arena, const bake_light_debug_ray_t *init_ray)
 {
     bake_light_debug_ray_t *ray = m_alloc_struct(arena, bake_light_debug_ray_t);
-
-    ray->spawn_brush = spawn_brush;
-    ray->o = o;
-    ray->d = d;
-    ray->t = t;
-
+    copy_struct(ray, init_ray);
     sll_push_back(dest->first, dest->last, ray);
 }
 
@@ -49,7 +43,7 @@ v3_t map_to_cosine_weighted_hemisphere(v2_t sample)
     return result;
 }
 
-static v3_t evaluate_lighting(bake_light_thread_context_t *context, random_series_t *entropy, v3_t hit_p, v3_t hit_n, map_brush_t *brush, bool is_primary_hit)
+static v3_t evaluate_lighting(bake_light_thread_context_t *context, random_series_t *entropy, v3_t hit_p, v3_t hit_n, map_brush_t *brush, map_poly_t *poly, bool is_primary_hit)
 {
     (void)is_primary_hit;
     (void)entropy; // will be used later
@@ -76,30 +70,38 @@ static v3_t evaluate_lighting(bake_light_thread_context_t *context, random_serie
             lighting = params->sun_color;
             lighting = mul(lighting, ndotl);
 
-#if defined(DEBUG)
             if (is_primary_hit)
             {
                 bake_light_debug_data_t *debug = &context->debug;
-                lm_record_debug_ray(&debug->direct_rays, &context->arena, hit_p, sun_direction, FLT_MAX, brush);
+                lm_record_debug_ray(&debug->direct_rays, &context->arena, &(bake_light_debug_ray_t){
+                    .o = hit_p, 
+                    .d = sun_direction, 
+                    .t = FLT_MAX, 
+                    .spawn_brush = brush,
+                    .spawn_poly = poly,
+                });
             }
-#endif
         }
         else
         {
-#if defined(DEBUG)
             if (is_primary_hit)
             {
                 bake_light_debug_data_t *debug = &context->debug;
-                lm_record_debug_ray(&debug->direct_rays, &context->arena, hit_p, sun_direction, shadow_intersect.t, brush);
+                lm_record_debug_ray(&debug->direct_rays, &context->arena, &(bake_light_debug_ray_t){
+                    .o = hit_p, 
+                    .d = sun_direction, 
+                    .t = shadow_intersect.t, 
+                    .spawn_brush = brush,
+                    .spawn_poly = poly,
+                });
             }
-#endif
         }
     }
 
     return lighting;
 }
 
-static v3_t pathtrace_recursively(bake_light_thread_context_t *context, random_series_t *entropy, v3_t o, v3_t d, map_brush_t *brush, int recursion)
+static v3_t pathtrace_recursively(bake_light_thread_context_t *context, random_series_t *entropy, v3_t o, v3_t d, map_brush_t *brush, map_poly_t *poly, int recursion)
 {
     if (recursion == 0) 
         return (v3_t){0,0,0};
@@ -152,7 +154,7 @@ static v3_t pathtrace_recursively(bake_light_thread_context_t *context, random_s
 
         v3_t hit_p = add(intersect_params.o, mul(intersect.t, intersect_params.d));
 
-        v3_t lighting = evaluate_lighting(context, entropy, hit_p, n, brush, false);
+        v3_t lighting = evaluate_lighting(context, entropy, hit_p, n, brush, poly, false);
 
         v2_t sample = random_unilateral2(entropy);
         v3_t unrotated_dir = map_to_cosine_weighted_hemisphere(sample);
@@ -161,7 +163,7 @@ static v3_t pathtrace_recursively(bake_light_thread_context_t *context, random_s
         bounce_dir = add(bounce_dir, mul(unrotated_dir.y, b));
         bounce_dir = add(bounce_dir, mul(unrotated_dir.z, n));
 
-        lighting = add(lighting, mul(albedo, pathtrace_recursively(context, entropy, hit_p, bounce_dir, intersect.brush, recursion - 1)));
+        lighting = add(lighting, mul(albedo, pathtrace_recursively(context, entropy, hit_p, bounce_dir, intersect.brush, intersect.poly, recursion - 1)));
         color = mul(albedo, lighting);
     }
     else
@@ -219,6 +221,7 @@ static void bake_light_job(job_context_t *job_context, void *userdata)
 
     map_brush_t *brush = job->brush;
     map_plane_t *plane = job->plane;
+    map_poly_t *poly = &brush->polys[plane->poly_index];
 
     arena_t *arena = &bake_context->arena;
 
@@ -237,11 +240,11 @@ static void bake_light_job(job_context_t *job_context, void *userdata)
 
     v3_t n = p.n;
 
-    float scale_x = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->lm_tex_maxs.x - plane->lm_tex_mins.x) / LIGHTMAP_SCALE));
-    float scale_y = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->lm_tex_maxs.y - plane->lm_tex_mins.y) / LIGHTMAP_SCALE));
+    float scale_x = plane->lm_scale_x;
+    float scale_y = plane->lm_scale_y;
 
-    int w = (int)(scale_x / LIGHTMAP_SCALE);
-    int h = (int)(scale_y / LIGHTMAP_SCALE);
+    int w = plane->lm_tex_w;
+    int h = plane->lm_tex_h;
 
     uint32_t *lighting = m_alloc_array(arena, w*h, uint32_t);
 
@@ -257,7 +260,7 @@ static void bake_light_job(job_context_t *job_context, void *userdata)
         world_p = add(world_p, mul(scale_x*u, plane->lm_s));
         world_p = add(world_p, mul(scale_y*v, plane->lm_t));
 
-        v3_t primary_hit_lighting = evaluate_lighting(bake_context, &entropy, world_p, n, brush, true);
+        v3_t primary_hit_lighting = evaluate_lighting(bake_context, &entropy, world_p, n, brush, poly, true);
         v3_t color_accum = mul(primary_hit_lighting, (float)ray_count);
 
         for (int i = 0; i < ray_count; i++)
@@ -269,7 +272,7 @@ static void bake_light_job(job_context_t *job_context, void *userdata)
             dir = add(dir, mul(unrotated_dir.y, b));
             dir = add(dir, mul(unrotated_dir.z, n));
 
-            color_accum = add(color_accum, pathtrace_recursively(bake_context, &entropy, world_p, dir, brush, ray_recursion));
+            color_accum = add(color_accum, pathtrace_recursively(bake_context, &entropy, world_p, dir, brush, poly, ray_recursion));
         }
 
         v4_t color;

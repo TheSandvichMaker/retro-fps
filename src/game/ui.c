@@ -298,6 +298,61 @@ void ui_pop_style(void)
     }
 }
 
+void ui_push_background_color(ui_gradient_t color)
+{
+    ui_style_t style = ui_get_style();
+    style.background_color = color;
+
+    ui_push_style(&style);
+}
+
+ui_box_t *ui_box_margins(float size)
+{
+    axis2_t layout_axis = ui_layout_axis();
+
+    ui_box_t *outer = ui_box(strnull, 0);
+    ui_set_size(outer, AXIS2_X, ui_pct(1.0f, 1.0f));
+    ui_set_size(outer, AXIS2_Y, ui_pct(1.0f, 1.0f));
+    outer->layout_axis = AXIS2_Y;
+    outer->key_string = strlit("BOX MARGINS OUTER");
+
+    ui_box_t *content_area = NULL;
+
+    UI_Parent(outer)
+    {
+        ui_box_t *top = ui_box(strnull, 0);
+        ui_set_size(top, AXIS2_X, ui_pct(1.0f, 1.0f));
+        ui_set_size(top, AXIS2_Y, ui_pixels(size, 1.0f));
+
+        ui_box_t *middle = ui_box(strnull, 0);
+        ui_set_size(middle, AXIS2_X, ui_pct(1.0f, 1.0f));
+        ui_set_size(middle, AXIS2_Y, ui_pct(1.0f, 0.0f));
+        middle->layout_axis = AXIS2_X;
+
+        UI_Parent(middle)
+        {
+            ui_box_t *left = ui_box(strnull, 0);
+            ui_set_size(left, AXIS2_X, ui_pixels(size, 1.0f));
+            ui_set_size(left, AXIS2_Y, ui_pct(1.0f, 1.0f));
+
+            content_area = ui_box(strnull, 0);
+            ui_set_size(content_area, AXIS2_X, ui_pct(1.0f, 0.0f));
+            ui_set_size(content_area, AXIS2_Y, ui_pct(1.0f, 1.0f));
+            content_area->layout_axis = layout_axis;
+
+            ui_box_t *right = ui_box(strnull, 0);
+            ui_set_size(right, AXIS2_X, ui_pixels(size, 1.0f));
+            ui_set_size(right, AXIS2_Y, ui_pct(1.0f, 1.0f));
+        }
+
+        ui_box_t *bottom = ui_box(strnull, 0);
+        ui_set_size(bottom, AXIS2_Y, ui_pixels(size, 1.0f));
+        ui_set_size(bottom, AXIS2_X, ui_pct(1.0f, 1.0f));
+    }
+
+    return content_area;
+}
+
 ui_box_t *ui_box(string_t key, uint32_t flags)
 {
     ui_box_t *box = ui_get_or_create_box(key);
@@ -311,17 +366,32 @@ ui_box_t *ui_box(string_t key, uint32_t flags)
     return box;
 }
 
-ui_box_t *ui_panel(string_t key, uint32_t flags, float x, float y, float w, float h)
+ui_box_t *ui_window_begin(string_t text, uint32_t flags, float x, float y, float w, float h)
 {
-    ui_box_t *box = ui_box(string_format(temp, "%.*s##panel", strexpand(key)), UI_DRAW_BACKGROUND|UI_DRAW_OUTLINE|flags);
+    ui_box_t *box = ui_box(string_format(temp, "%.*s##panel", strexpand(text)), UI_DRAW_BACKGROUND|UI_DRAW_OUTLINE|flags);
 
-    // box->position_offset[AXIS2_X] = x;
-    // box->position_offset[AXIS2_Y] = y;
+    box->position_offset[AXIS2_X] = x;
+    box->position_offset[AXIS2_Y] = y;
+
     box->semantic_size[AXIS2_X] = (ui_size_t){ UI_SIZE_PIXELS, w, 1.0f };
     box->semantic_size[AXIS2_Y] = (ui_size_t){ UI_SIZE_PIXELS, h, 1.0f };
     box->rect.min = make_v2(x, y);
 
+    ui_push_parent(box);
+
+    ui_box_t *title_bar = ui_box(text, UI_DRAW_BACKGROUND|UI_DRAW_TEXT);
+    title_bar->style.background_color = ui_gradient_vertical(make_v4(0.35f, 0.15f, 0.15f, 1.0f), make_v4(0.25f, 0.10f, 0.10f, 1.0f));
+    ui_set_size(title_bar, AXIS2_Y, ui_pixels(16.0f, 1.0f));
+
+    // ui_push_parent(ui_box_margins(4.0f));
+
     return box;
+}
+
+void ui_window_end(void)
+{
+    ui_pop_parent();
+    ui_pop_parent();
 }
 
 ui_box_t *ui_label(string_t text)
@@ -604,10 +674,7 @@ static void ui_layout_solve_finalize_positions(ui_box_t *root, axis2_t axis)
 {
     for (ui_box_t *box = root; box; box = ui_box_next_depth_first_pre_order(box))
     {
-        box->computed_rel_position[axis] = box->position_offset[axis];
-
-        if (axis == AXIS2_Y)
-            box->computed_rel_position[axis] = -box->computed_rel_position[axis];
+        box->computed_rel_position[axis] += box->position_offset[axis];
 
         if (box->parent)
         {
@@ -694,60 +761,62 @@ static void ui_draw_box(ui_box_t *box, rect2_t clip_rect)
 {
     clip_rect = rect2_intersect(clip_rect, box->rect);
 
-    r_immediate_draw_t *background = r_immediate_draw_begin(&(r_immediate_draw_t){
-        .clip_rect = clip_rect,
-    });
-
     ui_style_t *style = &box->style;
 
-    if (box->flags & UI_DRAW_BACKGROUND)
     {
-        ui_gradient_t gradient = style->background_color;
+        r_immediate_draw_t *background = r_immediate_draw_begin(&(r_immediate_draw_t){
+            .clip_rect = clip_rect,
+        });
 
-        if (has_flags_any(box->flags, UI_CLICKABLE|UI_DRAGGABLE) && box == g_ui.hot)
+        if (box->flags & UI_DRAW_BACKGROUND)
         {
-            gradient = style->background_color_hot;
+            ui_gradient_t gradient = style->background_color;
+
+            if (has_flags_any(box->flags, UI_CLICKABLE|UI_DRAGGABLE) && box == g_ui.hot)
+            {
+                gradient = style->background_color_hot;
+            }
+
+            if (has_flags_any(box->flags, UI_CLICKABLE|UI_DRAGGABLE) && box == g_ui.active)
+            {
+                gradient = style->background_color_active;
+            }
+
+            r_push_rect2_filled_gradient(background, box->rect, gradient.colors);
         }
 
-        if (has_flags_any(box->flags, UI_CLICKABLE|UI_DRAGGABLE) && box == g_ui.active)
+        if (box->flags & UI_DRAW_OUTLINE)
         {
-            gradient = style->background_color_active;
+            v4_t color = style->outline_color.colors[0];
+
+            rect2_t h0 = {
+                .min = { box->rect.min.x,     box->rect.min.y     },
+                .max = { box->rect.max.x,     box->rect.min.y + 1 },
+            };
+
+            rect2_t h1 = {
+                .min = { box->rect.min.x,     box->rect.max.y - 1 },
+                .max = { box->rect.max.x,     box->rect.max.y     },
+            };
+
+            rect2_t v0 = {
+                .min = { box->rect.min.x,     box->rect.min.y     },
+                .max = { box->rect.min.x + 1, box->rect.max.y     },
+            };
+
+            rect2_t v1 = {
+                .min = { box->rect.max.x - 1, box->rect.min.y     },
+                .max = { box->rect.max.x,     box->rect.max.y     },
+            };
+
+            r_push_rect2_filled(background, h0, pack_color(color));
+            r_push_rect2_filled(background, h1, pack_color(color));
+            r_push_rect2_filled(background, v0, pack_color(color));
+            r_push_rect2_filled(background, v1, pack_color(color));
         }
 
-        r_push_rect2_filled_gradient(background, box->rect, gradient.colors);
+        r_immediate_draw_end(background);
     }
-
-    if (box->flags & UI_DRAW_OUTLINE)
-    {
-        v4_t color = style->outline_color.colors[0];
-
-        rect2_t h0 = {
-            .min = { box->rect.min.x,     box->rect.min.y     },
-            .max = { box->rect.max.x,     box->rect.min.y + 1 },
-        };
-
-        rect2_t h1 = {
-            .min = { box->rect.min.x,     box->rect.max.y - 1 },
-            .max = { box->rect.max.x,     box->rect.max.y     },
-        };
-
-        rect2_t v0 = {
-            .min = { box->rect.min.x,     box->rect.min.y     },
-            .max = { box->rect.min.x + 1, box->rect.max.y     },
-        };
-
-        rect2_t v1 = {
-            .min = { box->rect.max.x - 1, box->rect.min.y     },
-            .max = { box->rect.max.x,     box->rect.max.y     },
-        };
-
-        r_push_rect2_filled(background, h0, pack_color(color));
-        r_push_rect2_filled(background, h1, pack_color(color));
-        r_push_rect2_filled(background, v0, pack_color(color));
-        r_push_rect2_filled(background, v1, pack_color(color));
-    }
-
-    r_immediate_draw_end(background);
 
     if (RESOURCE_HANDLE_VALID(box->texture))
     {
@@ -762,7 +831,7 @@ static void ui_draw_box(ui_box_t *box, rect2_t clip_rect)
             rect = rect2_sub_radius(rect, make_v2(1, 1));
         }
 
-        r_push_rect2_filled(background, rect, COLOR32_WHITE);
+        r_push_rect2_filled(image, rect, COLOR32_WHITE);
 
         r_immediate_draw_end(image);
     }

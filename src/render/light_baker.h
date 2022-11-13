@@ -21,6 +21,7 @@ typedef struct bake_light_debug_ray_t
     struct bake_light_debug_ray_t *next;
 
     struct map_brush_t *spawn_brush;
+    struct map_poly_t  *spawn_poly;
 
     v3_t o;
     v3_t d;

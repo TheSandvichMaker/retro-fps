@@ -44,6 +44,12 @@ static inline ui_size_t ui_aspect_ratio(float value, float strictness)
     return result;
 }
 
+static inline ui_size_t ui_pixels(float value, float strictness)
+{
+    ui_size_t result = { UI_SIZE_PIXELS, value, strictness };
+    return result;
+}
+
 static inline ui_size_t ui_txt(float strictness)
 {
     ui_size_t result = { UI_SIZE_TEXT_CONTENT, 0.0f, strictness };
@@ -191,12 +197,22 @@ ui_style_t ui_get_style(void);
 void ui_push_style(const ui_style_t *style);
 void ui_pop_style(void);
 
+void ui_push_background_color(ui_gradient_t color);
+
 ui_box_t *ui_push_parent(ui_box_t *parent);
 ui_box_t *ui_pop_parent(void);
 ui_box_t *ui_box(string_t key, uint32_t flags);
 ui_interaction_t ui_interaction_from_box(ui_box_t *box);
 
-ui_box_t *ui_panel(string_t key, uint32_t flags, float x, float y, float w, float h);
+void ui_spacer(ui_size_t size);
+
+ui_box_t *ui_window_begin(string_t key, uint32_t flags, float x, float y, float w, float h);
+void ui_window_end(void);
+
+#define UI_Window(key, flags, x, y, w, h) DeferLoop(ui_window_begin(key, flags, x, y, w, h), ui_window_end())
+#define UI_BackgroundColor(gradient) DeferLoop(ui_push_background_color(gradient), ui_pop_style())
+#define UI_Parent(parent) DeferLoop(ui_push_parent(parent), ui_pop_parent())
+
 ui_box_t *ui_label(string_t text);
 ui_interaction_t ui_button(string_t text);
 ui_interaction_t ui_checkbox(string_t text, bool *toggle);

@@ -5,8 +5,8 @@
 
 #define RENDER_COMMAND_ALIGN 16
 
-#define MAX_IMMEDIATE_INDICES  (1 << 20)
-#define MAX_IMMEDIATE_VERTICES (1 << 19)
+#define MAX_IMMEDIATE_INDICES  (1 << 24)
+#define MAX_IMMEDIATE_VERTICES (1 << 23)
 
 typedef struct bitmap_font_t
 {

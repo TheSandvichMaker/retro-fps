@@ -332,7 +332,9 @@ void map_parse_string(map_parser_t *parser, string_t *string)
 
 void map_parse_texture_name(map_parser_t *parser, string_t *string)
 {
-    map_force_text_token(parser);
+    if (!map_match_token(parser, MTOK_STRING))
+        map_force_text_token(parser);
+
     *string = parser->token.string_value;
 
     map_next_token(parser);
@@ -343,6 +345,8 @@ map_entity_t *parse_map(arena_t *arena, string_t path)
     string_t map = fs_read_entire_file(temp, path);
 
     map_entity_t *f = NULL, *l = NULL;
+
+    long debug_ordinal = 0;
 
     map_parser_t parser;
     if (map_begin_parse(&parser, map))
@@ -380,6 +384,7 @@ map_entity_t *parse_map(arena_t *arena, string_t path)
                     while (!map_match_token(&parser, '}'))
                     {
                         map_plane_t *plane = m_alloc_struct(arena, map_plane_t);
+                        plane->debug_ordinal = debug_ordinal++;
 
                         map_parse_point(&parser, &plane->a);
                         map_parse_point(&parser, &plane->b);
@@ -453,7 +458,7 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
 
     v3_t *vertices = NULL;
 
-    unsigned  **plane_vertex_arrays = m_alloc_array(temp,  plane_count, unsigned *);
+    unsigned  **plane_index_arrays = m_alloc_array(temp,  plane_count, unsigned *);
     map_poly_t *polys               = m_alloc_array(arena, plane_count, map_poly_t);
 
     brush->poly_count = plane_count;
@@ -497,9 +502,9 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
             v3_t vertex = { x[0], x[1], x[2] };
             sb_push(vertices, vertex);
 
-            sb_push(plane_vertex_arrays[plane0_index], vertex_index);
-            sb_push(plane_vertex_arrays[plane1_index], vertex_index);
-            sb_push(plane_vertex_arrays[plane2_index], vertex_index);
+            sb_push(plane_index_arrays[plane0_index], vertex_index);
+            sb_push(plane_index_arrays[plane1_index], vertex_index);
+            sb_push(plane_index_arrays[plane2_index], vertex_index);
         }
     }
 
@@ -530,7 +535,7 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
     for (size_t plane_index = 0; plane_index < plane_count; plane_index++)
     {
         map_plane_t *plane = planes[plane_index];
-        unsigned *plane_verts = plane_vertex_arrays[plane_index];
+        unsigned *plane_verts = plane_index_arrays[plane_index];
 
         for (size_t vert_index = 0; vert_index < sb_count(plane_verts);)
         {
@@ -560,9 +565,9 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
     for (size_t plane_index = 0; plane_index < plane_count; plane_index++)
     {
         map_plane_t *plane = planes[plane_index];
-        unsigned    *verts = plane_vertex_arrays[plane_index];
+        unsigned    *indices = plane_index_arrays[plane_index];
 
-        unsigned vertex_count = sb_count(verts);
+        unsigned index_count = sb_count(indices);
 
         plane_t p;
         plane_from_points(plane->a, plane->b, plane->c, &p);
@@ -570,39 +575,23 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
         v3_t t, b;
         get_tangent_vectors(p.n, &t, &b);
 
-        v2_t lm_tex_mins = { FLT_MAX, FLT_MAX };
-        v2_t lm_tex_maxs = {-FLT_MAX,-FLT_MAX };
-
         v3_t v_mean = { 0, 0, 0 };
-        for (size_t i = 0; i < vertex_count; i++)
+        for (size_t i = 0; i < index_count; i++)
         {
-            v3_t v = vertices[verts[i]];
+            v3_t v = vertices[indices[i]];
             v_mean = add(v_mean, v);
 
             bounds = rect3_grow_to_contain(bounds, v);
-
-            v2_t st = { dot(v, plane->lm_s), dot(v, plane->lm_t) };
-
-            lm_tex_mins = min(lm_tex_mins, st);
-            lm_tex_maxs = max(lm_tex_maxs, st);
         }
-        v_mean = div(v_mean, (float)vertex_count);
-
-        v3_t lm_origin = mul(p.n, p.d);
-        lm_origin = add(lm_origin, mul(plane->lm_s, lm_tex_mins.x));
-        lm_origin = add(lm_origin, mul(plane->lm_t, lm_tex_mins.y));
-
-        plane->lm_tex_mins = lm_tex_mins;
-        plane->lm_tex_maxs = lm_tex_maxs;
-        plane->lm_origin   = lm_origin;
+        v_mean = div(v_mean, (float)index_count);
 
         m_scoped(temp)
         {
-            float *angles = m_alloc_array_nozero(temp, vertex_count, float);
+            float *angles = m_alloc_array_nozero(temp, index_count, float);
 
-            for (size_t i = 0; i < vertex_count; i++)
+            for (size_t i = 0; i < index_count; i++)
             {
-                v3_t v = sub(vertices[verts[i]], v_mean);
+                v3_t v = sub(vertices[indices[i]], v_mean);
 
                 float x = dot(t, v);
                 float y = dot(b, v);
@@ -615,18 +604,103 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
                 angles[i] = a;
             }
 
-            for (size_t i = 0; i < vertex_count - 1; i++)
+            for (size_t i = 0; i < index_count - 1; i++)
             {
-                for (size_t j = i + 1; j < vertex_count; j++)
+                for (size_t j = i + 1; j < index_count; j++)
                 {
                     if (angles[i] < angles[j])
                     {
                         SWAP(float,    angles[i], angles[j]);
-                        SWAP(unsigned,  verts[i],  verts[j]);
+                        SWAP(unsigned,  indices[i],  indices[j]);
                     }
                 }
             }
         }
+
+        // remove vertices that are too close together
+
+        for (size_t i = 0; i < index_count;)
+        {
+            v3_t v0 = vertices[indices[i]];
+            v3_t v1 = vertices[indices[(i + 1) % index_count]];
+
+            v3_t  d = sub(v1, v0);
+            float l = vlensq(d);
+
+            if (l < 0.01f)
+            {
+                sb_remove_ordered(indices, i);
+                index_count -= 1;
+            }
+            else
+            {
+                i++;
+            }
+        }
+
+        // find best fitting lightmap basis vectors
+
+        // try and find a reasonable set of basis vectors for the lightmap
+        // trying to minimize the surface area
+        // as one of them
+
+        float smallest_surface_area = FLT_MAX;
+        v3_t  best_fit_lm_s      = { 0 };
+        v3_t  best_fit_lm_t      = { 0 };
+        v3_t  best_fit_lm_o      = { 0 };
+        float best_fit_lm_w      = 0.0f;
+        float best_fit_lm_h      = 0.0f;
+
+        for (size_t i = 0; i < index_count - 1; i++)
+        {
+            v3_t v0 = vertices[indices[i + 0]];
+            v3_t v1 = vertices[indices[i + 1]];
+
+            v3_t lm_s = normalize(sub(v1, v0));
+            v3_t lm_t = normalize(cross(p.n, lm_s));
+
+            v2_t mins = {  FLT_MAX,  FLT_MAX };
+            v2_t maxs = { -FLT_MAX, -FLT_MAX };
+
+            for (size_t test_vertex_index = 0; test_vertex_index < index_count; test_vertex_index++)
+            {
+                v3_t test_vertex = vertices[indices[test_vertex_index]];
+
+                v2_t st = { dot(test_vertex, lm_s), dot(test_vertex, lm_t) };
+                mins = min(mins, st);
+                maxs = max(maxs, st);
+            }
+
+            float w = maxs.x - mins.x;
+            float h = maxs.y - mins.y;
+
+            float surface_area = w*h;
+
+            if (smallest_surface_area > surface_area)
+            {
+                v3_t o = mul(p.n, p.d);
+                o = add(o, mul(lm_s, mins.x));
+                o = add(o, mul(lm_t, mins.y));
+
+                smallest_surface_area = surface_area;
+                best_fit_lm_s = lm_s;
+                best_fit_lm_t = lm_t;
+                best_fit_lm_o = o;
+                best_fit_lm_w = w;
+                best_fit_lm_h = h;
+            }
+        }
+
+        float scale_x = max(1.0f, LIGHTMAP_SCALE*ceilf(best_fit_lm_w / LIGHTMAP_SCALE));
+        float scale_y = max(1.0f, LIGHTMAP_SCALE*ceilf(best_fit_lm_h / LIGHTMAP_SCALE));
+
+        plane->lm_origin = best_fit_lm_o;
+        plane->lm_s = best_fit_lm_s;
+        plane->lm_t = best_fit_lm_t;
+        plane->lm_scale_x = scale_x;
+        plane->lm_scale_y = scale_y;
+        plane->lm_tex_w = (int)(scale_x / LIGHTMAP_SCALE);
+        plane->lm_tex_h = (int)(scale_y / LIGHTMAP_SCALE);
     }
 
     brush->bounds = bounds;
@@ -709,9 +783,9 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
 
         m_scoped(temp)
         {
-            unsigned *verts = plane_vertex_arrays[plane_index];
+            unsigned *indices = plane_index_arrays[plane_index];
 
-            if (sb_count(verts) >= 3)
+            if (sb_count(indices) >= 3)
             {
                 plane_t p;
                 plane_from_points(plane->a, plane->b, plane->c, &p);
@@ -724,15 +798,12 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
                 v3_t  t_vec    = { plane->t.x, plane->t.y, plane->t.z };
                 float t_offset = plane->t.w;
 
-                unsigned vertex_count = sb_count(verts);
+                unsigned vertex_count = sb_count(indices);
                 vertex_brush_t *triangle_vertices = m_alloc_array_nozero(arena, vertex_count, vertex_brush_t);
-
-                float lightmap_scale_x = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->lm_tex_maxs.x - plane->lm_tex_mins.x) / LIGHTMAP_SCALE));
-                float lightmap_scale_y = max(1.0f, LIGHTMAP_SCALE * ceilf((plane->lm_tex_maxs.y - plane->lm_tex_mins.y) / LIGHTMAP_SCALE));
 
                 for (size_t i = 0; i < vertex_count; i++)
                 {
-                    v3_t pos = vertices[verts[i]];
+                    v3_t pos = vertices[indices[i]];
                     triangle_vertices[i] = (vertex_brush_t) {
                         .pos = pos,
                         .tex = {
@@ -740,8 +811,8 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
                             .y = (dot(pos, t_vec) + t_offset) / texscale_y / plane->scale_y,
                         },
                         .tex_lightmap = {
-                            .x = (dot(pos, plane->lm_s) - plane->lm_tex_mins.x) / lightmap_scale_x,
-                            .y = (dot(pos, plane->lm_t) - plane->lm_tex_mins.y) / lightmap_scale_y,
+                            .x = dot(sub(pos, plane->lm_origin), plane->lm_s) / plane->lm_scale_x,
+                            .y = dot(sub(pos, plane->lm_origin), plane->lm_t) / plane->lm_scale_y,
                         },
                     };
                 }

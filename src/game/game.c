@@ -369,21 +369,26 @@ static v3_t player_view_direction(player_t *player)
 static bool g_debug_lightmaps;
 static bool g_cursor_locked;
 
+static void push_poly_wireframe(r_immediate_draw_t *draw_call, map_poly_t *poly, uint32_t color)
+{
+    for (size_t triangle_index = 0; triangle_index < poly->index_count / 3; triangle_index++)
+    {
+        v3_t a = poly->vertices[poly->indices[3*triangle_index + 0]].pos;
+        v3_t b = poly->vertices[poly->indices[3*triangle_index + 1]].pos;
+        v3_t c = poly->vertices[poly->indices[3*triangle_index + 2]].pos;
+
+        r_push_line(draw_call, a, b, color);
+        r_push_line(draw_call, a, c, color);
+        r_push_line(draw_call, b, c, color);
+    }
+}
+
 static void push_brush_wireframe(r_immediate_draw_t *draw_call, map_brush_t *brush, uint32_t color)
 {
     for (size_t poly_index = 0; poly_index < brush->poly_count; poly_index++)
     {
         map_poly_t *poly = &brush->polys[poly_index];
-        for (size_t triangle_index = 0; triangle_index < poly->index_count / 3; triangle_index++)
-        {
-            v3_t a = poly->vertices[poly->indices[3*triangle_index + 0]].pos;
-            v3_t b = poly->vertices[poly->indices[3*triangle_index + 1]].pos;
-            v3_t c = poly->vertices[poly->indices[3*triangle_index + 2]].pos;
-
-            r_push_line(draw_call, a, b, color);
-            r_push_line(draw_call, a, c, color);
-            r_push_line(draw_call, b, c, color);
-        }
+        push_poly_wireframe(draw_call, poly, color);
     }
 }
 
@@ -531,6 +536,21 @@ void game_init(void)
     initialized = true;
 }
 
+static inline map_plane_t *plane_from_poly(map_brush_t *brush, map_poly_t *poly)
+{
+    map_plane_t *plane = brush->first_plane;
+
+    for (size_t i = 0; i < brush->poly_count; i++)
+    {
+        if (&brush->polys[i] == poly)
+            break;
+
+        plane = plane->next;
+    }
+
+    return plane;
+}
+
 void game_tick(game_io_t *io, float dt)
 {
     if (!initialized)
@@ -627,7 +647,9 @@ void game_tick(game_io_t *io, float dt)
 
     r_push_view(&view);
 
+    //
     // render map geometry
+    //
 
     map_t *map = world->map;
 
@@ -643,6 +665,8 @@ void game_tick(game_io_t *io, float dt)
     }
 
     static map_brush_t *selected_brush = NULL;
+    static map_plane_t *selected_plane = NULL;
+    static map_poly_t  *selected_poly  = NULL;
 
     if (g_debug_lightmaps)
     {
@@ -661,61 +685,71 @@ void game_tick(game_io_t *io, float dt)
                     .d = player_view_direction(player),
                 }, &intersect))
             {
+                map_plane_t *plane = plane_from_poly(intersect.brush, intersect.poly);
+
                 if (button_pressed(BUTTON_FIRE1))
                 {
-                    if (selected_brush == intersect.brush)
+                    if (selected_plane == plane)
                     {
                         selected_brush = NULL;
+                        selected_plane = NULL;
+                        selected_poly  = NULL;
                     }
                     else
                     {
                         selected_brush = intersect.brush;
+                        selected_plane = plane;
+                        selected_poly  = intersect.poly;
                     }
                 }
 
-                if (selected_brush != intersect.brush)
-                    push_brush_wireframe(draw_call, intersect.brush, COLOR32_RED);
+                if (selected_poly != intersect.poly)
+                    push_poly_wireframe(draw_call, intersect.poly, COLOR32_RED);
             }
             else
             {
                 if (button_pressed(BUTTON_FIRE1))
+                {
                     selected_brush = NULL;
+                    selected_plane = NULL;
+                    selected_poly  = NULL;
+                }
             }
         }
 
-        if (selected_brush)
+        if (selected_plane)
         {
-            for (map_plane_t *plane = selected_brush->first_plane;
-                 plane;
-                 plane = plane->next)
-            {
-                r_push_arrow(draw_call, plane->lm_origin, add(plane->lm_origin, mul(10.0f, plane->s.xyz)), COLOR32_RED);
-                r_push_arrow(draw_call, plane->lm_origin, add(plane->lm_origin, mul(10.0f, plane->t.xyz)), COLOR32_BLUE);
+            map_plane_t *plane = selected_plane;
 
-                v3_t square_v0 = add(plane->lm_origin, mul(2.5f, plane->s.xyz));
-                v3_t square_v1 = add(plane->lm_origin, mul(2.5f, plane->t.xyz));
-                v3_t square_v2 = v3_add3(plane->lm_origin, mul(2.5f, plane->s.xyz), mul(2.5f, plane->t.xyz));
+            float scale_x = plane->lm_scale_x;
+            float scale_y = plane->lm_scale_y;
 
-                r_push_line(draw_call, square_v0, square_v2, COLOR32_GREEN);
-                r_push_line(draw_call, square_v1, square_v2, COLOR32_GREEN);
-            }
+            push_poly_wireframe(draw_call, &selected_brush->polys[plane->poly_index], pack_rgba(0.0f, 0.0f, 0.0f, 0.75f));
 
-            push_brush_wireframe(draw_call, selected_brush, COLOR32_GREEN);
+            r_push_arrow(draw_call, plane->lm_origin, add(plane->lm_origin, mul(scale_x, plane->lm_s)), pack_rgb(0.5f, 0.0f, 0.0f));
+            r_push_arrow(draw_call, plane->lm_origin, add(plane->lm_origin, mul(scale_y, plane->lm_t)), pack_rgb(0.0f, 0.5f, 0.0f));
+
+            v3_t square_v0 = add(plane->lm_origin, mul(scale_x, plane->lm_s));
+            v3_t square_v1 = add(plane->lm_origin, mul(scale_y, plane->lm_t));
+            v3_t square_v2 = v3_add3(plane->lm_origin, mul(scale_x, plane->lm_s), mul(scale_y, plane->lm_t));
+
+            r_push_line(draw_call, square_v0, square_v2, pack_rgb(0.5f, 0.0f, 0.5f));
+            r_push_line(draw_call, square_v1, square_v2, pack_rgb(0.5f, 0.0f, 0.5f));
         }
 
         for (bake_light_debug_ray_t *ray = bake_results.debug_data.direct_rays.first;
              ray;
              ray = ray->next)
         {
-            if (ray->spawn_brush == selected_brush)
+            if (ray->spawn_poly == selected_poly)
             {
                 if (ray->t != FLT_MAX)
                 {
-                    r_push_arrow(draw_call, ray->o, add(ray->o, mul(ray->t, ray->d)), COLOR32_RED);
+                    r_push_line(draw_call, ray->o, add(ray->o, mul(ray->t, ray->d)), COLOR32_RED);
                 }
                 else
                 {
-                    r_push_arrow(draw_call, ray->o, add(ray->o, mul(15.0f, ray->d)), COLOR32_GREEN);
+                    r_push_line(draw_call, ray->o, add(ray->o, mul(15.0f, ray->d)), COLOR32_GREEN);
                 }
             }
         }
@@ -725,7 +759,9 @@ void game_tick(game_io_t *io, float dt)
 
     if (g_cursor_locked)
     {
+        //
         // reticle 
+        //
 
         r_push_view_screenspace();
         r_immediate_draw_t *draw_call = r_immediate_draw_begin(NULL);
@@ -742,22 +778,34 @@ void game_tick(game_io_t *io, float dt)
         r_pop_view();
     }
 
-    ui_box_t *panel = ui_panel(strlit("lightmap debugger panel"), 0, 32, 32, 300, 512);
-
-    ui_push_parent(panel);
+    UI_Window(strlit("lightmap debugger panel"), 0, 32, 32, 300, 512)
     {
-        if (g_debug_lightmaps)
-        {
-            ui_label(strlit("lightmap debugger enabled haha:)"));
-        }
-        else
-        {
-            ui_label(strlit("lightmap debugger disabled noo:("));
-        }
+        ui_checkbox(strlit("enabled"), &g_debug_lightmaps);
 
-        ui_checkbox(strlit("lightmap debugger"), &g_debug_lightmaps);
+        if (selected_poly)
+        {
+            map_poly_t *poly = selected_poly;
+
+            texture_desc_t desc;
+            render->describe_texture(poly->lightmap, &desc);
+
+            ui_label(string_format(temp, "debug ordinal: %d", selected_plane->debug_ordinal));
+            ui_label(string_format(temp, "resolution: %u x %u", desc.w, desc.h));
+
+            ui_box_t *image_viewer = ui_box(strlit("lightmap image"), UI_DRAW_BACKGROUND);
+            if (desc.w >= desc.h)
+            {
+                ui_set_size(image_viewer, AXIS2_X, ui_pct(1.0f, 1.0f));
+                ui_set_size(image_viewer, AXIS2_Y, ui_aspect_ratio((float)desc.h / (float)desc.w, 1.0f));
+            }
+            else
+            {
+                ui_set_size(image_viewer, AXIS2_X, ui_aspect_ratio((float)desc.w / (float)desc.h, 1.0f));
+                ui_set_size(image_viewer, AXIS2_Y, ui_pct(1.0f, 1.0f));
+            }
+            image_viewer->texture = poly->lightmap;
+        }
     }
-    ui_pop_parent();
 
     ui_end(dt);
 

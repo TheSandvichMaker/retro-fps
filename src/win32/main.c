@@ -162,9 +162,9 @@ int wWinMain(HINSTANCE instance,
     r_list_t r_list = { 0 };
     r_list.command_list_size = MB(16),
     r_list.command_list_base = m_alloc_nozero(&win32_arena, r_list.command_list_size, 16);
-    r_list.max_immediate_icount = 1 << 20;
+    r_list.max_immediate_icount = 1 << 24;
     r_list.immediate_indices = m_alloc_array_nozero(&win32_arena, r_list.max_immediate_icount, uint32_t);
-    r_list.max_immediate_vcount = 1 << 19;
+    r_list.max_immediate_vcount = 1 << 23;
     r_list.immediate_vertices = m_alloc_array_nozero(&win32_arena, r_list.max_immediate_vcount, vertex_immediate_t);
     r_set_command_list(&r_list);
 
