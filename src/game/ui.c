@@ -30,6 +30,9 @@ typedef struct ui_state_t
     ui_box_t *root;
     ui_box_t *current_parent;
 
+    v2_t element_margins;
+    v2_t    text_margins;
+
     ui_style_t style;
 
     bitmap_font_t *font;
@@ -42,12 +45,15 @@ typedef struct ui_state_t
     v2_t press_p;
     v2_t screen_dim;
 
+    ui_style_node_t *first_free_style;
+    ui_style_node_t *first_style;
+
     bool has_focus;
 } ui_state_t;
 
 static ui_state_t g_ui;
 
-ui_box_t *ui_get_or_create_box(string_t key_string)
+static ui_box_t *ui_get_or_create_box(string_t key_string)
 {
     bool anonymous = key_string.count == 0;
 
@@ -109,6 +115,8 @@ ui_box_t *ui_get_or_create_box(string_t key_string)
     box->computed_size[AXIS2_X] = 0.0f;
     box->computed_size[AXIS2_Y] = 0.0f;
 
+    box->style = ui_get_style();
+
     if (box->parent)
         dll_push_back(box->parent->first, box->parent->last, box);
 
@@ -122,6 +130,11 @@ ui_box_t *ui_get_or_create_box(string_t key_string)
 bool ui_begin(bitmap_font_t *font, const ui_style_t *style)
 {
     m_reset(&g_ui.frame_arena);
+
+    int resolution_x, resolution_y;
+    render->get_resolution(&resolution_x, &resolution_y);
+
+    g_ui.screen_dim = make_v2((float)resolution_x, (float)resolution_y);
 
     for (size_t slot = 0; slot < ARRAY_COUNT(g_ui.box_hash); slot++)
     {
@@ -141,13 +154,20 @@ bool ui_begin(bitmap_font_t *font, const ui_style_t *style)
         }
     }
 
+    g_ui.element_margins = make_v2(2.0f, 2.0f);
+    g_ui.text_margins = make_v2(2.0f, 2.0f);
+
+    g_ui.first_style = NULL;
+    ui_push_style(style);
+
     g_ui.current_parent = NULL;
 
     g_ui.root = ui_get_or_create_box(strlit("root"));
     g_ui.current_parent = g_ui.root;
 
-    g_ui.root->semantic_size[AXIS2_X] = (ui_size_t){ UI_SIZE_SUM_OF_CHILDREN, 0.0f, 1.0f };
-    g_ui.root->semantic_size[AXIS2_Y] = (ui_size_t){ UI_SIZE_SUM_OF_CHILDREN, 0.0f, 1.0f };
+    g_ui.root->layout_axis = AXIS2_Y;
+    g_ui.root->semantic_size[AXIS2_X] = (ui_size_t){ UI_SIZE_PIXELS, g_ui.screen_dim.x, 1.0f };
+    g_ui.root->semantic_size[AXIS2_Y] = (ui_size_t){ UI_SIZE_PIXELS, g_ui.screen_dim.y, 1.0f };
 
     int mouse_x, mouse_y;
     get_mouse(&mouse_x, &mouse_y);
@@ -164,13 +184,6 @@ bool ui_begin(bitmap_font_t *font, const ui_style_t *style)
 
     g_ui.font = font;
 
-    int resolution_x, resolution_y;
-    render->get_resolution(&resolution_x, &resolution_y);
-
-    g_ui.screen_dim = make_v2((float)resolution_x, (float)resolution_y);
-
-    copy_struct(&g_ui.style, style);
-
     g_ui.frame_index += 1;
 
     if (ui_button_pressed(BUTTON_FIRE1|BUTTON_FIRE2))
@@ -179,7 +192,7 @@ bool ui_begin(bitmap_font_t *font, const ui_style_t *style)
         {
             g_ui.active = g_ui.hot;
 
-            g_ui.has_focus = true;
+            g_ui.has_focus = g_ui.hot != g_ui.root;
         }
         else
         {
@@ -222,31 +235,6 @@ axis2_t ui_cross_axis(void)
     return (g_ui.current_parent->layout_axis + 1) % 2;
 }
 
-ui_box_t *ui_box(string_t key, uint32_t flags)
-{
-    ui_box_t *box = ui_get_or_create_box(key);
-
-    box->flags            = flags;
-    box->layout_axis      = AXIS2_Y;
-    box->foreground_color = g_ui.style.text_color;
-    box->background_color = g_ui.style.panel_background_color;
-
-    ui_set_size(box, ui_cross_axis(), ui_pct(1.0f, 0.0f));
-
-    return box;
-}
-
-ui_box_t *ui_panel(string_t key, uint32_t flags, float x, float y, float w, float h)
-{
-    ui_box_t *box = ui_box(string_format(temp, "%.*s##panel", strexpand(key)), UI_DRAW_BACKGROUND|flags);
-
-    box->semantic_size[AXIS2_X] = (ui_size_t){ UI_SIZE_PIXELS, w, 1.0f };
-    box->semantic_size[AXIS2_Y] = (ui_size_t){ UI_SIZE_PIXELS, h, 1.0f };
-    box->rect.min = make_v2(x, y);
-
-    return box;
-}
-
 ui_box_t *ui_push_parent(ui_box_t *parent)
 {
     ui_box_t *result = g_ui.current_parent;
@@ -273,30 +261,84 @@ static inline float ui_font_height(void)
 
 static inline float ui_standard_element_height(void)
 {
-    return (float)g_ui.font->ch + 2.0f*g_ui.style.element_margins.y + 2.0f*g_ui.style.text_margins.y;
+    return (float)g_ui.font->ch + 2.0f*g_ui.element_margins.y + 2.0f*g_ui.text_margins.y;
+}
+
+ui_style_t ui_get_style(void)
+{
+    ui_style_t result = { 0 };
+
+    if (ALWAYS(g_ui.first_style))
+    {
+        copy_struct(&result, &g_ui.first_style->style);
+    }
+
+    return result;
+}
+
+void ui_push_style(const ui_style_t *style)
+{
+    if (!g_ui.first_free_style)
+    {
+        g_ui.first_free_style = m_alloc_struct_nozero(&g_ui.frame_arena, ui_style_node_t);
+        g_ui.first_free_style->next = NULL;
+    }
+
+    ui_style_node_t *node = sll_pop(g_ui.first_free_style);
+    copy_struct(&node->style, style); 
+
+    sll_push(g_ui.first_style, node);
+}
+
+void ui_pop_style(void)
+{
+    if (ALWAYS(g_ui.first_style))
+    {
+        sll_pop(g_ui.first_style);
+    }
+}
+
+ui_box_t *ui_box(string_t key, uint32_t flags)
+{
+    ui_box_t *box = ui_get_or_create_box(key);
+
+    box->flags       = flags;
+    box->layout_axis = g_ui.current_parent->layout_axis;
+    box->text        = string_copy(&g_ui.frame_arena, ui_display_text(key));
+
+    ui_set_size(box, ui_cross_axis(), ui_pct(1.0f, 0.0f));
+
+    return box;
+}
+
+ui_box_t *ui_panel(string_t key, uint32_t flags, float x, float y, float w, float h)
+{
+    ui_box_t *box = ui_box(string_format(temp, "%.*s##panel", strexpand(key)), UI_DRAW_BACKGROUND|UI_DRAW_OUTLINE|flags);
+
+    // box->position_offset[AXIS2_X] = x;
+    // box->position_offset[AXIS2_Y] = y;
+    box->semantic_size[AXIS2_X] = (ui_size_t){ UI_SIZE_PIXELS, w, 1.0f };
+    box->semantic_size[AXIS2_Y] = (ui_size_t){ UI_SIZE_PIXELS, h, 1.0f };
+    box->rect.min = make_v2(x, y);
+
+    return box;
 }
 
 ui_box_t *ui_label(string_t text)
 {
-    ui_box_t *box = ui_box(text, 0);
+    ui_box_t *box = ui_box(text, UI_DRAW_TEXT);
 
     ui_set_size(box, AXIS2_X, ui_txt(1.0f));
     ui_set_size(box, AXIS2_Y, ui_txt(1.0f));
-
-    box->text = string_copy(&g_ui.frame_arena, text);
 
     return box;
 }
 
 ui_interaction_t ui_button(string_t text)
 {
-    ui_box_t *box = ui_box(text, UI_CLICKABLE|UI_DRAW_BACKGROUND|UI_DRAW_OUTLINE);
+    ui_box_t *box = ui_box(text, UI_CLICKABLE|UI_DRAW_BACKGROUND|UI_DRAW_OUTLINE|UI_DRAW_TEXT);
 
     ui_set_size(box, AXIS2_Y, ui_txt(1.0f));
-
-    box->background_color           = g_ui.style.button_background_color;
-    box->background_highlight_color = g_ui.style.button_background_highlight_color;
-    box->text = string_copy(&g_ui.frame_arena, text);
 
     box->hot_t    =  0.0f;
     box->active_t = -1.0f;
@@ -333,19 +375,17 @@ ui_interaction_t ui_checkbox(string_t text, bool *toggle)
 {
     ui_begin_container(AXIS2_X, ui_txt(1.0f));
 
-    ui_box_t *label = ui_label(text);
-    label->flags |= UI_DRAW_OUTLINE;
-
-    ui_spacer(ui_pct(1.0f, 0.0f));
-
-    ui_box_t *button = ui_box(string_format(temp, "%.*s##button", strexpand(text)), UI_CLICKABLE|UI_DRAW_BACKGROUND|UI_DRAW_OUTLINE);
-    ui_set_size(button, AXIS2_X, ui_pct(0.1f, 1.0f));
+    ui_box_t *button = ui_box(string_format(temp, "X##%.*s-checkbox-button", strexpand(text)), 
+                              UI_CLICKABLE|UI_DRAW_BACKGROUND|UI_DRAW_OUTLINE|UI_CENTER_TEXT);
+    ui_set_size(button, AXIS2_X, ui_aspect_ratio(1.0f, 1.0f));
     ui_set_size(button, AXIS2_Y, ui_pct(1.0f, 1.0f));
+
+    ui_label(text);
 
     ui_end_container();
 
     ui_interaction_t interaction = ui_interaction_from_box(button);
-    if (interaction.clicked)
+    if (interaction.released)
     {
         if (toggle)
             *toggle = !*toggle;
@@ -353,8 +393,11 @@ ui_interaction_t ui_checkbox(string_t text, bool *toggle)
 
     bool toggled = (toggle ? *toggle : false);
 
-    button->background_color           = toggled ? g_ui.style.button_background_active_color : g_ui.style.button_background_color;
-    button->background_highlight_color = toggled ? g_ui.style.button_background_active_color : g_ui.style.button_background_highlight_color;
+    if (toggled)
+        button->flags |= UI_DRAW_TEXT;
+
+    // button->background_color           = toggled ? g_ui.style.button_background_active_color : g_ui.style.button_background_color;
+    // button->background_highlight_color = toggled ? g_ui.style.button_background_active_color : g_ui.style.button_background_highlight_color;
 
     return interaction;
 }
@@ -442,7 +485,7 @@ static void ui_layout_solve_independent_sizes(ui_box_t *root, axis2_t axis)
                 uint32_t font_w = g_ui.font->cw;
                 uint32_t font_h = g_ui.font->ch;
 
-                string_t display_text = ui_display_text(box->text);
+                string_t display_text = box->text;
 
                 size_t newline_count = 1;
                 for (size_t i = 0; i < display_text.count; i++)
@@ -463,7 +506,7 @@ static void ui_layout_solve_independent_sizes(ui_box_t *root, axis2_t axis)
                     box->computed_size[axis] = (float)newline_count*(float)font_h;
                 }
 
-                box->computed_size[axis] += 2.0f*g_ui.style.text_margins.e[axis];
+                box->computed_size[axis] += 2.0f*g_ui.text_margins.e[axis];
             } break;
         }
     }
@@ -506,6 +549,28 @@ static void ui_layout_solve_downwards_dependent_sizes(ui_box_t *root, axis2_t ax
     }
 }
 
+static void ui_layout_solve_self_referential_sizes(ui_box_t *root, axis2_t axis)
+{
+    for (ui_box_t *box = root; box; box = ui_box_next_depth_first_pre_order(box))
+    {
+        ui_size_t *size = &box->semantic_size[axis];
+        ASSERT(size->kind != UI_SIZE_NONE);
+
+        switch (size->kind)
+        {
+            case UI_SIZE_ASPECT_RATIO:
+            {
+                axis2_t other_axis = (axis + 1) % 2;
+
+                ui_size_t *other_size = &box->semantic_size[other_axis];
+                ASSERT(other_size->kind != UI_SIZE_ASPECT_RATIO);
+
+                box->computed_size[axis] = size->value*box->computed_size[other_axis];
+            } break;
+        }
+    }
+}
+
 static void ui_layout_solve_size_violations(ui_box_t *root, axis2_t axis)
 {
     for (ui_box_t *box = root; box; box = ui_box_next_depth_first_pre_order(box))
@@ -515,15 +580,12 @@ static void ui_layout_solve_size_violations(ui_box_t *root, axis2_t axis)
 
         float target_size = box->computed_size[axis];
 
-        float offset = 0.0f;
         float child_sum_strictness = 0.0f;
-        float child_sum_size = 0.0f;
+        float child_sum_size       = 0.0f;
         for (ui_box_t *child = box->first; child; child = child->next)
         {
-            child_sum_size       = max(child_sum_size, offset + child->computed_size[axis]);
+            child_sum_size       += child->computed_size[axis];
             child_sum_strictness += 1.0f - child->semantic_size[axis].strictness;
-
-            offset += child->computed_size[axis];
         }
 
         float violation_size = child_sum_size - target_size;
@@ -542,13 +604,18 @@ static void ui_layout_solve_finalize_positions(ui_box_t *root, axis2_t axis)
 {
     for (ui_box_t *box = root; box; box = ui_box_next_depth_first_pre_order(box))
     {
+        box->computed_rel_position[axis] = box->position_offset[axis];
+
+        if (axis == AXIS2_Y)
+            box->computed_rel_position[axis] = -box->computed_rel_position[axis];
+
         if (box->parent)
         {
             if (box->parent->layout_axis == axis)
             {
                 if (box->prev)
                 {
-                    box->computed_rel_position[axis] = box->prev->computed_rel_position[axis] + box->prev->computed_size[axis];
+                    box->computed_rel_position[axis] += box->prev->computed_rel_position[axis] + box->prev->computed_size[axis];
                 }
             }
 
@@ -591,6 +658,15 @@ static void ui_solve_layout(void)
         ui_layout_solve_independent_sizes(root, axis);
         ui_layout_solve_upwards_dependent_sizes(root, axis);
         ui_layout_solve_downwards_dependent_sizes(root, axis);
+    }
+
+    for (int axis = 0; axis < AXIS2_COUNT; axis++)
+    {
+        ui_layout_solve_self_referential_sizes(root, axis);
+    }
+
+    for (int axis = 0; axis < AXIS2_COUNT; axis++)
+    {
         ui_layout_solve_size_violations(root, axis);
         ui_layout_solve_finalize_positions(root, axis);
     }
@@ -614,132 +690,119 @@ static void ui_process_interactions(void)
     g_ui.hot = next_hot;
 }
 
+static void ui_draw_box(ui_box_t *box, rect2_t clip_rect)
+{
+    clip_rect = rect2_intersect(clip_rect, box->rect);
+
+    r_immediate_draw_t *background = r_immediate_draw_begin(&(r_immediate_draw_t){
+        .clip_rect = clip_rect,
+    });
+
+    ui_style_t *style = &box->style;
+
+    if (box->flags & UI_DRAW_BACKGROUND)
+    {
+        ui_gradient_t gradient = style->background_color;
+
+        if (has_flags_any(box->flags, UI_CLICKABLE|UI_DRAGGABLE) && box == g_ui.hot)
+        {
+            gradient = style->background_color_hot;
+        }
+
+        if (has_flags_any(box->flags, UI_CLICKABLE|UI_DRAGGABLE) && box == g_ui.active)
+        {
+            gradient = style->background_color_active;
+        }
+
+        r_push_rect2_filled_gradient(background, box->rect, gradient.colors);
+    }
+
+    if (box->flags & UI_DRAW_OUTLINE)
+    {
+        v4_t color = style->outline_color.colors[0];
+
+        rect2_t h0 = {
+            .min = { box->rect.min.x,     box->rect.min.y     },
+            .max = { box->rect.max.x,     box->rect.min.y + 1 },
+        };
+
+        rect2_t h1 = {
+            .min = { box->rect.min.x,     box->rect.max.y - 1 },
+            .max = { box->rect.max.x,     box->rect.max.y     },
+        };
+
+        rect2_t v0 = {
+            .min = { box->rect.min.x,     box->rect.min.y     },
+            .max = { box->rect.min.x + 1, box->rect.max.y     },
+        };
+
+        rect2_t v1 = {
+            .min = { box->rect.max.x - 1, box->rect.min.y     },
+            .max = { box->rect.max.x,     box->rect.max.y     },
+        };
+
+        r_push_rect2_filled(background, h0, pack_color(color));
+        r_push_rect2_filled(background, h1, pack_color(color));
+        r_push_rect2_filled(background, v0, pack_color(color));
+        r_push_rect2_filled(background, v1, pack_color(color));
+    }
+
+    r_immediate_draw_end(background);
+
+    if (RESOURCE_HANDLE_VALID(box->texture))
+    {
+        r_immediate_draw_t *image = r_immediate_draw_begin(&(r_immediate_draw_t){
+            .clip_rect = clip_rect,
+            .texture   = box->texture,
+        });
+
+        rect2_t rect = box->rect;
+        if (box->flags & UI_DRAW_OUTLINE)
+        {
+            rect = rect2_sub_radius(rect, make_v2(1, 1));
+        }
+
+        r_push_rect2_filled(background, rect, COLOR32_WHITE);
+
+        r_immediate_draw_end(image);
+    }
+
+    if (box->text.count > 0 && has_flags_any(box->flags, UI_DRAW_TEXT))
+    {
+        r_immediate_draw_t *text = r_immediate_draw_begin(&(r_immediate_draw_t){
+            .clip_rect = clip_rect,
+            .texture   = g_ui.font->texture,
+        });
+
+        v2_t p = add(box->rect.min, g_ui.text_margins);
+
+        string_t display_text = box->text;
+
+        if (has_flags_any(box->flags, UI_CENTER_TEXT))
+        {
+            float width = (float)g_ui.font->cw*(float)display_text.count; // TODO: handle multiple lines
+            p.x = 0.5f*(box->rect.min.x + box->rect.max.x) - 0.5f*width;
+        }
+
+        p = add(p, make_v2(0.0f, box->current_t));
+
+        r_push_text(text, g_ui.font, add(p, make_v2(1, -1)), pack_rgba(0.0f, 0.0f, 0.0f, 0.5f), display_text);
+        r_push_text(text, g_ui.font, p, pack_color(style->text_color), display_text);
+
+        r_immediate_draw_end(text);
+    }
+
+    for (ui_box_t *child = box->first; child; child = child->next)
+    {
+        ui_draw_box(child, clip_rect);
+    }
+}
+
 static void ui_draw(void)
 {
     r_push_view_screenspace();
 
-    for (ui_box_t *box = g_ui.root; box; box = ui_box_next_depth_first_pre_order(box))
-    {
-        r_immediate_draw_t *background = r_immediate_draw_begin(&(r_immediate_draw_t){
-            .clip_rect = box->rect,
-        });
-
-        if (box->flags & UI_DRAW_BACKGROUND)
-        {
-            v4_t color = box->background_color;
-
-            if (has_flags_any(box->flags, UI_CLICKABLE|UI_DRAGGABLE) &&
-                (box == g_ui.hot || box == g_ui.active))
-            {
-                color = box->background_highlight_color;
-            }
-
-            v4_t color_bottom = color;
-            color_bottom.xyz = mul(0.65f, color_bottom.xyz);
-            
-            rect2_t rect = box->rect;
-
-            uint32_t i0 = r_immediate_vertex(background, &(vertex_immediate_t){ 
-                .pos = { rect.min.x, rect.min.y, 0.0f }, 
-                .tex = { 0, 0 },
-                .col = pack_color(color_bottom)
-            });
-            uint32_t i1 = r_immediate_vertex(background, &(vertex_immediate_t){ 
-                .pos = { rect.max.x, rect.min.y, 0.0f }, 
-                .tex = { 1, 0 },
-                .col = pack_color(color_bottom)
-            });
-            uint32_t i2 = r_immediate_vertex(background, &(vertex_immediate_t){ 
-                .pos = { rect.max.x, rect.max.y, 0.0f }, 
-                .tex = { 1, 1 },
-                .col = pack_color(color) 
-            });
-            uint32_t i3 = r_immediate_vertex(background, &(vertex_immediate_t){ 
-                .pos = { rect.min.x, rect.max.y, 0.0f }, 
-                .tex = { 0, 1 },
-                .col = pack_color(color) 
-            });
-
-            // triangle 1
-            r_immediate_index(background, i0);
-            r_immediate_index(background, i1);
-            r_immediate_index(background, i2);
-
-            // triangle 2
-            r_immediate_index(background, i0);
-            r_immediate_index(background, i2);
-            r_immediate_index(background, i3);
-        }
-
-        if (box->flags & UI_DRAW_OUTLINE)
-        {
-            v4_t color = g_ui.style.button_outline_color;
-
-            rect2_t h0 = {
-                .min = { box->rect.min.x,     box->rect.min.y     },
-                .max = { box->rect.max.x,     box->rect.min.y + 1 },
-            };
-
-            rect2_t h1 = {
-                .min = { box->rect.min.x,     box->rect.max.y - 1 },
-                .max = { box->rect.max.x,     box->rect.max.y     },
-            };
-
-            rect2_t v0 = {
-                .min = { box->rect.min.x,     box->rect.min.y     },
-                .max = { box->rect.min.x + 1, box->rect.max.y     },
-            };
-
-            rect2_t v1 = {
-                .min = { box->rect.max.x - 1, box->rect.min.y     },
-                .max = { box->rect.max.x,     box->rect.max.y     },
-            };
-
-            r_push_rect2_filled(background, h0, pack_color(color));
-            r_push_rect2_filled(background, h1, pack_color(color));
-            r_push_rect2_filled(background, v0, pack_color(color));
-            r_push_rect2_filled(background, v1, pack_color(color));
-        }
-
-        r_immediate_draw_end(background);
-
-        if (RESOURCE_HANDLE_VALID(box->texture))
-        {
-            r_immediate_draw_t *image = r_immediate_draw_begin(&(r_immediate_draw_t){
-                .clip_rect = box->rect,
-                .texture   = box->texture,
-            });
-
-            rect2_t rect = box->rect;
-            if (box->flags & UI_DRAW_OUTLINE)
-            {
-                rect = rect2_sub_radius(rect, make_v2(1, 1));
-            }
-
-            r_push_rect2_filled(background, rect, COLOR32_WHITE);
-
-            r_immediate_draw_end(image);
-        }
-
-        if (box->text.count > 0)
-        {
-            r_immediate_draw_t *text = r_immediate_draw_begin(&(r_immediate_draw_t){
-                .clip_rect = box->rect,
-                .texture   = g_ui.font->texture,
-            });
-
-            v2_t p = add(box->rect.min, g_ui.style.text_margins);
-
-            p = add(p, make_v2(0.0f, box->current_t));
-
-            string_t display_text = ui_display_text(box->text);
-
-            r_push_text(text, g_ui.font, add(p, make_v2(1, -1)), pack_rgba(0.0f, 0.0f, 0.0f, 0.5f), display_text);
-            r_push_text(text, g_ui.font, p, pack_color(box->foreground_color), display_text);
-
-            r_immediate_draw_end(text);
-        }
-    }
+    ui_draw_box(g_ui.root, rect2_infinity());
 
     r_pop_view();
 }

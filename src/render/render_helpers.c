@@ -43,6 +43,40 @@ void r_push_rect2_filled(r_immediate_draw_t *draw_call, rect2_t rect, uint32_t c
     r_immediate_index(draw_call, i3);
 }
 
+void r_push_rect2_filled_gradient(r_immediate_draw_t *draw_call, rect2_t rect, v4_t colors[4])
+{
+    uint32_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
+        .pos = { rect.min.x, rect.min.y, 0.0f }, 
+        .tex = { 0, 0 },
+        .col = pack_color(colors[0]),
+    });
+    uint32_t i1 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
+        .pos = { rect.max.x, rect.min.y, 0.0f }, 
+        .tex = { 1, 0 },
+        .col = pack_color(colors[1]), 
+    });
+    uint32_t i2 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
+        .pos = { rect.max.x, rect.max.y, 0.0f }, 
+        .tex = { 1, 1 },
+        .col = pack_color(colors[2]),
+    });
+    uint32_t i3 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
+        .pos = { rect.min.x, rect.max.y, 0.0f }, 
+        .tex = { 0, 1 },
+        .col = pack_color(colors[3]), 
+    });
+
+    // triangle 1
+    r_immediate_index(draw_call, i0);
+    r_immediate_index(draw_call, i1);
+    r_immediate_index(draw_call, i2);
+
+    // triangle 2
+    r_immediate_index(draw_call, i0);
+    r_immediate_index(draw_call, i2);
+    r_immediate_index(draw_call, i3);
+}
+
 void r_push_arrow(r_immediate_draw_t *draw_call, v3_t start, v3_t end, uint32_t color)
 {
     float head_size = 1.0f;

@@ -549,17 +549,24 @@ void game_tick(game_io_t *io, float dt)
     v2_t res = make_v2((float)res_x, (float)res_y);
 
     ui_style_t ui_style = {
-        .element_margins = { 4.0f, 4.0f },
-        .text_margins    = { 4.0f, 4.0f },
+        .text_color = make_v4(0.9f, 0.9f, 0.9f, 1.0f),
 
-        .panel_background_color            = make_v4(0.125f, 0.125f, 0.125f, 0.95f),
+        .outline_color = ui_gradient_from_rgba(0.35f, 0.35f, 0.65f, 1.0f),
 
-        .button_outline_color              = make_v4(0.35f, 0.35f, 0.65f, 1.0f),
-        .button_background_color           = make_v4(0.25f, 0.25f, 0.25f, 1.0f),
-        .button_background_highlight_color = make_v4(0.2f, 0.22f, 0.3f, 1.0f),
-        .button_background_active_color    = make_v4(0.3f, 0.32f, 0.4f, 1.0f),
+        .background_color = ui_gradient_vertical(
+            make_v4(0.15f, 0.15f, 0.15f, 1.0f),
+            make_v4(0.05f, 0.05f, 0.05f, 1.0f)
+        ),
 
-        .text_color                        = make_v4(0.9f, 0.9f, 0.9f, 1.0f),
+        .background_color_hot = ui_gradient_vertical(
+            make_v4(0.20f, 0.22f, 0.30f, 1.0f),
+            make_v4(0.15f, 0.18f, 0.27f, 1.0f)
+        ),
+
+        .background_color_active = ui_gradient_vertical(
+            make_v4(0.05f, 0.05f, 0.05f, 1.0f),
+            make_v4(0.15f, 0.15f, 0.15f, 1.0f) 
+        ),
     };
 
     bool ui_focused = ui_begin(&font, &ui_style);
@@ -745,7 +752,7 @@ void game_tick(game_io_t *io, float dt)
         }
         else
         {
-            ui_label(strlit("lightmap debugger disabled\nnoo:("));
+            ui_label(strlit("lightmap debugger disabled noo:("));
         }
 
         ui_checkbox(strlit("lightmap debugger"), &g_debug_lightmaps);

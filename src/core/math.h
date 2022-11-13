@@ -895,6 +895,24 @@ static inline bool rect2_contains_point(rect2_t rect, v2_t point)
             point.y >= rect.min.y && point.y < rect.max.y);
 }
 
+static inline rect2_t rect2_intersect(rect2_t a, rect2_t b)
+{
+    rect2_t result = {
+        .min = max(a.min, b.min),
+        .max = min(a.max, b.max),
+    };
+    return result;
+}
+
+static inline rect2_t rect2_infinity(void)
+{
+    rect2_t result = {
+        .min = { -FLT_MAX, -FLT_MAX },
+        .max = {  FLT_MAX,  FLT_MAX },
+    };
+    return result;
+}
+
 //
 // rect3
 //

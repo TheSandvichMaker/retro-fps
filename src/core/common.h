@@ -7,6 +7,8 @@
 #include "tls.h"
 #include "assert.h"
 
+#define DeferLoop(begin, end) for (int PASTE(_i_, __LINE__) = (begin, 0); !PASTE(_i_, __LINE__); PASTE(_i_, __LINE__) += (end, 1))
+
 #define array_expand(type, ...) ARRAY_COUNT(((type[]){ __VA_ARGS__ })), (type[]){ __VA_ARGS__ }
 
 // linked list macros

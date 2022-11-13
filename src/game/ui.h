@@ -5,25 +5,14 @@
 
 typedef uint64_t ui_key_t;
 
-typedef struct ui_style_t
-{
-    v2_t element_margins;
-    v2_t text_margins;
-
-    v4_t panel_background_color;
-    v4_t button_outline_color;
-    v4_t button_background_color;
-    v4_t button_background_highlight_color;
-    v4_t button_background_active_color;
-    v4_t text_color;
-} ui_style_t;
-
 typedef enum ui_flags_t
 {
     UI_CLICKABLE       = 1 << 0,
     UI_DRAGGABLE       = 1 << 1,
     UI_DRAW_BACKGROUND = 1 << 2,
     UI_DRAW_OUTLINE    = 1 << 3,
+    UI_DRAW_TEXT       = 1 << 4,
+    UI_CENTER_TEXT     = 1 << 5,
 } ui_flags_t;
 
 typedef enum ui_size_kind_t
@@ -33,6 +22,7 @@ typedef enum ui_size_kind_t
     UI_SIZE_TEXT_CONTENT,
     UI_SIZE_PERCENTAGE_OF_PARENT,
     UI_SIZE_SUM_OF_CHILDREN,
+    UI_SIZE_ASPECT_RATIO,
 } ui_size_kind_t;
 
 typedef struct ui_size_t
@@ -48,11 +38,98 @@ static inline ui_size_t ui_pct(float value, float strictness)
     return result;
 }
 
+static inline ui_size_t ui_aspect_ratio(float value, float strictness)
+{
+    ui_size_t result = { UI_SIZE_ASPECT_RATIO, value, strictness };
+    return result;
+}
+
 static inline ui_size_t ui_txt(float strictness)
 {
     ui_size_t result = { UI_SIZE_TEXT_CONTENT, 0.0f, strictness };
     return result;
 }
+
+typedef struct ui_gradient_t
+{
+    // bottom left, bottom right, top left, top right
+    v4_t colors[4];
+} ui_gradient_t;
+
+static inline ui_gradient_t ui_gradient_from_rgba(float r, float g, float b, float a)
+{
+    ui_gradient_t result = {
+        .colors = {
+            { r, g, b, a },
+            { r, g, b, a },
+            { r, g, b, a },
+            { r, g, b, a },
+        },
+    };
+    return result;
+}
+
+static inline ui_gradient_t ui_gradient_from_v4(v4_t color)
+{
+    ui_gradient_t result = {
+        .colors = {
+            color,
+            color,
+            color,
+            color,
+        },
+    };
+    return result;
+}
+
+static inline ui_gradient_t ui_gradient_vertical(v4_t top, v4_t bottom)
+{
+    ui_gradient_t result = {
+        .colors = {
+            bottom,
+            bottom,
+            top,
+            top,
+        },
+    };
+    return result;
+}
+
+static inline ui_gradient_t ui_gradient_horizontal(v4_t left, v4_t right)
+{
+    ui_gradient_t result = {
+        .colors = {
+            left,
+            right,
+            left,
+            right,
+        },
+    };
+    return result;
+}
+
+typedef struct ui_style_t
+{
+    v4_t text_color;
+
+    ui_gradient_t outline_color;
+
+    ui_gradient_t background_color;
+    ui_gradient_t background_color_hot;
+    ui_gradient_t background_color_active;
+} ui_style_t;
+
+typedef struct ui_size_node_t
+{
+    struct ui_size_node_t *next;
+    ui_size_t semantic_size[AXIS2_COUNT];
+} ui_size_node_t;
+
+typedef struct ui_style_node_t
+{
+    struct ui_style_node_t *next;
+    ui_style_t style;
+} ui_style_node_t;
 
 typedef struct ui_box_t
 {
@@ -70,14 +147,13 @@ typedef struct ui_box_t
     axis2_t layout_axis;
     ui_size_t semantic_size[AXIS2_COUNT];
 
+    float position_offset[AXIS2_COUNT];
     float computed_rel_position[AXIS2_COUNT];
     float computed_size[AXIS2_COUNT];
 
     resource_handle_t texture;
 
-    v4_t foreground_color;
-    v4_t background_color;
-    v4_t background_highlight_color;
+    ui_style_t style;
 
     rect2_t rect;
 
@@ -110,6 +186,10 @@ typedef struct ui_interaction_t
 } ui_interaction_t;
 
 bool ui_begin(struct bitmap_font_t *font, const ui_style_t *style);
+
+ui_style_t ui_get_style(void);
+void ui_push_style(const ui_style_t *style);
+void ui_pop_style(void);
 
 ui_box_t *ui_push_parent(ui_box_t *parent);
 ui_box_t *ui_pop_parent(void);
