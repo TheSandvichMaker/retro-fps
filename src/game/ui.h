@@ -213,7 +213,7 @@ void ui_window_end(void);
 #define UI_BackgroundColor(gradient) DeferLoop(ui_push_background_color(gradient), ui_pop_style())
 #define UI_Parent(parent) DeferLoop(ui_push_parent(parent), ui_pop_parent())
 
-ui_box_t *ui_label(string_t text);
+ui_box_t *ui_label(string_t text, uint32_t flags);
 ui_interaction_t ui_button(string_t text);
 ui_interaction_t ui_checkbox(string_t text, bool *toggle);
 // void ui_image(resource_handle_t image);

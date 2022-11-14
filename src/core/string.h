@@ -114,5 +114,6 @@ string16_t utf16_from_utf8(arena_t *arena, string_t   string);
 string_t   utf8_from_utf16(arena_t *arena, string16_t string);
 
 uint64_t string_hash(string_t string);
+uint64_t string_hash_with_seed(string_t string, uint64_t seed);
 
 #endif /* STRING_H */

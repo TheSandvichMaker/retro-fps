@@ -26,6 +26,10 @@ typedef struct bake_light_debug_ray_t
     v3_t o;
     v3_t d;
     float t;
+
+    v3_t lighting;
+
+    int recursion;
 } bake_light_debug_ray_t;
 
 typedef struct bake_light_debug_ray_list_t

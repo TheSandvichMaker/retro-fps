@@ -491,6 +491,11 @@ bool string_parse_float(string_t *string, float *value)
     return result;
 }
 
+uint64_t string_hash_with_seed(string_t string, uint64_t seed)
+{
+    return XXH3_64bits_withSeed(string.data, string.count, seed);
+}
+
 uint64_t string_hash(string_t string)
 {
     return XXH3_64bits(string.data, string.count);

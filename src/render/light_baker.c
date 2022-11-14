@@ -165,13 +165,19 @@ static v3_t evaluate_lighting(bake_light_thread_context_t *context, random_serie
     return lighting;
 }
 
-static v3_t pathtrace_recursively(bake_light_thread_context_t *context, random_series_t *entropy, v3_t o, v3_t d, map_brush_t *brush, map_poly_t *poly, int recursion)
+static v3_t pathtrace_recursively(bake_light_thread_context_t *context, random_series_t *entropy, v3_t o, v3_t d, map_brush_t *ancestor_brush, map_poly_t *ancestor_poly, map_brush_t *brush, map_poly_t *poly, int recursion)
 {
-    if (recursion == 0) 
+    if (recursion >= context->params.ray_recursion)
         return (v3_t){0,0,0};
 
     bake_light_params_t *params = &context->params;
     map_t *map = params->map;
+
+    arena_t *arena = &context->arena;
+    (void)arena;
+
+    bake_light_debug_data_t *debug = &context->debug;
+    (void)debug;
 
     intersect_params_t intersect_params = {
         .o                  = o,
@@ -227,11 +233,37 @@ static v3_t pathtrace_recursively(bake_light_thread_context_t *context, random_s
         bounce_dir = add(bounce_dir, mul(unrotated_dir.y, b));
         bounce_dir = add(bounce_dir, mul(unrotated_dir.z, n));
 
-        lighting = add(lighting, mul(albedo, pathtrace_recursively(context, entropy, hit_p, bounce_dir, intersect.brush, intersect.poly, recursion - 1)));
+        lighting = add(lighting, mul(albedo, pathtrace_recursively(context, entropy, hit_p, bounce_dir, ancestor_brush, ancestor_poly, intersect.brush, intersect.poly, recursion + 1)));
         color = mul(albedo, lighting);
+
+        lm_record_debug_ray(&debug->indirect_rays, arena, &(bake_light_debug_ray_t){
+            .spawn_brush = ancestor_brush,
+            .spawn_poly  = ancestor_poly,
+
+            .recursion = recursion,
+
+            .lighting = color,
+
+            .o = intersect_params.o,
+            .d = intersect_params.d,
+
+            .t = intersect.t,
+        });
     }
     else
     {
+        lm_record_debug_ray(&debug->indirect_rays, arena, &(bake_light_debug_ray_t){
+            .spawn_brush = ancestor_brush,
+            .spawn_poly  = ancestor_poly,
+
+            .recursion = recursion,
+
+            .o = intersect_params.o,
+            .d = intersect_params.d,
+
+            .t = FLT_MAX,
+        });
+
         // sky
         color = params->ambient_color; // (v3_t){ 1, 1, 1 };
     }
@@ -290,7 +322,6 @@ static void bake_light_job(job_context_t *job_context, void *userdata)
     arena_t *arena = &bake_context->arena;
 
     int ray_count     = params->ray_count;
-    int ray_recursion = params->ray_recursion;
 
     random_series_t entropy = {
         (uint32_t)(uintptr_t)plane,
@@ -337,7 +368,7 @@ static void bake_light_job(job_context_t *job_context, void *userdata)
             dir = add(dir, mul(unrotated_dir.y, b));
             dir = add(dir, mul(unrotated_dir.z, n));
 
-            indirect_lighting = add(indirect_lighting, pathtrace_recursively(bake_context, &entropy, world_p, dir, brush, poly, ray_recursion));
+            indirect_lighting = add(indirect_lighting, pathtrace_recursively(bake_context, &entropy, world_p, dir, brush, poly, brush, poly, 0));
         }
 
         indirect_lighting = mul(indirect_lighting, 1.0f / ray_count);
@@ -346,7 +377,8 @@ static void bake_light_job(job_context_t *job_context, void *userdata)
         indirect_lighting_pixels[y*w + x] = (v4_t){ .xyz = indirect_lighting };
     }
 
-    for (int k = 0; k < 32; k++)
+#if  0
+    for (int k = 0; k < 32 / LIGHTMAP_SCALE; k++)
     {
         for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++)
@@ -392,6 +424,7 @@ static void bake_light_job(job_context_t *job_context, void *userdata)
             indirect_lighting_pixels[y*w + x].xyz = color;
         }
     }
+#endif
 
     for (int k = 0; k < 1; k++)
     {

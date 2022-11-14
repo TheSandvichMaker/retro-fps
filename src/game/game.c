@@ -681,6 +681,95 @@ void game_tick(game_io_t *io, float dt)
     static map_plane_t *selected_plane = NULL;
     static map_poly_t  *selected_poly  = NULL;
 
+    static bool show_direct_light_rays;
+    static bool show_indirect_light_rays;
+
+    static int min_display_recursion = 0;
+    static int max_display_recursion = 0;
+
+    UI_Window(strlit("lightmap debugger panel"), 0, 32, 32, 300, 512)
+    {
+        ui_checkbox(strlit("enabled"), &g_debug_lightmaps);
+        ui_checkbox(strlit("show direct light rays"), &show_direct_light_rays);
+        ui_checkbox(strlit("show indirect light rays"), &show_indirect_light_rays);
+
+        {
+            ui_box_t *container = ui_box(strlit("container1"), 0);
+            ui_set_size(container, AXIS2_X, ui_pct(1.0f, 1.0f));
+            ui_set_size(container, AXIS2_Y, ui_txt(1.0f));
+            container->layout_axis = AXIS2_X;
+
+            UI_Parent(container)
+            {
+                bool decrement = ui_button(strlit(" < ")).released;
+                ui_spacer(ui_pct(1.0f, 0.0f));
+                ui_label(string_format(temp, "min recursion level: %d", min_display_recursion), UI_CENTER_TEXT);
+                ui_spacer(ui_pct(1.0f, 0.0f));
+                bool increment = ui_button(strlit(" > ")).released;
+
+                if (decrement)
+                {
+                    min_display_recursion -= 1;
+                }
+
+                if (increment)
+                {
+                    min_display_recursion += 1;
+                }
+            }
+        }
+
+        {
+            ui_box_t *container = ui_box(strlit("container2"), 0);
+            ui_set_size(container, AXIS2_X, ui_pct(1.0f, 1.0f));
+            ui_set_size(container, AXIS2_Y, ui_txt(1.0f));
+            container->layout_axis = AXIS2_X;
+
+            UI_Parent(container)
+            {
+                bool decrement = ui_button(strlit(" < ")).released;
+                ui_spacer(ui_pct(1.0f, 0.0f));
+                ui_label(string_format(temp, "max recursion level: %d", max_display_recursion), UI_CENTER_TEXT);
+                ui_spacer(ui_pct(1.0f, 0.0f));
+                bool increment = ui_button(strlit(" > ")).released;
+
+                if (decrement)
+                {
+                    max_display_recursion -= 1;
+                }
+
+                if (increment)
+                {
+                    max_display_recursion += 1;
+                }
+            }
+        }
+
+        if (selected_poly)
+        {
+            map_poly_t *poly = selected_poly;
+
+            texture_desc_t desc;
+            render->describe_texture(poly->lightmap, &desc);
+
+            ui_label(string_format(temp, "debug ordinal: %d", selected_plane->debug_ordinal), 0);
+            ui_label(string_format(temp, "resolution: %u x %u", desc.w, desc.h), 0);
+
+            ui_box_t *image_viewer = ui_box(strlit("lightmap image"), UI_DRAW_BACKGROUND);
+            if (desc.w >= desc.h)
+            {
+                ui_set_size(image_viewer, AXIS2_X, ui_pct(1.0f, 1.0f));
+                ui_set_size(image_viewer, AXIS2_Y, ui_aspect_ratio((float)desc.h / (float)desc.w, 1.0f));
+            }
+            else
+            {
+                ui_set_size(image_viewer, AXIS2_X, ui_aspect_ratio((float)desc.w / (float)desc.h, 1.0f));
+                ui_set_size(image_viewer, AXIS2_Y, ui_pct(1.0f, 1.0f));
+            }
+            image_viewer->texture = poly->lightmap;
+        }
+    }
+
     if (g_debug_lightmaps)
     {
         r_command_identifier(strlit("lightmap debug"));
@@ -750,19 +839,44 @@ void game_tick(game_io_t *io, float dt)
             r_push_line(draw_call, square_v1, square_v2, pack_rgb(0.5f, 0.0f, 0.5f));
         }
 
-        for (bake_light_debug_ray_t *ray = bake_results.debug_data.direct_rays.first;
-             ray;
-             ray = ray->next)
+        if (show_direct_light_rays)
         {
-            if (ray->spawn_poly == selected_poly)
+            for (bake_light_debug_ray_t *ray = bake_results.debug_data.direct_rays.first;
+                 ray;
+                 ray = ray->next)
             {
-                if (ray->t != FLT_MAX)
+                if (ray->spawn_poly == selected_poly)
                 {
-                    r_push_line(draw_call, ray->o, add(ray->o, mul(ray->t, ray->d)), COLOR32_RED);
+                    if (ray->t != FLT_MAX)
+                    {
+                        r_push_line(draw_call, ray->o, add(ray->o, mul(ray->t, ray->d)), COLOR32_RED);
+                    }
+                    else
+                    {
+                        r_push_line(draw_call, ray->o, add(ray->o, mul(15.0f, ray->d)), COLOR32_GREEN);
+                    }
                 }
-                else
+            }
+        }
+
+        if (show_indirect_light_rays)
+        {
+            for (bake_light_debug_ray_t *ray = bake_results.debug_data.indirect_rays.first;
+                 ray;
+                 ray = ray->next)
+            {
+                if (ray->spawn_poly == selected_poly &&
+                    ray->recursion >= min_display_recursion &&
+                    ray->recursion <= max_display_recursion)
                 {
-                    r_push_line(draw_call, ray->o, add(ray->o, mul(15.0f, ray->d)), COLOR32_GREEN);
+                    if (ray->t != FLT_MAX)
+                    {
+                        r_push_arrow(draw_call, ray->o, add(ray->o, mul(ray->t, ray->d)), pack_rgb(ray->lighting.x, ray->lighting.y, ray->lighting.z));
+                    }
+                    else
+                    {
+                        // r_push_arrow(draw_call, ray->o, add(ray->o, mul(15.0f, ray->d)), COLOR32_YELLOW);
+                    }
                 }
             }
         }
@@ -789,35 +903,6 @@ void game_tick(game_io_t *io, float dt)
         r_push_rect2_filled(draw_call, inner_rect, COLOR32_WHITE);
 
         r_pop_view();
-    }
-
-    UI_Window(strlit("lightmap debugger panel"), 0, 32, 32, 300, 512)
-    {
-        ui_checkbox(strlit("enabled"), &g_debug_lightmaps);
-
-        if (selected_poly)
-        {
-            map_poly_t *poly = selected_poly;
-
-            texture_desc_t desc;
-            render->describe_texture(poly->lightmap, &desc);
-
-            ui_label(string_format(temp, "debug ordinal: %d", selected_plane->debug_ordinal));
-            ui_label(string_format(temp, "resolution: %u x %u", desc.w, desc.h));
-
-            ui_box_t *image_viewer = ui_box(strlit("lightmap image"), UI_DRAW_BACKGROUND);
-            if (desc.w >= desc.h)
-            {
-                ui_set_size(image_viewer, AXIS2_X, ui_pct(1.0f, 1.0f));
-                ui_set_size(image_viewer, AXIS2_Y, ui_aspect_ratio((float)desc.h / (float)desc.w, 1.0f));
-            }
-            else
-            {
-                ui_set_size(image_viewer, AXIS2_X, ui_aspect_ratio((float)desc.w / (float)desc.h, 1.0f));
-                ui_set_size(image_viewer, AXIS2_Y, ui_pct(1.0f, 1.0f));
-            }
-            image_viewer->texture = poly->lightmap;
-        }
     }
 
     ui_end(dt);

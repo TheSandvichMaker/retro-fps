@@ -5,17 +5,6 @@
 #include "render/render.h"
 #include "render/render_helpers.h"
 
-static inline string_t ui_display_text(string_t key_string)
-{
-    string_t result = substring(key_string, 0, string_find_first(key_string, strlit("##")));
-    return result;
-}
-
-static inline ui_key_t ui_key(string_t string)
-{
-    return string_hash(string);
-}
-
 typedef struct ui_state_t
 {
     arena_t frame_arena;
@@ -52,6 +41,18 @@ typedef struct ui_state_t
 } ui_state_t;
 
 static ui_state_t g_ui;
+
+static inline string_t ui_display_text(string_t key_string)
+{
+    string_t result = substring(key_string, 0, string_find_first(key_string, strlit("##")));
+    return result;
+}
+
+static inline ui_key_t ui_key(string_t string)
+{
+    ui_key_t seed = (g_ui.current_parent ? g_ui.current_parent->key : 0);
+    return string_hash_with_seed(string, seed);
+}
 
 static ui_box_t *ui_get_or_create_box(string_t key_string)
 {
@@ -94,11 +95,11 @@ static ui_box_t *ui_get_or_create_box(string_t key_string)
 
             box->next_in_hash = g_ui.box_hash[index];
             g_ui.box_hash[index] = box;
-
-            box->key        = key;
-            box->key_string = string_copy(&g_ui.frame_arena, key_string);
         }
     }
+
+    box->key        = key;
+    box->key_string = string_copy(&g_ui.frame_arena, key_string);
 
     box->debug_ordinal = g_ui.next_box_debug_ordinal++;
 
@@ -394,9 +395,9 @@ void ui_window_end(void)
     ui_pop_parent();
 }
 
-ui_box_t *ui_label(string_t text)
+ui_box_t *ui_label(string_t text, uint32_t flags)
 {
-    ui_box_t *box = ui_box(text, UI_DRAW_TEXT);
+    ui_box_t *box = ui_box(text, UI_DRAW_TEXT|flags);
 
     ui_set_size(box, AXIS2_X, ui_txt(1.0f));
     ui_set_size(box, AXIS2_Y, ui_txt(1.0f));
@@ -406,8 +407,9 @@ ui_box_t *ui_label(string_t text)
 
 ui_interaction_t ui_button(string_t text)
 {
-    ui_box_t *box = ui_box(text, UI_CLICKABLE|UI_DRAW_BACKGROUND|UI_DRAW_OUTLINE|UI_DRAW_TEXT);
+    ui_box_t *box = ui_box(text, UI_CLICKABLE|UI_DRAW_BACKGROUND|UI_DRAW_OUTLINE|UI_DRAW_TEXT|UI_CENTER_TEXT);
 
+    ui_set_size(box, AXIS2_X, ui_txt(1.0f));
     ui_set_size(box, AXIS2_Y, ui_txt(1.0f));
 
     box->hot_t    =  0.0f;
@@ -450,7 +452,7 @@ ui_interaction_t ui_checkbox(string_t text, bool *toggle)
     ui_set_size(button, AXIS2_X, ui_aspect_ratio(1.0f, 1.0f));
     ui_set_size(button, AXIS2_Y, ui_pct(1.0f, 1.0f));
 
-    ui_label(text);
+    ui_label(text, 0);
 
     ui_end_container();
 
@@ -748,7 +750,7 @@ static void ui_process_interactions(void)
 
     for (ui_box_t *box = g_ui.root; box; box = ui_box_next_depth_first_pre_order(box))
     {
-        if (rect2_contains_point(box->rect, g_ui.mouse_p))
+        if ((box->flags & UI_CLICKABLE) && rect2_contains_point(box->rect, g_ui.mouse_p))
         {
             next_hot = box;
         }
