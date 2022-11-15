@@ -65,7 +65,7 @@ image_t load_image(arena_t *arena, string_t path)
     return result;
 }
 
-bool split_image_into_cubemap_faces(image_t source, image_t *faces)
+bool split_image_into_cubemap_faces(const image_t *source, cubemap_t *cubemap)
 {
     /*      ------
      *      | +y |
@@ -83,21 +83,16 @@ bool split_image_into_cubemap_faces(image_t source, image_t *faces)
      * faces[5] = -z
      */
 
-    unsigned w = source.w / 4;
-    unsigned h = source.h / 3;
+    unsigned w = source->w / 4;
+    unsigned h = source->h / 3;
 
-    if (source.w % w != 0 ||
-        source.h % h != 0)
+    if (source->w % w != 0 ||
+        source->h % h != 0)
     {
         return false;
     }
 
-    typedef struct cubemap_index_t
-    {
-        int x, y;
-    } cubemap_index_t;
-
-    cubemap_index_t face_to_index[] = {
+    v2i_t face_to_index[] = {
         { 2, 1 }, // +x
         { 0, 1 }, // -x
         { 1, 0 }, // +y
@@ -106,19 +101,19 @@ bool split_image_into_cubemap_faces(image_t source, image_t *faces)
         { 1, 3 }, // -z
     };
 
-    uint32_t *pixels = source.pixels;
+    uint32_t *pixels = source->pixels;
+
+    cubemap->w = w;
+    cubemap->h = h;
+    cubemap->pitch = source->pitch;
 
     for (size_t i = 0; i < 6; i++)
     {
-        cubemap_index_t index = face_to_index[i];
+        v2i_t index = face_to_index[i];
         int x_offset = w*index.x;
         int y_offset = h*index.y;
 
-        image_t *face = &faces[i];
-        face->pitch  = source.pitch;
-        face->w      = w;
-        face->h      = h;
-        face->pixels = pixels + y_offset*face->pitch + x_offset;
+        cubemap->pixels[i] = pixels + y_offset*source->pitch + x_offset;
     }
 
     return true;

@@ -181,7 +181,8 @@ static inline void ui_set_size(ui_box_t *box, axis2_t axis, ui_size_t size)
 typedef struct ui_interaction_t
 {
     ui_box_t *box;
-    v2_t mouse;
+    v2_t mouse_p;
+    v2_t press_p;
     v2_t drag_delta;
     bool clicked;
     bool double_clicked;
@@ -216,6 +217,7 @@ void ui_window_end(void);
 ui_box_t *ui_label(string_t text, uint32_t flags);
 ui_interaction_t ui_button(string_t text);
 ui_interaction_t ui_checkbox(string_t text, bool *toggle);
+void ui_increment_decrement(string_t text, int *value, int min, int max);
 // void ui_image(resource_handle_t image);
 // void ui_image_scaled(resource_handle_t image, v2_t size);
 // void ui_image_viewer(resource_handle_t image);

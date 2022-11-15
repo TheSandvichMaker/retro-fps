@@ -192,7 +192,6 @@ bool ui_begin(bitmap_font_t *font, const ui_style_t *style)
         if (g_ui.hot)
         {
             g_ui.active = g_ui.hot;
-
             g_ui.has_focus = g_ui.hot != g_ui.root;
         }
         else
@@ -210,7 +209,8 @@ ui_interaction_t ui_interaction_from_box(ui_box_t *box)
 
     if (box == g_ui.hot)
     {
-        result.mouse         = g_ui.mouse_p;
+        result.mouse_p       = g_ui.mouse_p;
+        result.press_p       = g_ui.press_p;
         result.drag_delta    = g_ui.mouse_dp;
         result.clicked       = ui_button_pressed(BUTTON_FIRE1);
         result.right_clicked = ui_button_pressed(BUTTON_FIRE2);
@@ -472,6 +472,37 @@ ui_interaction_t ui_checkbox(string_t text, bool *toggle)
     // button->background_highlight_color = toggled ? g_ui.style.button_background_active_color : g_ui.style.button_background_highlight_color;
 
     return interaction;
+}
+
+void ui_increment_decrement(string_t text, int *value, int min, int max)
+{
+    ui_box_t *container = ui_box(string_format(temp, "%.*s##container", strexpand(text)), 0);
+    ui_set_size(container, AXIS2_X, ui_pct(1.0f, 1.0f));
+    ui_set_size(container, AXIS2_Y, ui_txt(1.0f));
+    container->layout_axis = AXIS2_X;
+
+    UI_Parent(container)
+    {
+        bool decrement = ui_button(strlit(" < ")).released;
+        ui_spacer(ui_pct(1.0f, 0.0f));
+        ui_label(string_format(temp, "%.*s: %d", strexpand(text), *value), UI_CENTER_TEXT);
+        ui_spacer(ui_pct(1.0f, 0.0f));
+        bool increment = ui_button(strlit(" > ")).released;
+
+        if (decrement)
+        {
+            *value -= 1;
+            if (*value < min)
+                *value = min;
+        }
+
+        if (increment)
+        {
+            *value += 1;
+            if (*value > max)
+                *value = max;
+        }
+    }
 }
 
 static inline ui_box_t *ui_box_next_depth_first_pre_order(ui_box_t *node)
@@ -816,6 +847,38 @@ static void ui_draw_box(ui_box_t *box, rect2_t clip_rect)
             r_push_rect2_filled(background, v0, pack_color(color));
             r_push_rect2_filled(background, v1, pack_color(color));
         }
+
+#if 0
+        if (has_flags_any(box->flags, UI_CLICKABLE|UI_DRAGGABLE) && box == g_ui.active)
+        {
+            v4_t color = style->outline_color.colors[0];
+
+            rect2_t h0 = {
+                .min = { box->rect.min.x,     box->rect.min.y     },
+                .max = { box->rect.max.x,     box->rect.min.y + 1 },
+            };
+
+            rect2_t h1 = {
+                .min = { box->rect.min.x,     box->rect.max.y - 1 },
+                .max = { box->rect.max.x,     box->rect.max.y     },
+            };
+
+            rect2_t v0 = {
+                .min = { box->rect.min.x,     box->rect.min.y     },
+                .max = { box->rect.min.x + 1, box->rect.max.y     },
+            };
+
+            rect2_t v1 = {
+                .min = { box->rect.max.x - 1, box->rect.min.y     },
+                .max = { box->rect.max.x,     box->rect.max.y     },
+            };
+
+            r_push_rect2_filled(background, h0, pack_color(color));
+            r_push_rect2_filled(background, h1, pack_color(color));
+            r_push_rect2_filled(background, v0, pack_color(color));
+            r_push_rect2_filled(background, v1, pack_color(color));
+        }
+#endif
 
         r_immediate_draw_end(background);
     }

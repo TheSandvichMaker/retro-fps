@@ -304,6 +304,7 @@ static inline v4_t unpack_color(uint32_t color)
     result.y = rcp_255*(float)((color >>  8) & 0xFF);
     result.z = rcp_255*(float)((color >> 16) & 0xFF);
     result.w = rcp_255*(float)((color >> 24) & 0xFF);
+
     return result;
 }
 

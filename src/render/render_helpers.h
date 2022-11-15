@@ -12,7 +12,9 @@
 
 // r_push_* functions only put vertices, it is up to you to set the right primitive topology
 void r_push_line         (struct r_immediate_draw_t *draw_call, v3_t start, v3_t end, uint32_t color);
-void r_push_arrow        (struct r_immediate_draw_t *draw_call, v3_t start, v3_t end, uint32_t color);
+void r_push_line_gradient(struct r_immediate_draw_t *draw_call, v3_t start, v3_t end, v4_t start_color, v4_t end_color);
+void r_push_arrow         (struct r_immediate_draw_t *draw_call, v3_t start, v3_t end, v4_t color);
+void r_push_arrow_gradient(struct r_immediate_draw_t *draw_call, v3_t start, v3_t end, v4_t start_color, v4_t end_color);
 void r_push_rect2_filled (struct r_immediate_draw_t *draw_call, rect2_t rect, uint32_t color);
 void r_push_rect2_filled_gradient(struct r_immediate_draw_t *draw_call, rect2_t rect, v4_t colors[4]);
 void r_push_rect3_outline(struct r_immediate_draw_t *draw_call, rect3_t bounds, uint32_t color);

@@ -9,6 +9,14 @@ void r_push_line(r_immediate_draw_t *draw_call, v3_t start, v3_t end, uint32_t c
     r_immediate_index(draw_call, i1);
 }
 
+void r_push_line_gradient(r_immediate_draw_t *draw_call, v3_t start, v3_t end, v4_t start_color, v4_t end_color)
+{
+    uint32_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ .pos = start, .col = pack_color(start_color) });
+    r_immediate_index(draw_call, i0);
+    uint32_t i1 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ .pos = end,   .col = pack_color(end_color) });
+    r_immediate_index(draw_call, i1);
+}
+
 void r_push_rect2_filled(r_immediate_draw_t *draw_call, rect2_t rect, uint32_t color)
 {
     uint32_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
@@ -77,7 +85,7 @@ void r_push_rect2_filled_gradient(r_immediate_draw_t *draw_call, rect2_t rect, v
     r_immediate_index(draw_call, i3);
 }
 
-void r_push_arrow(r_immediate_draw_t *draw_call, v3_t start, v3_t end, uint32_t color)
+void r_push_arrow_gradient(r_immediate_draw_t *draw_call, v3_t start, v3_t end, v4_t start_color, v4_t end_color)
 {
     float head_size = 1.0f;
 
@@ -108,12 +116,17 @@ void r_push_arrow(r_immediate_draw_t *draw_call, v3_t start, v3_t end, uint32_t 
 
         v3_t v0 = add(shaft_end, add(mul(t, head_size*s0), mul(b, head_size*c0)));
         v3_t v1 = add(shaft_end, add(mul(t, head_size*s1), mul(b, head_size*c1)));
-        r_push_line(draw_call, v0, v1, color);
+        r_push_line_gradient(draw_call, v0, v1, end_color, end_color);
 
-        r_push_line(draw_call, v0, end, color);
+        r_push_line_gradient(draw_call, v0, end, end_color, end_color);
     }
 
-    r_push_line(draw_call, start, shaft_end, color);
+    r_push_line_gradient(draw_call, start, shaft_end, start_color, end_color);
+}
+
+void r_push_arrow(r_immediate_draw_t *draw_call, v3_t start, v3_t end, v4_t color)
+{
+    r_push_arrow_gradient(draw_call, start, end, color, color);
 }
 
 void r_push_rect3_outline(r_immediate_draw_t *draw_call, rect3_t bounds, uint32_t color)

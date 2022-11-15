@@ -3,52 +3,82 @@
 
 #include "core/api_types.h"
 
-typedef struct bake_light_params_t
+typedef struct lum_params_t
 {
     arena_t *arena;
+
     struct map_t *map;
 
     int ray_count;      // number of diffuse rays per lightmap pixel
     int ray_recursion;  // maximum recursion depth for indirect lighting
 
+    struct image_t *skybox;
+
     v3_t sun_direction;
     v3_t sun_color;
-    v3_t ambient_color;
-} bake_light_params_t;
+    v3_t sky_color;
+} lum_params_t;
 
-typedef struct bake_light_debug_ray_t
+typedef struct lum_light_sample_t
 {
-    struct bake_light_debug_ray_t *next;
+    float shadow_ray_t;
 
-    struct map_brush_t *spawn_brush;
-    struct map_poly_t  *spawn_poly;
-
-    v3_t o;
+    v3_t contribution;
     v3_t d;
-    float t;
+} lum_light_sample_t;
 
-    v3_t lighting;
-
-    int recursion;
-} bake_light_debug_ray_t;
-
-typedef struct bake_light_debug_ray_list_t
+typedef struct lum_path_vertex_t
 {
-    bake_light_debug_ray_t *first;
-    bake_light_debug_ray_t *last;
-} bake_light_debug_ray_list_t;
+    struct lum_path_vertex_t *next;
+    struct lum_path_vertex_t *prev;
 
-typedef struct bake_light_debug_data_t
+    struct map_brush_t *brush;
+    struct map_poly_t *poly;
+
+    lum_light_sample_t *light_samples;
+
+    v3_t contribution;
+    v3_t throughput;
+    v3_t o;
+
+    unsigned light_sample_count;
+} lum_path_vertex_t;
+
+typedef struct lum_path_t
 {
-    bake_light_debug_ray_list_t   direct_rays;
-    bake_light_debug_ray_list_t indirect_rays;
-} bake_light_debug_data_t;
+    struct lum_path_t *next;
 
-typedef struct bake_light_results_t
+    v2i_t source_pixel;
+
+    v3_t contribution;
+
+    lum_path_vertex_t *first_vertex;
+    lum_path_vertex_t * last_vertex;
+} lum_path_t;
+
+// TODO: Lightmap texture debug info to map
+// from pixel to path easily
+//
+// TODO: Switch to flat arrays of data for
+// debug data and map_t data, so that I can
+// refer to stuff by index instead of having
+// a pointer rat's nest, which also makes it
+// trivial to map between data.
+//
+// unsigned poly_to_debug_texture_map[...];
+// unsigned debug_texture_to_poly_map[...];
+
+typedef struct lum_debug_data_t
 {
-    bake_light_debug_data_t debug_data;
-} bake_light_results_t;
+    lum_path_t *first_path;
+    lum_path_t *last_path;
+} lum_debug_data_t;
 
-void bake_lighting(const bake_light_params_t *params, bake_light_results_t *results);
+typedef struct lum_results_t
+{
+    lum_debug_data_t debug_data;
+} lum_results_t;
+
+void bake_lighting(const lum_params_t *params, lum_results_t *results);
 
 #endif /* LIGHT_BAKER_H */

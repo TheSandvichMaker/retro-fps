@@ -169,6 +169,12 @@ static inline float smootherstep(float x)
     return result;
 }
 
+// v2i_t
+
+static inline bool v2i_are_equal(v2i_t a, v2i_t b)
+{
+    return a.x == b.x && a.y == b.y;
+}
 
 // v2_t
 
@@ -859,6 +865,31 @@ static inline m4x4_t make_perspective_matrix(float vfov, float w_over_h, float n
 }
 
 //
+// rect2i
+//
+
+static inline bool rect2i_contains_inclusive(rect2i_t rect, v2i_t p)
+{
+    return (p.x >= rect.min.x && p.x <= rect.max.x &&
+            p.y >= rect.min.y && p.y <= rect.max.y);
+}
+
+static inline bool rect2i_contains_exclusive(rect2i_t rect, v2i_t p)
+{
+    return (p.x >= rect.min.x && p.x < rect.max.x &&
+            p.y >= rect.min.y && p.y < rect.max.y);
+}
+
+static inline v2i_t rect2i_get_dim(rect2i_t rect)
+{
+    v2i_t result = {
+        rect.max.x - rect.min.x,
+        rect.max.y - rect.min.y,
+    };
+    return result;
+}
+
+//
 // rect2
 //
 
@@ -909,6 +940,15 @@ static inline rect2_t rect2_infinity(void)
     rect2_t result = {
         .min = { -FLT_MAX, -FLT_MAX },
         .max = {  FLT_MAX,  FLT_MAX },
+    };
+    return result;
+}
+
+static inline v2_t rect2_get_dim(rect2_t rect)
+{
+    v2_t result = {
+        rect.max.x - rect.min.x,
+        rect.max.y - rect.min.y,
     };
     return result;
 }

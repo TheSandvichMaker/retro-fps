@@ -23,7 +23,7 @@ static bitmap_font_t font;
 static size_t map_vertex_count;
 static v3_t map_vertices[MAX_VERTICES];
 
-static bake_light_results_t bake_results;
+static lum_results_t bake_results;
 
 v3_t forward_vector_from_pitch_yaw(float pitch, float yaw)
 {
@@ -442,12 +442,12 @@ void game_init(void)
     world->map = load_map(&world->arena, strlit("gamedata/maps/test.map"));
 
 #if 1
-    bake_lighting(&(bake_light_params_t) {
+    bake_lighting(&(lum_params_t) {
         .arena         = &world->arena,
         .map           = world->map,
         .sun_direction = make_v3(0.25f, 0.75f, 1),
         .sun_color     = mul(0.0f, make_v3(1, 1, 0.75f)),
-        .ambient_color = mul(0.0f, make_v3(0.15f, 0.30f, 0.62f)),
+        .sky_color     = mul(0.0f, make_v3(0.15f, 0.30f, 0.62f)),
 
         // TODO: Have a macro for optimization level to check instead of DEBUG
 #if DEBUG
@@ -681,69 +681,28 @@ void game_tick(game_io_t *io, float dt)
     static map_plane_t *selected_plane = NULL;
     static map_poly_t  *selected_poly  = NULL;
 
+    static bool pixel_selection_active = false;
+    static rect2i_t selected_pixels = { 0 };
+
     static bool show_direct_light_rays;
     static bool show_indirect_light_rays;
+
+    static bool fullbright_rays = false;
+    static bool no_ray_depth_test = false;
 
     static int min_display_recursion = 0;
     static int max_display_recursion = 0;
 
-    UI_Window(strlit("lightmap debugger panel"), 0, 32, 32, 300, 512)
+    UI_Window(strlit("lightmap debugger panel"), 0, 32, 32, 500, 800)
     {
         ui_checkbox(strlit("enabled"), &g_debug_lightmaps);
         ui_checkbox(strlit("show direct light rays"), &show_direct_light_rays);
         ui_checkbox(strlit("show indirect light rays"), &show_indirect_light_rays);
+        ui_checkbox(strlit("fullbright rays"), &fullbright_rays);
+        ui_checkbox(strlit("no ray depth test"), &no_ray_depth_test);
 
-        {
-            ui_box_t *container = ui_box(strlit("container1"), 0);
-            ui_set_size(container, AXIS2_X, ui_pct(1.0f, 1.0f));
-            ui_set_size(container, AXIS2_Y, ui_txt(1.0f));
-            container->layout_axis = AXIS2_X;
-
-            UI_Parent(container)
-            {
-                bool decrement = ui_button(strlit(" < ")).released;
-                ui_spacer(ui_pct(1.0f, 0.0f));
-                ui_label(string_format(temp, "min recursion level: %d", min_display_recursion), UI_CENTER_TEXT);
-                ui_spacer(ui_pct(1.0f, 0.0f));
-                bool increment = ui_button(strlit(" > ")).released;
-
-                if (decrement)
-                {
-                    min_display_recursion -= 1;
-                }
-
-                if (increment)
-                {
-                    min_display_recursion += 1;
-                }
-            }
-        }
-
-        {
-            ui_box_t *container = ui_box(strlit("container2"), 0);
-            ui_set_size(container, AXIS2_X, ui_pct(1.0f, 1.0f));
-            ui_set_size(container, AXIS2_Y, ui_txt(1.0f));
-            container->layout_axis = AXIS2_X;
-
-            UI_Parent(container)
-            {
-                bool decrement = ui_button(strlit(" < ")).released;
-                ui_spacer(ui_pct(1.0f, 0.0f));
-                ui_label(string_format(temp, "max recursion level: %d", max_display_recursion), UI_CENTER_TEXT);
-                ui_spacer(ui_pct(1.0f, 0.0f));
-                bool increment = ui_button(strlit(" > ")).released;
-
-                if (decrement)
-                {
-                    max_display_recursion -= 1;
-                }
-
-                if (increment)
-                {
-                    max_display_recursion += 1;
-                }
-            }
-        }
+        ui_increment_decrement(strlit("min recursion level"), &min_display_recursion, 0, 16);
+        ui_increment_decrement(strlit("max recursion level"), &max_display_recursion, 0, 16);
 
         if (selected_poly)
         {
@@ -754,8 +713,27 @@ void game_tick(game_io_t *io, float dt)
 
             ui_label(string_format(temp, "debug ordinal: %d", selected_plane->debug_ordinal), 0);
             ui_label(string_format(temp, "resolution: %u x %u", desc.w, desc.h), 0);
+            if (pixel_selection_active)
+            {
+                ui_label(string_format(temp, "selected pixel region: (%d, %d) (%d, %d)", 
+                                       selected_pixels.min.x,
+                                       selected_pixels.min.y,
+                                       selected_pixels.max.x,
+                                       selected_pixels.max.y), 0);
 
-            ui_box_t *image_viewer = ui_box(strlit("lightmap image"), UI_DRAW_BACKGROUND);
+                if (ui_button(strlit("clear selection")).released)
+                {
+                    pixel_selection_active = false;
+                    selected_pixels = (rect2i_t){ 0 };
+                }
+            }
+            else
+            {
+                ui_spacer(ui_txt(1.0f));
+                ui_spacer(ui_txt(1.0f));
+            }
+
+            ui_box_t *image_viewer = ui_box(strlit("lightmap image"), UI_CLICKABLE|UI_DRAGGABLE|UI_DRAW_BACKGROUND);
             if (desc.w >= desc.h)
             {
                 ui_set_size(image_viewer, AXIS2_X, ui_pct(1.0f, 1.0f));
@@ -767,6 +745,54 @@ void game_tick(game_io_t *io, float dt)
                 ui_set_size(image_viewer, AXIS2_Y, ui_pct(1.0f, 1.0f));
             }
             image_viewer->texture = poly->lightmap;
+
+            ui_interaction_t interaction = ui_interaction_from_box(image_viewer);
+            if (interaction.hovering || pixel_selection_active)
+            {
+                v2_t rel_press_p = sub(interaction.press_p, image_viewer->rect.min);
+                v2_t rel_mouse_p = sub(interaction.mouse_p, image_viewer->rect.min);
+
+                v2_t rect_dim   = rect2_get_dim(image_viewer->rect);
+                v2_t pixel_size = div(rect_dim, make_v2((float)desc.w, (float)desc.h));
+
+                UI_Parent(image_viewer)
+                {
+                    ui_box_t *selection_highlight = ui_box(strlit("selection highlight"), UI_DRAW_OUTLINE);
+                    selection_highlight->style.outline_color = ui_gradient_from_rgba(1, 0, 0, 1);
+
+                    v2_t selection_start = { rel_press_p.x, rel_press_p.y };
+                    v2_t selection_end   = { rel_mouse_p.x, rel_mouse_p.y };
+                    
+                    rect2i_t pixel_selection = { 
+                        .min = {
+                            (int)(selection_start.x / pixel_size.x),
+                            (int)(selection_start.y / pixel_size.y),
+                        },
+                        .max = {
+                            (int)(selection_end.x / pixel_size.x) + 1,
+                            (int)(selection_end.y / pixel_size.y) + 1,
+                        },
+                    };
+
+                    if (pixel_selection.max.y < pixel_selection.min.y)
+                        SWAP(int, pixel_selection.max.y, pixel_selection.min.y);
+
+                    if (interaction.dragging)
+                    {
+                        pixel_selection_active = true;
+                        selected_pixels = pixel_selection;
+                    }
+
+                    v2i_t selection_dim = rect2i_get_dim(selected_pixels);
+
+                    ui_set_size(selection_highlight, AXIS2_X, ui_pixels((float)selection_dim.x*pixel_size.x, 1.0f));
+                    ui_set_size(selection_highlight, AXIS2_Y, ui_pixels((float)selection_dim.y*pixel_size.y, 1.0f));
+
+                    selection_highlight->position_offset[AXIS2_X] = (float)selected_pixels.min.x * pixel_size.x;
+                    selection_highlight->position_offset[AXIS2_Y] = rect_dim.y - (float)(selected_pixels.min.y + selection_dim.y) * pixel_size.y;
+
+                }
+            }
         }
     }
 
@@ -776,7 +802,7 @@ void game_tick(game_io_t *io, float dt)
         r_immediate_draw_t *draw_call = r_immediate_draw_begin(&(r_immediate_draw_t){
             .topology   = R_PRIMITIVE_TOPOLOGY_LINELIST,
             .depth_bias = 0.005f,
-            .depth_test = true,
+            .depth_test = !no_ray_depth_test,
         });
 
         if (g_cursor_locked)
@@ -828,8 +854,8 @@ void game_tick(game_io_t *io, float dt)
 
             push_poly_wireframe(draw_call, &selected_brush->polys[plane->poly_index], pack_rgba(0.0f, 0.0f, 0.0f, 0.75f));
 
-            r_push_arrow(draw_call, plane->lm_origin, add(plane->lm_origin, mul(scale_x, plane->lm_s)), pack_rgb(0.5f, 0.0f, 0.0f));
-            r_push_arrow(draw_call, plane->lm_origin, add(plane->lm_origin, mul(scale_y, plane->lm_t)), pack_rgb(0.0f, 0.5f, 0.0f));
+            r_push_arrow(draw_call, plane->lm_origin, add(plane->lm_origin, mul(scale_x, plane->lm_s)), make_v4(0.5f, 0.0f, 0.0f, 1.0f));
+            r_push_arrow(draw_call, plane->lm_origin, add(plane->lm_origin, mul(scale_y, plane->lm_t)), make_v4(0.0f, 0.5f, 0.0f, 1.0f));
 
             v3_t square_v0 = add(plane->lm_origin, mul(scale_x, plane->lm_s));
             v3_t square_v1 = add(plane->lm_origin, mul(scale_y, plane->lm_t));
@@ -837,11 +863,138 @@ void game_tick(game_io_t *io, float dt)
 
             r_push_line(draw_call, square_v0, square_v2, pack_rgb(0.5f, 0.0f, 0.5f));
             r_push_line(draw_call, square_v1, square_v2, pack_rgb(0.5f, 0.0f, 0.5f));
+
+            if (pixel_selection_active)
+            {
+                texture_desc_t desc;
+                render->describe_texture(selected_poly->lightmap, &desc);
+
+                float texscale_x = (float)desc.w;
+                float texscale_y = (float)desc.h;
+
+                v2_t selection_worldspace = {
+                    scale_x*((float)selected_pixels.min.x / texscale_x),
+                    scale_y*((float)selected_pixels.min.y / texscale_y),
+                };
+
+                v2i_t selection_dim = rect2i_get_dim(selected_pixels);
+
+                v2_t selection_dim_worldspace = {
+                    scale_x*(selection_dim.x / texscale_x),
+                    scale_y*(selection_dim.y / texscale_y),
+                };
+
+                v3_t pixel_v0 = v3_add3(plane->lm_origin,
+                                         mul(selection_worldspace.x, plane->lm_s),
+                                         mul(selection_worldspace.y, plane->lm_t));
+                v3_t pixel_v1 = add(pixel_v0, mul(selection_dim_worldspace.x, plane->lm_s));
+                v3_t pixel_v2 = add(pixel_v0, mul(selection_dim_worldspace.y, plane->lm_t));
+                v3_t pixel_v3 = v3_add3(pixel_v0, 
+                                        mul(selection_dim_worldspace.x, plane->lm_s), 
+                                        mul(selection_dim_worldspace.y, plane->lm_t));
+
+                r_push_line(draw_call, pixel_v0, pixel_v1, COLOR32_RED);
+                r_push_line(draw_call, pixel_v0, pixel_v2, COLOR32_RED);
+                r_push_line(draw_call, pixel_v2, pixel_v3, COLOR32_RED);
+                r_push_line(draw_call, pixel_v1, pixel_v3, COLOR32_RED);
+            }
         }
 
+        if (show_indirect_light_rays)
+        {
+            for (lum_path_t *path = bake_results.debug_data.first_path;
+                 path;
+                 path = path->next)
+            {
+                if (pixel_selection_active &&
+                    !rect2i_contains_exclusive(selected_pixels, path->source_pixel))
+                {
+                    continue;
+                }
+
+                if (path->first_vertex->poly != selected_poly)
+                    continue;
+
+                lum_path_vertex_t *vertex = path->first_vertex;
+
+                for (int level = 0; level <= max_display_recursion; level++)
+                {
+                    if (level >= min_display_recursion)
+                    {
+                        if (show_direct_light_rays)
+                        {
+                            for (size_t sample_index = 0; sample_index < vertex->light_sample_count; sample_index++)
+                            {
+                                lum_light_sample_t *sample = &vertex->light_samples[sample_index];
+
+                                if (sample->shadow_ray_t > 0.0f && sample->shadow_ray_t < FLT_MAX)
+                                {
+                                    // r_push_line(draw_call, vertex->o, add(vertex->o, mul(sample->shadow_ray_t, sample->d)), COLOR32_RED);
+                                }
+                                else if (sample->shadow_ray_t == FLT_MAX && sample_index < map->light_count)
+                                {
+                                    map_point_light_t *point_light = &map->lights[sample_index];
+
+                                    v3_t color = sample->contribution;
+
+                                    if (fullbright_rays)
+                                    {
+                                        color = normalize(color);
+                                    }
+
+                                    r_push_line(draw_call, vertex->o, point_light->p, 
+                                                pack_rgb(color.x, color.y, color.z));
+                                }
+                            }
+                        }
+
+                        if (vertex->next && level < max_display_recursion)
+                        {
+                            lum_path_vertex_t *next_vertex = vertex->next;
+
+                            if (next_vertex->brush)
+                            {
+                                v4_t start_color = make_v4(vertex->contribution.x,
+                                                           vertex->contribution.y,
+                                                           vertex->contribution.z,
+                                                           1.0f);
+
+                                v4_t end_color = make_v4(next_vertex->contribution.x,
+                                                         next_vertex->contribution.y,
+                                                         next_vertex->contribution.z,
+                                                         1.0f);
+
+                                if (fullbright_rays)
+                                {
+                                    start_color.xyz = normalize(start_color.xyz);
+                                    end_color.xyz = normalize(end_color.xyz);
+                                }
+
+#if 1
+                                if (next_vertex->next && level + 1 < max_display_recursion)
+                                {
+                                    r_push_line_gradient(draw_call, vertex->o, next_vertex->o, start_color, end_color);
+                                }
+                                else
+                                {
+                                    r_push_arrow_gradient(draw_call, vertex->o, next_vertex->o, start_color, end_color);
+                                }
+#endif
+                            }
+                        }
+                    }
+
+                    vertex = vertex->next;
+
+                    if (!vertex)
+                        break;
+                }
+            }
+        }
+#if 0
         if (show_direct_light_rays)
         {
-            for (bake_light_debug_ray_t *ray = bake_results.debug_data.direct_rays.first;
+            for (lum_debug_ray_t *ray = bake_results.debug_data.direct_rays.first;
                  ray;
                  ray = ray->next)
             {
@@ -861,7 +1014,7 @@ void game_tick(game_io_t *io, float dt)
 
         if (show_indirect_light_rays)
         {
-            for (bake_light_debug_ray_t *ray = bake_results.debug_data.indirect_rays.first;
+            for (lum_debug_ray_t *ray = bake_results.debug_data.indirect_rays.first;
                  ray;
                  ray = ray->next)
             {
@@ -880,6 +1033,7 @@ void game_tick(game_io_t *io, float dt)
                 }
             }
         }
+#endif
 
         r_immediate_draw_end(draw_call);
     }

@@ -140,6 +140,20 @@ typedef union rect2_t
     };
 } rect2_t;
 
+typedef union rect2i_t
+{
+    struct
+    {
+        int x0, y0;
+        int x1, y1;
+    };
+    struct
+    {
+        v2i_t min;
+        v2i_t max;
+    };
+} rect2i_t;
+
 typedef union rect3_t
 {
     struct
