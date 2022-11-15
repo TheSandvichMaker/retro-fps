@@ -912,3 +912,19 @@ void game_tick(game_io_t *io, float dt)
         io->exit_requested = true;
     }
 }
+
+static double g_audio_time;
+
+void game_mix_audio(game_audio_io_t *audio_io)
+{
+    // TODO: make a mixer and play some sounds
+
+    size_t frames_to_mix = audio_io->frames_to_mix;
+    float *buffer = audio_io->buffer;
+
+    for (size_t frame_index = 0; frame_index < frames_to_mix; frame_index++)
+    {
+        *buffer++ = 0.0f;
+        *buffer++ = 0.0f;
+    }
+}

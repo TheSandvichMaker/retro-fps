@@ -259,7 +259,11 @@ int main(int argc, char **argv)
             strlit("dxguid"),
             strlit("d3d11"),
             strlit("dxgi"),
-            strlit("d3dcompiler")
+            strlit("d3dcompiler"),
+            strlit("gdi32"),
+            strlit("user32"),
+            strlit("ole32"),
+            strlit("ksuser"),
         )),
 
         .defines = slist_from_array(temp, array_expand(string_t,

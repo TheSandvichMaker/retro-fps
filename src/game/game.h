@@ -19,7 +19,14 @@ typedef struct game_io_t
     bool exit_requested;
 } game_io_t;
 
+typedef struct game_audio_io_t
+{
+    size_t frames_to_mix;
+    float *buffer;
+} game_audio_io_t;
+
 void game_tick(game_io_t *io, float dt);
+void game_mix_audio(game_audio_io_t *audio_io);
 
 typedef enum player_move_mode_t
 {
