@@ -152,6 +152,7 @@ static v3_t pathtrace_recursively(lum_thread_context_t *thread, lum_path_t *path
     v3_t color = { 0, 0, 0 };
 
     lum_path_vertex_t *path_vertex = m_alloc_struct(arena, lum_path_vertex_t);
+    path->vertex_count++;
     dll_push_back(path->first_vertex, path->last_vertex, path_vertex);
 
     intersect_result_t hit;
@@ -313,6 +314,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
             sll_push_back(thread->debug.first_path, thread->debug.last_path, path);
 
             lum_path_vertex_t *path_vertex = m_alloc_struct(arena, lum_path_vertex_t);
+            path->vertex_count++;
             dll_push_back(path->first_vertex, path->last_vertex, path_vertex);
 
             path_vertex->brush        = brush;

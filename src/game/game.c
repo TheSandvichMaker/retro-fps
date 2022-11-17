@@ -452,7 +452,7 @@ void game_init(void)
         // TODO: Have a macro for optimization level to check instead of DEBUG
 #if DEBUG
         .ray_count     = 8,
-        .ray_recursion = 2,
+        .ray_recursion = 4,
 #else
         .ray_count     = 64,
         .ray_recursion = 4,
@@ -803,6 +803,7 @@ void game_tick(game_io_t *io, float dt)
             .topology   = R_PRIMITIVE_TOPOLOGY_LINELIST,
             .depth_bias = 0.005f,
             .depth_test = !no_ray_depth_test,
+            .blend_mode = R_BLEND_ADDITIVE,
         });
 
         if (g_cursor_locked)
@@ -915,11 +916,14 @@ void game_tick(game_io_t *io, float dt)
                 if (path->first_vertex->poly != selected_poly)
                     continue;
 
-                lum_path_vertex_t *vertex = path->first_vertex;
+                ;
 
-                for (int level = 0; level <= max_display_recursion; level++)
+                if ((int)path->vertex_count >= min_display_recursion &&
+                    (int)path->vertex_count <= max_display_recursion)
                 {
-                    if (level >= min_display_recursion)
+                    for (lum_path_vertex_t *vertex = path->first_vertex;
+                         vertex;
+                         vertex = vertex->next)
                     {
                         if (show_direct_light_rays)
                         {
@@ -942,13 +946,21 @@ void game_tick(game_io_t *io, float dt)
                                         color = normalize(color);
                                     }
 
-                                    r_push_line(draw_call, vertex->o, point_light->p, 
-                                                pack_rgb(color.x, color.y, color.z));
+                                    if (vertex == path->first_vertex)
+                                    {
+                                        r_push_arrow(draw_call, point_light->p, vertex->o, 
+                                                     make_v4(color.x, color.y, color.z, 1.0f));
+                                    }
+                                    else
+                                    {
+                                        r_push_line(draw_call, vertex->o, point_light->p, 
+                                                    pack_rgb(color.x, color.y, color.z));
+                                    }
                                 }
                             }
                         }
 
-                        if (vertex->next && level < max_display_recursion)
+                        if (vertex->next)
                         {
                             lum_path_vertex_t *next_vertex = vertex->next;
 
@@ -970,70 +982,20 @@ void game_tick(game_io_t *io, float dt)
                                     end_color.xyz = normalize(end_color.xyz);
                                 }
 
-#if 1
-                                if (next_vertex->next && level + 1 < max_display_recursion)
+                                if (vertex == path->first_vertex)
                                 {
-                                    r_push_line_gradient(draw_call, vertex->o, next_vertex->o, start_color, end_color);
+                                    r_push_arrow_gradient(draw_call, next_vertex->o, vertex->o, end_color, start_color);
                                 }
                                 else
                                 {
-                                    r_push_arrow_gradient(draw_call, vertex->o, next_vertex->o, start_color, end_color);
+                                    r_push_line_gradient(draw_call, vertex->o, next_vertex->o, start_color, end_color);
                                 }
-#endif
                             }
                         }
                     }
-
-                    vertex = vertex->next;
-
-                    if (!vertex)
-                        break;
                 }
             }
         }
-#if 0
-        if (show_direct_light_rays)
-        {
-            for (lum_debug_ray_t *ray = bake_results.debug_data.direct_rays.first;
-                 ray;
-                 ray = ray->next)
-            {
-                if (ray->spawn_poly == selected_poly)
-                {
-                    if (ray->t != FLT_MAX)
-                    {
-                        r_push_line(draw_call, ray->o, add(ray->o, mul(ray->t, ray->d)), COLOR32_RED);
-                    }
-                    else
-                    {
-                        r_push_line(draw_call, ray->o, add(ray->o, mul(15.0f, ray->d)), COLOR32_GREEN);
-                    }
-                }
-            }
-        }
-
-        if (show_indirect_light_rays)
-        {
-            for (lum_debug_ray_t *ray = bake_results.debug_data.indirect_rays.first;
-                 ray;
-                 ray = ray->next)
-            {
-                if (ray->spawn_poly == selected_poly &&
-                    ray->recursion >= min_display_recursion &&
-                    ray->recursion <= max_display_recursion)
-                {
-                    if (ray->t != FLT_MAX)
-                    {
-                        r_push_arrow(draw_call, ray->o, add(ray->o, mul(ray->t, ray->d)), pack_rgb(ray->lighting.x, ray->lighting.y, ray->lighting.z));
-                    }
-                    else
-                    {
-                        // r_push_arrow(draw_call, ray->o, add(ray->o, mul(15.0f, ray->d)), COLOR32_YELLOW);
-                    }
-                }
-            }
-        }
-#endif
 
         r_immediate_draw_end(draw_call);
     }

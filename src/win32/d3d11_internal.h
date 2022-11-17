@@ -65,10 +65,12 @@ typedef struct d3d_state_t
     ID3D11SamplerState       *samplers[D3D_SAMPLER_COUNT];
 
     ID3D11BlendState         *bs;
+    ID3D11BlendState         *bs_additive;
     ID3D11RasterizerState    *rs;
     ID3D11RasterizerState    *rs_no_cull;
     ID3D11DepthStencilState  *dss;
     ID3D11DepthStencilState  *dss_no_depth;
+    ID3D11DepthStencilState  *dss_dont_write_depth;
     ID3D11Texture2D          *rt_tex;
     ID3D11RenderTargetView   *rt_rtv;
     ID3D11Texture2D          *msaa_rt_tex;
@@ -111,6 +113,8 @@ void get_resolution(int *w, int *h);
 typedef struct render_pass_t
 {
     d3d_model_t *model;
+
+    r_blend_mode_t blend_mode;
 
     UINT cbuffer_count;
     ID3D11Buffer **cbuffers;

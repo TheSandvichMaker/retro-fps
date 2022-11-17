@@ -297,6 +297,25 @@ int init_d3d11(void *hwnd_)
         ID3D11Device_CreateBlendState(d3d.device, &desc, &d3d.bs);
     }
 
+    // additive blend state
+
+    {
+        D3D11_BLEND_DESC desc =
+        {
+            .RenderTarget[0] = {
+                .BlendEnable           = TRUE,
+                .SrcBlend              = D3D11_BLEND_SRC_ALPHA,
+                .DestBlend             = D3D11_BLEND_ONE,
+                .BlendOp               = D3D11_BLEND_OP_ADD,
+                .SrcBlendAlpha         = D3D11_BLEND_SRC_ALPHA,
+                .DestBlendAlpha        = D3D11_BLEND_ONE,
+                .BlendOpAlpha          = D3D11_BLEND_OP_ADD,
+                .RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL,
+            },
+        };
+        ID3D11Device_CreateBlendState(d3d.device, &desc, &d3d.bs_additive);
+    }
+
     // create rasterizer state
 
     {
@@ -328,9 +347,6 @@ int init_d3d11(void *hwnd_)
             .DepthEnable      = TRUE,
             .DepthWriteMask   = D3D11_DEPTH_WRITE_MASK_ALL,
             .DepthFunc        = D3D11_COMPARISON_GREATER,
-            .StencilEnable    = FALSE,
-            .StencilReadMask  = D3D11_DEFAULT_STENCIL_READ_MASK,
-            .StencilWriteMask = D3D11_DEFAULT_STENCIL_WRITE_MASK,
         };
         ID3D11Device_CreateDepthStencilState(d3d.device, &desc, &d3d.dss);
     }
@@ -342,11 +358,19 @@ int init_d3d11(void *hwnd_)
             .DepthEnable      = FALSE,
             .DepthWriteMask   = D3D11_DEPTH_WRITE_MASK_ALL,
             .DepthFunc        = D3D11_COMPARISON_GREATER,
-            .StencilEnable    = FALSE,
-            .StencilReadMask  = D3D11_DEFAULT_STENCIL_READ_MASK,
-            .StencilWriteMask = D3D11_DEFAULT_STENCIL_WRITE_MASK,
         };
         ID3D11Device_CreateDepthStencilState(d3d.device, &desc, &d3d.dss_no_depth);
+    }
+
+    // don't write depth
+
+    {
+        D3D11_DEPTH_STENCIL_DESC desc = {
+            .DepthEnable      = TRUE,
+            .DepthWriteMask   = D3D11_DEPTH_WRITE_MASK_ZERO,
+            .DepthFunc        = D3D11_COMPARISON_GREATER,
+        };
+        ID3D11Device_CreateDepthStencilState(d3d.device, &desc, &d3d.dss_dont_write_depth);
     }
 
     // white texture
@@ -492,8 +516,19 @@ void render_model(const render_pass_t *pass)
     ID3D11DeviceContext_PSSetShader(d3d.context, pass->ps, NULL, 0);
 
     // set output merger state
-    ID3D11DeviceContext_OMSetBlendState(d3d.context, d3d.bs, NULL, ~0U);
-    ID3D11DeviceContext_OMSetDepthStencilState(d3d.context, pass->depth ? d3d.dss : d3d.dss_no_depth, 0);
+
+    if (pass->blend_mode == R_BLEND_PREMUL_ALPHA)
+    {
+        ID3D11DeviceContext_OMSetBlendState(d3d.context, d3d.bs, NULL, ~0U);
+        ID3D11DeviceContext_OMSetDepthStencilState(d3d.context, pass->depth ? d3d.dss : d3d.dss_no_depth, 0);
+    }
+    else
+    {
+        ASSERT(pass->blend_mode == R_BLEND_ADDITIVE);
+        ID3D11DeviceContext_OMSetBlendState(d3d.context, d3d.bs_additive, NULL, ~0U);
+        ID3D11DeviceContext_OMSetDepthStencilState(d3d.context, d3d.dss_dont_write_depth, 0);
+    }
+
     ID3D11DeviceContext_OMSetRenderTargets(d3d.context, 1, &d3d.msaa_rt_rtv, d3d.ds_view);
 
     // draw 
@@ -756,6 +791,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                         .vs = d3d.immediate_vs,
                         .ps = d3d.immediate_ps,
 
+                        .blend_mode   = draw_call->blend_mode,
                         .index_format = DXGI_FORMAT_R32_UINT,
 
                         .ioffset = draw_call->ioffset,

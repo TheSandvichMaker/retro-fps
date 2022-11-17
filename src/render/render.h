@@ -75,6 +75,12 @@ typedef enum vertex_format_t
     VERTEX_FORMAT_COUNT,
 } vertex_format_t;
 
+typedef enum r_blend_mode_t
+{
+    R_BLEND_PREMUL_ALPHA,
+    R_BLEND_ADDITIVE,
+} r_blend_mode_t;
+
 typedef enum r_primitive_topology_t
 {
     R_PRIMITIVE_TOPOLOGY_TRIANGELIST, // default
@@ -176,6 +182,7 @@ typedef struct r_command_model_t
 typedef struct r_immediate_draw_t
 {
     r_primitive_topology_t topology;
+    r_blend_mode_t blend_mode;
 
     rect2_t clip_rect;
 

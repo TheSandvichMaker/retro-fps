@@ -418,6 +418,13 @@ static inline v3_t v3_mins(v3_t l, float r)
     };
 }
 
+static inline float v3_max3(v3_t v)
+{
+    float result = (v.x > v.y ? v.x : v.y);
+    result = (v.z > result ? v.z : result);
+    return result;
+}
+
 static inline v3_t v3_max(v3_t l, v3_t r)
 {
     return (v3_t){

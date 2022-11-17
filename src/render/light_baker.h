@@ -52,6 +52,7 @@ typedef struct lum_path_t
 
     v3_t contribution;
 
+    uint32_t vertex_count;
     lum_path_vertex_t *first_vertex;
     lum_path_vertex_t * last_vertex;
 } lum_path_t;
