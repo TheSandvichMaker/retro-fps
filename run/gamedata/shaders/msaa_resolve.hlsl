@@ -1,12 +1,15 @@
 #include "common.hlsl"
 
+    // float4x4 camera_projection;
+
 struct PS_INPUT
 {
     float4 pos : SV_POSITION;
     float2 uv  : TEXCOORD;
 };
 
-Texture2DMS<float3> rendertarget;
+Texture2DMS<float3> rendertarget : register(t0);
+Texture3D           fogmap       : register(t1);
 
 PS_INPUT vs(uint id : SV_VertexID)
 {
@@ -23,6 +26,32 @@ float4 hash43n(float3 p)
     return frac(float4(p.x * p.y * 95.4307, p.x * p.y * 97.5901, p.x * p.z * 93.8369, p.y * p.z * 91.6931 ));
 }
 
+float3 raymarch_fog(float2 uv)
+{
+    float3 o, d;
+    camera_ray(uv, o, d);
+
+    uint steps = 256;
+
+    float t      = 0;
+    float t_step = rcp(steps);
+
+    float3 result = 0;
+
+    for (uint i = 0; i < steps; i++)
+    {
+        float3 p = o + 1024.0f*t*d;
+
+        result += fogmap.Sample(sampler_point_clamped, (p - 0) / 128.0f).rgb;
+
+        t += t_step;
+    }
+
+    result *= rcp(steps);
+
+    return result;
+}
+
 float4 ps(PS_INPUT IN) : SV_TARGET
 {
     uint2 dim; uint sample_count;
@@ -34,11 +63,14 @@ float4 ps(PS_INPUT IN) : SV_TARGET
     for (uint i = 0; i < sample_count; i++)
     {
         float3 s = rendertarget.Load(co, i);
-        s = 1.0f - exp(-s);
+        s = 1 - exp(-s);
 
         color += s;
     }
     color *= rcp(sample_count);
+
+    color += 0.125f*raymarch_fog(IN.uv);
+
     color = pow(abs(color), 1.0 / 2.23);
 
     float3 dither = hash43n(float3(IN.uv, frame_index)).xyz;

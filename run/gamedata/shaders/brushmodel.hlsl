@@ -13,7 +13,7 @@ Texture2D lightmap : register(t1);
 PS_INPUT vs(VS_INPUT_BRUSH IN)
 {
     PS_INPUT OUT;
-    OUT.pos         = mul(mul(camera_projection, model_transform), float4(IN.pos, 1));
+    OUT.pos         = mul(mul(mul(proj_matrix, view_matrix), model_matrix), float4(IN.pos, 1));
     OUT.uv          = IN.uv;
     OUT.uv_lightmap = IN.uv_lightmap;
     return OUT;
@@ -44,10 +44,10 @@ float4 ps(PS_INPUT IN) : SV_TARGET
     float2 lm_dim;
     lightmap.GetDimensions(lm_dim.x, lm_dim.y);
 
-    float2 uv = fat_pixel(dim, IN.uv);
+    float2 uv    = fat_pixel(dim, IN.uv);
     float2 lm_uv = fat_pixel(lm_dim, IN.uv_lightmap);
 
-    // float4 tex = albedo.Sample(sampler_linear, IM.uv);
+    // float4 tex = albedo.Sample(sampler_linear, IN.uv);
     float4 tex      = albedo.Sample(sampler_linear, uv);
     // float4 lighting = lightmap.Sample(sampler_linear_clamped, IN.uv_lightmap);
     // float4 lighting = lightmap.Sample(sampler_linear_clamped, lm_uv);

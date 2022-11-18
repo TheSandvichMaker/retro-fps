@@ -1,6 +1,7 @@
 #include <stdlib.h>
 
 #include "core/core.h"
+#include "core/geometric_algebra.h"
 
 #include "game.h"
 #include "map.h"
@@ -27,12 +28,18 @@ static lum_results_t bake_results;
 
 v3_t forward_vector_from_pitch_yaw(float pitch, float yaw)
 {
-    quat_t qpitch = make_quat_axis_angle((v3_t){ 0, 1, 0 }, DEG_TO_RAD*pitch);
-    quat_t qyaw   = make_quat_axis_angle((v3_t){ 0, 0, 1 }, DEG_TO_RAD*yaw);
+    // quat_t qpitch = make_quat_axis_angle((v3_t){ 0, 1, 0 }, DEG_TO_RAD*pitch);
+    // quat_t qyaw   = make_quat_axis_angle((v3_t){ 0, 0, 1 }, DEG_TO_RAD*yaw);
+
+    rotor3_t r_pitch = rotor3_from_plane_angle(PLANE_ZX, DEG_TO_RAD*pitch);
+    rotor3_t r_yaw   = rotor3_from_plane_angle(PLANE_YZ, DEG_TO_RAD*yaw  );
 
     v3_t forward = { 1, 0, 0 };
-    forward = quat_rotatev(qpitch, forward);
-    forward = quat_rotatev(qyaw, forward);
+    // forward = quat_rotatev(qpitch, forward);
+    // forward = quat_rotatev(qyaw, forward);
+
+    forward = rotor3_rotatev(r_pitch, forward);
+    forward = rotor3_rotatev(r_yaw  , forward);
 
     return forward;
 }
@@ -90,11 +97,17 @@ void player_freecam(player_t *player, float dt)
     if (button_down(BUTTON_LEFT))     move_delta.y += move_speed;
     if (button_down(BUTTON_RIGHT))    move_delta.y -= move_speed;
 
-    quat_t qpitch = make_quat_axis_angle((v3_t){ 0, 1, 0 }, DEG_TO_RAD*camera->pitch);
-    quat_t qyaw   = make_quat_axis_angle((v3_t){ 0, 0, 1 }, DEG_TO_RAD*camera->yaw);
+    rotor3_t r_pitch = rotor3_from_plane_angle(PLANE_ZX, DEG_TO_RAD*camera->pitch);
+    rotor3_t r_yaw   = rotor3_from_plane_angle(PLANE_YZ, DEG_TO_RAD*camera->yaw  );
 
-    move_delta = quat_rotatev(qpitch, move_delta);
-    move_delta = quat_rotatev(qyaw,   move_delta);
+    // quat_t qpitch = make_quat_axis_angle((v3_t){ 0, 1, 0 }, DEG_TO_RAD*camera->pitch);
+    // quat_t qyaw   = make_quat_axis_angle((v3_t){ 0, 0, 1 }, DEG_TO_RAD*camera->yaw);
+
+    move_delta = rotor3_rotatev(r_pitch, move_delta);
+    move_delta = rotor3_rotatev(r_yaw  , move_delta);
+
+    // move_delta = quat_rotatev(qpitch, move_delta);
+    // move_delta = quat_rotatev(qyaw,   move_delta);
 
     if (button_down(BUTTON_JUMP))     move_delta.z += move_speed;
     if (button_down(BUTTON_CROUCH))   move_delta.z -= move_speed;
@@ -112,7 +125,8 @@ void player_movement(player_t *player, float dt)
     if (!camera)
         return;
 
-    quat_t qyaw = make_quat_axis_angle((v3_t){ 0, 0, 1 }, DEG_TO_RAD*camera->yaw);
+    // quat_t qyaw = make_quat_axis_angle((v3_t){ 0, 0, 1 }, DEG_TO_RAD*camera->yaw);
+    rotor3_t r_yaw = rotor3_from_plane_angle(PLANE_YZ, DEG_TO_RAD*camera->yaw);
 
     // movement
 
@@ -189,7 +203,7 @@ void player_movement(player_t *player, float dt)
         .max = {  16,  16,  0  },
     };
 
-    move_delta = quat_rotatev(qyaw, move_delta);
+    move_delta = rotor3_rotatev(r_yaw, move_delta);
     move_delta = normalize_or_zero(move_delta);
     move_delta = mul(move_delta, move_speed);
 
@@ -446,8 +460,8 @@ void game_init(void)
         .arena         = &world->arena,
         .map           = world->map,
         .sun_direction = make_v3(0.25f, 0.75f, 1),
-        .sun_color     = mul(0.0f, make_v3(1, 1, 0.75f)),
-        .sky_color     = mul(0.0f, make_v3(0.15f, 0.30f, 0.62f)),
+        .sun_color     = mul(1.0f, make_v3(1, 1, 0.75f)),
+        .sky_color     = mul(1.0f, make_v3(0.15f, 0.30f, 0.62f)),
 
         // TODO: Have a macro for optimization level to check instead of DEBUG
 #if DEBUG
@@ -643,7 +657,7 @@ void game_tick(game_io_t *io, float dt)
     r_view_t view;
     view_for_camera(camera, viewport, &view);
 
-    // view.skybox = skybox;
+    view.skybox = skybox;
 
     r_push_view(&view);
 
@@ -695,6 +709,37 @@ void game_tick(game_io_t *io, float dt)
 
     UI_Window(strlit("lightmap debugger panel"), 0, 32, 32, 500, 800)
     {
+        v3_t p = player_view_origin(player);
+        v3_t d = player_view_direction(player);
+
+        m4x4_t view_matrix = make_view_matrix(camera->p, negate(camera->computed_z), (v3_t){0,0,1});
+
+        v3_t camera_x = {
+            view_matrix.e[0][0],
+            view_matrix.e[1][0],
+            view_matrix.e[2][0],
+        };
+
+        v3_t camera_y = {
+            view_matrix.e[0][1],
+            view_matrix.e[1][1],
+            view_matrix.e[2][1],
+        };
+
+        v3_t camera_z = {
+            view_matrix.e[0][2],
+            view_matrix.e[1][2],
+            view_matrix.e[2][2],
+        };
+
+        v3_t recon_p = negate(v3_add3(mul(view_matrix.e[3][0], camera_x),
+                                      mul(view_matrix.e[3][1], camera_y),
+                                      mul(view_matrix.e[3][2], camera_z)));
+
+        ui_label(string_format(temp, "camera d:               %.02f %.02f %.02f", d.x, d.y, d.z), 0);
+        ui_label(string_format(temp, "camera p:               %.02f %.02f %.02f", p.x, p.y, p.z), 0);
+        ui_label(string_format(temp, "reconstructed camera p: %.02f %.02f %.02f", recon_p.x, recon_p.y, recon_p.z), 0);
+
         ui_checkbox(strlit("enabled"), &g_debug_lightmaps);
         ui_checkbox(strlit("show direct light rays"), &show_direct_light_rays);
         ui_checkbox(strlit("show indirect light rays"), &show_indirect_light_rays);
@@ -916,8 +961,7 @@ void game_tick(game_io_t *io, float dt)
                 if (path->first_vertex->poly != selected_poly)
                     continue;
 
-                ;
-
+                int vertex_index = 0;
                 if ((int)path->vertex_count >= min_display_recursion &&
                     (int)path->vertex_count <= max_display_recursion)
                 {
@@ -946,12 +990,15 @@ void game_tick(game_io_t *io, float dt)
                                         color = normalize(color);
                                     }
 
+#if 0
                                     if (vertex == path->first_vertex)
                                     {
                                         r_push_arrow(draw_call, point_light->p, vertex->o, 
                                                      make_v4(color.x, color.y, color.z, 1.0f));
                                     }
-                                    else
+#endif
+
+                                    if (!vertex->next || vertex_index + 2 == (int)path->vertex_count)
                                     {
                                         r_push_line(draw_call, vertex->o, point_light->p, 
                                                     pack_rgb(color.x, color.y, color.z));
@@ -992,6 +1039,8 @@ void game_tick(game_io_t *io, float dt)
                                 }
                             }
                         }
+
+                        vertex_index += 1;
                     }
                 }
             }

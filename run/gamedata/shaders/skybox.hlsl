@@ -16,15 +16,8 @@ TextureCube cubemap         : register(t0);
 
 PS_INPUT vs(VS_INPUT IN)
 {
-    float4x4 swizzle = {
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1,
-    };
-
     PS_INPUT OUT;
-    OUT.pos      = mul(mul(camera_projection, swizzle), float4(IN.pos, 1));
+    OUT.pos      = mul(view_matrix, float4(IN.pos, 1));
     OUT.texcoord = IN.pos;
     return OUT;
 }

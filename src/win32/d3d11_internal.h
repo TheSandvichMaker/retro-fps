@@ -6,9 +6,9 @@
 
 typedef struct d3d_cbuffer_t
 {
-    m4x4_t camera_projection;
-    m4x4_t light_projection;
-    m4x4_t model_transform;
+    m4x4_t view_matrix;
+    m4x4_t proj_matrix;
+    m4x4_t model_matrix;
     uint32_t frame_index;
     float    depth_bias;
 } d3d_cbuffer_t;
@@ -89,6 +89,9 @@ typedef struct d3d_state_t
     ID3D11PixelShader        *skybox_ps;
     ID3D11VertexShader       *msaa_resolve_vs;
     ID3D11PixelShader        *msaa_resolve_ps;
+
+    ID3D11Texture3D          *fog_map;
+    ID3D11ShaderResourceView *fog_map_srv;
 
     uint32_t frame_index;
 } d3d_state_t;

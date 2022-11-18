@@ -486,6 +486,54 @@ int init_d3d11(void *hwnd_)
         d3d.skybox_model = bd_get(&d3d_models, handle);
     }
 
+    // create test fog map
+    {
+        UINT width  = 64;
+        UINT height = 64;
+        UINT depth  = 64;
+
+        m_scoped(temp)
+        {
+            uint32_t *fog_map = m_alloc_array(temp, width*height*depth, uint32_t);
+
+            uint32_t *dst = fog_map;
+            for (size_t z = 0; z < depth;  z++)
+            for (size_t y = 0; y < height; y++)
+            for (size_t x = 0; x < width;  x++)
+            {
+                *dst++ = pack_rgb((float)x / (float)width,
+                                  (float)y / (float)height,
+                                  (float)z / (float)depth);
+            }
+
+            ID3D11Device_CreateTexture3D(
+                d3d.device,
+                (&(D3D11_TEXTURE3D_DESC) {
+                    .Width     = width,
+                    .Height    = height,
+                    .Depth     = depth,
+                    .MipLevels = 1,
+                    .Format    = DXGI_FORMAT_R8G8B8A8_UNORM,
+                    .Usage     = D3D11_USAGE_IMMUTABLE,
+                    .BindFlags = D3D11_BIND_SHADER_RESOURCE,
+                }),
+                (&(D3D11_SUBRESOURCE_DATA) {
+                    .pSysMem          = fog_map,
+                    .SysMemPitch      = width*sizeof(uint32_t),
+                    .SysMemSlicePitch = width*height*sizeof(uint32_t),
+                }), 
+                &d3d.fog_map
+            );
+
+            ID3D11Device_CreateShaderResourceView(
+                d3d.device, 
+                (ID3D11Resource *)d3d.fog_map, 
+                NULL, 
+                &d3d.fog_map_srv
+            );
+        }
+    }
+
     return 0;
 }
 
@@ -653,7 +701,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
             mvp = mul(mvp, swizzle);
 
             d3d_cbuffer_t cbuffer = {
-                .camera_projection = mvp,
+                .view_matrix = mvp,
                 .frame_index = frame_index,
             };
 
@@ -715,9 +763,10 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                         camera_projection = mul(camera_projection, view->camera);
 
                         d3d_cbuffer_t cbuffer = {
-                            .camera_projection = camera_projection,
-                            .model_transform   = command->transform,
-                            .frame_index       = frame_index,
+                            .view_matrix  = view->camera,
+                            .proj_matrix  = view->projection,
+                            .model_matrix = command->transform,
+                            .frame_index  = frame_index,
                         };
 
                         update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
@@ -733,7 +782,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                             .cbuffer_count = 1,
                             .cbuffers      = (ID3D11Buffer *[]) { d3d.ubuffer },
                             .srv_count     = 2,
-                            .srvs          = (ID3D11ShaderResourceView *[]) { texture->srv, lightmap->srv, },
+                            .srvs          = (ID3D11ShaderResourceView *[]) { texture->srv, lightmap->srv },
 
                             .depth         = true,
                             .cull          = true,
@@ -750,14 +799,11 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
 
                     r_immediate_draw_t *draw_call = &command->draw_call;
 
-                    m4x4_t camera_projection = m4x4_identity;
-                    camera_projection = mul(camera_projection, view->projection);
-                    camera_projection = mul(camera_projection, view->camera);
-
                     d3d_cbuffer_t cbuffer = {
-                        .camera_projection = camera_projection,
-                        .model_transform   = m4x4_identity,
-                        .depth_bias        = draw_call->depth_bias,
+                        .view_matrix  = view->camera,
+                        .proj_matrix  = view->projection,
+                        .model_matrix = m4x4_identity,
+                        .depth_bias   = draw_call->depth_bias,
                     };
 
                     update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
@@ -819,8 +865,23 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
             }
         }
 
+        r_view_t *relevant_view = NULL;
+        for (size_t i = 1; i < list->view_count; i++)
+        {
+            r_view_t *view = &list->views[i];
+
+            if (RESOURCE_HANDLE_VALID(view->skybox))
+            {
+                relevant_view = view;
+                break;
+            }
+        }
+
         d3d_cbuffer_t cbuffer = {
-            .frame_index = frame_index,
+            .view_matrix  = relevant_view->camera,
+            .proj_matrix  = relevant_view->projection,
+            .model_matrix = m4x4_identity,
+            .frame_index  = frame_index,
         };
 
         update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
@@ -844,7 +905,8 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
         // set pixel shader
         ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);
         ID3D11DeviceContext_PSSetSamplers(d3d.context, 0, D3D_SAMPLER_COUNT, d3d.samplers);
-        ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 1, &d3d.msaa_rt_srv);
+        ID3D11ShaderResourceView *srvs[] = { d3d.msaa_rt_srv, d3d.fog_map_srv };
+        ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 2, srvs);
         ID3D11DeviceContext_PSSetShader(d3d.context, d3d.msaa_resolve_ps, NULL, 0);
 
         ID3D11DeviceContext_Draw(d3d.context, 3, 0);

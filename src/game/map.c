@@ -1076,6 +1076,7 @@ map_t *load_map(arena_t *arena, string_t path)
     }
 
     build_bvh(arena, map);
+    map->bounds = map->nodes[0].bounds;
 
     gather_lights(arena, map);
 

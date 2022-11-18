@@ -91,6 +91,8 @@ typedef struct map_t
 {
     map_entity_t *first_entity;
 
+    rect3_t bounds;
+
     uint32_t node_count;
     uint32_t brush_count;
     uint32_t light_count;

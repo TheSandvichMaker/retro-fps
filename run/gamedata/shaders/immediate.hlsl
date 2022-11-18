@@ -12,7 +12,7 @@ Texture2D texture0 : register(t0);
 PS_INPUT vs(VS_INPUT_IMMEDIATE IN)
 {
     PS_INPUT OUT;
-    OUT.pos = mul(camera_projection, float4(IN.pos, 1));
+    OUT.pos = mul(mul(proj_matrix, view_matrix), float4(IN.pos, 1));
     OUT.pos.z += depth_bias;
     OUT.uv  = IN.uv;
 
