@@ -3,6 +3,8 @@
 
 #include "api_types.h"
 
+// based on the article from marc ten bosch https://marctenbosch.com/quaternions/
+// and the code snippet he provides https://marctenbosch.com/quaternions/code.htm
 //
 // basis planes:
 //
