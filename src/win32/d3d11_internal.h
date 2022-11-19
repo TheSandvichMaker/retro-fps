@@ -11,6 +11,11 @@ typedef struct d3d_cbuffer_t
     m4x4_t model_matrix;
     uint32_t frame_index;
     float    depth_bias;
+    float    pad0;
+    float    pad1;
+    v3_t     fog_offset;
+    float    pad2;
+    v3_t     fog_dim;
 } d3d_cbuffer_t;
 
 typedef struct d3d_model_t
@@ -29,7 +34,11 @@ typedef struct d3d_texture_t
 {
     texture_desc_t desc;
 
-    ID3D11Texture2D          *tex[6];
+    union
+    {
+        ID3D11Texture2D *tex[6];
+        ID3D11Texture3D *tex_3d;
+    };
     ID3D11ShaderResourceView *srv;
 } d3d_texture_t;
 
@@ -42,6 +51,7 @@ typedef enum d3d_sampler_t
     D3D_SAMPLER_LINEAR,
     D3D_SAMPLER_POINT_CLAMP,
     D3D_SAMPLER_LINEAR_CLAMP,
+    D3D_SAMPLER_FOG,
     D3D_SAMPLER_COUNT,
 } d3d_sampler_t;
 
@@ -77,6 +87,7 @@ typedef struct d3d_state_t
     ID3D11RenderTargetView   *msaa_rt_rtv;
     ID3D11ShaderResourceView *msaa_rt_srv;
     ID3D11DepthStencilView   *ds_view;
+    ID3D11ShaderResourceView *ds_srv;
 
     ID3D11InputLayout        *layouts[VERTEX_FORMAT_COUNT];
 

@@ -10,6 +10,7 @@ struct PS_INPUT
 
 Texture2DMS<float3> rendertarget : register(t0);
 Texture3D           fogmap       : register(t1);
+Texture2DMS<float>  depth_buffer : register(t2);
 
 PS_INPUT vs(uint id : SV_VertexID)
 {
@@ -26,23 +27,46 @@ float4 hash43n(float3 p)
     return frac(float4(p.x * p.y * 95.4307, p.x * p.y * 97.5901, p.x * p.z * 93.8369, p.y * p.z * 91.6931 ));
 }
 
-float3 raymarch_fog(float2 uv)
+float3 iq_hash2(uint3 x)
+{
+    static const uint k = 1103515245U;  // GLIB C
+
+    x = ((x>>8U)^x.yzx)*k;
+    x = ((x>>8U)^x.yzx)*k;
+    x = ((x>>8U)^x.yzx)*k;
+    
+    return float3(x)*(1.0/float(0xffffffffU));
+}
+
+float3 raymarch_fog(float2 uv, uint2 co, float dither, uint sample_index)
 {
     float3 o, d;
     camera_ray(uv, o, d);
 
-    uint steps = 256;
+    uint steps = 32;
 
     float t      = 0;
     float t_step = rcp(steps);
 
     float3 result = 0;
+    float depth = 1.0f / depth_buffer.Load(co, sample_index);
+
+    float3 fogmap_dim;
+    fogmap.GetDimensions(fogmap_dim.x, fogmap_dim.y, fogmap_dim.z);
+
+    float3 fogmap_vox_scale = 1.0f / fogmap_dim;
 
     for (uint i = 0; i < steps; i++)
     {
-        float3 p = o + 1024.0f*t*d;
+        float  t_ = 512.0f*(t - dither*t_step);
+        float3 p = o + t_*d;
 
-        result += fogmap.Sample(sampler_point_clamped, (p - 0) / 128.0f).rgb;
+        bool ok = t_ < depth;
+        if (!ok)
+            break;
+
+        float3 sample_p = (p - fog_offset) / fog_dim + 0.5f;
+        result += fogmap.SampleLevel(sampler_fog, sample_p, 0).rgb;
 
         t += t_step;
     }
@@ -52,6 +76,11 @@ float3 raymarch_fog(float2 uv)
     return result;
 }
 
+float3 tonemap(float3 color)
+{
+    return 1 - exp(-color);
+}
+
 float4 ps(PS_INPUT IN) : SV_TARGET
 {
     uint2 dim; uint sample_count;
@@ -59,22 +88,45 @@ float4 ps(PS_INPUT IN) : SV_TARGET
 
     uint2 co = IN.uv*dim;
 
-    float3 color = 0;
-    for (uint i = 0; i < sample_count; i++)
-    {
-        float3 s = rendertarget.Load(co, i);
-        s = 1 - exp(-s);
+    bool require_full_multisampled_raymarch = false;
 
-        color += s;
+    float3 color_samples[8];
+    color_samples[0] = rendertarget.Load(co, 0);
+
+    float3 dither = iq_hash2(uint3(co, frame_index)).xyz;
+    dither = dither.xyz - dither.zxy;
+
+    {for (uint i = 1; i < sample_count; i++)
+    {
+        color_samples[i] = rendertarget.Load(co, i);
+        if (any(color_samples[i] != color_samples[i - 1]))
+        {
+            require_full_multisampled_raymarch = true;
+        }
+    }}
+
+    float3 color = 0;
+    if (require_full_multisampled_raymarch)
+    {
+        {for (uint i = 0; i < sample_count; i++)
+        {
+            float3 sample_color = color_samples[i] + raymarch_fog(IN.uv, co, dither.x, i);
+            color += tonemap(sample_color);
+        }}
+    }
+    else
+    {
+        float3 fog = raymarch_fog(IN.uv, co, dither.x, 0);
+        {for (uint i = 0; i < sample_count; i++)
+        {
+            float3 sample_color = color_samples[i] + fog;
+            color += tonemap(sample_color);
+        }}
     }
     color *= rcp(sample_count);
 
-    color += 0.125f*raymarch_fog(IN.uv);
-
     color = pow(abs(color), 1.0 / 2.23);
+    color += dither / 255.0;
 
-    float3 dither = hash43n(float3(IN.uv, frame_index)).xyz;
-    color += (dither - 0.5) / 255.0;
-
-    return float4(saturate(color), 1);
+    return float4(color.rgb, 1);
 }

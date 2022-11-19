@@ -472,6 +472,95 @@ static void lum_job(job_context_t *job_context, void *userdata)
 #endif
 }
 
+void trace_volumetric_lighting(const lum_params_t *params, map_t *map)
+{
+    rect3_t fogmap_bounds = map->bounds;
+
+    map->fogmap_offset = rect3_center(fogmap_bounds);
+    map->fogmap_dim    = rect3_dim(fogmap_bounds);
+
+    uint32_t fogmap_resolution_scale = 16;
+    uint32_t width  = (uint32_t)((map->fogmap_dim.x + fogmap_resolution_scale - 1) / fogmap_resolution_scale);
+    uint32_t height = (uint32_t)((map->fogmap_dim.y + fogmap_resolution_scale - 1) / fogmap_resolution_scale);
+    uint32_t depth  = (uint32_t)((map->fogmap_dim.z + fogmap_resolution_scale - 1) / fogmap_resolution_scale);
+
+    m_scoped(temp)
+    {
+        uint32_t *fogmap = m_alloc_array(temp, width*height*depth, uint32_t);
+
+        uint32_t *dst = fogmap;
+        for (size_t z = 0; z < depth;  z++)
+        for (size_t y = 0; y < height; y++)
+        for (size_t x = 0; x < width;  x++)
+        {
+            v3_t uvw = {
+                (float)x / (float)width,
+                (float)y / (float)height,
+                (float)z / (float)depth,
+            };
+
+            v3_t world_p = v3_add(fogmap_bounds.min, mul(uvw, map->fogmap_dim));
+
+            v3_t lighting = { 0 };
+            for (size_t light_index = 0; light_index < map->light_count; light_index++)
+            {
+                map_point_light_t *light = &map->lights[light_index];
+
+                v3_t  light_vector   = sub(light->p, world_p);
+                float light_distance = vlen(light_vector);
+                v3_t light_direction = div(light_vector, light_distance);
+
+                intersect_result_t shadow_hit;
+                if (!intersect_map(map, &(intersect_params_t) {
+                        .o                  = world_p,
+                        .d                  = light_direction,
+                        .occlusion_test     = true,
+                        .max_t              = light_distance,
+                    }, &shadow_hit))
+                {
+                    v3_t contribution = light->color;
+
+                    float biased_light_distance = light_distance + 1;
+                    contribution = mul(contribution, 1.0f / (biased_light_distance*biased_light_distance));
+
+                    lighting = add(lighting, contribution);
+                }
+            }
+
+            intersect_result_t shadow_hit;
+            if (!intersect_map(map, &(intersect_params_t) {
+                    .o                  = world_p,
+                    .d                  = params->sun_direction,
+                    .occlusion_test     = true,
+                }, &shadow_hit))
+            {
+                v3_t contribution = params->sun_color;
+                lighting = add(lighting, contribution);
+            }
+
+            float scattering = 0.25f;
+            lighting = mul(lighting, scattering);
+
+            *dst++ = pack_rgb(lighting.x, lighting.y, lighting.z);
+        }
+
+        map->fogmap = render->upload_texture(&(upload_texture_t) {
+            .desc = {
+                .type        = TEXTURE_TYPE_3D,
+                .format      = PIXEL_FORMAT_RGBA8,
+                .w           = width,
+                .h           = height,
+                .d           = depth,
+                .pitch       = sizeof(uint32_t)*width,
+                .slice_pitch = sizeof(uint32_t)*width*height,
+            },
+            .data = {
+                .pixels = fogmap,
+            },
+        });
+    }
+}
+
 void bake_lighting(const lum_params_t *params_init, lum_results_t *results)
 {
     // making a copy of the params so they can be massaged against bad input
@@ -580,4 +669,6 @@ void bake_lighting(const lum_params_t *params_init, lum_results_t *results)
 
         destroy_job_queue(queue);
     }
+
+    trace_volumetric_lighting(&params, map);
 }

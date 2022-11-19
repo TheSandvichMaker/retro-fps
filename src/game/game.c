@@ -628,6 +628,8 @@ void game_tick(game_io_t *io, float dt)
 
     io->cursor_locked = g_cursor_locked;
 
+    map_t *map = world->map;
+
     player_t *player = world->player;
     player->attached_camera = &g_camera;
 
@@ -658,14 +660,15 @@ void game_tick(game_io_t *io, float dt)
     view_for_camera(camera, viewport, &view);
 
     view.skybox = skybox;
+    view.fogmap = map->fogmap;
+    view.fog_offset = rect3_center(map->bounds);
+    view.fog_dim = rect3_dim(map->bounds);
 
     r_push_view(&view);
 
     //
     // render map geometry
     //
-
-    map_t *map = world->map;
 
     for (map_entity_t *entity = map->first_entity; entity; entity = entity->next)
     {

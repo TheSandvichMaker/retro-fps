@@ -79,6 +79,7 @@ int init_d3d11(void *hwnd_)
         ID3D11Device_QueryInterface(d3d.device, &IID_ID3D11InfoQueue, &info);
         ID3D11InfoQueue_SetBreakOnSeverity(info, D3D11_MESSAGE_SEVERITY_CORRUPTION, TRUE);
         ID3D11InfoQueue_SetBreakOnSeverity(info, D3D11_MESSAGE_SEVERITY_ERROR, TRUE);
+        ID3D11InfoQueue_SetBreakOnSeverity(info, D3D11_MESSAGE_SEVERITY_WARNING, TRUE);
         ID3D11InfoQueue_Release(info);
     }
 #endif
@@ -276,6 +277,18 @@ int init_d3d11(void *hwnd_)
             .MaxAnisotropy = 16,
         };
         ID3D11Device_CreateSamplerState(d3d.device, &desc, &d3d.samplers[D3D_SAMPLER_LINEAR_CLAMP]);
+    }
+
+    {
+        D3D11_SAMPLER_DESC desc =
+        {
+            .Filter   = D3D11_FILTER_MIN_MAG_MIP_LINEAR,
+            .AddressU = D3D11_TEXTURE_ADDRESS_BORDER,
+            .AddressV = D3D11_TEXTURE_ADDRESS_BORDER,
+            .AddressW = D3D11_TEXTURE_ADDRESS_BORDER,
+            .MaxLOD   = FLT_MAX,
+        };
+        ID3D11Device_CreateSamplerState(d3d.device, &desc, &d3d.samplers[D3D_SAMPLER_FOG]);
     }
 
     // enable alpha blending
@@ -632,16 +645,28 @@ void d3d11_ensure_swapchain_size(int width, int height)
                 .Height     = height,
                 .MipLevels  = 1,
                 .ArraySize  = 1,
-                .Format     = DXGI_FORMAT_D32_FLOAT, // or use DXGI_FORMAT_D32_FLOAT_S8X24_UINT if you need stencil
+                .Format     = DXGI_FORMAT_R32_TYPELESS, // or use DXGI_FORMAT_D32_FLOAT_S8X24_UINT if you need stencil
                 .SampleDesc = { 8, 0 },
                 .Usage      = D3D11_USAGE_DEFAULT,
-                .BindFlags  = D3D11_BIND_DEPTH_STENCIL,
+                .BindFlags  = D3D11_BIND_DEPTH_STENCIL|D3D11_BIND_SHADER_RESOURCE,
             };
 
             // create new depth stencil texture & DepthStencil view
             ID3D11Texture2D* depth;
             ID3D11Device_CreateTexture2D(d3d.device, &depth_desc, NULL, &depth);
-            ID3D11Device_CreateDepthStencilView(d3d.device, (ID3D11Resource*)depth, NULL, &d3d.ds_view);
+
+            D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc = {
+                .Format = DXGI_FORMAT_D32_FLOAT,
+                .ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMS,
+            };
+            ID3D11Device_CreateDepthStencilView(d3d.device, (ID3D11Resource*)depth, &dsv_desc, &d3d.ds_view);
+
+            D3D11_SHADER_RESOURCE_VIEW_DESC depth_srv_desc = {
+                .Format = DXGI_FORMAT_R32_FLOAT,
+                .ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DMS,
+            };
+            ID3D11Device_CreateShaderResourceView(d3d.device, (ID3D11Resource*)depth, &depth_srv_desc, &d3d.ds_srv);
+
             ID3D11Texture2D_Release(depth);
         }
 
@@ -672,7 +697,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
         FLOAT color[] = { 0.0f, 0.0f, 0.0f, 1.0f };
         ID3D11DeviceContext_ClearRenderTargetView(d3d.context, d3d.rt_rtv, color);
         ID3D11DeviceContext_ClearRenderTargetView(d3d.context, d3d.msaa_rt_rtv, color);
-        ID3D11DeviceContext_ClearDepthStencilView(d3d.context, d3d.ds_view, D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL, 0.0f, 0);
+        ID3D11DeviceContext_ClearDepthStencilView(d3d.context, d3d.ds_view, D3D11_CLEAR_DEPTH, 0.0f, 0);
 
         // render any potential skyboxes
         for (size_t i = 1; i < list->view_count; i++)
@@ -870,18 +895,23 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
         {
             r_view_t *view = &list->views[i];
 
-            if (RESOURCE_HANDLE_VALID(view->skybox))
+            if (RESOURCE_HANDLE_VALID(view->fogmap))
             {
                 relevant_view = view;
                 break;
             }
         }
 
+        d3d_texture_t *fogmap = bd_get(&d3d_textures, relevant_view->fogmap);
+        ASSERT(fogmap);
+
         d3d_cbuffer_t cbuffer = {
             .view_matrix  = relevant_view->camera,
             .proj_matrix  = relevant_view->projection,
             .model_matrix = m4x4_identity,
             .frame_index  = frame_index,
+            .fog_offset   = relevant_view->fog_offset,
+            .fog_dim      = relevant_view->fog_dim,
         };
 
         update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
@@ -905,11 +935,14 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
         // set pixel shader
         ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);
         ID3D11DeviceContext_PSSetSamplers(d3d.context, 0, D3D_SAMPLER_COUNT, d3d.samplers);
-        ID3D11ShaderResourceView *srvs[] = { d3d.msaa_rt_srv, d3d.fog_map_srv };
-        ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 2, srvs);
+        ID3D11ShaderResourceView *srvs[] = { d3d.msaa_rt_srv, fogmap->srv, d3d.ds_srv };
+        ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 3, srvs);
         ID3D11DeviceContext_PSSetShader(d3d.context, d3d.msaa_resolve_ps, NULL, 0);
 
         ID3D11DeviceContext_Draw(d3d.context, 3, 0);
+
+        ID3D11ShaderResourceView *insane_people_made_this_api[] = { NULL, NULL, NULL };
+        ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 3, insane_people_made_this_api);
     }
 
     d3d.frame_index++;
@@ -954,63 +987,110 @@ resource_handle_t upload_texture(const upload_texture_t *params)
             INVALID_DEFAULT_CASE;
         }
 
-        D3D11_TEXTURE2D_DESC desc = {
-            .Width      = params->desc.w,
-            .Height     = params->desc.h,
-            .MipLevels  = 1,
-            .ArraySize  = 1,
-            .Format     = format,
-            .SampleDesc = { 1, 0 },
-            .Usage      = D3D11_USAGE_IMMUTABLE,
-            .BindFlags  = D3D11_BIND_SHADER_RESOURCE,
-        };
-
         uint32_t pitch = params->desc.pitch;
 
         if (!pitch)  
             pitch = params->desc.w*pixel_size;
 
-        if (params->desc.flags & TEXTURE_FLAG_CUBEMAP)
+        uint32_t slice_pitch = params->desc.slice_pitch;
+
+        if (!slice_pitch)  
+            slice_pitch = params->desc.w*params->desc.h*pixel_size;
+
+        if (params->desc.type == TEXTURE_TYPE_2D)
         {
-            desc.ArraySize = 6;
-            desc.MiscFlags |= D3D11_RESOURCE_MISC_TEXTURECUBE;
-
-            D3D11_SUBRESOURCE_DATA data[6];
-            for (size_t i = 0; i < 6; i++)
-            {
-                data[i] = (D3D11_SUBRESOURCE_DATA){
-                    .pSysMem     = params->data.faces[i],
-                    .SysMemPitch = pitch,
-                };
-            }
-
-            ID3D11Device_CreateTexture2D(d3d.device, &desc, &data[0], &resource->tex[0]);
-
-            D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {
-                .Format                = desc.Format,
-                .ViewDimension         = D3D11_SRV_DIMENSION_TEXTURECUBE,
-                .TextureCube.MipLevels = desc.MipLevels,
+            D3D11_TEXTURE2D_DESC desc = {
+                .Width      = params->desc.w,
+                .Height     = params->desc.h,
+                .MipLevels  = 1,
+                .ArraySize  = 1,
+                .Format     = format,
+                .SampleDesc = { 1, 0 },
+                .Usage      = D3D11_USAGE_IMMUTABLE,
+                .BindFlags  = D3D11_BIND_SHADER_RESOURCE,
             };
 
-            ID3D11Device_CreateShaderResourceView(d3d.device, (ID3D11Resource *)resource->tex[0], &srv_desc, &resource->srv);
+            if (params->desc.flags & TEXTURE_FLAG_CUBEMAP)
+            {
+                desc.ArraySize = 6;
+                desc.MiscFlags |= D3D11_RESOURCE_MISC_TEXTURECUBE;
+
+                D3D11_SUBRESOURCE_DATA data[6];
+                for (size_t i = 0; i < 6; i++)
+                {
+                    data[i] = (D3D11_SUBRESOURCE_DATA){
+                        .pSysMem     = params->data.faces[i],
+                        .SysMemPitch = pitch,
+                    };
+                }
+
+                ID3D11Device_CreateTexture2D(d3d.device, &desc, &data[0], &resource->tex[0]);
+
+                D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {
+                    .Format                = desc.Format,
+                    .ViewDimension         = D3D11_SRV_DIMENSION_TEXTURECUBE,
+                    .TextureCube.MipLevels = desc.MipLevels,
+                };
+
+                ID3D11Device_CreateShaderResourceView(d3d.device, (ID3D11Resource *)resource->tex[0], &srv_desc, &resource->srv);
+            }
+            else
+            {
+                desc.Usage = D3D11_USAGE_DEFAULT;
+                desc.MipLevels = 0;
+                desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
+                desc.MiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
+
+                ID3D11Device_CreateTexture2D(d3d.device, &desc, NULL, &resource->tex[0]);
+                ID3D11DeviceContext_UpdateSubresource(d3d.context, (ID3D11Resource *)resource->tex[0], 0, NULL, params->data.pixels, pitch, params->desc.h*pitch);
+
+                D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {
+                    .Format              = desc.Format,
+                    .ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE2D,
+                    .Texture2D.MipLevels = UINT_MAX,
+                };
+
+                ID3D11Device_CreateShaderResourceView(d3d.device, (ID3D11Resource *)resource->tex[0], &srv_desc, &resource->srv);
+                ID3D11DeviceContext_GenerateMips(d3d.context, resource->srv);
+            }
         }
         else
         {
-            desc.Usage = D3D11_USAGE_DEFAULT;
-            desc.MipLevels = 0;
-            desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
-            desc.MiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
+            ASSERT(params->desc.type == TEXTURE_TYPE_3D);
 
-            ID3D11Device_CreateTexture2D(d3d.device, &desc, NULL, &resource->tex[0]);
-            ID3D11DeviceContext_UpdateSubresource(d3d.context, (ID3D11Resource *)resource->tex[0], 0, NULL, params->data.pixels, pitch, params->desc.h*pitch);
+            ID3D11Device_CreateTexture3D(
+                d3d.device,
+                (&(D3D11_TEXTURE3D_DESC) {
+                    .Width     = params->desc.w,
+                    .Height    = params->desc.h,
+                    .Depth     = params->desc.d,
+                    .MipLevels = 0,
+                    .Format    = format,
+                    .Usage     = D3D11_USAGE_DEFAULT,
+                    .BindFlags = D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET,
+                    .MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS,
+                }),
+                NULL,
+                &resource->tex_3d
+            );
+
+#if 0
+                (&(D3D11_SUBRESOURCE_DATA) {
+                    .pSysMem          = params->data.pixels,
+                    .SysMemPitch      = params->desc.pitch,
+                    .SysMemSlicePitch = params->desc.slice_pitch,
+                }), 
+#endif
+
+            ID3D11DeviceContext_UpdateSubresource(d3d.context, (ID3D11Resource *)resource->tex_3d, 0, NULL, params->data.pixels, pitch, slice_pitch);
 
             D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {
-                .Format              = desc.Format,
-                .ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE2D,
-                .Texture2D.MipLevels = UINT_MAX,
+                .Format              = format,
+                .ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE3D,
+                .Texture3D.MipLevels = UINT_MAX,
             };
 
-            ID3D11Device_CreateShaderResourceView(d3d.device, (ID3D11Resource *)resource->tex[0], &srv_desc, &resource->srv);
+            ID3D11Device_CreateShaderResourceView(d3d.device, (ID3D11Resource *)resource->tex_3d, &srv_desc, &resource->srv);
             ID3D11DeviceContext_GenerateMips(d3d.context, resource->srv);
         }
         result = bd_get_handle(&d3d_textures, resource);

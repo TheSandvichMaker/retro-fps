@@ -45,10 +45,17 @@ typedef enum texture_flags_t
     TEXTURE_FLAG_CUBEMAP = 0x1,
 } upload_texture_flags_e;
 
+typedef enum texture_type_t
+{
+    TEXTURE_TYPE_2D,
+    TEXTURE_TYPE_3D,
+} texture_type_t;
+
 typedef struct texture_desc_t
 {
+    texture_type_t type;
     pixel_format_t format;
-    uint32_t w, h, pitch;
+    uint32_t w, h, d, pitch, slice_pitch;
     uint32_t flags;
 } texture_desc_t;
 
@@ -147,6 +154,9 @@ typedef struct r_view_t
     rect2_t clip_rect;
     m4x4_t camera, projection;
     resource_handle_t skybox;
+    resource_handle_t fogmap;
+    v3_t fog_offset;
+    v3_t fog_dim;
 } r_view_t;
 
 typedef enum r_command_kind_t

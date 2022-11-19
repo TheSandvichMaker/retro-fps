@@ -3,11 +3,11 @@
 
 float max3(float3 v) { return max(v.x, max(v.y, v.z)); }
 
-sampler sampler_point  : register(s0);
-sampler sampler_linear : register(s1);
-
+sampler sampler_point          : register(s0);
+sampler sampler_linear         : register(s1);
 sampler sampler_point_clamped  : register(s2);
 sampler sampler_linear_clamped : register(s3);
+sampler sampler_fog            : register(s4);
 
 struct VS_INPUT_POS
 {
@@ -35,6 +35,8 @@ cbuffer cbuffer0 : register(b0)
     float4x4 model_matrix;
     uint     frame_index;
     float    depth_bias;
+    float3   fog_offset;
+    float3   fog_dim;
 }
 
 float2 fat_pixel(float2 tex_dim, float2 in_uv)
@@ -77,6 +79,7 @@ void camera_ray(float2 uv, out float3 position, out float3 direction)
     };
 
     float2 nds = 2*uv - 1;
+    nds.y = -nds.y;
 
     float film_half_w = rcp(proj_matrix[0][0]);
     float film_half_h = rcp(proj_matrix[1][1]);

@@ -93,6 +93,10 @@ typedef struct map_t
 
     rect3_t bounds;
 
+    resource_handle_t fogmap;
+    v3_t fogmap_offset;
+    v3_t fogmap_dim;
+
     uint32_t node_count;
     uint32_t brush_count;
     uint32_t light_count;
