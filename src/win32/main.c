@@ -364,6 +364,14 @@ int wWinMain(HINSTANCE instance,
             }
         }
 
+        for (UINT i = 0; i < 12; i++)
+        {
+            if (GetAsyncKeyState(VK_F1 + i))
+            {
+                input.button_states |= ((uint64_t)BUTTON_F1 << i);
+            }
+        }
+
         prev_cursor = cursor;
 
         r_reset_command_list();

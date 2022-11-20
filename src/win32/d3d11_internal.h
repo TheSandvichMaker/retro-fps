@@ -3,6 +3,7 @@
 
 #include "core/api_types.h"
 #include "render/render.h"
+#include "game/asset.h"
 
 typedef struct d3d_cbuffer_t
 {
@@ -60,6 +61,7 @@ typedef struct d3d_state_t
     d3d_texture_t *white_texture;
     d3d_texture_t *missing_texture;
     d3d_texture_t *missing_texture_cubemap;
+    d3d_texture_t *blue_noise;
 
     d3d_model_t *skybox_model;
 

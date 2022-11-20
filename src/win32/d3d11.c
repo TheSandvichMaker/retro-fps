@@ -458,6 +458,42 @@ int init_d3d11(void *hwnd_)
         d3d.missing_texture_cubemap = bd_get(&d3d_textures, cubemap_handle);
     }
 
+    // blue noise texture
+    m_scoped(temp)
+    {
+        image_t t0 = load_image(temp, strlit("gamedata/textures/noise/LDR_LLL1_0.png"), 1);
+        image_t t1 = load_image(temp, strlit("gamedata/textures/noise/LDR_LLL1_7.png"), 1);
+        image_t t2 = load_image(temp, strlit("gamedata/textures/noise/LDR_LLL1_15.png"), 1);
+        image_t t3 = load_image(temp, strlit("gamedata/textures/noise/LDR_LLL1_23.png"), 1);
+
+        uint32_t *pixels = m_alloc_array(temp, t0.w*t0.h, uint32_t);
+
+        unsigned char *t0p = t0.pixels;
+        unsigned char *t1p = t1.pixels;
+        unsigned char *t2p = t2.pixels;
+        unsigned char *t3p = t3.pixels;
+
+        for (size_t i = 0; i < t0.w*t0.h; i++)
+        {
+            pixels[i] = ((t0p[i] <<  0) | 
+                         (t1p[i] <<  8) |
+                         (t2p[i] << 16) |
+                         (t3p[i] << 24));
+        }
+
+        resource_handle_t handle = render->upload_texture(&(upload_texture_t){
+            .desc = {
+                .format = PIXEL_FORMAT_RGBA8,
+                .w      = t0.w,
+                .h      = t0.h,
+            },
+            .data = {
+                .pixels = pixels,
+            },
+        });
+        d3d.blue_noise = bd_get(&d3d_textures, handle);
+    }
+
     // create immediate rendering buffers
 
     {
@@ -935,14 +971,14 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
         // set pixel shader
         ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);
         ID3D11DeviceContext_PSSetSamplers(d3d.context, 0, D3D_SAMPLER_COUNT, d3d.samplers);
-        ID3D11ShaderResourceView *srvs[] = { d3d.msaa_rt_srv, fogmap->srv, d3d.ds_srv };
-        ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 3, srvs);
+        ID3D11ShaderResourceView *srvs[] = { d3d.msaa_rt_srv, fogmap->srv, d3d.ds_srv, d3d.blue_noise->srv, };
+        ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 4, srvs);
         ID3D11DeviceContext_PSSetShader(d3d.context, d3d.msaa_resolve_ps, NULL, 0);
 
         ID3D11DeviceContext_Draw(d3d.context, 3, 0);
 
-        ID3D11ShaderResourceView *insane_people_made_this_api[] = { NULL, NULL, NULL };
-        ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 3, insane_people_made_this_api);
+        ID3D11ShaderResourceView *insane_people_made_this_api[] = { NULL, NULL, NULL, NULL };
+        ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 4, insane_people_made_this_api);
     }
 
     d3d.frame_index++;

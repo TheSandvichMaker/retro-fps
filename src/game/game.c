@@ -434,7 +434,7 @@ void game_init(void)
     update_camera_rotation(&g_camera, 0.0f);
 
     {
-        image_t font_image = load_image(temp, strlit("gamedata/textures/font.png"));
+        image_t font_image = load_image(temp, strlit("gamedata/textures/font.png"), 4);
         font.w = font_image.w;
         font.h = font_image.h;
         font.cw = 10;
@@ -457,19 +457,23 @@ void game_init(void)
 
 #if 1
     bake_lighting(&(lum_params_t) {
-        .arena         = &world->arena,
-        .map           = world->map,
-        .sun_direction = make_v3(0.25f, 0.75f, 1),
-        .sun_color     = mul(1.0f, make_v3(1, 1, 0.75f)),
-        .sky_color     = mul(1.0f, make_v3(0.15f, 0.30f, 0.62f)),
+        .arena               = &world->arena,
+        .map                 = world->map,
+        .sun_direction       = make_v3(0.25f, 0.75f, 1),
+        .sun_color           = mul(4.0f, make_v3(1, 1, 0.75f)),
+        .sky_color           = mul(1.0f, make_v3(0.15f, 0.30f, 0.62f)),
 
         // TODO: Have a macro for optimization level to check instead of DEBUG
 #if DEBUG
-        .ray_count     = 8,
-        .ray_recursion = 4,
+        .ray_count               = 8,
+        .ray_recursion           = 4,
+        .fog_light_sample_count  = 16,
+        .fogmap_scale            = 16,
 #else
-        .ray_count     = 64,
-        .ray_recursion = 4,
+        .ray_count               = 64,
+        .ray_recursion           = 4,
+        .fog_light_sample_count  = 64,
+        .fogmap_scale            = 8,
 #endif
     }, &bake_results);
 #endif
@@ -510,12 +514,12 @@ void game_init(void)
                 }
 #else
                 image_t faces[6] = {
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/posx.jpg", strexpand(skytex))),
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/negx.jpg", strexpand(skytex))),
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/posy.jpg", strexpand(skytex))),
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/negy.jpg", strexpand(skytex))),
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/posz.jpg", strexpand(skytex))),
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/negz.jpg", strexpand(skytex))),
+                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/posx.jpg", strexpand(skytex)), 4),
+                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/negx.jpg", strexpand(skytex)), 4),
+                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/posy.jpg", strexpand(skytex)), 4),
+                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/negy.jpg", strexpand(skytex)), 4),
+                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/posz.jpg", strexpand(skytex)), 4),
+                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/negz.jpg", strexpand(skytex)), 4),
                 };
 
                 skybox = render->upload_texture(&(upload_texture_t){
@@ -672,6 +676,7 @@ void game_tick(game_io_t *io, float dt)
 
     for (map_entity_t *entity = map->first_entity; entity; entity = entity->next)
     {
+#if 0
         if (is_class(entity, strlit("point_light")))
         {
             r_immediate_draw_t *draw_call = r_immediate_draw_begin(&(r_immediate_draw_t){
@@ -683,6 +688,7 @@ void game_tick(game_io_t *io, float dt)
 
             r_immediate_draw_end(draw_call);
         }
+#endif
 
         for (map_brush_t *brush = entity->first_brush; brush; brush = brush->next)
         {
@@ -693,6 +699,11 @@ void game_tick(game_io_t *io, float dt)
             }
         }
     }
+
+    static bool show_lightmap_debug_panel = true;
+
+    if (ui_button_pressed(BUTTON_F1))
+        show_lightmap_debug_panel = !show_lightmap_debug_panel;
 
     static map_brush_t *selected_brush = NULL;
     static map_plane_t *selected_plane = NULL;
@@ -710,135 +721,140 @@ void game_tick(game_io_t *io, float dt)
     static int min_display_recursion = 0;
     static int max_display_recursion = 0;
 
-    UI_Window(strlit("lightmap debugger panel"), 0, 32, 32, 500, 800)
+    if (show_lightmap_debug_panel)
     {
-        v3_t p = player_view_origin(player);
-        v3_t d = player_view_direction(player);
-
-        m4x4_t view_matrix = make_view_matrix(camera->p, negate(camera->computed_z), (v3_t){0,0,1});
-
-        v3_t camera_x = {
-            view_matrix.e[0][0],
-            view_matrix.e[1][0],
-            view_matrix.e[2][0],
-        };
-
-        v3_t camera_y = {
-            view_matrix.e[0][1],
-            view_matrix.e[1][1],
-            view_matrix.e[2][1],
-        };
-
-        v3_t camera_z = {
-            view_matrix.e[0][2],
-            view_matrix.e[1][2],
-            view_matrix.e[2][2],
-        };
-
-        v3_t recon_p = negate(v3_add3(mul(view_matrix.e[3][0], camera_x),
-                                      mul(view_matrix.e[3][1], camera_y),
-                                      mul(view_matrix.e[3][2], camera_z)));
-
-        ui_label(string_format(temp, "camera d:               %.02f %.02f %.02f", d.x, d.y, d.z), 0);
-        ui_label(string_format(temp, "camera p:               %.02f %.02f %.02f", p.x, p.y, p.z), 0);
-        ui_label(string_format(temp, "reconstructed camera p: %.02f %.02f %.02f", recon_p.x, recon_p.y, recon_p.z), 0);
-
-        ui_checkbox(strlit("enabled"), &g_debug_lightmaps);
-        ui_checkbox(strlit("show direct light rays"), &show_direct_light_rays);
-        ui_checkbox(strlit("show indirect light rays"), &show_indirect_light_rays);
-        ui_checkbox(strlit("fullbright rays"), &fullbright_rays);
-        ui_checkbox(strlit("no ray depth test"), &no_ray_depth_test);
-
-        ui_increment_decrement(strlit("min recursion level"), &min_display_recursion, 0, 16);
-        ui_increment_decrement(strlit("max recursion level"), &max_display_recursion, 0, 16);
-
-        if (selected_poly)
+        UI_Window(strlit("lightmap debugger panel"), 0, 32, 32, 500, 800)
         {
-            map_poly_t *poly = selected_poly;
+            v3_t p = player_view_origin(player);
+            v3_t d = player_view_direction(player);
 
-            texture_desc_t desc;
-            render->describe_texture(poly->lightmap, &desc);
+            m4x4_t view_matrix = make_view_matrix(camera->p, negate(camera->computed_z), (v3_t){0,0,1});
 
-            ui_label(string_format(temp, "debug ordinal: %d", selected_plane->debug_ordinal), 0);
-            ui_label(string_format(temp, "resolution: %u x %u", desc.w, desc.h), 0);
-            if (pixel_selection_active)
+            v3_t camera_x = {
+                view_matrix.e[0][0],
+                view_matrix.e[1][0],
+                view_matrix.e[2][0],
+            };
+
+            v3_t camera_y = {
+                view_matrix.e[0][1],
+                view_matrix.e[1][1],
+                view_matrix.e[2][1],
+            };
+
+            v3_t camera_z = {
+                view_matrix.e[0][2],
+                view_matrix.e[1][2],
+                view_matrix.e[2][2],
+            };
+
+            v3_t recon_p = negate(v3_add3(mul(view_matrix.e[3][0], camera_x),
+                                          mul(view_matrix.e[3][1], camera_y),
+                                          mul(view_matrix.e[3][2], camera_z)));
+
+            ui_label(string_format(temp, "camera d:               %.02f %.02f %.02f", d.x, d.y, d.z), 0);
+            ui_label(string_format(temp, "camera p:               %.02f %.02f %.02f", p.x, p.y, p.z), 0);
+            ui_label(string_format(temp, "reconstructed camera p: %.02f %.02f %.02f", recon_p.x, recon_p.y, recon_p.z), 0);
+
+            ui_label(string_format(temp, "fogmap resolution: %u %u %u", map->fogmap_w, map->fogmap_h, map->fogmap_d), 0);
+
+            ui_checkbox(strlit("enabled"), &g_debug_lightmaps);
+            ui_checkbox(strlit("show direct light rays"), &show_direct_light_rays);
+            ui_checkbox(strlit("show indirect light rays"), &show_indirect_light_rays);
+            ui_checkbox(strlit("fullbright rays"), &fullbright_rays);
+            ui_checkbox(strlit("no ray depth test"), &no_ray_depth_test);
+
+            ui_increment_decrement(strlit("min recursion level"), &min_display_recursion, 0, 16);
+            ui_increment_decrement(strlit("max recursion level"), &max_display_recursion, 0, 16);
+
+            if (selected_poly)
             {
-                ui_label(string_format(temp, "selected pixel region: (%d, %d) (%d, %d)", 
-                                       selected_pixels.min.x,
-                                       selected_pixels.min.y,
-                                       selected_pixels.max.x,
-                                       selected_pixels.max.y), 0);
+                map_poly_t *poly = selected_poly;
 
-                if (ui_button(strlit("clear selection")).released)
+                texture_desc_t desc;
+                render->describe_texture(poly->lightmap, &desc);
+
+                ui_label(string_format(temp, "debug ordinal: %d", selected_plane->debug_ordinal), 0);
+                ui_label(string_format(temp, "resolution: %u x %u", desc.w, desc.h), 0);
+                if (pixel_selection_active)
                 {
-                    pixel_selection_active = false;
-                    selected_pixels = (rect2i_t){ 0 };
-                }
-            }
-            else
-            {
-                ui_spacer(ui_txt(1.0f));
-                ui_spacer(ui_txt(1.0f));
-            }
+                    ui_label(string_format(temp, "selected pixel region: (%d, %d) (%d, %d)", 
+                                           selected_pixels.min.x,
+                                           selected_pixels.min.y,
+                                           selected_pixels.max.x,
+                                           selected_pixels.max.y), 0);
 
-            ui_box_t *image_viewer = ui_box(strlit("lightmap image"), UI_CLICKABLE|UI_DRAGGABLE|UI_DRAW_BACKGROUND);
-            if (desc.w >= desc.h)
-            {
-                ui_set_size(image_viewer, AXIS2_X, ui_pct(1.0f, 1.0f));
-                ui_set_size(image_viewer, AXIS2_Y, ui_aspect_ratio((float)desc.h / (float)desc.w, 1.0f));
-            }
-            else
-            {
-                ui_set_size(image_viewer, AXIS2_X, ui_aspect_ratio((float)desc.w / (float)desc.h, 1.0f));
-                ui_set_size(image_viewer, AXIS2_Y, ui_pct(1.0f, 1.0f));
-            }
-            image_viewer->texture = poly->lightmap;
-
-            ui_interaction_t interaction = ui_interaction_from_box(image_viewer);
-            if (interaction.hovering || pixel_selection_active)
-            {
-                v2_t rel_press_p = sub(interaction.press_p, image_viewer->rect.min);
-                v2_t rel_mouse_p = sub(interaction.mouse_p, image_viewer->rect.min);
-
-                v2_t rect_dim   = rect2_get_dim(image_viewer->rect);
-                v2_t pixel_size = div(rect_dim, make_v2((float)desc.w, (float)desc.h));
-
-                UI_Parent(image_viewer)
-                {
-                    ui_box_t *selection_highlight = ui_box(strlit("selection highlight"), UI_DRAW_OUTLINE);
-                    selection_highlight->style.outline_color = ui_gradient_from_rgba(1, 0, 0, 1);
-
-                    v2_t selection_start = { rel_press_p.x, rel_press_p.y };
-                    v2_t selection_end   = { rel_mouse_p.x, rel_mouse_p.y };
-                    
-                    rect2i_t pixel_selection = { 
-                        .min = {
-                            (int)(selection_start.x / pixel_size.x),
-                            (int)(selection_start.y / pixel_size.y),
-                        },
-                        .max = {
-                            (int)(selection_end.x / pixel_size.x) + 1,
-                            (int)(selection_end.y / pixel_size.y) + 1,
-                        },
-                    };
-
-                    if (pixel_selection.max.y < pixel_selection.min.y)
-                        SWAP(int, pixel_selection.max.y, pixel_selection.min.y);
-
-                    if (interaction.dragging)
+                    if (ui_button(strlit("clear selection")).released)
                     {
-                        pixel_selection_active = true;
-                        selected_pixels = pixel_selection;
+                        pixel_selection_active = false;
+                        selected_pixels = (rect2i_t){ 0 };
                     }
+                }
+                else
+                {
+                    ui_spacer(ui_txt(1.0f));
+                    ui_spacer(ui_txt(1.0f));
+                }
 
-                    v2i_t selection_dim = rect2i_get_dim(selected_pixels);
+                ui_box_t *image_viewer = ui_box(strlit("lightmap image"), UI_CLICKABLE|UI_DRAGGABLE|UI_DRAW_BACKGROUND);
+                if (desc.w >= desc.h)
+                {
+                    ui_set_size(image_viewer, AXIS2_X, ui_pct(1.0f, 1.0f));
+                    ui_set_size(image_viewer, AXIS2_Y, ui_aspect_ratio((float)desc.h / (float)desc.w, 1.0f));
+                }
+                else
+                {
+                    ui_set_size(image_viewer, AXIS2_X, ui_aspect_ratio((float)desc.w / (float)desc.h, 1.0f));
+                    ui_set_size(image_viewer, AXIS2_Y, ui_pct(1.0f, 1.0f));
+                }
+                image_viewer->texture = poly->lightmap;
 
-                    ui_set_size(selection_highlight, AXIS2_X, ui_pixels((float)selection_dim.x*pixel_size.x, 1.0f));
-                    ui_set_size(selection_highlight, AXIS2_Y, ui_pixels((float)selection_dim.y*pixel_size.y, 1.0f));
+                ui_interaction_t interaction = ui_interaction_from_box(image_viewer);
+                if (interaction.hovering || pixel_selection_active)
+                {
+                    v2_t rel_press_p = sub(interaction.press_p, image_viewer->rect.min);
+                    v2_t rel_mouse_p = sub(interaction.mouse_p, image_viewer->rect.min);
 
-                    selection_highlight->position_offset[AXIS2_X] = (float)selected_pixels.min.x * pixel_size.x;
-                    selection_highlight->position_offset[AXIS2_Y] = rect_dim.y - (float)(selected_pixels.min.y + selection_dim.y) * pixel_size.y;
+                    v2_t rect_dim   = rect2_get_dim(image_viewer->rect);
+                    v2_t pixel_size = div(rect_dim, make_v2((float)desc.w, (float)desc.h));
 
+                    UI_Parent(image_viewer)
+                    {
+                        ui_box_t *selection_highlight = ui_box(strlit("selection highlight"), UI_DRAW_OUTLINE);
+                        selection_highlight->style.outline_color = ui_gradient_from_rgba(1, 0, 0, 1);
+
+                        v2_t selection_start = { rel_press_p.x, rel_press_p.y };
+                        v2_t selection_end   = { rel_mouse_p.x, rel_mouse_p.y };
+                        
+                        rect2i_t pixel_selection = { 
+                            .min = {
+                                (int)(selection_start.x / pixel_size.x),
+                                (int)(selection_start.y / pixel_size.y),
+                            },
+                            .max = {
+                                (int)(selection_end.x / pixel_size.x) + 1,
+                                (int)(selection_end.y / pixel_size.y) + 1,
+                            },
+                        };
+
+                        if (pixel_selection.max.y < pixel_selection.min.y)
+                            SWAP(int, pixel_selection.max.y, pixel_selection.min.y);
+
+                        if (interaction.dragging)
+                        {
+                            pixel_selection_active = true;
+                            selected_pixels = pixel_selection;
+                        }
+
+                        v2i_t selection_dim = rect2i_get_dim(selected_pixels);
+
+                        ui_set_size(selection_highlight, AXIS2_X, ui_pixels((float)selection_dim.x*pixel_size.x, 1.0f));
+                        ui_set_size(selection_highlight, AXIS2_Y, ui_pixels((float)selection_dim.y*pixel_size.y, 1.0f));
+
+                        selection_highlight->position_offset[AXIS2_X] = (float)selected_pixels.min.x * pixel_size.x;
+                        selection_highlight->position_offset[AXIS2_Y] = rect_dim.y - (float)(selected_pixels.min.y + selection_dim.y) * pixel_size.y;
+
+                    }
                 }
             }
         }

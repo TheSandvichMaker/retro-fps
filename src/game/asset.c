@@ -48,18 +48,18 @@ void *stbi_realloc(void *ptr, size_t new_size)
 //
 //
 
-image_t load_image(arena_t *arena, string_t path)
+image_t load_image(arena_t *arena, string_t path, unsigned nchannels)
 {
     stbi_arena = arena;
 
     int w = 0, h = 0, n = 0;
-    unsigned char *pixels = stbi_load(string_null_terminate(temp, path), &w, &h, &n, 4);
+    unsigned char *pixels = stbi_load(string_null_terminate(temp, path), &w, &h, &n, nchannels);
 
     image_t result = {
         .w      = (unsigned)w,
         .h      = (unsigned)h,
         .pitch  = sizeof(uint32_t)*w,
-        .pixels = (uint32_t *)pixels,
+        .pixels = pixels,
     };
 
     return result;

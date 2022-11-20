@@ -5,8 +5,8 @@
 
 typedef struct image_t
 {
-    uint32_t w, h, pitch;
-    uint32_t *pixels;
+    uint32_t w, h, pitch, nchannels;
+    void *pixels;
 } image_t;
 
 typedef struct cubemap_t
@@ -15,7 +15,7 @@ typedef struct cubemap_t
     uint32_t *pixels[6];
 } cubemap_t;
 
-image_t load_image(arena_t *arena, string_t path);
+image_t load_image(arena_t *arena, string_t path, unsigned nchannels);
 bool split_image_into_cubemap(const image_t *source, cubemap_t *cubemap);
 
 #endif /* ASSET_H */

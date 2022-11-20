@@ -743,10 +743,10 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
                 string_t texture_path_png = string_format(temp, "gamedata/textures/%.*s.png", strexpand(plane->texture));
                 string_t texture_path_tga = string_format(temp, "gamedata/textures/%.*s.tga", strexpand(plane->texture));
 
-                image_t image = load_image(arena, texture_path_png);
+                image_t image = load_image(arena, texture_path_png, 4);
 
                 if (!image.pixels)
-                    image = load_image(arena, texture_path_tga);
+                    image = load_image(arena, texture_path_tga, 4);
 
                 if (image.pixels)
                 {

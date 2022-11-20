@@ -12,6 +12,11 @@ typedef struct lum_params_t
     int ray_count;      // number of diffuse rays per lightmap pixel
     int ray_recursion;  // maximum recursion depth for indirect lighting
 
+    int fogmap_cluster_size;
+    int fogmap_scale;
+    int fog_light_sample_count;
+    float fog_base_scattering;
+
     struct image_t *skybox;
 
     v3_t sun_direction;

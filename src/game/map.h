@@ -8,7 +8,7 @@
 #if DEBUG
 #define LIGHTMAP_SCALE 8
 #else
-#define LIGHTMAP_SCALE 2
+#define LIGHTMAP_SCALE 4
 #endif
 
 typedef struct map_plane_t
@@ -96,6 +96,10 @@ typedef struct map_t
     resource_handle_t fogmap;
     v3_t fogmap_offset;
     v3_t fogmap_dim;
+
+    uint32_t fogmap_w;
+    uint32_t fogmap_h;
+    uint32_t fogmap_d;
 
     uint32_t node_count;
     uint32_t brush_count;

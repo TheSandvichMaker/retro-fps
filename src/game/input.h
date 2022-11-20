@@ -3,31 +3,40 @@
 
 #include "core/api_types.h"
 
-typedef enum button_t
-{
-    BUTTON_LEFT          = 1 << 0,
-    BUTTON_RIGHT         = 1 << 1,
-    BUTTON_FORWARD       = 1 << 2,
-    BUTTON_BACK          = 1 << 3,
-    BUTTON_JUMP          = 1 << 4,
-    BUTTON_RUN           = 1 << 5,
-    BUTTON_CROUCH        = 1 << 6,
-    BUTTON_FIRE1         = 1 << 7,
-    BUTTON_FIRE2         = 1 << 8,
-    BUTTON_NEXT_WEAPON   = 1 << 9,
-    BUTTON_PREV_WEAPON   = 1 << 10,
-    BUTTON_WEAPON1       = 1 << 11,
-    BUTTON_WEAPON2       = 1 << 12,
-    BUTTON_WEAPON3       = 1 << 13,
-    BUTTON_WEAPON4       = 1 << 14,
-    BUTTON_WEAPON5       = 1 << 15,
-    BUTTON_WEAPON6       = 1 << 16,
-    BUTTON_WEAPON7       = 1 << 17,
-    BUTTON_WEAPON8       = 1 << 18,
-    BUTTON_WEAPON9       = 1 << 19,
-    BUTTON_ESCAPE        = 1 << 20,
-    BUTTON_TOGGLE_NOCLIP = 1 << 21,
-} button_t;
+#define BUTTON_LEFT          (1 << 0)
+#define BUTTON_RIGHT         (1 << 1)
+#define BUTTON_FORWARD       (1 << 2)
+#define BUTTON_BACK          (1 << 3)
+#define BUTTON_JUMP          (1 << 4)
+#define BUTTON_RUN           (1 << 5)
+#define BUTTON_CROUCH        (1 << 6)
+#define BUTTON_FIRE1         (1 << 7)
+#define BUTTON_FIRE2         (1 << 8)
+#define BUTTON_NEXT_WEAPON   (1 << 9)
+#define BUTTON_PREV_WEAPON   (1 << 10)
+#define BUTTON_WEAPON1       (1 << 11)
+#define BUTTON_WEAPON2       (1 << 12)
+#define BUTTON_WEAPON3       (1 << 13)
+#define BUTTON_WEAPON4       (1 << 14)
+#define BUTTON_WEAPON5       (1 << 15)
+#define BUTTON_WEAPON6       (1 << 16)
+#define BUTTON_WEAPON7       (1 << 17)
+#define BUTTON_WEAPON8       (1 << 18)
+#define BUTTON_WEAPON9       (1 << 19)
+#define BUTTON_ESCAPE        (1 << 20)
+#define BUTTON_TOGGLE_NOCLIP (1 << 21)
+#define BUTTON_F1            (1 << 22)
+#define BUTTON_F2            (1 << 23)
+#define BUTTON_F3            (1 << 24)
+#define BUTTON_F4            (1 << 25)
+#define BUTTON_F5            (1 << 26)
+#define BUTTON_F6            (1 << 27)
+#define BUTTON_F7            (1 << 28)
+#define BUTTON_F8            (1 << 29)
+#define BUTTON_F9            (1 << 30)
+#define BUTTON_F10           (1 << 31)
+#define BUTTON_F11           (1 << 32)
+#define BUTTON_F12           (1 << 33)
 
 typedef enum axis_t
 {
