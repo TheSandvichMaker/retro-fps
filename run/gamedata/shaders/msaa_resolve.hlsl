@@ -70,9 +70,9 @@ float4 raymarch_fog(float2 uv, uint2 co, float dither, uint sample_index)
 
     float stop_distance = min(depth, max_distance);
 
-    float density    = 0.002;
+    float density    = 0.01;
     float absorption = 0.002;
-    float scattering = 0.005;
+    float scattering = 0.01;
     float extinction = absorption + scattering;
 
     float3 ambient = 0; // 0.5*float3(0.15, 0.30, 0.62);

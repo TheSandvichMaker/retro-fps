@@ -460,8 +460,8 @@ void game_init(void)
         .arena               = &world->arena,
         .map                 = world->map,
         .sun_direction       = make_v3(0.25f, 0.75f, 1),
-        .sun_color           = mul(4.0f, make_v3(1, 1, 0.75f)),
-        .sky_color           = mul(1.0f, make_v3(0.15f, 0.30f, 0.62f)),
+        .sun_color           = mul(0.15f, make_v3(1, 1, 0.75f)),
+        .sky_color           = mul(0.5f, make_v3(0.15f, 0.30f, 0.62f)),
 
         // TODO: Have a macro for optimization level to check instead of DEBUG
 #if DEBUG
