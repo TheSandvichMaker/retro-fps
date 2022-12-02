@@ -182,6 +182,7 @@ bool ui_begin(bitmap_font_t *font, const ui_style_t *style)
     get_mouse_delta(&mouse_dx, &mouse_dy);
 
     g_ui.mouse_dp = make_v2((float)mouse_dx, (float)mouse_dy);
+    g_ui.mouse_dp.y = -g_ui.mouse_dp.y;
 
     g_ui.font = font;
 
@@ -219,6 +220,7 @@ ui_interaction_t ui_interaction_from_box(ui_box_t *box)
 
     if (box == g_ui.active)
     {
+        result.drag_delta = g_ui.mouse_dp;
         result.dragging = !!(box->flags & UI_DRAGGABLE);
         result.released = ui_button_released(BUTTON_FIRE1);
     }
