@@ -33,6 +33,8 @@
 #define RAD_TO_DEG (180.0f / PI32)
 #define PAD(n) char PASTE(pad__, __LINE__)[n]
 
+#define MASK_BITS(n) ((1 << ((n) + 1)) - 1)
+
 #define DEFAULT_STRING_ALIGN 16
 
 typedef struct string_t

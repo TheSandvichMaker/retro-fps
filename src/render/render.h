@@ -36,8 +36,9 @@ typedef enum pixel_format_t
     PIXEL_FORMAT_RG8,
     PIXEL_FORMAT_RGBA8,
     PIXEL_FORMAT_SRGB8_A8,
-    PIXEL_FORMAT_R32G32B32,
-    PIXEL_FORMAT_R32G32B32A32,
+    PIXEL_FORMAT_R11G11B10F,
+    PIXEL_FORMAT_R32G32B32F,
+    PIXEL_FORMAT_R32G32B32A32F,
 } pixel_format_t;
 
 typedef enum texture_flags_t
@@ -321,6 +322,67 @@ static inline v4_t unpack_color(uint32_t color)
     result.y = rcp_255*(float)((color >>  8) & 0xFF);
     result.z = rcp_255*(float)((color >> 16) & 0xFF);
     result.w = rcp_255*(float)((color >> 24) & 0xFF);
+
+    return result;
+}
+
+// https://registry.khronos.org/OpenGL/extensions/EXT/EXT_packed_float.txt
+
+static inline unsigned pack_float11(float value)
+{
+	// This does not handle NaN or infinity.
+
+    if (value < 0.0f) 
+        value = 0.0f;
+
+    if (value > 65024.0f)
+        value = 65024.0f;
+
+    union
+    {
+        float    f;
+        unsigned i;
+    } u;
+
+    u.f = value;
+
+    int exponent = ((u.i >> 23) & 0xFF) - 127;
+    int mantissa = (u.i & ((1 << 23) - 1));
+
+    return (((exponent + 15) << 6) | (mantissa >> (23 - 6))) & MASK_BITS(11);
+}
+
+static inline unsigned pack_float10(float value)
+{
+	// This does not handle NaN or infinity.
+
+    if (value < 0.0f) 
+        value = 0.0f;
+
+    if (value > 64512.0f)
+        value = 64512.0f;
+
+    union
+    {
+        float    f;
+        unsigned i;
+    } u;
+
+    u.f = value;
+
+    int exponent = ((u.i >> 23) & 0xFF) - 127;
+    int mantissa = u.i & MASK_BITS(22);
+
+    return (((exponent + 15) << 5) | (mantissa >> (23 - 5))) & MASK_BITS(10);
+}
+
+static inline uint32_t pack_r11g11b10f(v3_t color)
+{
+    unsigned r = pack_float11(color.x);
+    unsigned g = pack_float11(color.y);
+    unsigned b = pack_float10(color.z);
+
+    unsigned result = (b << 22) | (g << 11) | r;
 
     return result;
 }

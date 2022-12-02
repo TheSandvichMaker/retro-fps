@@ -301,175 +301,184 @@ static void lum_job(job_context_t *job_context, void *userdata)
     int w = plane->lm_tex_w;
     int h = plane->lm_tex_h;
 
-    v4_t   *direct_lighting_pixels = m_alloc_array(arena, w*h, v4_t);
-    v4_t *indirect_lighting_pixels = m_alloc_array(arena, w*h, v4_t);
-
-    /* int arrow_index = 0; */
-
-    for (size_t y = 0; y < h; y++)
-    for (size_t x = 0; x < w; x++)
+    m_scoped(temp)
     {
-        float u = ((float)x + 0.5f) / (float)(w);
-        float v = ((float)y + 0.5f) / (float)(h);
+        v3_t   *direct_lighting_pixels = m_alloc_array(temp, w*h, v3_t);
+        v3_t *indirect_lighting_pixels = m_alloc_array(temp, w*h, v3_t);
 
-        v3_t world_p = plane->lm_origin;
-        world_p = add(world_p, mul(scale_x*u, plane->lm_s));
-        world_p = add(world_p, mul(scale_y*v, plane->lm_t));
+        /* int arrow_index = 0; */
 
-        v3_t   direct_lighting = { 0 };
-        v3_t indirect_lighting = { 0 };
-
-        for (int i = 0; i < ray_count; i++)
+        for (size_t y = 0; y < h; y++)
+        for (size_t x = 0; x < w; x++)
         {
-            lum_path_t *path = m_alloc_struct(arena, lum_path_t);
-            path->source_pixel = (v2i_t){ (int)x, (int)y };
-            sll_push_back(thread->debug.first_path, thread->debug.last_path, path);
+            float u = ((float)x + 0.5f) / (float)(w);
+            float v = ((float)y + 0.5f) / (float)(h);
 
-            lum_path_vertex_t *path_vertex = m_alloc_struct(arena, lum_path_vertex_t);
-            path->vertex_count++;
-            dll_push_back(path->first_vertex, path->last_vertex, path_vertex);
+            v3_t world_p = plane->lm_origin;
+            world_p = add(world_p, mul(scale_x*u, plane->lm_s));
+            world_p = add(world_p, mul(scale_y*v, plane->lm_t));
 
-            path_vertex->brush        = brush;
-            path_vertex->poly         = poly;
-            path_vertex->o            = world_p;
-            path_vertex->throughput   = make_v3(1, 1, 1);
+            v3_t   direct_lighting = { 0 };
+            v3_t indirect_lighting = { 0 };
 
-            v3_t this_direct_lighting = evaluate_lighting(thread, path_vertex, world_p, n);
+            for (int i = 0; i < ray_count; i++)
+            {
+                lum_path_t *path = m_alloc_struct(arena, lum_path_t);
+                path->source_pixel = (v2i_t){ (int)x, (int)y };
+                sll_push_back(thread->debug.first_path, thread->debug.last_path, path);
 
-            path_vertex->contribution = this_direct_lighting;
+                lum_path_vertex_t *path_vertex = m_alloc_struct(arena, lum_path_vertex_t);
+                path->vertex_count++;
+                dll_push_back(path->first_vertex, path->last_vertex, path_vertex);
 
-            direct_lighting = add(direct_lighting, this_direct_lighting);
+                path_vertex->brush        = brush;
+                path_vertex->poly         = poly;
+                path_vertex->o            = world_p;
+                path_vertex->throughput   = make_v3(1, 1, 1);
 
-            v2_t sample = random_unilateral2(entropy);
-            v3_t unrotated_dir = map_to_cosine_weighted_hemisphere(sample);
+                v3_t this_direct_lighting = evaluate_lighting(thread, path_vertex, world_p, n);
 
-            v3_t dir = mul(unrotated_dir.x, t);
-            dir = add(dir, mul(unrotated_dir.y, b));
-            dir = add(dir, mul(unrotated_dir.z, n));
+                path_vertex->contribution = this_direct_lighting;
 
-            v3_t this_indirect_lighting = pathtrace_recursively(thread, path, world_p, dir, 0);
+                direct_lighting = add(direct_lighting, this_direct_lighting);
 
-            path->contribution = add(this_direct_lighting, this_indirect_lighting);
+                v2_t sample = random_unilateral2(entropy);
+                v3_t unrotated_dir = map_to_cosine_weighted_hemisphere(sample);
 
-            indirect_lighting = add(indirect_lighting, this_indirect_lighting);
+                v3_t dir = mul(unrotated_dir.x, t);
+                dir = add(dir, mul(unrotated_dir.y, b));
+                dir = add(dir, mul(unrotated_dir.z, n));
+
+                v3_t this_indirect_lighting = pathtrace_recursively(thread, path, world_p, dir, 0);
+
+                path->contribution = add(this_direct_lighting, this_indirect_lighting);
+
+                indirect_lighting = add(indirect_lighting, this_indirect_lighting);
+            }
+
+              direct_lighting = mul(  direct_lighting, 1.0f / ray_count);
+            indirect_lighting = mul(indirect_lighting, 1.0f / ray_count);
+
+              direct_lighting_pixels[y*w + x] = direct_lighting;
+            indirect_lighting_pixels[y*w + x] = indirect_lighting;
         }
-
-          direct_lighting = mul(  direct_lighting, 1.0f / ray_count);
-        indirect_lighting = mul(indirect_lighting, 1.0f / ray_count);
-
-          direct_lighting_pixels[y*w + x] = (v4_t){ .xyz = direct_lighting   };
-        indirect_lighting_pixels[y*w + x] = (v4_t){ .xyz = indirect_lighting };
-    }
 
 #if  1
-    for (int k = 0; k < 32 / LIGHTMAP_SCALE; k++)
-    {
-        for (int y = 0; y < h; y++)
-        for (int x = 0; x < w; x++)
+        for (int k = 0; k < 32 / LIGHTMAP_SCALE; k++)
         {
-            v3_t color = { 0 };
-
-            float weight = 0.0f;
-
-            for (int o = -1; o <= 1; o++)
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
             {
-                int xo = x + o;
-                if (xo >= 0 && xo < w)
+                v3_t color = { 0 };
+
+                float weight = 0.0f;
+
+                for (int o = -1; o <= 1; o++)
                 {
-                    color   = add(color, indirect_lighting_pixels[y*w + xo].xyz);
-                    weight += 1.0f;
+                    int xo = x + o;
+                    if (xo >= 0 && xo < w)
+                    {
+                        color   = add(color, indirect_lighting_pixels[y*w + xo]);
+                        weight += 1.0f;
+                    }
                 }
+
+                color = mul(color, 1.0f / weight);
+
+                indirect_lighting_pixels[y*w + x] = color;
             }
 
-            color = mul(color, 1.0f / weight);
-
-            indirect_lighting_pixels[y*w + x].xyz = color;
-        }
-
-        for (int y = 0; y < h; y++)
-        for (int x = 0; x < w; x++)
-        {
-            v3_t color = { 0 };
-
-            float weight = 0.0f;
-
-            for (int o = -1; o <= 1; o++)
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
             {
-                int yo = y + o;
-                if (yo >= 0 && yo < h)
+                v3_t color = { 0 };
+
+                float weight = 0.0f;
+
+                for (int o = -1; o <= 1; o++)
                 {
-                    color   = add(color, indirect_lighting_pixels[yo*w + x].xyz);
-                    weight += 1.0f;
+                    int yo = y + o;
+                    if (yo >= 0 && yo < h)
+                    {
+                        color   = add(color, indirect_lighting_pixels[yo*w + x]);
+                        weight += 1.0f;
+                    }
                 }
+
+                color = mul(color, 1.0f / weight);
+
+                indirect_lighting_pixels[y*w + x] = color;
             }
-
-            color = mul(color, 1.0f / weight);
-
-            indirect_lighting_pixels[y*w + x].xyz = color;
         }
-    }
 #endif
 
-    for (int k = 0; k < 1; k++)
-    {
-        for (int y = 0; y < h; y++)
-        for (int x = 0; x < w; x++)
+        for (int k = 0; k < 1; k++)
         {
-            v3_t color = { 0 };
-
-            float weight = 0.0f;
-
-            for (int o = -1; o <= 1; o++)
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
             {
-                int xo = x + o;
-                if (xo >= 0 && xo < w)
+                v3_t color = { 0 };
+
+                float weight = 0.0f;
+
+                for (int o = -1; o <= 1; o++)
                 {
-                    color   = add(color, direct_lighting_pixels[y*w + xo].xyz);
-                    weight += 1.0f;
+                    int xo = x + o;
+                    if (xo >= 0 && xo < w)
+                    {
+                        color   = add(color, direct_lighting_pixels[y*w + xo]);
+                        weight += 1.0f;
+                    }
                 }
+
+                color = mul(color, 1.0f / weight);
+
+                direct_lighting_pixels[y*w + x] = color;
             }
 
-            color = mul(color, 1.0f / weight);
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                v3_t color = { 0 };
 
-            direct_lighting_pixels[y*w + x].xyz = color;
+                float weight = 0.0f;
+
+                for (int o = -1; o <= 1; o++)
+                {
+                    int yo = y + o;
+                    if (yo >= 0 && yo < h)
+                    {
+                        color   = add(color, direct_lighting_pixels[yo*w + x]);
+                        weight += 1.0f;
+                    }
+                }
+
+                color = mul(color, 1.0f / weight);
+
+                direct_lighting_pixels[y*w + x] = color;
+            }
         }
 
         for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++)
         {
-            v3_t color = { 0 };
-
-            float weight = 0.0f;
-
-            for (int o = -1; o <= 1; o++)
-            {
-                int yo = y + o;
-                if (yo >= 0 && yo < h)
-                {
-                    color   = add(color, direct_lighting_pixels[yo*w + x].xyz);
-                    weight += 1.0f;
-                }
-            }
-
-            color = mul(color, 1.0f / weight);
-
-            direct_lighting_pixels[y*w + x].xyz = color;
+            direct_lighting_pixels[y*w + x] = add(direct_lighting_pixels[y*w + x], indirect_lighting_pixels[y*w + x]);
         }
-    }
 
-    for (int y = 0; y < h; y++)
-    for (int x = 0; x < w; x++)
-    {
-        direct_lighting_pixels[y*w + x].xyz = add(direct_lighting_pixels[y*w + x].xyz, indirect_lighting_pixels[y*w + x].xyz);
-        direct_lighting_pixels[y*w + x].w   = 1.0f;
-    }
+        uint32_t *packed = m_alloc_array(arena, w*h, uint32_t);
 
-    job->result = (image_t){
-        .w      = w,
-        .h      = h,
-        .pitch  = sizeof(v4_t)*w,
-        .pixels = (uint32_t *)direct_lighting_pixels,
-    };
+        for (int i = 0; i < w*h; i++)
+        {
+            packed[i] = pack_r11g11b10f(direct_lighting_pixels[i]);
+        }
+
+        job->result = (image_t){
+            .w      = w,
+            .h      = h,
+            .pitch  = sizeof(uint32_t)*w,
+            .pixels = packed,
+        };
+    }
 
 #if 0
     // TODO: Make upload_texture thread-safe
@@ -542,9 +551,9 @@ void trace_volumetric_lighting(const lum_params_t *params, map_t *map)
         size_t cluster_count_z = (depth  + cluster_size - 1) / cluster_size;
 #endif
 
-        v4_t *fogmap = m_alloc_array(temp, width*height*depth, v4_t);
+        uint32_t *fogmap = m_alloc_array(temp, width*height*depth, uint32_t);
 
-        v4_t *dst = fogmap;
+        uint32_t *dst = fogmap;
         for (size_t z = 0; z < depth;  z++)
         for (size_t y = 0; y < height; y++)
         for (size_t x = 0; x < width;  x++)
@@ -608,18 +617,18 @@ void trace_volumetric_lighting(const lum_params_t *params, map_t *map)
             }
             lighting = mul(lighting, 1.0f / (float)sample_count);
 
-            *dst++ = (v4_t){lighting.x, lighting.y, lighting.z, 1.0f};
+            *dst++ = pack_r11g11b10f(lighting);
         }
 
         map->fogmap = render->upload_texture(&(upload_texture_t) {
             .desc = {
                 .type        = TEXTURE_TYPE_3D,
-                .format      = PIXEL_FORMAT_R32G32B32A32,
+                .format      = PIXEL_FORMAT_R11G11B10F,
                 .w           = width,
                 .h           = height,
                 .d           = depth,
-                .pitch       = sizeof(v4_t)*width,
-                .slice_pitch = sizeof(v4_t)*width*height,
+                .pitch       = sizeof(uint32_t)*width,
+                .slice_pitch = sizeof(uint32_t)*width*height,
             },
             .data = {
                 .pixels = fogmap,
@@ -706,10 +715,10 @@ void bake_lighting(const lum_params_t *params_init, lum_results_t *results)
 
             poly->lightmap = render->upload_texture(&(upload_texture_t) {
                 .desc = {
-                    .format = PIXEL_FORMAT_R32G32B32A32,
+                    .format = PIXEL_FORMAT_R11G11B10F,
                     .w      = result->w,
                     .h      = result->h,
-                    .pitch  = sizeof(v4_t)*result->w,
+                    .pitch  = sizeof(uint32_t)*result->w,
                 },
                 .data = {
                     .pixels = result->pixels,
@@ -739,3 +748,77 @@ void bake_lighting(const lum_params_t *params_init, lum_results_t *results)
 
     trace_volumetric_lighting(&params, map);
 }
+
+// --------------------------------------------------------
+
+#if 0
+static v3i_t world_dim_to_lightmap_dim(v3_t dim)
+{
+    v3i_t result = {
+        (int)max(1.0f, ceilf(dim.x / LIGHTMAP_SCALE)),
+        (int)max(1.0f, ceilf(dim.y / LIGHTMAP_SCALE)),
+        (int)max(1.0f, ceilf(dim.z / LIGHTMAP_SCALE)),
+    };
+    return result;
+}
+
+typedef struct lum_planar_texel_t
+{
+    struct lum_planar_texel_t *next;
+    float depth;
+} lum_planar_texel_t;
+
+typedef struct lum_planar_view_t
+{
+    v2i_t dim;
+    lum_planar_texel_t **texels;
+} lum_planar_view_t;
+
+static void lum_generate_triplanar_textures(map_t *map)
+{
+    rect3_t bounds = map->bounds;
+
+    v3i_t dim = world_dim_to_lightmap_dim(rect3_dim(bounds));
+
+    v2i_t plane_dims[] = {
+        make_v2(dim.x, dim.y),
+        make_v2(dim.z, dim.x),
+        make_v2(dim.y, dim.z),
+    };
+
+    for (size_t plane_index = 0; plane_index < 3; plane_index++)
+    {
+        int i1 = (plane_index + 0);
+        int i2 = (plane_index + 1) % 3;
+        int i3 = (plane_index + 2) % 3;
+
+        v2i_t plane_dim = plane_dims[plane_index];
+
+        for (size_t side = 0; side < 2; side++)
+        {
+            // basis vectors
+
+            v3_t e1 = {}; 
+            e1.e[i1] = 1;
+
+            v3_t e2 = {};
+            e2.e[i2] = 1;
+
+            v3_t e3 = {};
+            e3.e[i3] = side == 0 ? 1 : -1;
+
+            for (size_t brush_index = 0; brush_index < map->brush_count; brush_index++)
+            {
+                map_brush_t *brush = map->brushes[brush_index];
+
+                for (size_t poly_index = 0; poly_index < brush->poly_count; poly_index++)
+                {
+                    map_poly_t *poly = brush->polys[poly_index];
+
+
+                }
+            }
+        }
+    }
+}
+#endif

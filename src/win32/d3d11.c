@@ -1014,12 +1014,13 @@ resource_handle_t upload_texture(const upload_texture_t *params)
         DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
         switch (params->desc.format)
         {
-            case PIXEL_FORMAT_R8:           pixel_size = 1;            format = DXGI_FORMAT_R8_UNORM;            break;
-            case PIXEL_FORMAT_RG8:          pixel_size = 2;            format = DXGI_FORMAT_R8G8_UNORM;          break;
-            case PIXEL_FORMAT_RGBA8:        pixel_size = 4;            format = DXGI_FORMAT_R8G8B8A8_UNORM;      break;
-            case PIXEL_FORMAT_SRGB8_A8:     pixel_size = 4;            format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB; break;
-            case PIXEL_FORMAT_R32G32B32:    pixel_size = sizeof(v3_t); format = DXGI_FORMAT_R32G32B32_FLOAT;     break;
-            case PIXEL_FORMAT_R32G32B32A32: pixel_size = sizeof(v4_t); format = DXGI_FORMAT_R32G32B32A32_FLOAT;  break;
+            case PIXEL_FORMAT_R8:            pixel_size = 1;            format = DXGI_FORMAT_R8_UNORM;            break;
+            case PIXEL_FORMAT_RG8:           pixel_size = 2;            format = DXGI_FORMAT_R8G8_UNORM;          break;
+            case PIXEL_FORMAT_RGBA8:         pixel_size = 4;            format = DXGI_FORMAT_R8G8B8A8_UNORM;      break;
+            case PIXEL_FORMAT_SRGB8_A8:      pixel_size = 4;            format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB; break;
+            case PIXEL_FORMAT_R11G11B10F:    pixel_size = 4;            format = DXGI_FORMAT_R11G11B10_FLOAT;     break;
+            case PIXEL_FORMAT_R32G32B32F:    pixel_size = sizeof(v3_t); format = DXGI_FORMAT_R32G32B32_FLOAT;     break;
+            case PIXEL_FORMAT_R32G32B32A32F: pixel_size = sizeof(v4_t); format = DXGI_FORMAT_R32G32B32A32_FLOAT;  break;
             INVALID_DEFAULT_CASE;
         }
 
