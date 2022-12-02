@@ -126,8 +126,10 @@ void set_model_buffers(d3d_model_t *model, DXGI_FORMAT index_format);
 
 void get_resolution(int *w, int *h);
 
-typedef struct render_pass_t
+typedef struct d3d_render_pass_t
 {
+    ID3D11RenderTargetView *render_target;
+
     d3d_model_t *model;
 
     r_blend_mode_t blend_mode;

@@ -1,11 +1,13 @@
 #include "render_helpers.h"
 #include "render.h"
 
-void r_push_line(r_immediate_draw_t *draw_call, v3_t start, v3_t end, uint32_t color)
+void r_push_line(r_immediate_draw_t *draw_call, v3_t start, v3_t end, v4_t color)
 {
-    uint32_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ .pos = start, .col = color });
+    uint32_t color_packed = pack_color(color);
+
+    uint32_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ .pos = start, .col = color_packed });
     r_immediate_index(draw_call, i0);
-    uint32_t i1 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ .pos = end,   .col = color });
+    uint32_t i1 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ .pos = end,   .col = color_packed });
     r_immediate_index(draw_call, i1);
 }
 
@@ -17,27 +19,29 @@ void r_push_line_gradient(r_immediate_draw_t *draw_call, v3_t start, v3_t end, v
     r_immediate_index(draw_call, i1);
 }
 
-void r_push_rect2_filled(r_immediate_draw_t *draw_call, rect2_t rect, uint32_t color)
+void r_push_rect2_filled(r_immediate_draw_t *draw_call, rect2_t rect, v4_t color)
 {
+    uint32_t color_packed = pack_color(color);
+
     uint32_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
         .pos = { rect.min.x, rect.min.y, 0.0f }, 
         .tex = { 0, 0 },
-        .col = color 
+        .col = color_packed,
     });
     uint32_t i1 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
         .pos = { rect.max.x, rect.min.y, 0.0f }, 
         .tex = { 1, 0 },
-        .col = color 
+        .col = color_packed,
     });
     uint32_t i2 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
         .pos = { rect.max.x, rect.max.y, 0.0f }, 
         .tex = { 1, 1 },
-        .col = color 
+        .col = color_packed,
     });
     uint32_t i3 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
         .pos = { rect.min.x, rect.max.y, 0.0f }, 
         .tex = { 0, 1 },
-        .col = color 
+        .col = color_packed,
     });
 
     // triangle 1
@@ -129,7 +133,7 @@ void r_push_arrow(r_immediate_draw_t *draw_call, v3_t start, v3_t end, v4_t colo
     r_push_arrow_gradient(draw_call, start, end, color, color);
 }
 
-void r_push_rect3_outline(r_immediate_draw_t *draw_call, rect3_t bounds, uint32_t color)
+void r_push_rect3_outline(r_immediate_draw_t *draw_call, rect3_t bounds, v4_t color)
 {
     v3_t v000 = { bounds.min.x, bounds.min.y, bounds.min.z };
     v3_t v100 = { bounds.max.x, bounds.min.y, bounds.min.z };
@@ -160,13 +164,15 @@ void r_push_rect3_outline(r_immediate_draw_t *draw_call, rect3_t bounds, uint32_
     r_push_line(draw_call, v110, v111, color);
 }
 
-void r_push_text(r_immediate_draw_t *draw_call, const bitmap_font_t *font, v2_t p, uint32_t color, string_t string)
+void r_push_text(r_immediate_draw_t *draw_call, const bitmap_font_t *font, v2_t p, v4_t color, string_t string)
 {
     ASSERT(RESOURCE_HANDLES_EQUAL(draw_call->texture, font->texture));
 
     ASSERT(font->w / font->cw == 16);
     ASSERT(font->w % font->cw ==  0);
     ASSERT(font->h / font->ch >= 16);
+
+    uint32_t color_packed = pack_color(color);
 
     float cw = (float)font->cw;
     float ch = (float)font->ch;
@@ -206,25 +212,25 @@ void r_push_text(r_immediate_draw_t *draw_call, const bitmap_font_t *font, v2_t 
             uint32_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t) {
                 .pos = { at.x, at.y, 0.0f }, // TODO: Use Z?
                 .tex = { u0, v1 },
-                .col = color,
+                .col = color_packed,
             });
 
             uint32_t i1 = r_immediate_vertex(draw_call, &(vertex_immediate_t) {
                 .pos = { at.x + cw, at.y, 0.0f }, // TODO: Use Z?
                 .tex = { u1, v1 },
-                .col = color,
+                .col = color_packed,
             });
 
             uint32_t i2 = r_immediate_vertex(draw_call, &(vertex_immediate_t) {
                 .pos = { at.x + cw, at.y + ch, 0.0f }, // TODO: Use Z?
                 .tex = { u1, v0 },
-                .col = color,
+                .col = color_packed,
             });
 
             uint32_t i3 = r_immediate_vertex(draw_call, &(vertex_immediate_t) {
                 .pos = { at.x, at.y + ch, 0.0f }, // TODO: Use Z?
                 .tex = { u0, v0 },
-                .col = color,
+                .col = color_packed,
             });
 
             r_immediate_index(draw_call, i0);

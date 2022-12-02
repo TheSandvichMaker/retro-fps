@@ -459,7 +459,7 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
     v3_t *vertices = NULL;
 
     unsigned  **plane_index_arrays = m_alloc_array(temp,  plane_count, unsigned *);
-    map_poly_t *polys               = m_alloc_array(arena, plane_count, map_poly_t);
+    map_poly_t *polys              = m_alloc_array(arena, plane_count, map_poly_t);
 
     brush->poly_count = plane_count;
     brush->polys      = polys;
@@ -610,7 +610,7 @@ static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
                 {
                     if (angles[i] < angles[j])
                     {
-                        SWAP(float,    angles[i], angles[j]);
+                        SWAP(float,     angles [i],  angles [j]);
                         SWAP(unsigned,  indices[i],  indices[j]);
                     }
                 }

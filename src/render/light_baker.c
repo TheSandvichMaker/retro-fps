@@ -747,6 +747,8 @@ void bake_lighting(const lum_params_t *params_init, lum_results_t *results)
     }
 
     trace_volumetric_lighting(&params, map);
+
+    map->light_baked = true;
 }
 
 // --------------------------------------------------------

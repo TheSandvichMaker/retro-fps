@@ -261,6 +261,11 @@ r_immediate_draw_t *r_immediate_draw_begin(const r_immediate_draw_t *draw_call)
     return &command->draw_call;
 }
 
+void r_end_scene_pass(void)
+{
+    r_submit_command(R_COMMAND_END_SCENE_PASS, sizeof(r_command_base_t));
+}
+
 uint32_t r_immediate_vertex(r_immediate_draw_t *draw_call, const vertex_immediate_t *vertex)
 {
     ASSERT(draw_call == g_list->immediate_draw_call);

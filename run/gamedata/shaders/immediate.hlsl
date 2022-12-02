@@ -25,8 +25,25 @@ PS_INPUT vs(VS_INPUT_IMMEDIATE IN)
     return OUT;
 }
 
+float r_dither(float2 co)
+{
+	const float2 magic = float2(0.75487766624669276, 0.569840290998);
+    return frac(dot(co, magic));
+}
+
+float remap_tri(float n)
+{
+    float orig = n * 2.0 - 1.0;
+    n = orig * rsqrt(abs(orig));
+    return max(-1.0, n) - sign(orig);
+}
+
 float4 ps(PS_INPUT IN) : SV_TARGET
 {
     float4 tex = texture0.Sample(sampler_point, IN.uv);
-    return IN.col*tex;
+
+    float4 result = IN.col*tex;
+    result.rgb += remap_tri(r_dither(IN.pos.xy)) / 255.0f;
+
+    return result;
 }

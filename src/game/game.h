@@ -73,4 +73,7 @@ typedef struct world_t
     player_t *player;
 } world_t;
 
+v3_t player_view_origin(player_t *player);
+v3_t player_view_direction(player_t *player);
+
 #endif /* RETRO_H */

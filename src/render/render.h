@@ -16,6 +16,15 @@ typedef struct bitmap_font_t
 
 extern v3_t g_debug_colors[6];
 
+#define COLORF_WHITE   make_v4(1, 1, 1, 1)
+#define COLORF_BLACK   make_v4(0, 0, 0, 1)
+#define COLORF_RED     make_v4(1, 0, 0, 1)
+#define COLORF_GREEN   make_v4(0, 1, 0, 1)
+#define COLORF_BLUE    make_v4(0, 0, 1, 1)
+#define COLORF_MAGENTA make_v4(1, 0, 1, 1)
+#define COLORF_CYAN    make_v4(0, 1, 1, 1)
+#define COLORF_YELLOW  make_v4(1, 1, 0, 1)
+
 #define COLOR32_WHITE   pack_rgba(1, 1, 1, 1)
 #define COLOR32_BLACK   pack_rgba(0, 0, 0, 1)
 #define COLOR32_RED     pack_rgba(1, 0, 0, 1)
@@ -166,6 +175,7 @@ typedef enum r_command_kind_t
 
     R_COMMAND_MODEL,
     R_COMMAND_IMMEDIATE,
+    R_COMMAND_END_SCENE_PASS,
     
     R_COMMAND_COUNT,
 } r_command_kind_t;
@@ -248,6 +258,7 @@ typedef struct r_list_t
 
 void r_command_identifier(string_t identifier);
 void r_draw_model(m4x4_t transform, resource_handle_t model, resource_handle_t texture, resource_handle_t lightmap);
+void r_end_scene_pass(void);
 
 void r_set_command_list(r_list_t *list);
 void r_reset_command_list(void);
@@ -288,6 +299,8 @@ static inline uint32_t pack_color(v4_t color)
     color.y = CLAMP(color.y, 0.0f, 1.0f);
     color.z = CLAMP(color.z, 0.0f, 1.0f);
     color.w = CLAMP(color.w, 0.0f, 1.0f);
+
+    color = linear_to_srgb(color);
 
     color.x *= color.w;
     color.y *= color.w;
@@ -347,7 +360,7 @@ static inline unsigned pack_float11(float value)
     u.f = value;
 
     int exponent = ((u.i >> 23) & 0xFF) - 127;
-    int mantissa = (u.i & ((1 << 23) - 1));
+    int mantissa = u.i & MASK_BITS(22);
 
     return (((exponent + 15) << 6) | (mantissa >> (23 - 6))) & MASK_BITS(11);
 }

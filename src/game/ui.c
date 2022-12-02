@@ -842,10 +842,10 @@ static void ui_draw_box(ui_box_t *box, rect2_t clip_rect)
                 .max = { box->rect.max.x,     box->rect.max.y     },
             };
 
-            r_push_rect2_filled(background, h0, pack_color(color));
-            r_push_rect2_filled(background, h1, pack_color(color));
-            r_push_rect2_filled(background, v0, pack_color(color));
-            r_push_rect2_filled(background, v1, pack_color(color));
+            r_push_rect2_filled(background, h0, color);
+            r_push_rect2_filled(background, h1, color);
+            r_push_rect2_filled(background, v0, color);
+            r_push_rect2_filled(background, v1, color);
         }
 
 #if 0
@@ -873,10 +873,10 @@ static void ui_draw_box(ui_box_t *box, rect2_t clip_rect)
                 .max = { box->rect.max.x,     box->rect.max.y     },
             };
 
-            r_push_rect2_filled(background, h0, pack_color(color));
-            r_push_rect2_filled(background, h1, pack_color(color));
-            r_push_rect2_filled(background, v0, pack_color(color));
-            r_push_rect2_filled(background, v1, pack_color(color));
+            r_push_rect2_filled(background, h0, color);
+            r_push_rect2_filled(background, h1, color);
+            r_push_rect2_filled(background, v0, color);
+            r_push_rect2_filled(background, v1, color);
         }
 #endif
 
@@ -896,7 +896,7 @@ static void ui_draw_box(ui_box_t *box, rect2_t clip_rect)
             rect = rect2_sub_radius(rect, make_v2(1, 1));
         }
 
-        r_push_rect2_filled(image, rect, COLOR32_WHITE);
+        r_push_rect2_filled(image, rect, COLORF_WHITE);
 
         r_immediate_draw_end(image);
     }
@@ -920,8 +920,8 @@ static void ui_draw_box(ui_box_t *box, rect2_t clip_rect)
 
         p = add(p, make_v2(0.0f, box->current_t));
 
-        r_push_text(text, g_ui.font, add(p, make_v2(1, -1)), pack_rgba(0.0f, 0.0f, 0.0f, 0.5f), display_text);
-        r_push_text(text, g_ui.font, p, pack_color(style->text_color), display_text);
+        r_push_text(text, g_ui.font, add(p, make_v2(1, -1)), make_v4(0.0f, 0.0f, 0.0f, 0.5f), display_text);
+        r_push_text(text, g_ui.font, p, style->text_color, display_text);
 
         r_immediate_draw_end(text);
     }

@@ -89,6 +89,8 @@ typedef struct map_bvh_node_t
 
 typedef struct map_t
 {
+    bool light_baked;
+
     map_entity_t *first_entity;
 
     rect3_t bounds;
