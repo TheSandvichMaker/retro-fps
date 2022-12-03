@@ -467,6 +467,8 @@ static bool parse_map(arena_t *arena, string_t path, map_parse_result_t *result)
                         map_parse_number(&parser, &plane->scale_y);
                     }
 
+                    brush->plane_poly_count = result->plane_count - brush->first_plane_poly;
+
                     if (brush->plane_poly_count == 0) brush->first_plane_poly = 0;
                 }
                 else
@@ -474,6 +476,9 @@ static bool parse_map(arena_t *arena, string_t path, map_parse_result_t *result)
                     map_parse_error(&parser, strlit("unexpected token"));
                 }
             }
+
+            e->brush_count    = result->brush_count    - e->first_brush_edge;
+            e->property_count = result->property_count - e->first_property;
 
             if (e->brush_count    == 0) e->first_brush_edge = 0;
             if (e->property_count == 0) e->first_property   = 0;
@@ -893,89 +898,91 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
 
             // triangulate
 
-            m_scoped(temp)
+            // NOTE: I got confused about this before. The plane indices used here are
+            // used to reuse vertex positions for the brush. However, because each plane
+            // has potentially a different texture and lightmap texture, planes can't
+            // share vertices. That's why this code is the way it is. Daniël 02/12/2022
+
+            // NOTE: Don't wrap this in a scoped temp block. This is one of those cases
+            // where the Ryan-Allen style of having multiple scratch arenas to deal with
+            // conflicts would help. Pushing to the map_* stretchy buffers means we can't
+            // be resetting temp storage here.
+
+            stretchy_buffer(uint16_t) plane_indices = plane_index_buffers[plane_index];
+
+            if (sb_count(plane_indices) >= 3)
             {
-                // NOTE: I got confused about this before. The plane indices used here are
-                // used to reuse vertex positions for the brush. However, because each plane
-                // has potentially a different texture and lightmap texture, planes can't
-                // share vertices. That's why this code is the way it is. Daniël 02/12/2022
+                plane_t p;
+                plane_from_points(plane->a, plane->b, plane->c, &p);
+                
+                poly->normal = p.n;
 
-                stretchy_buffer(uint16_t) plane_indices = plane_index_buffers[plane_index];
+                v3_t  s_vec    = { plane->s.x, plane->s.y, plane->s.z };
+                float s_offset = plane->s.w;
 
-                if (sb_count(plane_indices) >= 3)
+                v3_t  t_vec    = { plane->t.x, plane->t.y, plane->t.z };
+                float t_offset = plane->t.w;
+
+                uint32_t triangulated_vertex_count = sb_count(plane_indices); // See note above, the index count is the vertex count (for the triangulated geometry).
+                vertex_brush_t *triangulated_vertices = m_alloc_array_nozero(arena, triangulated_vertex_count, vertex_brush_t);
+
+                for (size_t vertex_index = 0; vertex_index < triangulated_vertex_count; vertex_index++)
                 {
-                    plane_t p;
-                    plane_from_points(plane->a, plane->b, plane->c, &p);
-                    
-                    poly->normal = p.n;
+                    v3_t pos = brush_positions[plane_indices[vertex_index]];
 
-                    v3_t  s_vec    = { plane->s.x, plane->s.y, plane->s.z };
-                    float s_offset = plane->s.w;
-
-                    v3_t  t_vec    = { plane->t.x, plane->t.y, plane->t.z };
-                    float t_offset = plane->t.w;
-
-                    uint32_t triangulated_vertex_count = sb_count(plane_indices); // See note above, the index count is the vertex count (for the triangulated geometry).
-                    vertex_brush_t *triangulated_vertices = m_alloc_array_nozero(arena, triangulated_vertex_count, vertex_brush_t);
-
-                    for (size_t vertex_index = 0; vertex_index < triangulated_vertex_count; vertex_index++)
-                    {
-                        v3_t pos = brush_positions[plane_indices[vertex_index]];
-
-                        triangulated_vertices[vertex_index] = (vertex_brush_t) {
-                            .pos = pos,
-                            .tex = {
-                                .x = (dot(pos, s_vec) + s_offset) / texscale_x / plane->scale_x,
-                                .y = (dot(pos, t_vec) + t_offset) / texscale_y / plane->scale_y,
-                            },
-                            .tex_lightmap = {
-                                .x = dot(sub(pos, plane->lm_origin), plane->lm_s) / plane->lm_scale_x,
-                                .y = dot(sub(pos, plane->lm_origin), plane->lm_t) / plane->lm_scale_y,
-                            },
-                        };
-                    }
-
-                    uint32_t triangle_count = triangulated_vertex_count - 2;
-
-                    uint32_t triangulated_index_count = 3*triangle_count;
-                    uint16_t *triangulated_indices = m_alloc_array_nozero(arena, triangulated_index_count, uint16_t);
-
-                    size_t triangle_offset = 0;
-                    for (uint16_t i = 1; i < triangulated_vertex_count - 1; i++)
-                    {
-                        triangulated_indices[triangle_offset++] = 0;
-                        triangulated_indices[triangle_offset++] = i;
-                        triangulated_indices[triangle_offset++] = i + 1;
-                    }
-
-                    poly->first_index  = sb_count(map_indices);
-                    poly->first_vertex = sb_count(map_positions);
-
-                    // TODO: Bit silly?
-
-                    for (size_t i = 0; i < triangulated_index_count; i++)
-                    {
-                        sb_push(map_indices, triangulated_indices[i]);
-                    }
-
-                    for (size_t i = 0; i < triangulated_vertex_count; i++)
-                    {
-                        sb_push(map_positions, triangulated_vertices[i].pos);
-                        sb_push(map_texcoords, triangulated_vertices[i].tex);
-                        sb_push(map_lightmap_texcoords, triangulated_vertices[i].tex_lightmap);
-                    }
-
-                    poly->index_count  = triangulated_index_count;
-                    poly->vertex_count = triangulated_vertex_count;
-
-                    poly->mesh = render->upload_model(&(upload_model_t) {
-                        .vertex_format = VERTEX_FORMAT_BRUSH,
-                        .index_count   = triangulated_index_count,
-                        .indices       = triangulated_indices,
-                        .vertex_count  = triangulated_vertex_count,
-                        .vertices      = triangulated_vertices,
-                    });
+                    triangulated_vertices[vertex_index] = (vertex_brush_t) {
+                        .pos = pos,
+                        .tex = {
+                            .x = (dot(pos, s_vec) + s_offset) / texscale_x / plane->scale_x,
+                            .y = (dot(pos, t_vec) + t_offset) / texscale_y / plane->scale_y,
+                        },
+                        .tex_lightmap = {
+                            .x = dot(sub(pos, plane->lm_origin), plane->lm_s) / plane->lm_scale_x,
+                            .y = dot(sub(pos, plane->lm_origin), plane->lm_t) / plane->lm_scale_y,
+                        },
+                    };
                 }
+
+                uint32_t triangle_count = triangulated_vertex_count - 2;
+
+                uint32_t triangulated_index_count = 3*triangle_count;
+                uint16_t *triangulated_indices = m_alloc_array_nozero(arena, triangulated_index_count, uint16_t);
+
+                size_t triangle_offset = 0;
+                for (uint16_t i = 1; i < triangulated_vertex_count - 1; i++)
+                {
+                    triangulated_indices[triangle_offset++] = 0;
+                    triangulated_indices[triangle_offset++] = i;
+                    triangulated_indices[triangle_offset++] = i + 1;
+                }
+
+                poly->first_index  = sb_count(map_indices);
+                poly->first_vertex = sb_count(map_positions);
+
+                // TODO: Bit silly?
+
+                for (size_t i = 0; i < triangulated_index_count; i++)
+                {
+                    sb_push(map_indices, triangulated_indices[i]);
+                }
+
+                for (size_t i = 0; i < triangulated_vertex_count; i++)
+                {
+                    sb_push(map_positions, triangulated_vertices[i].pos);
+                    sb_push(map_texcoords, triangulated_vertices[i].tex);
+                    sb_push(map_lightmap_texcoords, triangulated_vertices[i].tex_lightmap);
+                }
+
+                poly->index_count  = triangulated_index_count;
+                poly->vertex_count = triangulated_vertex_count;
+
+                poly->mesh = render->upload_model(&(upload_model_t) {
+                    .vertex_format = VERTEX_FORMAT_BRUSH,
+                    .index_count   = triangulated_index_count,
+                    .indices       = triangulated_indices,
+                    .vertex_count  = triangulated_vertex_count,
+                    .vertices      = triangulated_vertices,
+                });
             }
         }
     }
