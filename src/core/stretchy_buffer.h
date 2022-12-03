@@ -12,6 +12,13 @@ typedef struct sb_t
 
 #define stretchy_buffer(type) type *
 
+// TODO: Make these macros take a pointer to the sb to avoid mistakes
+// where the sb relocates and gets lost because the macro was given some
+// copy on the stack.
+//
+// Or don't. Because if you keep having pointer-pointers then you can't
+// index them without dereferencing them which is also annoying.
+
 #define sb_init(arena, type) sb__alloc(arena, 8, sizeof(type))
 #define sb_add(sb) (sb__ensure_space((void **)&(sb), 1, sizeof(*sb)), &sb[sb__header(sb)->count++])
 #define sb_push(sb, item) (sb__ensure_space((void **)&(sb), 1, sizeof(*sb)), sb[sb__header(sb)->count++] = item)

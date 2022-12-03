@@ -42,6 +42,11 @@ typedef struct ui_state_t
 
 static ui_state_t g_ui;
 
+v2_t ui_get_screen_bounds(void)
+{
+    return g_ui.screen_dim;
+}
+
 static inline string_t ui_display_text(string_t key_string)
 {
     string_t result = substring(key_string, 0, string_find_first(key_string, strlit("##")));

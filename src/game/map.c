@@ -18,6 +18,43 @@
 // .map parser
 //
 
+typedef struct map_entity_node_t
+{
+    struct map_entity_node_t *next;
+    map_entity_t entity;
+} map_entity_node_t;
+
+typedef struct map_property_node_t
+{
+    struct map_property_node_t *next;
+    map_property_t property;
+} map_property_node_t;
+
+typedef struct map_brush_node_t
+{
+    struct map_brush_node_t *next;
+    map_brush_t brush;
+} map_brush_node_t;
+
+typedef struct map_plane_node_t
+{
+    struct map_plane_node_t *next;
+    map_plane_t plane;
+} map_plane_node_t;
+
+typedef struct map_parse_result_t
+{
+    uint32_t entity_count;
+    uint32_t property_count;
+    uint32_t brush_count;
+    uint32_t plane_count;
+
+    map_entity_t   *entities;
+    map_property_t *properties;
+    map_brush_t    *brushes;
+    map_plane_t    *planes;
+} map_parse_result_t;
+
 typedef enum map_token_kind_e
 {
     MTOK_TEXT = 128,
@@ -340,24 +377,35 @@ void map_parse_texture_name(map_parser_t *parser, string_t *string)
     map_next_token(parser);
 }
 
-map_entity_t *parse_map(arena_t *arena, string_t path)
+static bool parse_map(arena_t *arena, string_t path, map_parse_result_t *result)
 {
-    string_t map = fs_read_entire_file(temp, path);
+    zero_struct(result);
 
-    map_entity_t *f = NULL, *l = NULL;
+    string_t map_file = fs_read_entire_file(temp, path);
 
-    long debug_ordinal = 0;
+    map_entity_node_t   *first_entity   = NULL, *last_entity   = NULL;
+    map_property_node_t *first_property = NULL, *last_property = NULL;
+    map_brush_node_t    *first_brush    = NULL, *last_brush    = NULL;
+    map_plane_node_t    *first_plane    = NULL, *last_plane    = NULL;
+
+    bool parsed_successfully = false;
 
     map_parser_t parser;
-    if (map_begin_parse(&parser, map))
+    if (map_begin_parse(&parser, map_file))
     {
         while (map_continue_parse(&parser))
         {
             // entity
             map_require_token(&parser, '{');
 
-            map_entity_t *e = m_alloc_struct(arena, map_entity_t);
-            sll_push_back(f, l, e);
+            map_entity_node_t *e_node = m_alloc_struct(temp, map_entity_node_t);
+            map_entity_t *e = &e_node->entity;
+
+            sll_push_back(first_entity, last_entity, e_node);
+            result->entity_count += 1;
+
+            e->first_brush_edge = result->brush_count;
+            e->first_property   = result->property_count;
 
             while (!map_match_token(&parser, '}'))
             {
@@ -370,21 +418,34 @@ map_entity_t *parse_map(arena_t *arena, string_t path)
                     string_t val;
                     map_parse_string(&parser, &val);
 
-                    map_property_t *prop = m_alloc_struct(arena, map_property_t);
+                    map_property_node_t *prop_node = m_alloc_struct(temp, map_property_node_t);
+                    map_property_t *prop = &prop_node->property;
+
+                    sll_push_back(first_property, last_property, prop_node);
+                    result->property_count += 1;
+
                     prop->key = string_copy(arena, key);
                     prop->val = string_copy(arena, val);
-                    sll_push_back(e->first_property, e->last_property, prop);
                 }
                 else if (map_match_token(&parser, '{'))
                 {
                     // brush
-                    map_brush_t *brush = m_alloc_struct(arena, map_brush_t);
-                    sll_push_back(e->first_brush, e->last_brush, brush);
+
+                    map_brush_node_t *brush_node = m_alloc_struct(temp, map_brush_node_t);
+                    map_brush_t *brush = &brush_node->brush;
+
+                    brush->first_plane_poly = result->plane_count;
+
+                    sll_push_back(first_brush, last_brush, brush_node);
+                    result->brush_count += 1;
 
                     while (!map_match_token(&parser, '}'))
                     {
-                        map_plane_t *plane = m_alloc_struct(arena, map_plane_t);
-                        plane->debug_ordinal = debug_ordinal++;
+                        map_plane_node_t *plane_node = m_alloc_struct(temp, map_plane_node_t);
+                        map_plane_t *plane = &plane_node->plane;
+
+                        sll_push_back(first_plane, last_plane, plane_node);
+                        result->plane_count += 1;
 
                         map_parse_point(&parser, &plane->a);
                         map_parse_point(&parser, &plane->b);
@@ -404,24 +465,80 @@ map_entity_t *parse_map(arena_t *arena, string_t path)
                         map_parse_number(&parser, &plane->rot);
                         map_parse_number(&parser, &plane->scale_x);
                         map_parse_number(&parser, &plane->scale_y);
-                        
-                        sll_push_back(brush->first_plane, brush->last_plane, plane);
                     }
+
+                    if (brush->plane_poly_count == 0) brush->first_plane_poly = 0;
                 }
                 else
                 {
                     map_parse_error(&parser, strlit("unexpected token"));
                 }
             }
+
+            if (e->brush_count    == 0) e->first_brush_edge = 0;
+            if (e->property_count == 0) e->first_property   = 0;
         }
+
+        //
+        // Linearize Result
+        //
+
+        size_t i;
+
+        // entities
+
+        result->entities = m_alloc_array_nozero(arena, result->entity_count, map_entity_t);
+
+        i = 0;
+        for (map_entity_node_t *entity_node = first_entity; entity_node; entity_node = entity_node->next)
+        {
+            copy_struct(&result->entities[i++], &entity_node->entity);
+        }
+
+        // properties
+
+        result->properties = m_alloc_array_nozero(arena, result->property_count, map_property_t);
+
+        i = 0;
+        for (map_property_node_t *property_node = first_property; property_node; property_node = property_node->next)
+        {
+            copy_struct(&result->properties[i++], &property_node->property);
+        }
+
+        // brushes
+
+        result->brushes = m_alloc_array_nozero(arena, result->brush_count, map_brush_t);
+
+        i = 0;
+        for (map_brush_node_t *brush_node = first_brush; brush_node; brush_node = brush_node->next)
+        {
+            copy_struct(&result->brushes[i++], &brush_node->brush);
+        }
+
+        // planes
+
+        result->planes = m_alloc_array_nozero(arena, result->plane_count, map_plane_t);
+
+        i = 0;
+        for (map_plane_node_t *plane_node = first_plane; plane_node; plane_node = plane_node->next)
+        {
+            copy_struct(&result->planes[i++], &plane_node->plane);
+        }
+
+        //
+
+        parsed_successfully = true;
     }
     else
     {
         // map parse failed
-        f = l = NULL;
+        result->entity_count   = 0;
+        result->property_count = 0;
+        result->brush_count    = 0;
+        result->plane_count    = 0;
     }
 
-    return f;
+    return parsed_successfully;
 }
 
 //
@@ -440,422 +557,454 @@ typedef struct map_cached_texture_t
 static hash_t g_texture_cache_hash;
 static bulk_t g_texture_cache = INIT_BULK_DATA(map_cached_texture_t);
 
-static void generate_points_for_brush(arena_t *arena, map_brush_t *brush)
+static void generate_map_geometry(arena_t *arena, map_t *map)
 {
     ASSERT(arena != temp);
 
     arena_marker_t temp_marker = m_get_marker(temp);
 
-    map_plane_t **planes = NULL;
+    // these are for building up the final map geometry
+    // TODO: do some reservation to avoid pointless copying
+    stretchy_buffer(uint16_t) map_indices            = NULL;
+    stretchy_buffer(v3_t)     map_positions          = NULL;
+    stretchy_buffer(v2_t)     map_texcoords          = NULL;
+    stretchy_buffer(v2_t)     map_lightmap_texcoords = NULL;
 
-    // TODO: Bit awkward. Should we be storing planes in a linked list? Is stretchy buffer the way for the map building stage?
-    for (map_plane_t *plane = brush->first_plane; plane; plane = plane->next)
+    for (size_t brush_index = 0; brush_index < map->brush_count; brush_index++)
     {
-        sb_push(planes, plane);
-    }
+        map_brush_t *brush = &map->brushes[brush_index];
 
-    size_t plane_count = sb_count(planes);
+        size_t       plane_count = brush->plane_poly_count;
+        map_plane_t *planes      = map->planes + brush->first_plane_poly;
+        map_poly_t  *polys       = map->polys  + brush->first_plane_poly;
 
-    v3_t *vertices = NULL;
+        stretchy_buffer(v3_t)      brush_positions     = NULL;
+        stretchy_buffer(uint16_t) *plane_index_buffers = m_alloc_array(temp, plane_count, stretchy_buffer(uint16_t));
 
-    unsigned  **plane_index_arrays = m_alloc_array(temp,  plane_count, unsigned *);
-    map_poly_t *polys              = m_alloc_array(arena, plane_count, map_poly_t);
+        // intersect all 3-sized subsets of planes with each other to try and find some vertices
 
-    brush->poly_count = plane_count;
-    brush->polys      = polys;
-
-    // intersect all 3-sized subsets of planes with each other to try and find some vertices
-
-    for (subset_iter_t iter = iterate_subsets(temp, plane_count, 3); 
-         subset_valid(&iter); 
-         subset_next(&iter))
-    {
-        size_t plane0_index = iter.indices[0];
-        size_t plane1_index = iter.indices[1];
-        size_t plane2_index = iter.indices[2];
-
-        map_plane_t *plane0 = planes[plane0_index];
-        map_plane_t *plane1 = planes[plane1_index];
-        map_plane_t *plane2 = planes[plane2_index];
-
-        plane_t p0, p1, p2;
-        plane_from_points(plane0->a, plane0->b, plane0->c, &p0);
-        plane_from_points(plane1->a, plane1->b, plane1->c, &p1);
-        plane_from_points(plane2->a, plane2->b, plane2->c, &p2);
-
-        mat_t m = {
-            .m = 4,
-            .n = 3,
-            .e = (float[4*3]){
-                p0.n.x, p1.n.x, p2.n.x,
-                p0.n.y, p1.n.y, p2.n.y,
-                p0.n.z, p1.n.z, p2.n.z,
-                p0.d,   p1.d,   p2.d,
-            },
-        };
-
-        float x[3];
-        if (solve_system_of_equations(&m, x))
+        for (subset_iter_t iter = iterate_subsets(temp, plane_count, 3); 
+             subset_valid(&iter); 
+             subset_next(&iter))
         {
-            unsigned vertex_index = sb_count(vertices);
+            size_t plane0_index = iter.indices[0];
+            size_t plane1_index = iter.indices[1];
+            size_t plane2_index = iter.indices[2];
 
-            v3_t vertex = { x[0], x[1], x[2] };
-            sb_push(vertices, vertex);
+            map_plane_t *plane0 = &planes[plane0_index];
+            map_plane_t *plane1 = &planes[plane1_index];
+            map_plane_t *plane2 = &planes[plane2_index];
 
-            sb_push(plane_index_arrays[plane0_index], vertex_index);
-            sb_push(plane_index_arrays[plane1_index], vertex_index);
-            sb_push(plane_index_arrays[plane2_index], vertex_index);
-        }
-    }
+            plane_t p0, p1, p2;
+            plane_from_points(plane0->a, plane0->b, plane0->c, &p0);
+            plane_from_points(plane1->a, plane1->b, plane1->c, &p1);
+            plane_from_points(plane2->a, plane2->b, plane2->c, &p2);
 
-    // reject vertices that fall on the wrong side of any plane
+            mat_t m = {
+                .m = 4,
+                .n = 3,
+                .e = (float[4*3]){
+                    p0.n.x, p1.n.x, p2.n.x,
+                    p0.n.y, p1.n.y, p2.n.y,
+                    p0.n.z, p1.n.z, p2.n.z,
+                    p0.d,   p1.d,   p2.d,
+                },
+            };
 
-    for (size_t plane_index = 0; plane_index < plane_count; plane_index++)
-    {
-        map_plane_t *plane = planes[plane_index];
-
-        plane_t p;
-        plane_from_points(plane->a, plane->b, plane->c, &p);
-
-        for (size_t vertex_index = 0; vertex_index < sb_count(vertices); vertex_index++)
-        {
-            v3_t v = vertices[vertex_index];
-            float d = dot(p.n, v);
-
-            if (d - 0.01f > p.d)
+            float x[3];
+            if (solve_system_of_equations(&m, x))
             {
-                // mark for removal
-                vertices[vertex_index] = (v3_t) { FLT_MAX, FLT_MAX, FLT_MAX };
+                uint16_t index = (uint16_t)sb_count(brush_positions);
+
+                v3_t position = { x[0], x[1], x[2] };
+                sb_push(brush_positions, position);
+
+                sb_push(plane_index_buffers[plane0_index], index);
+                sb_push(plane_index_buffers[plane1_index], index);
+                sb_push(plane_index_buffers[plane2_index], index);
             }
         }
-    }
 
-    // now remove those vertices for each plane
+        // reject vertices that fall on the wrong side of any plane
 
-    for (size_t plane_index = 0; plane_index < plane_count; plane_index++)
-    {
-        map_plane_t *plane = planes[plane_index];
-        unsigned *plane_verts = plane_index_arrays[plane_index];
-
-        for (size_t vert_index = 0; vert_index < sb_count(plane_verts);)
+        for (size_t plane_index = 0; plane_index < plane_count; plane_index++)
         {
-            v3_t v = vertices[plane_verts[vert_index]];
+            map_plane_t *plane = &planes[plane_index];
 
             plane_t p;
             plane_from_points(plane->a, plane->b, plane->c, &p);
 
-            if (v.x == FLT_MAX &&
-                v.y == FLT_MAX &&
-                v.z == FLT_MAX)
+            for (size_t vertex_index = 0; vertex_index < sb_count(brush_positions); vertex_index++)
             {
-                sb_remove_unordered(plane_verts, vert_index);
-            }
-            else
-            {
-                vert_index++;
+                v3_t v = brush_positions[vertex_index];
+                float d = dot(p.n, v);
+
+                if (d - 0.01f > p.d)
+                {
+                    // mark for removal
+                    brush_positions[vertex_index] = make_v3(FLT_MAX, FLT_MAX, FLT_MAX);
+                }
             }
         }
-    }
 
-    // sort plane vertices to wind counter-clockwise
+        // now remove those vertices for each plane
 
-    // and while I'm at it compute the bounds
-    rect3_t bounds = rect3_inverted_infinity();
-
-    for (size_t plane_index = 0; plane_index < plane_count; plane_index++)
-    {
-        map_plane_t *plane = planes[plane_index];
-        unsigned    *indices = plane_index_arrays[plane_index];
-
-        unsigned index_count = sb_count(indices);
-
-        plane_t p;
-        plane_from_points(plane->a, plane->b, plane->c, &p);
-
-        v3_t t, b;
-        get_tangent_vectors(p.n, &t, &b);
-
-        v3_t v_mean = { 0, 0, 0 };
-        for (size_t i = 0; i < index_count; i++)
+        for (size_t plane_index = 0; plane_index < plane_count; plane_index++)
         {
-            v3_t v = vertices[indices[i]];
-            v_mean = add(v_mean, v);
+            map_plane_t              *plane         = &planes[plane_index];
+            stretchy_buffer(uint16_t) plane_indices = plane_index_buffers[plane_index];
 
-            bounds = rect3_grow_to_contain(bounds, v);
+            for (size_t index_index = 0; index_index < sb_count(plane_indices);)
+            {
+                v3_t v = brush_positions[plane_indices[index_index]];
+
+                plane_t p;
+                plane_from_points(plane->a, plane->b, plane->c, &p);
+
+                if (v.x == FLT_MAX &&
+                    v.y == FLT_MAX &&
+                    v.z == FLT_MAX)
+                {
+                    sb_remove_unordered(plane_indices, index_index);
+                }
+                else
+                {
+                    index_index++;
+                }
+            }
         }
-        v_mean = div(v_mean, (float)index_count);
 
-        m_scoped(temp)
+        // sort plane vertices to wind counter-clockwise
+
+        // and while I'm at it compute the bounds
+        rect3_t bounds = rect3_inverted_infinity();
+
+        for (size_t plane_index = 0; plane_index < plane_count; plane_index++)
         {
-            float *angles = m_alloc_array_nozero(temp, index_count, float);
+            map_plane_t              *plane         = &planes[plane_index];
+            stretchy_buffer(uint16_t) plane_indices = plane_index_buffers[plane_index];
 
+            uint32_t index_count = sb_count(plane_indices);
+
+            plane_t p;
+            plane_from_points(plane->a, plane->b, plane->c, &p);
+
+            v3_t t, b;
+            get_tangent_vectors(p.n, &t, &b);
+
+            v3_t v_mean = { 0, 0, 0 };
             for (size_t i = 0; i < index_count; i++)
             {
-                v3_t v = sub(vertices[indices[i]], v_mean);
+                v3_t v = brush_positions[plane_indices[i]];
+                v_mean = add(v_mean, v);
 
-                float x = dot(t, v);
-                float y = dot(b, v);
-
-                float a = atan2f(y, x);
-
-                if (a <= 0.0f) 
-                    a += 2.0f*PI32;
-
-                angles[i] = a;
+                bounds = rect3_grow_to_contain(bounds, v);
             }
+            v_mean = div(v_mean, (float)index_count);
 
-            for (size_t i = 0; i < index_count - 1; i++)
+            m_scoped(temp)
             {
-                for (size_t j = i + 1; j < index_count; j++)
+                float *angles = m_alloc_array_nozero(temp, index_count, float);
+
+                for (size_t i = 0; i < index_count; i++)
                 {
-                    if (angles[i] < angles[j])
+                    v3_t v = sub(brush_positions[plane_indices[i]], v_mean);
+
+                    float x = dot(t, v);
+                    float y = dot(b, v);
+
+                    float a = atan2f(y, x);
+
+                    if (a <= 0.0f) 
+                        a += 2.0f*PI32;
+
+                    angles[i] = a;
+                }
+
+                for (size_t i = 0; i < index_count - 1; i++)
+                {
+                    for (size_t j = i + 1; j < index_count; j++)
                     {
-                        SWAP(float,     angles [i],  angles [j]);
-                        SWAP(unsigned,  indices[i],  indices[j]);
+                        if (angles[i] < angles[j])
+                        {
+                            SWAP(float,     angles       [i],  angles       [j]);
+                            SWAP(uint16_t,  plane_indices[i],  plane_indices[j]);
+                        }
                     }
                 }
             }
-        }
 
-        // remove vertices that are too close together
+            // remove vertices that are too close together
 
-        for (size_t i = 0; i < index_count;)
-        {
-            v3_t v0 = vertices[indices[i]];
-            v3_t v1 = vertices[indices[(i + 1) % index_count]];
-
-            v3_t  d = sub(v1, v0);
-            float l = vlensq(d);
-
-            if (l < 0.01f)
+            for (size_t i = 0; i < index_count;)
             {
-                sb_remove_ordered(indices, i);
-                index_count -= 1;
-            }
-            else
-            {
-                i++;
-            }
-        }
+                v3_t v0 = brush_positions[plane_indices[i]];
+                v3_t v1 = brush_positions[plane_indices[(i + 1) % index_count]];
 
-        // find best fitting lightmap basis vectors
+                v3_t  d = sub(v1, v0);
+                float l = vlensq(d);
 
-        // try and find a reasonable set of basis vectors for the lightmap
-        // trying to minimize the surface area
-        // as one of them
-
-        float smallest_surface_area = FLT_MAX;
-        v3_t  best_fit_lm_s      = { 0 };
-        v3_t  best_fit_lm_t      = { 0 };
-        v3_t  best_fit_lm_o      = { 0 };
-        float best_fit_lm_w      = 0.0f;
-        float best_fit_lm_h      = 0.0f;
-
-        for (size_t i = 0; i < index_count - 1; i++)
-        {
-            v3_t v0 = vertices[indices[i + 0]];
-            v3_t v1 = vertices[indices[i + 1]];
-
-            v3_t lm_s = normalize(sub(v1, v0));
-            v3_t lm_t = normalize(cross(p.n, lm_s));
-
-            v2_t mins = {  FLT_MAX,  FLT_MAX };
-            v2_t maxs = { -FLT_MAX, -FLT_MAX };
-
-            for (size_t test_vertex_index = 0; test_vertex_index < index_count; test_vertex_index++)
-            {
-                v3_t test_vertex = vertices[indices[test_vertex_index]];
-
-                v2_t st = { dot(test_vertex, lm_s), dot(test_vertex, lm_t) };
-                mins = min(mins, st);
-                maxs = max(maxs, st);
+                if (l < 0.01f)
+                {
+                    sb_remove_ordered(plane_indices, i);
+                    index_count -= 1;
+                }
+                else
+                {
+                    i++;
+                }
             }
 
-            float w = maxs.x - mins.x;
-            float h = maxs.y - mins.y;
+            // find least wasteful lightmap orientation
 
-            float surface_area = w*h;
+            float smallest_surface_area = FLT_MAX;
+            v3_t  best_fit_lm_s      = { 0 };
+            v3_t  best_fit_lm_t      = { 0 };
+            v3_t  best_fit_lm_o      = { 0 };
+            float best_fit_lm_w      = 0.0f;
+            float best_fit_lm_h      = 0.0f;
 
-            if (smallest_surface_area > surface_area)
+            for (size_t i = 0; i < index_count - 1; i++)
             {
-                v3_t o = mul(p.n, p.d);
-                o = add(o, mul(lm_s, mins.x));
-                o = add(o, mul(lm_t, mins.y));
+                v3_t v0 = brush_positions[plane_indices[i + 0]];
+                v3_t v1 = brush_positions[plane_indices[i + 1]];
 
-                smallest_surface_area = surface_area;
-                best_fit_lm_s = lm_s;
-                best_fit_lm_t = lm_t;
-                best_fit_lm_o = o;
-                best_fit_lm_w = w;
-                best_fit_lm_h = h;
+                v3_t lm_s = normalize(sub(v1, v0));
+                v3_t lm_t = normalize(cross(p.n, lm_s));
+
+                v2_t mins = {  FLT_MAX,  FLT_MAX };
+                v2_t maxs = { -FLT_MAX, -FLT_MAX };
+
+                for (size_t test_vertex_index = 0; test_vertex_index < index_count; test_vertex_index++)
+                {
+                    v3_t test_vertex = brush_positions[plane_indices[test_vertex_index]];
+
+                    v2_t st = { dot(test_vertex, lm_s), dot(test_vertex, lm_t) };
+                    mins = min(mins, st);
+                    maxs = max(maxs, st);
+                }
+
+                float w = maxs.x - mins.x;
+                float h = maxs.y - mins.y;
+
+                float surface_area = w*h;
+
+                if (smallest_surface_area > surface_area)
+                {
+                    v3_t o = mul(p.n, p.d);
+                    o = add(o, mul(lm_s, mins.x));
+                    o = add(o, mul(lm_t, mins.y));
+
+                    smallest_surface_area = surface_area;
+                    best_fit_lm_s = lm_s;
+                    best_fit_lm_t = lm_t;
+                    best_fit_lm_o = o;
+                    best_fit_lm_w = w;
+                    best_fit_lm_h = h;
+                }
             }
+
+            float scale_x = max(1.0f, LIGHTMAP_SCALE*ceilf(best_fit_lm_w / LIGHTMAP_SCALE));
+            float scale_y = max(1.0f, LIGHTMAP_SCALE*ceilf(best_fit_lm_h / LIGHTMAP_SCALE));
+
+            plane->lm_origin  = best_fit_lm_o;
+            plane->lm_s       = best_fit_lm_s;
+            plane->lm_t       = best_fit_lm_t;
+            plane->lm_scale_x = scale_x;
+            plane->lm_scale_y = scale_y;
+            plane->lm_tex_w   = (int)(scale_x / LIGHTMAP_SCALE);
+            plane->lm_tex_h   = (int)(scale_y / LIGHTMAP_SCALE);
         }
 
-        float scale_x = max(1.0f, LIGHTMAP_SCALE*ceilf(best_fit_lm_w / LIGHTMAP_SCALE));
-        float scale_y = max(1.0f, LIGHTMAP_SCALE*ceilf(best_fit_lm_h / LIGHTMAP_SCALE));
+        brush->bounds = bounds;
 
-        plane->lm_origin = best_fit_lm_o;
-        plane->lm_s = best_fit_lm_s;
-        plane->lm_t = best_fit_lm_t;
-        plane->lm_scale_x = scale_x;
-        plane->lm_scale_y = scale_y;
-        plane->lm_tex_w = (int)(scale_x / LIGHTMAP_SCALE);
-        plane->lm_tex_h = (int)(scale_y / LIGHTMAP_SCALE);
-    }
+        // create poly (load texture and triangulate)
 
-    brush->bounds = bounds;
-
-    // create poly (load texture and triangulate)
-
-    for (size_t plane_index = 0; plane_index < plane_count; plane_index++)
-    {
-        map_plane_t *plane = planes[plane_index];
-        map_poly_t  *poly  = &polys[plane_index];
-
-        plane->poly_index = (unsigned)plane_index;
-
-        float texscale_x = MISSING_TEXTURE_SIZE;
-        float texscale_y = MISSING_TEXTURE_SIZE;
-
-        // see if texture was loaded before
-
-        uint64_t value;
-        if (hash_find(&g_texture_cache_hash, string_hash(plane->texture), &value))
+        for (size_t plane_index = 0; plane_index < plane_count; plane_index++)
         {
-            resource_handle_t handle = { .value = value };
+            map_plane_t *plane = &planes[plane_index];
+            map_poly_t  *poly  = &polys [plane_index];
 
-            map_cached_texture_t *cached = bd_get(&g_texture_cache, handle);
-            ASSERT(string_match(plane->texture, STRING_FROM_STORAGE(cached->name)));
+            float texscale_x = MISSING_TEXTURE_SIZE;
+            float texscale_y = MISSING_TEXTURE_SIZE;
 
-            texscale_x = (float)cached->w;
-            texscale_y = (float)cached->h;
-            poly->texture = cached->gpu_handle;
-            poly->texture_cpu = cached->image;
-        }
+            // see if texture was loaded before
 
-        // load texture if required
+            uint64_t value;
+            if (hash_find(&g_texture_cache_hash, string_hash(plane->texture), &value))
+            {
+                resource_handle_t handle = { .value = value };
 
-        if (!RESOURCE_HANDLE_VALID(poly->texture))
-        {
+                map_cached_texture_t *cached = bd_get(&g_texture_cache, handle);
+                ASSERT(string_match(plane->texture, STRING_FROM_STORAGE(cached->name)));
+
+                texscale_x = (float)cached->w;
+                texscale_y = (float)cached->h;
+
+                poly->texture     = cached->gpu_handle;
+                poly->texture_cpu = cached->image;
+            }
+
+            // load texture if required
+
+            if (!RESOURCE_HANDLE_VALID(poly->texture))
+            {
+                m_scoped(temp)
+                {
+                    // TODO: pretty sad... handle file formats properly...
+                    string_t texture_path_png = string_format(temp, "gamedata/textures/%.*s.png", strexpand(plane->texture));
+                    string_t texture_path_tga = string_format(temp, "gamedata/textures/%.*s.tga", strexpand(plane->texture));
+
+                    image_t image = load_image(arena, texture_path_png, 4);
+
+                    if (!image.pixels)
+                        image = load_image(arena, texture_path_tga, 4);
+
+                    if (image.pixels)
+                    {
+                        poly->texture_cpu = image;
+
+                        texscale_x = (float)image.w;
+                        texscale_y = (float)image.h;
+                        poly->texture = render->upload_texture(&(upload_texture_t) {
+                            .desc = {
+                                .format = PIXEL_FORMAT_SRGB8_A8,
+                                .w      = image.w,
+                                .h      = image.h,
+                                .pitch  = image.pitch,
+                            },
+                            .data = {
+                                .pixels = image.pixels,
+                            },
+                        });
+
+                        map_cached_texture_t *cached = bd_add(&g_texture_cache);
+                        cached->w          = image.w;
+                        cached->h          = image.h;
+                        cached->gpu_handle = poly->texture;
+                        cached->image      = poly->texture_cpu;
+                        STRING_INTO_STORAGE(cached->name, plane->texture);
+
+                        resource_handle_t handle = bd_get_handle(&g_texture_cache, cached);
+                        hash_add(&g_texture_cache_hash, string_hash(plane->texture), handle.value);
+                    }
+                }
+            }
+
+            // triangulate
+
             m_scoped(temp)
             {
-                // TODO: pretty sad... handle file formats properly...
-                string_t texture_path_png = string_format(temp, "gamedata/textures/%.*s.png", strexpand(plane->texture));
-                string_t texture_path_tga = string_format(temp, "gamedata/textures/%.*s.tga", strexpand(plane->texture));
+                // NOTE: I got confused about this before. The plane indices used here are
+                // used to reuse vertex positions for the brush. However, because each plane
+                // has potentially a different texture and lightmap texture, planes can't
+                // share vertices. That's why this code is the way it is. Daniël 02/12/2022
 
-                image_t image = load_image(arena, texture_path_png, 4);
+                stretchy_buffer(uint16_t) plane_indices = plane_index_buffers[plane_index];
 
-                if (!image.pixels)
-                    image = load_image(arena, texture_path_tga, 4);
-
-                if (image.pixels)
+                if (sb_count(plane_indices) >= 3)
                 {
-                    poly->texture_cpu = image;
+                    plane_t p;
+                    plane_from_points(plane->a, plane->b, plane->c, &p);
+                    
+                    poly->normal = p.n;
 
-                    texscale_x = (float)image.w;
-                    texscale_y = (float)image.h;
-                    poly->texture = render->upload_texture(&(upload_texture_t) {
-                        .desc = {
-                            .format = PIXEL_FORMAT_SRGB8_A8,
-                            .w      = image.w,
-                            .h      = image.h,
-                            .pitch  = image.pitch,
-                        },
-                        .data = {
-                            .pixels = image.pixels,
-                        },
+                    v3_t  s_vec    = { plane->s.x, plane->s.y, plane->s.z };
+                    float s_offset = plane->s.w;
+
+                    v3_t  t_vec    = { plane->t.x, plane->t.y, plane->t.z };
+                    float t_offset = plane->t.w;
+
+                    uint32_t triangulated_vertex_count = sb_count(plane_indices); // See note above, the index count is the vertex count (for the triangulated geometry).
+                    vertex_brush_t *triangulated_vertices = m_alloc_array_nozero(arena, triangulated_vertex_count, vertex_brush_t);
+
+                    for (size_t vertex_index = 0; vertex_index < triangulated_vertex_count; vertex_index++)
+                    {
+                        v3_t pos = brush_positions[plane_indices[vertex_index]];
+
+                        triangulated_vertices[vertex_index] = (vertex_brush_t) {
+                            .pos = pos,
+                            .tex = {
+                                .x = (dot(pos, s_vec) + s_offset) / texscale_x / plane->scale_x,
+                                .y = (dot(pos, t_vec) + t_offset) / texscale_y / plane->scale_y,
+                            },
+                            .tex_lightmap = {
+                                .x = dot(sub(pos, plane->lm_origin), plane->lm_s) / plane->lm_scale_x,
+                                .y = dot(sub(pos, plane->lm_origin), plane->lm_t) / plane->lm_scale_y,
+                            },
+                        };
+                    }
+
+                    uint32_t triangle_count = triangulated_vertex_count - 2;
+
+                    uint32_t triangulated_index_count = 3*triangle_count;
+                    uint16_t *triangulated_indices = m_alloc_array_nozero(arena, triangulated_index_count, uint16_t);
+
+                    size_t triangle_offset = 0;
+                    for (uint16_t i = 1; i < triangulated_vertex_count - 1; i++)
+                    {
+                        triangulated_indices[triangle_offset++] = 0;
+                        triangulated_indices[triangle_offset++] = i;
+                        triangulated_indices[triangle_offset++] = i + 1;
+                    }
+
+                    poly->first_index  = sb_count(map_indices);
+                    poly->first_vertex = sb_count(map_positions);
+
+                    // TODO: Bit silly?
+
+                    for (size_t i = 0; i < triangulated_index_count; i++)
+                    {
+                        sb_push(map_indices, triangulated_indices[i]);
+                    }
+
+                    for (size_t i = 0; i < triangulated_vertex_count; i++)
+                    {
+                        sb_push(map_positions, triangulated_vertices[i].pos);
+                        sb_push(map_texcoords, triangulated_vertices[i].tex);
+                        sb_push(map_lightmap_texcoords, triangulated_vertices[i].tex_lightmap);
+                    }
+
+                    poly->index_count  = triangulated_index_count;
+                    poly->vertex_count = triangulated_vertex_count;
+
+                    poly->mesh = render->upload_model(&(upload_model_t) {
+                        .vertex_format = VERTEX_FORMAT_BRUSH,
+                        .index_count   = triangulated_index_count,
+                        .indices       = triangulated_indices,
+                        .vertex_count  = triangulated_vertex_count,
+                        .vertices      = triangulated_vertices,
                     });
-
-                    map_cached_texture_t *cached = bd_add(&g_texture_cache);
-                    cached->w          = image.w;
-                    cached->h          = image.h;
-                    cached->gpu_handle = poly->texture;
-                    cached->image      = poly->texture_cpu;
-                    STRING_INTO_STORAGE(cached->name, plane->texture);
-
-                    resource_handle_t handle = bd_get_handle(&g_texture_cache, cached);
-                    hash_add(&g_texture_cache_hash, string_hash(plane->texture), handle.value);
                 }
-            }
-        }
-
-        // triangulate
-
-        m_scoped(temp)
-        {
-            unsigned *indices = plane_index_arrays[plane_index];
-
-            if (sb_count(indices) >= 3)
-            {
-                plane_t p;
-                plane_from_points(plane->a, plane->b, plane->c, &p);
-                
-                poly->normal = p.n;
-
-                v3_t  s_vec    = { plane->s.x, plane->s.y, plane->s.z };
-                float s_offset = plane->s.w;
-
-                v3_t  t_vec    = { plane->t.x, plane->t.y, plane->t.z };
-                float t_offset = plane->t.w;
-
-                unsigned vertex_count = sb_count(indices);
-                vertex_brush_t *triangle_vertices = m_alloc_array_nozero(arena, vertex_count, vertex_brush_t);
-
-                for (size_t i = 0; i < vertex_count; i++)
-                {
-                    v3_t pos = vertices[indices[i]];
-                    triangle_vertices[i] = (vertex_brush_t) {
-                        .pos = pos,
-                        .tex = {
-                            .x = (dot(pos, s_vec) + s_offset) / texscale_x / plane->scale_x,
-                            .y = (dot(pos, t_vec) + t_offset) / texscale_y / plane->scale_y,
-                        },
-                        .tex_lightmap = {
-                            .x = dot(sub(pos, plane->lm_origin), plane->lm_s) / plane->lm_scale_x,
-                            .y = dot(sub(pos, plane->lm_origin), plane->lm_t) / plane->lm_scale_y,
-                        },
-                    };
-                }
-
-                unsigned triangle_count = vertex_count - 2;
-                unsigned index_count    = 3*triangle_count;
-                uint16_t *triangle_indices = m_alloc_array_nozero(arena, index_count, uint16_t);
-
-                unsigned triangle_offset = 0;
-                for (uint16_t i = 1; i < vertex_count - 1; i++)
-                {
-                    triangle_indices[triangle_offset++] = 0;
-                    triangle_indices[triangle_offset++] = i;
-                    triangle_indices[triangle_offset++] = i + 1;
-                }
-
-                poly->index_count  = index_count;
-                poly->vertex_count = vertex_count;
-                poly->indices      = triangle_indices;
-                poly->vertices     = triangle_vertices;
-
-                poly->mesh = render->upload_model(&(upload_model_t) {
-                    .vertex_format = VERTEX_FORMAT_BRUSH,
-                    .vertex_count  = poly->vertex_count,
-                    .vertices      = poly->vertices,
-                    .index_count   = poly->index_count,
-                    .indices       = poly->indices,
-                });
             }
         }
     }
+
+    map->indices = sb_copy(arena, map_indices);
+    map->vertex.positions = sb_copy(arena, map_positions);
+    map->vertex.texcoords = sb_copy(arena, map_texcoords);
+    map->vertex.lightmap_texcoords = sb_copy(arena, map_lightmap_texcoords);
 
     m_reset_to_marker(temp, temp_marker);
 }
+
+typedef struct bvh_builder_context_t
+{
+    map_t *map;
+    uint32_t *brush_indices;
+} bvh_builder_context_t;
 
 typedef struct partition_result_t
 {
     uint32_t split_index;
 } partition_result_t;
 
-static void partition_brushes(map_t *map, uint32_t first, uint32_t count, rect3_t bv, uint8_t split_axis, partition_result_t *result)
+static void partition_brushes(bvh_builder_context_t *context, uint32_t first, uint32_t count, rect3_t bv, uint8_t split_axis, partition_result_t *result)
 {
-    map_brush_t **brushes = map->brushes + first;
+    map_t *map = context->map;
+
+    uint32_t    *brush_edges = map->brush_edges + first;
+    map_brush_t *brushes     = map->brushes;
 
     float pivot = 0.5f*(bv.min.e[split_axis] + bv.max.e[split_axis]);
 
@@ -871,8 +1020,8 @@ static void partition_brushes(map_t *map, uint32_t first, uint32_t count, rect3_
             if (i >= count)
                 break;
 
-            float p = 0.5f*(brushes[i]->bounds.min.e[split_axis] + 
-                            brushes[i]->bounds.max.e[split_axis]);
+            float p = 0.5f*(brushes[brush_edges[i]].bounds.min.e[split_axis] + 
+                            brushes[brush_edges[i]].bounds.max.e[split_axis]);
 
             if (p > pivot)
                 break;
@@ -885,8 +1034,8 @@ static void partition_brushes(map_t *map, uint32_t first, uint32_t count, rect3_
             if (j < 0)
                 break;
 
-            float p = 0.5f*(brushes[j]->bounds.min.e[split_axis] + 
-                            brushes[j]->bounds.max.e[split_axis]);
+            float p = 0.5f*(brushes[brush_edges[j]].bounds.min.e[split_axis] + 
+                            brushes[brush_edges[j]].bounds.max.e[split_axis]);
 
             if (p < pivot)
                 break;
@@ -895,17 +1044,17 @@ static void partition_brushes(map_t *map, uint32_t first, uint32_t count, rect3_
         if (i >= j)
             break;
 
-        SWAP(map_brush_t *, brushes[i], brushes[j]);
+        SWAP(uint32_t, brush_edges[i], brush_edges[j]);
     }
 
     result->split_index = (uint32_t)i;
 
 #ifdef DEBUG_SLOW
-    for (size_t brush_index = 0; brush_index < count; brush_index++)
+    for (size_t index = 0; index < count; index++)
     {
-        float p = 0.5f*(brushes[brush_index]->bounds.min.e[split_axis] + 
-                        brushes[brush_index]->bounds.max.e[split_axis]);
-        if (brush_index < result->split_index)
+        float p = 0.5f*(brushes[brush_edges[index]].bounds.min.e[split_axis] + 
+                        brushes[brush_edges[index]].bounds.max.e[split_axis]);
+        if (index < result->split_index)
         {
             ASSERT(p <= pivot);
         }
@@ -921,23 +1070,29 @@ static void partition_brushes(map_t *map, uint32_t first, uint32_t count, rect3_
         result->split_index -= 1;
 }
 
-static rect3_t compute_bounding_volume(map_t *map, uint32_t first, uint32_t count)
+static rect3_t compute_bounding_volume(bvh_builder_context_t *context, uint32_t first, uint32_t count)
 {
+    map_t *map = context->map;
+
+    uint32_t    *brush_edges   = map->brush_edges + first;
+    map_brush_t *brushes       = map->brushes;
+
     rect3_t bv = rect3_inverted_infinity();
 
-    map_brush_t **brushes = map->brushes + first;
     for (size_t i = 0; i < count; i++)
     {
-        map_brush_t *brush = brushes[i];
+        map_brush_t *brush = &brushes[brush_edges[i]];
         bv = rect3_union(bv, brush->bounds);
     }
 
     return bv;
 }
 
-static void build_bvh_recursively(map_t *map, map_bvh_node_t *parent, uint32_t first, uint32_t count)
+static void build_bvh_recursively(bvh_builder_context_t *context, map_bvh_node_t *parent, uint32_t first, uint32_t count)
 {
-    rect3_t bv = compute_bounding_volume(map, first, count);
+    map_t *map = context->map;
+
+    rect3_t bv = compute_bounding_volume(context, first, count);
     parent->bounds = bv;
 
     bool leaf = (count == 1);
@@ -956,7 +1111,7 @@ static void build_bvh_recursively(map_t *map, map_bvh_node_t *parent, uint32_t f
             leaf = true;
             for (size_t i = 0; i < 3; i++)
             {
-                partition_brushes(map, first, count, bv, split_axis, &partition);
+                partition_brushes(context, first, count, bv, split_axis, &partition);
 
                 uint32_t max_index = count - 1;
 
@@ -995,14 +1150,13 @@ static void build_bvh_recursively(map_t *map, map_bvh_node_t *parent, uint32_t f
         map_bvh_node_t *l = &map->nodes[l_node_index];
         uint32_t l_split_index = first;
         uint32_t l_split_count = partition.split_index;
-        build_bvh_recursively(map, l, l_split_index, l_split_count);
+        build_bvh_recursively(context, l, l_split_index, l_split_count);
 
         map_bvh_node_t *r = &map->nodes[r_node_index];
         uint32_t r_split_index = first + partition.split_index;
         uint32_t r_split_count = count - partition.split_index;
-        build_bvh_recursively(map, r, r_split_index, r_split_count);
+        build_bvh_recursively(context, r, r_split_index, r_split_count);
     }
-
 }
 
 static void build_bvh(arena_t *arena, map_t *map)
@@ -1012,27 +1166,61 @@ static void build_bvh(arena_t *arena, map_t *map)
     if (NEVER(max_nodes_count > UINT32_MAX)) 
         max_nodes_count = UINT32_MAX;
 
+    bvh_builder_context_t context = {
+        .map = map,
+    };
+
+    map->brush_edges = m_alloc_array_nozero(arena, map->brush_count, uint32_t);
+    for (size_t i = 0; i < map->brush_count; i++)
+    {
+        map->brush_edges[i] = (uint32_t)i;
+    }
+
     map->nodes = m_alloc_nozero(arena, max_nodes_count*sizeof(map_bvh_node_t), 64); 
 
     map_bvh_node_t *root = &map->nodes[map->node_count++];
     map->node_count++; // leave a gap after the root to make pairs of nodes end up on the same cache line
 
-    build_bvh_recursively(map, root, 0, map->brush_count);
+    build_bvh_recursively(&context, root, 0, map->brush_count);
+
+    m_scoped(temp)
+    {
+        // NOTE: I am going to sort the brushes in memory according to the BVH, which means I have to
+        // re-order the brush edges so that entities can use them to find brushes, because from the
+        // point of view of the entities I am making a real mess of the brushes.
+
+        // TODO: scratch_brush_edges is slightly roundabout, as I could've just passed the bvh builder
+        // context a temporary brush_edges array (as I nearly did actually do) and avoided a copy.
+
+        uint32_t    *scratch_brush_edges = m_copy_array(temp, map->brush_edges, map->brush_count);
+        map_brush_t *scratch_brushes     = m_copy_array(temp, map->brushes,     map->brush_count);
+
+        for (size_t index = 0; index < map->brush_count; index++)
+        {
+            uint32_t edge = scratch_brush_edges[index];
+
+            // Invert the brush edge mapping
+            map->brush_edges[edge] = (uint32_t)index;
+            map->brushes[index] = scratch_brushes[edge];
+        }
+    }
 }
 
 static void gather_lights(arena_t *arena, map_t *map)
 {
     map_point_light_t *lights = NULL;
 
-    for (map_entity_t *entity = map->first_entity; entity; entity = entity->next)
+    for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
     {
-        if (is_class(entity, strlit("point_light")))
+        map_entity_t *entity = &map->entities[entity_index];
+
+        if (is_class(map, entity, strlit("point_light")))
         {
-            float brightness = float_from_key(entity, strlit("brightness"));
-            v3_t  color      = v3_from_key(entity, strlit("_color"));
+            float brightness = float_from_key(map, entity, strlit("brightness"));
+            v3_t  color      = v3_from_key(map, entity, strlit("_color"));
 
             map_point_light_t light = {
-                .p     = v3_from_key(entity, strlit("origin")),
+                .p     = v3_from_key(map, entity, strlit("origin")),
                 .color = mul(brightness, color),
             };
             sb_push(lights, light);
@@ -1045,55 +1233,52 @@ static void gather_lights(arena_t *arena, map_t *map)
 
 map_t *load_map(arena_t *arena, string_t path)
 {
-    map_t *map = m_alloc_struct(arena, map_t);
-    map->first_entity = parse_map(arena, path);
+    map_t *map = NULL;
 
-    uint32_t brush_count = 0;
+    map_parse_result_t parse_result;
+    bool successful_parse = parse_map(arena, path, &parse_result);
 
-    for (map_entity_t *entity = map->first_entity; entity; entity = entity->next)
+    if (successful_parse)
     {
-        for (map_brush_t *brush = entity->first_brush; brush; brush = brush->next)
-        {
-            generate_points_for_brush(arena, brush);
-            brush_count++;
-        }
+        map = m_alloc_struct(arena, map_t);
+
+        map->entity_count   = parse_result.entity_count;
+        map->property_count = parse_result.property_count;
+        map->brush_count    = parse_result.brush_count;
+        map->plane_count    = parse_result.plane_count;
+
+        map->entities   = parse_result.entities;
+        map->properties = parse_result.properties;
+        map->brushes    = parse_result.brushes;
+        map->planes     = parse_result.planes;
+
+        map->poly_count = map->plane_count;
+        map->polys      = m_alloc_array(arena, map->poly_count, map_poly_t);
+
+        generate_map_geometry(arena, map);
+
+        build_bvh(arena, map);
+        map->bounds = map->nodes[0].bounds;
+
+        gather_lights(arena, map);
     }
-
-    map->brush_count = brush_count;
-
-    // TODO: bad code, bad man.
-
-    map->brushes = m_alloc_array_nozero(arena, brush_count, map_brush_t *);
-
-    size_t brush_index = 0;
-
-    for (map_entity_t *entity = map->first_entity; entity; entity = entity->next)
-    {
-        for (map_brush_t *brush = entity->first_brush; brush; brush = brush->next)
-        {
-            map->brushes[brush_index++] = brush;
-        }
-    }
-
-    build_bvh(arena, map);
-    map->bounds = map->nodes[0].bounds;
-
-    gather_lights(arena, map);
 
     return map;
 }
 
-bool is_class(map_entity_t *entity, string_t classname)
+bool is_class(map_t *map, map_entity_t *entity, string_t classname)
 {
-    return string_match(value_from_key(entity, strlit("classname")), classname);
+    return string_match(value_from_key(map, entity, strlit("classname")), classname);
 }
 
-string_t value_from_key(map_entity_t *entity, string_t key)
+string_t value_from_key(map_t *map, map_entity_t *entity, string_t key)
 {
     string_t result = { 0 };
 
-    for (map_property_t *prop = entity->first_property; prop; prop = prop->next)
+    for (size_t property_index = 0; property_index < entity->property_count; property_index++)
     {
+        map_property_t *prop = &map->properties[entity->first_property + property_index];
+
         if (string_match(key, prop->key))
         {
             result = prop->val;
@@ -1104,9 +1289,9 @@ string_t value_from_key(map_entity_t *entity, string_t key)
     return result;
 }
 
-int int_from_key(map_entity_t *entity, string_t key)
+int int_from_key(map_t *map, map_entity_t *entity, string_t key)
 {
-    string_t value = value_from_key(entity, key);
+    string_t value = value_from_key(map, entity, key);
 
     int64_t result = 0;
     string_parse_int(&value, &result);
@@ -1114,9 +1299,9 @@ int int_from_key(map_entity_t *entity, string_t key)
     return (int)result;
 }
 
-float float_from_key(map_entity_t *entity, string_t key)
+float float_from_key(map_t *map, map_entity_t *entity, string_t key)
 {
-    string_t value = value_from_key(entity, key);
+    string_t value = value_from_key(map, entity, key);
 
     float result = 0.0f;
     string_parse_float(&value, &result);
@@ -1124,9 +1309,9 @@ float float_from_key(map_entity_t *entity, string_t key)
     return result;
 }
 
-v3_t v3_from_key(map_entity_t *entity, string_t key)
+v3_t v3_from_key(map_t *map, map_entity_t *entity, string_t key)
 {
-    string_t value = value_from_key(entity, key);
+    string_t value = value_from_key(map, entity, key);
 
     v3_t v3 = { 0 };
 

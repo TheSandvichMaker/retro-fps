@@ -148,6 +148,7 @@ bool intersect_map(map_t *map, const intersect_params_t *params, intersect_resul
     uint32_t hit_triangle_offset = 0;
 
     map_brush_t *hit_brush = NULL;
+    map_plane_t *hit_plane = NULL;
     map_poly_t  *hit_poly  = NULL;
 
     bool d_is_negative[3] = {
@@ -176,7 +177,7 @@ bool intersect_map(map_t *map, const intersect_params_t *params, intersect_resul
 
                 for (size_t brush_index = 0; brush_index < count; brush_index++)
                 {
-                    map_brush_t *brush = map->brushes[first + brush_index];
+                    map_brush_t *brush = &map->brushes[first + brush_index];
 
                     bool ignored = false;
                     for (size_t ignored_brush_index = 0; ignored_brush_index < params->ignore_brush_count; ignored_brush_index++)
@@ -191,16 +192,19 @@ bool intersect_map(map_t *map, const intersect_params_t *params, intersect_resul
                     if (ignored)
                         continue;
 
-                    for (size_t poly_index = 0; poly_index < brush->poly_count; poly_index++)
+                    for (size_t poly_index = 0; poly_index < brush->plane_poly_count; poly_index++)
                     {
-                        map_poly_t *poly = &brush->polys[poly_index];
+                        map_poly_t *poly = &map->polys[brush->first_plane_poly + poly_index];
+
+                        uint16_t *indices   = map->indices          + poly->first_index;
+                        v3_t     *positions = map->vertex.positions + poly->first_vertex;
 
                         uint32_t triangle_count = poly->index_count / 3;
                         for (size_t triangle_index = 0; triangle_index < triangle_count; triangle_index++)
                         {
-                            v3_t a = poly->vertices[poly->indices[3*triangle_index + 0]].pos;
-                            v3_t b = poly->vertices[poly->indices[3*triangle_index + 1]].pos;
-                            v3_t c = poly->vertices[poly->indices[3*triangle_index + 2]].pos;
+                            v3_t a = positions[indices[3*triangle_index + 0]];
+                            v3_t b = positions[indices[3*triangle_index + 1]];
+                            v3_t c = positions[indices[3*triangle_index + 2]];
 
                             v3_t uvw;
                             float triangle_hit_t = ray_intersect_triangle(o, d, a, b, c, &uvw);
@@ -210,6 +214,7 @@ bool intersect_map(map_t *map, const intersect_params_t *params, intersect_resul
                             {
                                 t                   = triangle_hit_t;
                                 hit_brush           = brush;
+                                hit_plane           = &map->planes[brush->first_plane_poly + poly_index];
                                 hit_poly            = poly;
                                 hit_triangle_offset = (uint32_t)(3*triangle_index);
                                 hit_uvw             = uvw;
@@ -244,8 +249,9 @@ early_exit:
     if (result)
     {
         result->t               = t;
-        result->poly            = hit_poly;
         result->brush           = hit_brush;
+        result->plane           = hit_plane;
+        result->poly            = hit_poly;
         result->triangle_offset = hit_triangle_offset;
         result->uvw             = hit_uvw;
     }

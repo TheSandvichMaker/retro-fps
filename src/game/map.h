@@ -13,8 +13,6 @@
 
 typedef struct map_plane_t
 {
-    struct map_plane_t *next;
-
     v3_t a, b, c;
     string_t texture;
     v4_t s, t;
@@ -23,20 +21,18 @@ typedef struct map_plane_t
     v3_t lm_origin;
     v3_t lm_s, lm_t;
 
-    long debug_ordinal;
-
     float lm_scale_x, lm_scale_y;
     int   lm_tex_w,   lm_tex_h;
-
-    unsigned poly_index;
 } map_plane_t;
 
 typedef struct map_poly_t
 {
     uint32_t index_count;
+    uint32_t first_index; // NOTE: indices are _not_ absolute. They are relative to the first vertex.
+
     uint32_t vertex_count;
-    uint16_t       *indices;
-    vertex_brush_t *vertices;
+    uint32_t first_vertex; // NOTE: This is overspecified, since it will be the same for all polys in a brush
+                           // but that is useful when you just want to talk about a poly.
 
     v3_t normal;
 
@@ -49,18 +45,14 @@ typedef struct map_poly_t
 
 typedef struct map_property_t
 {
-    struct map_property_t *next;
     string_t key;
     string_t val;
 } map_property_t;
 
 typedef struct map_brush_t
 {
-    struct map_brush_t *next;
-    map_plane_t *first_plane, *last_plane;
-
-    size_t poly_count;
-    map_poly_t *polys;
+    uint32_t plane_poly_count;
+    uint32_t first_plane_poly;
 
     rect3_t bounds;
 } map_brush_t;
@@ -73,10 +65,11 @@ typedef struct map_point_light_t
 
 typedef struct map_entity_t
 {
-    struct map_entity_t *next;
+    uint32_t brush_count;
+    uint32_t first_brush_edge; // go through the brush_edges array to find your brushes.
 
-    map_property_t *first_property, *last_property;
-    map_brush_t *first_brush, *last_brush;
+    uint32_t property_count;
+    uint32_t first_property;
 } map_entity_t;
 
 typedef struct map_bvh_node_t 
@@ -91,35 +84,50 @@ typedef struct map_t
 {
     bool light_baked;
 
-    map_entity_t *first_entity;
-
     rect3_t bounds;
-
-    resource_handle_t fogmap;
-    v3_t fogmap_offset;
-    v3_t fogmap_dim;
 
     uint32_t fogmap_w;
     uint32_t fogmap_h;
     uint32_t fogmap_d;
+    resource_handle_t fogmap;
+
+    v3_t fogmap_offset;
+    v3_t fogmap_dim;
 
     uint32_t node_count;
+    uint32_t entity_count;
+    uint32_t property_count;
     uint32_t brush_count;
+    uint32_t plane_count;
+    uint32_t poly_count;
     uint32_t light_count;
+    uint32_t index_count;
+    uint32_t vertex_count;
 
-    map_bvh_node_t *nodes;
-    map_brush_t **brushes;
+    map_bvh_node_t    *nodes;
+    map_entity_t      *entities;
+    map_property_t    *properties;
+    map_brush_t       *brushes;
+    uint32_t          *brush_edges;
+    map_plane_t       *planes;
+    map_poly_t        *polys;
     map_point_light_t *lights;
+
+    uint16_t *indices;
+    struct
+    {
+        v3_t *positions;
+        v2_t *texcoords;
+        v3_t *lightmap_texcoords;
+    } vertex;
 } map_t;
 
-// returns first entity in list
-map_entity_t *parse_map(arena_t *arena, string_t path);
 map_t *load_map(arena_t *arena, string_t path);
 
-bool is_class(map_entity_t *entity, string_t classname);
-string_t value_from_key(map_entity_t *entity, string_t key);
-int int_from_key(map_entity_t *entity, string_t key);
-float float_from_key(map_entity_t *entity, string_t key);
-v3_t v3_from_key(map_entity_t *entity, string_t key);
+bool     is_class      (map_t *map, map_entity_t *entity, string_t classname);
+string_t value_from_key(map_t *map, map_entity_t *entity, string_t key);
+int      int_from_key  (map_t *map, map_entity_t *entity, string_t key);
+float    float_from_key(map_t *map, map_entity_t *entity, string_t key);
+v3_t     v3_from_key   (map_t *map, map_entity_t *entity, string_t key);
 
 #endif /* MAP_H */

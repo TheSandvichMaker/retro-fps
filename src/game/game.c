@@ -136,7 +136,7 @@ void player_freecam(player_t *player, float dt)
     camera->p = player_view_origin(player);
 }
 
-void player_movement(player_t *player, float dt)
+void player_movement(map_t *map, player_t *player, float dt)
 {
     camera_t *camera = player->attached_camera;
 
@@ -167,27 +167,22 @@ void player_movement(player_t *player, float dt)
         .max = {  16,  16, 0 },
     };
 
-    for (map_entity_t *entity = world->map->first_entity;
-         entity;
-         entity = entity->next)
+    for (size_t brush_index = 0; brush_index < map->brush_count; brush_index++)
     {
-        for (map_brush_t *brush = entity->first_brush;
-             brush;
-             brush = brush->next)
+        map_brush_t *brush = &map->brushes[brush_index];
+
+        if (brush == player->support)
+            continue;
+
+        rect3_t bounds = rect3_add(max_player_bounds, brush->bounds);
+
+        v3_t r_o = player->p;
+        r_o.z += 0.01f;
+
+        float hit_t = ray_intersect_rect3(r_o, (v3_t){0, 0, 1}, bounds);
+        if (hit_t > 0.001f && hit_t < max_player_height)
         {
-            if (brush == player->support)
-                continue;
-
-            rect3_t bounds = rect3_add(max_player_bounds, brush->bounds);
-
-            v3_t r_o = player->p;
-            r_o.z += 0.01f;
-
-            float hit_t = ray_intersect_rect3(r_o, (v3_t){0, 0, 1}, bounds);
-            if (hit_t > 0.001f && hit_t < max_player_height)
-            {
-                max_player_height = hit_t;
-            }
+            max_player_height = hit_t;
         }
     }
 
@@ -297,31 +292,26 @@ void player_movement(player_t *player, float dt)
         float closest_hit_t = dp_len;
         map_brush_t *closest_hit_brush = NULL;
 
-        for (map_entity_t *entity = world->map->first_entity;
-             entity;
-             entity = entity->next)
+        for (size_t brush_index = 0; brush_index < map->brush_count; brush_index++)
         {
-            for (map_brush_t *brush = entity->first_brush;
-                 brush;
-                 brush = brush->next)
-            {
-                rect3_t bounds = rect3_add(player_bounds, brush->bounds);
+            map_brush_t *brush = &map->brushes[brush_index];
+
+            rect3_t bounds = rect3_add(player_bounds, brush->bounds);
 
 #if 0
-                diag_add_box(&(diag_box_t){
-                    .bounds = brush->bounds,
-                    .color  = (brush == player->support ? (v3_t){ 0, 1, 0 } : (v3_t){ 1, 0, 0 }),
-                });
+            diag_add_box(&(diag_box_t){
+                .bounds = brush->bounds,
+                .color  = (brush == player->support ? (v3_t){ 0, 1, 0 } : (v3_t){ 1, 0, 0 }),
+            });
 #endif
 
-                float hit_t = ray_intersect_rect3(r_o, r_d, bounds);
-                if (hit_t > t_min && hit_t <= closest_hit_t)
+            float hit_t = ray_intersect_rect3(r_o, r_d, bounds);
+            if (hit_t > t_min && hit_t <= closest_hit_t)
+            {
+                if (hit_t < closest_hit_t)
                 {
-                    if (hit_t < closest_hit_t)
-                    {
-                        closest_hit_brush = brush;
-                        closest_hit_t = hit_t;
-                    }
+                    closest_hit_brush = brush;
+                    closest_hit_t = hit_t;
                 }
             }
         }
@@ -429,15 +419,17 @@ void game_init(void)
     }
 
     world = m_bootstrap(world_t, arena);
-    world->map = load_map(&world->arena, strlit("gamedata/maps/test.map"));
 
-    world->player = m_alloc_struct(&world->arena, player_t);
+    map_t    *map    = world->map    = load_map(&world->arena, strlit("gamedata/maps/test.map"));
+    player_t *player = world->player = m_alloc_struct(&world->arena, player_t);
 
-    for (map_entity_t *e = world->map->first_entity; e; e = e->next)
+    for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
     {
-        if (is_class(e, strlit("worldspawn")))
+        map_entity_t *e = &map->entities[entity_index];
+
+        if (is_class(map, e, strlit("worldspawn")))
         {
-            string_t skytex = value_from_key(e, strlit("skytex"));
+            string_t skytex = value_from_key(map, e, strlit("skytex"));
             m_scoped(temp)
             {
                 image_t faces[6] = {
@@ -470,10 +462,10 @@ void game_init(void)
                 });
             }
         }
-        else if (is_class(e, strlit("info_player_start")))
+        else if (is_class(map, e, strlit("info_player_start")))
         {
-            world->player->p = v3_from_key(e, strlit("origin"));
-            world->player->p.z += 10.0f;
+            player->p = v3_from_key(map, e, strlit("origin"));
+            player->p.z += 10.0f;
         }
     }
 
@@ -563,7 +555,7 @@ void game_tick(game_io_t *io, float dt)
 
     switch (player->move_mode)
     {
-        case PLAYER_MOVE_NORMAL:  player_movement(player, dt); break;
+        case PLAYER_MOVE_NORMAL:  player_movement(map, player, dt); break;
         case PLAYER_MOVE_FREECAM: player_freecam(player, dt); break;
     }
 
@@ -585,10 +577,10 @@ void game_tick(game_io_t *io, float dt)
     // render map geometry
     //
 
-    for (map_entity_t *entity = map->first_entity; entity; entity = entity->next)
-    {
 #if 0
-        if (is_class(entity, strlit("point_light")))
+    for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
+    {
+        if (is_class(map, entity, strlit("point_light")))
         {
             r_immediate_draw_t *draw_call = r_immediate_draw_begin(&(r_immediate_draw_t){
                 .topology   = R_PRIMITIVE_TOPOLOGY_LINELIST,
@@ -599,16 +591,13 @@ void game_tick(game_io_t *io, float dt)
 
             r_immediate_draw_end(draw_call);
         }
+    }
 #endif
 
-        for (map_brush_t *brush = entity->first_brush; brush; brush = brush->next)
-        {
-            for (size_t poly_index = 0; poly_index < brush->poly_count; poly_index++)
-            {
-                map_poly_t *poly = &brush->polys[poly_index];
-                r_draw_model(m4x4_identity, poly->mesh, poly->texture, poly->lightmap);
-            }
-        }
+    for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
+    {
+        map_poly_t *poly = &map->polys[poly_index];
+        r_draw_model(m4x4_identity, poly->mesh, poly->texture, poly->lightmap);
     }
 
     if (g_cursor_locked)

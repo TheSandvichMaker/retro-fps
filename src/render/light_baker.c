@@ -173,13 +173,14 @@ static v3_t pathtrace_recursively(lum_thread_context_t *thread, lum_path_t *path
         v3_t uvw = hit.uvw;
         uint32_t triangle_offset = hit.triangle_offset;
 
-        vertex_brush_t t0 = hit_poly->vertices[hit_poly->indices[triangle_offset + 0]];
-        vertex_brush_t t1 = hit_poly->vertices[hit_poly->indices[triangle_offset + 0]];
-        vertex_brush_t t2 = hit_poly->vertices[hit_poly->indices[triangle_offset + 0]];
+        uint16_t *indices   = map->indices          + hit_poly->first_index;
+        v2_t     *texcoords = map->vertex.texcoords + hit_poly->first_vertex;
 
-        v2_t tex = v2_add3(mul(uvw.x, t0.tex),
-                           mul(uvw.y, t1.tex),
-                           mul(uvw.z, t2.tex));
+        v2_t t0 = texcoords[indices[triangle_offset + 0]];
+        v2_t t1 = texcoords[indices[triangle_offset + 1]];
+        v2_t t2 = texcoords[indices[triangle_offset + 2]];
+
+        v2_t tex = v2_add3(mul(uvw.x, t0), mul(uvw.y, t1), mul(uvw.z, t2));
 
         v3_t albedo = {0, 0, 0};
 
@@ -237,8 +238,8 @@ typedef struct lum_job_t
 {
     lum_thread_context_t *thread_contexts;
 
-    map_brush_t *brush;
-    map_plane_t *plane;
+    uint32_t brush_index;
+    uint32_t plane_index;
 
     // insanity
     image_t result;
@@ -276,10 +277,11 @@ static void lum_job(job_context_t *job_context, void *userdata)
     lum_thread_context_t *thread = &job->thread_contexts[job_context->thread_index];
 
     lum_params_t *params = &thread->params;
+    map_t *map = params->map;
 
-    map_brush_t *brush = job->brush;
-    map_plane_t *plane = job->plane;
-    map_poly_t *poly = &brush->polys[plane->poly_index];
+    map_brush_t *brush = &map->brushes[job->brush_index];
+    map_plane_t *plane = &map->planes [job->plane_index];
+    map_poly_t  *poly  = &map->polys  [job->plane_index];
 
     arena_t *arena = &thread->arena;
 
@@ -647,26 +649,15 @@ void bake_lighting(const lum_params_t *params_init, lum_results_t *results)
 
     map_t *map = params.map;
 
-    size_t plane_count = 0;
-    for (size_t brush_index = 0; brush_index < map->brush_count; brush_index++)
-    {
-        map_brush_t *brush = map->brushes[brush_index];
-
-        for (map_plane_t *plane = brush->first_plane; plane; plane = plane->next)
-        {
-            plane_count++;
-        }
-    }
-
     m_scoped(temp)
     {
         size_t thread_count = 6;
 
         size_t job_count = 0;
-        lum_job_t *jobs = m_alloc_array(temp, plane_count, lum_job_t);
+        lum_job_t *jobs = m_alloc_array(temp, map->plane_count, lum_job_t);
 
         // silly, silly.
-        job_queue_t queue = create_job_queue(thread_count, plane_count);
+        job_queue_t queue = create_job_queue(thread_count, map->plane_count);
 
         lum_thread_context_t *thread_contexts = m_alloc_array(temp, thread_count, lum_thread_context_t);
 
@@ -680,14 +671,14 @@ void bake_lighting(const lum_params_t *params_init, lum_results_t *results)
 
         for (size_t brush_index = 0; brush_index < map->brush_count; brush_index++)
         {
-            map_brush_t *brush = map->brushes[brush_index];
+            map_brush_t *brush = &map->brushes[brush_index];
 
-            for (map_plane_t *plane = brush->first_plane; plane; plane = plane->next)
+            for (size_t plane_index = 0; plane_index < brush->plane_poly_count; plane_index++)
             {
                 lum_job_t *job = &jobs[job_count++];
                 job->thread_contexts = thread_contexts;
-                job->brush           = brush;
-                job->plane           = plane;
+                job->brush_index     = (uint32_t)(brush_index);
+                job->plane_index     = (uint32_t)(brush->first_plane_poly + plane_index);
 
                 add_job_to_queue(queue, lum_job, job);
             }
@@ -706,10 +697,7 @@ void bake_lighting(const lum_params_t *params_init, lum_results_t *results)
         {
             lum_job_t *job = &jobs[job_index];
 
-            map_brush_t *brush = job->brush;
-            map_plane_t *plane = job->plane;
-
-            map_poly_t *poly = &brush->polys[plane->poly_index];
+            map_poly_t *poly = &map->polys[job->plane_index];
 
             image_t *result = &job->result;
 
@@ -724,7 +712,6 @@ void bake_lighting(const lum_params_t *params_init, lum_results_t *results)
                     .pixels = result->pixels,
                 },
             });
-
         }
 
         if (results)

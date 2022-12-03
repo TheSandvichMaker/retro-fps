@@ -32,6 +32,8 @@ typedef struct ui_size_t
     float strictness;
 } ui_size_t;
 
+v2_t ui_get_screen_bounds(void);
+
 static inline ui_size_t ui_pct(float value, float strictness)
 {
     ui_size_t result = { UI_SIZE_PERCENTAGE_OF_PARENT, value, strictness };

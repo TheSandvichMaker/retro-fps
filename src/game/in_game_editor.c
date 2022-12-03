@@ -10,13 +10,16 @@
 #include "ui.h"
 #include "intersect.h"
 
-static void push_poly_wireframe(r_immediate_draw_t *draw_call, map_poly_t *poly, v4_t color)
+static void push_poly_wireframe(map_t *map, r_immediate_draw_t *draw_call, map_poly_t *poly, v4_t color)
 {
+    uint16_t *indices   = map->indices          + poly->first_index;
+    v3_t     *positions = map->vertex.positions + poly->first_vertex;
+
     for (size_t triangle_index = 0; triangle_index < poly->index_count / 3; triangle_index++)
     {
-        v3_t a = poly->vertices[poly->indices[3*triangle_index + 0]].pos;
-        v3_t b = poly->vertices[poly->indices[3*triangle_index + 1]].pos;
-        v3_t c = poly->vertices[poly->indices[3*triangle_index + 2]].pos;
+        v3_t a = positions[indices[3*triangle_index + 0]];
+        v3_t b = positions[indices[3*triangle_index + 1]];
+        v3_t c = positions[indices[3*triangle_index + 2]];
 
         r_push_line(draw_call, a, b, color);
         r_push_line(draw_call, a, c, color);
@@ -24,28 +27,13 @@ static void push_poly_wireframe(r_immediate_draw_t *draw_call, map_poly_t *poly,
     }
 }
 
-static void push_brush_wireframe(r_immediate_draw_t *draw_call, map_brush_t *brush, v4_t color)
+static void push_brush_wireframe(map_t *map, r_immediate_draw_t *draw_call, map_brush_t *brush, v4_t color)
 {
-    for (size_t poly_index = 0; poly_index < brush->poly_count; poly_index++)
+    for (size_t poly_index = 0; poly_index < brush->plane_poly_count; poly_index++)
     {
-        map_poly_t *poly = &brush->polys[poly_index];
-        push_poly_wireframe(draw_call, poly, color);
+        map_poly_t *poly = &map->polys[brush->first_plane_poly + poly_index];
+        push_poly_wireframe(map, draw_call, poly, color);
     }
-}
-
-static inline map_plane_t *plane_from_poly(map_brush_t *brush, map_poly_t *poly)
-{
-    map_plane_t *plane = brush->first_plane;
-
-    for (size_t i = 0; i < brush->poly_count; i++)
-    {
-        if (&brush->polys[i] == poly)
-            break;
-
-        plane = plane->next;
-    }
-
-    return plane;
 }
 
 typedef struct lightmap_editor_state_t
@@ -109,8 +97,15 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 
     UI_Parent(container)
     {
+        ui_style_t style = ui_get_style();
+
+        style.outline_color        = ui_gradient_from_v4(make_v4(0.45f, 0.25f, 0.25f, 1.0f));
+        style.background_color     = ui_gradient_vertical(make_v4(0.35f, 0.15f, 0.15f, 1.0f), make_v4(0.25f, 0.10f, 0.10f, 1.0f));
+        style.background_color_hot = ui_gradient_vertical(mul(1.5f, make_v4(0.35f, 0.15f, 0.15f, 1.0f)), mul(1.5f, make_v4(0.25f, 0.10f, 0.10f, 1.0f)));
+
+        ui_push_style(&style);
+
         ui_box_t *title_bar = ui_box(strlit("Lightmap Editor"), UI_DRAW_BACKGROUND|UI_DRAW_TEXT|UI_DRAGGABLE|UI_CLICKABLE);
-        title_bar->style.background_color = ui_gradient_vertical(make_v4(0.35f, 0.15f, 0.15f, 1.0f), make_v4(0.25f, 0.10f, 0.10f, 1.0f));
         ui_set_size(title_bar, AXIS2_X, ui_pct(1.0f, 0.0f));
 
         if (ui_button(strlit("Close")).released)
@@ -122,7 +117,18 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
         if (title_interaction.dragging)
         {
             lm_editor->window_position = add(lm_editor->window_position, title_interaction.drag_delta);
+
+            v2_t bounds = ui_get_screen_bounds();
+            bounds.x -= window_width;
+            bounds.y -= window_height;
+
+            if (lm_editor->window_position.x < 0) lm_editor->window_position.x = 0.0f;
+            if (lm_editor->window_position.y < 0) lm_editor->window_position.y = 0.0f;
+            if (lm_editor->window_position.x > bounds.x) lm_editor->window_position.x = bounds.x;
+            if (lm_editor->window_position.y > bounds.y) lm_editor->window_position.y = bounds.y;
         }
+
+        ui_pop_style();
     }
 
     v3_t p = player_view_origin(player);
@@ -206,7 +212,6 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
             texture_desc_t desc;
             render->describe_texture(poly->lightmap, &desc);
 
-            ui_label(string_format(temp, "debug ordinal: %d", lm_editor->selected_plane->debug_ordinal), 0);
             ui_label(string_format(temp, "resolution: %u x %u", desc.w, desc.h), 0);
             if (lm_editor->pixel_selection_active)
             {
@@ -311,7 +316,7 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
                     .d = player_view_direction(player),
                 }, &intersect))
             {
-                map_plane_t *plane = plane_from_poly(intersect.brush, intersect.poly);
+                map_plane_t *plane = intersect.plane;
 
                 if (button_pressed(BUTTON_FIRE1))
                 {
@@ -330,7 +335,7 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
                 }
 
                 if (lm_editor->selected_poly != intersect.poly)
-                    push_poly_wireframe(draw_call, intersect.poly, COLORF_RED);
+                    push_poly_wireframe(map, draw_call, intersect.poly, COLORF_RED);
             }
             else
             {
@@ -350,7 +355,7 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
             float scale_x = plane->lm_scale_x;
             float scale_y = plane->lm_scale_y;
 
-            push_poly_wireframe(draw_call, &lm_editor->selected_brush->polys[plane->poly_index], make_v4(0.0f, 0.0f, 0.0f, 0.75f));
+            push_poly_wireframe(map, draw_call, lm_editor->selected_poly, make_v4(0.0f, 0.0f, 0.0f, 0.75f));
 
             r_push_arrow(draw_call, plane->lm_origin, add(plane->lm_origin, mul(scale_x, plane->lm_s)), make_v4(0.5f, 0.0f, 0.0f, 1.0f));
             r_push_arrow(draw_call, plane->lm_origin, add(plane->lm_origin, mul(scale_y, plane->lm_t)), make_v4(0.0f, 0.5f, 0.0f, 1.0f));

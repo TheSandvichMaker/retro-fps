@@ -14,6 +14,7 @@ typedef struct intersect_result_t
     float t;                             // hit t
 
     struct map_brush_t *brush;           // hit brush
+    struct map_plane_t *plane;           // hit plane
     struct map_poly_t  *poly;            // hit poly
 
     v3_t uvw;                            // barycentrics of hit triangle
