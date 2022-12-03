@@ -66,7 +66,12 @@ typedef struct editor_state_t
     lightmap_editor_state_t lightmap_editor;
 } editor_state_t;
 
-static editor_state_t g_editor;
+static editor_state_t g_editor = {
+    .lightmap_editor_enabled = true,
+    .lightmap_editor = {
+        .window_position = { 32, 32 },
+    },
+};
 
 static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 {
