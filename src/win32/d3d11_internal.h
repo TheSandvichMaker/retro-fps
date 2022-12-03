@@ -129,6 +129,7 @@ void get_resolution(int *w, int *h);
 typedef struct d3d_render_pass_t
 {
     ID3D11RenderTargetView *render_target;
+    ID3D11DepthStencilView *depth_stencil;
 
     d3d_model_t *model;
 

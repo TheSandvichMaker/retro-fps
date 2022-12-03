@@ -626,7 +626,7 @@ void render_model(const render_pass_t *pass)
         ID3D11DeviceContext_OMSetDepthStencilState(d3d.context, d3d.dss_dont_write_depth, 0);
     }
 
-    ID3D11DeviceContext_OMSetRenderTargets(d3d.context, 1, &pass->render_target, d3d.ds_view);
+    ID3D11DeviceContext_OMSetRenderTargets(d3d.context, 1, &pass->render_target, pass->depth_stencil);
 
     // draw 
     if (pass->model->icount > 0)
@@ -775,6 +775,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
 
             render_model(&(render_pass_t) {
                 .render_target = d3d.msaa_rt_rtv,
+                .depth_stencil = d3d.ds_view,
 
                 .model = model,
 
@@ -802,6 +803,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
         bool resolved_scene = false;
 
         ID3D11RenderTargetView *current_render_target = d3d.msaa_rt_rtv;
+        ID3D11DepthStencilView *current_depth_stencil = d3d.ds_view;
 
         // meat and potatoes
         for (char *at = list->command_list_base; at < list->command_list_at;)
@@ -840,6 +842,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
 
                         render_model(&(render_pass_t) {
                             .render_target = current_render_target,
+                            .depth_stencil = current_depth_stencil,
 
                             .model = model,
 
@@ -902,6 +905,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
 
                     render_model(&(render_pass_t) {
                         .render_target = current_render_target,
+                        .depth_stencil = current_depth_stencil,
 
                         .model = &immediate_model,
 
@@ -988,6 +992,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                         ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 4, insane_people_made_this_api);
 
                         current_render_target = d3d.rt_rtv;
+                        current_depth_stencil = NULL; // TODO: Get a depth stencil view for UI?
                     }
                 } break;
 
