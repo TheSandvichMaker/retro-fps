@@ -1,23 +1,28 @@
 #include "common.hlsl"
 
+// -----------------------------------------------------------------------
+
 struct PS_INPUT
 {
     float4 pos : SV_POSITION;
     float2 uv  : TEXCOORD;
 };
 
-Texture2DMS<float3> rendertarget : register(t0);
-Texture3D           fogmap       : register(t1);
-Texture2DMS<float>  depth_buffer : register(t2);
-Texture2D<float4>   blue_noise   : register(t3);
-
-PS_INPUT vs(uint id : SV_VertexID)
+PS_INPUT postprocess_vs(uint id : SV_VertexID)
 {
     PS_INPUT OUT;
     OUT.uv  = uint2(id, id << 1) & 2;
     OUT.pos = float4(lerp(float2(-1, 1), float2(1, -1), OUT.uv), 0, 1);
     return OUT;
 }
+
+// -----------------------------------------------------------------------
+// MSAA Resolve (includes fog rendering)
+
+Texture2DMS<float3> msaa_rendertarget : register(t0);
+Texture2DMS<float>  depth_buffer      : register(t1);
+Texture2D<float4>   blue_noise        : register(t2);
+Texture3D           fogmap            : register(t3);
 
 float3 iq_hash2(uint3 x)
 {
@@ -105,31 +110,37 @@ float4 raymarch_fog(float2 uv, uint2 co, float dither, uint sample_index)
     return float4(illumination, transmission);
 }
 
-float3 tonemap(float3 color)
+float3 msaa_tonemap(float3 color)
 {
-    return 1 - exp(-color);
+    return color * (rcp(1.0 + max3(color)));
 }
 
-float4 ps(PS_INPUT IN) : SV_TARGET
+float3 msaa_tonemap_inverse(float3 color)
+{
+    return color * (rcp(1.0 - max3(color)));
+}
+
+float4 msaa_resolve_ps(PS_INPUT IN) : SV_TARGET
 {
     uint2 dim; uint sample_count;
-    rendertarget.GetDimensions(dim.x, dim.y, sample_count);
+    msaa_rendertarget.GetDimensions(dim.x, dim.y, sample_count);
 
     uint2 co = IN.uv*dim;
 
     bool require_full_multisampled_raymarch = false;
 
     float3 color_samples[8];
-    color_samples[0] = rendertarget.Load(co, 0);
+    color_samples[0] = msaa_rendertarget.Load(co, 0);
+
+    uint2 dither_dim;
+    blue_noise.GetDimensions(dither_dim.x, dither_dim.y);
     
-    float4 dither = blue_noise.Load(uint3(co % 64, 0)); // iq_hash2(uint3(co, frame_index)).xyz;
-    // float phi = (1.0 + sqrt(5.0)) / 2.0;
-    // dither = frac(dither + frame_index*phi);
+    float4 dither = blue_noise.Load(uint3(co % dither_dim, 0)); 
     dither = dither.xyzw - dither.yzwx;
 
     {for (uint i = 1; i < sample_count; i++)
     {
-        color_samples[i] = rendertarget.Load(co, i);
+        color_samples[i] = msaa_rendertarget.Load(co, i);
         if (any(color_samples[i] != color_samples[i - 1]))
         {
             require_full_multisampled_raymarch = true;
@@ -145,7 +156,7 @@ float4 ps(PS_INPUT IN) : SV_TARGET
         {
             float4 fog = raymarch_fog(IN.uv, co, raymarch_dither, i);;
             float3 sample_color = fog_blend(color_samples[i], fog);
-            color += tonemap(sample_color);
+            color += msaa_tonemap(sample_color);
         }}
     }
     else
@@ -154,13 +165,50 @@ float4 ps(PS_INPUT IN) : SV_TARGET
         {for (uint i = 0; i < sample_count; i++)
         {
             float3 sample_color = fog_blend(color_samples[i], fog);
-            color += tonemap(sample_color);
+            color += msaa_tonemap(sample_color);
         }}
     }
     color *= rcp(sample_count);
-
-    color = pow(abs(color), 1.0 / 2.23);
-    color += dither.rgb / 255.0;
+    color = msaa_tonemap_inverse(color);
 
     return float4(color.rgb, 1);
+}
+
+// -----------------------------------------------------------------------
+// Final post-effect shader
+
+Texture2D<float3> hdr_rendertarget : register(t0);
+
+float3 tonemap(float3 color)
+{
+    return 1.0 - exp(-color);
+}
+
+float4 hdr_resolve_ps(PS_INPUT IN) : SV_TARGET
+{
+    uint2 co = uint2(IN.pos.xy); 
+
+    float3 color = hdr_rendertarget.Load(uint3(co, 0));
+
+    float3 bloom = 0;
+    bloom += hdr_rendertarget.SampleLevel(sampler_linear_clamped, IN.uv, 1);
+    bloom += hdr_rendertarget.SampleLevel(sampler_linear_clamped, IN.uv, 2);
+    bloom += hdr_rendertarget.SampleLevel(sampler_linear_clamped, IN.uv, 3);
+    bloom += hdr_rendertarget.SampleLevel(sampler_linear_clamped, IN.uv, 4);
+    bloom += hdr_rendertarget.SampleLevel(sampler_linear_clamped, IN.uv, 5);
+    bloom /= 5.0;
+
+    color = lerp(color, bloom, 0.1);
+
+    uint2 dither_dim;
+    blue_noise.GetDimensions(dither_dim.x, dither_dim.y);
+    
+    float4 dither = blue_noise.Load(uint3(co % dither_dim, 0)); 
+    dither = dither.xyzw - dither.yzwx;
+
+    color = tonemap(color);
+    color = pow(color, 1.0 / 2.23);
+    color += dither.rgb / 255.0;
+
+    return float4(color, 1);
 }

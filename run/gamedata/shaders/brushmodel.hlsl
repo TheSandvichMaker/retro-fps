@@ -19,23 +19,6 @@ PS_INPUT vs(VS_INPUT_BRUSH IN)
     return OUT;
 }
 
-float4 pyramid_blur(Texture2D tex, sampler samp, float2 uv)
-{
-    float2 dim;
-    tex.GetDimensions(dim.x, dim.y);
-
-    float2 offset = 0.5 / dim;
-
-    float4 result = 0;
-    result += tex.Sample(samp, uv + float2( offset.x,  offset.y));
-    result += tex.Sample(samp, uv + float2(-offset.x,  offset.y));
-    result += tex.Sample(samp, uv + float2(-offset.x, -offset.y));
-    result += tex.Sample(samp, uv + float2( offset.x, -offset.y));
-    result *= 0.25f;
-
-    return result;
-}
-
 float4 ps(PS_INPUT IN) : SV_TARGET
 {
     float2 dim;

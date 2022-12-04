@@ -3,6 +3,15 @@
 
 #include "core/core.h"
 
+typedef struct render_settings_t
+{
+    int render_w, render_h;
+    int msaa_level;
+    int rendertarget_precision; // 0 = default, 1 = high precision
+
+    uint32_t version;
+} render_settings_t;
+
 #define RENDER_COMMAND_ALIGN 16
 
 #define MAX_IMMEDIATE_INDICES  (1 << 24)
@@ -15,24 +24,6 @@ typedef struct bitmap_font_t
 } bitmap_font_t;
 
 extern v3_t g_debug_colors[6];
-
-#define COLORF_WHITE   make_v4(1, 1, 1, 1)
-#define COLORF_BLACK   make_v4(0, 0, 0, 1)
-#define COLORF_RED     make_v4(1, 0, 0, 1)
-#define COLORF_GREEN   make_v4(0, 1, 0, 1)
-#define COLORF_BLUE    make_v4(0, 0, 1, 1)
-#define COLORF_MAGENTA make_v4(1, 0, 1, 1)
-#define COLORF_CYAN    make_v4(0, 1, 1, 1)
-#define COLORF_YELLOW  make_v4(1, 1, 0, 1)
-
-#define COLOR32_WHITE   pack_rgba(1, 1, 1, 1)
-#define COLOR32_BLACK   pack_rgba(0, 0, 0, 1)
-#define COLOR32_RED     pack_rgba(1, 0, 0, 1)
-#define COLOR32_GREEN   pack_rgba(0, 1, 0, 1)
-#define COLOR32_BLUE    pack_rgba(0, 0, 1, 1)
-#define COLOR32_MAGENTA pack_rgba(1, 0, 1, 1)
-#define COLOR32_CYAN    pack_rgba(0, 1, 1, 1)
-#define COLOR32_YELLOW  pack_rgba(1, 1, 0, 1)
 
 static inline v3_t r_debug_color(size_t i)
 {
@@ -270,134 +261,5 @@ void r_copy_top_view(r_view_t *view);
 r_view_t *r_get_top_view(void);
 v3_t r_to_view_space(const r_view_t *view, v3_t p, float w);
 void r_pop_view(void);
-
-static inline v4_t linear_to_srgb(v4_t color)
-{
-    // TODO: more accurate srgb transforms?
-    color.xyz = (v3_t){
-        .x = sqrt_ss(color.x),
-        .y = sqrt_ss(color.y),
-        .z = sqrt_ss(color.z),
-    };
-    return color;
-}
-
-static inline v4_t srgb_to_linear(v4_t color)
-{
-    // TODO: more accurate srgb transforms?
-    color.xyz = (v3_t){
-        .x = color.x*color.x,
-        .y = color.y*color.y,
-        .z = color.z*color.z,
-    };
-    return color;
-}
-
-static inline uint32_t pack_color(v4_t color)
-{
-    color.x = CLAMP(color.x, 0.0f, 1.0f);
-    color.y = CLAMP(color.y, 0.0f, 1.0f);
-    color.z = CLAMP(color.z, 0.0f, 1.0f);
-    color.w = CLAMP(color.w, 0.0f, 1.0f);
-
-    color = linear_to_srgb(color);
-
-    color.x *= color.w;
-    color.y *= color.w;
-    color.z *= color.w;
-
-    uint32_t result = (((uint32_t)(255.0f*color.x) <<  0) |
-                       ((uint32_t)(255.0f*color.y) <<  8) |
-                       ((uint32_t)(255.0f*color.z) << 16) |
-                       ((uint32_t)(255.0f*color.w) << 24));
-    return result;
-}
-
-static inline uint32_t pack_rgba(float r, float g, float b, float a)
-{
-    r *= a;
-    g *= a;
-    b *= a;
-    return pack_color((v4_t){r, g, b, a});
-}
-
-static inline uint32_t pack_rgb(float r, float g, float b)
-{
-    return pack_color((v4_t){r, g, b, 1.0f});
-}
-
-static inline v4_t unpack_color(uint32_t color)
-{
-    float rcp_255 = 1.0f / 255.0f;
-
-    v4_t result;
-    result.x = rcp_255*(float)((color >>  0) & 0xFF);
-    result.y = rcp_255*(float)((color >>  8) & 0xFF);
-    result.z = rcp_255*(float)((color >> 16) & 0xFF);
-    result.w = rcp_255*(float)((color >> 24) & 0xFF);
-
-    return result;
-}
-
-// https://registry.khronos.org/OpenGL/extensions/EXT/EXT_packed_float.txt
-
-static inline unsigned pack_float11(float value)
-{
-	// This does not handle NaN or infinity.
-
-    if (value < 0.0f) 
-        value = 0.0f;
-
-    if (value > 65024.0f)
-        value = 65024.0f;
-
-    union
-    {
-        float    f;
-        unsigned i;
-    } u;
-
-    u.f = value;
-
-    int exponent = ((u.i >> 23) & 0xFF) - 127;
-    int mantissa = u.i & MASK_BITS(22);
-
-    return (((exponent + 15) << 6) | (mantissa >> (23 - 6))) & MASK_BITS(11);
-}
-
-static inline unsigned pack_float10(float value)
-{
-	// This does not handle NaN or infinity.
-
-    if (value < 0.0f) 
-        value = 0.0f;
-
-    if (value > 64512.0f)
-        value = 64512.0f;
-
-    union
-    {
-        float    f;
-        unsigned i;
-    } u;
-
-    u.f = value;
-
-    int exponent = ((u.i >> 23) & 0xFF) - 127;
-    int mantissa = u.i & MASK_BITS(22);
-
-    return (((exponent + 15) << 5) | (mantissa >> (23 - 5))) & MASK_BITS(10);
-}
-
-static inline uint32_t pack_r11g11b10f(v3_t color)
-{
-    unsigned r = pack_float11(color.x);
-    unsigned g = pack_float11(color.y);
-    unsigned b = pack_float10(color.z);
-
-    unsigned result = (b << 22) | (g << 11) | r;
-
-    return result;
-}
 
 #endif /* RENDER_H */

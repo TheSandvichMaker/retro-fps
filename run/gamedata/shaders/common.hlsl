@@ -93,4 +93,21 @@ void camera_ray(float2 uv, out float3 position, out float3 direction)
                  view_matrix[2][3]*camera_z);
 }
 
+float4 pyramid_blur(Texture2D tex, sampler samp, float2 uv)
+{
+    float2 dim;
+    tex.GetDimensions(dim.x, dim.y);
+
+    float2 offset = 0.5 / dim;
+
+    float4 result = 0;
+    result += tex.Sample(samp, uv + float2( offset.x,  offset.y));
+    result += tex.Sample(samp, uv + float2(-offset.x,  offset.y));
+    result += tex.Sample(samp, uv + float2(-offset.x, -offset.y));
+    result += tex.Sample(samp, uv + float2( offset.x, -offset.y));
+    result *= 0.25f;
+
+    return result;
+}
+
 #endif

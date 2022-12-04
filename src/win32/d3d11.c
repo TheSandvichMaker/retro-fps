@@ -208,11 +208,12 @@ int init_d3d11(void *hwnd_)
 
     m_scoped(temp)
     {
-        string_t hlsl_file = strlit("gamedata/shaders/msaa_resolve.hlsl");
+        string_t hlsl_file = strlit("gamedata/shaders/postprocess.hlsl");
         string_t hlsl = fs_read_entire_file(temp, hlsl_file);
 
-        d3d.msaa_resolve_vs = compile_vs(hlsl_file, hlsl, "vs");
-        d3d.msaa_resolve_ps = compile_ps(hlsl_file, hlsl, "ps");
+        d3d.postprocess_vs  = compile_vs(hlsl_file, hlsl, "postprocess_vs");
+        d3d.msaa_resolve_ps = compile_ps(hlsl_file, hlsl, "msaa_resolve_ps");
+        d3d.hdr_resolve_ps  = compile_ps(hlsl_file, hlsl, "hdr_resolve_ps");
     }
 
     // create constant buffers
@@ -635,21 +636,94 @@ void render_model(const render_pass_t *pass)
         ID3D11DeviceContext_Draw(d3d.context, pass->model->vcount, pass->voffset);
 }
 
-void d3d11_ensure_swapchain_size(int width, int height)
+void d3d_do_post_pass(const d3d_post_pass_t *pass)
 {
-    if (d3d.rt_rtv == NULL || width != d3d.current_width || height != d3d.current_height)
+        // set output merger state
+        ID3D11DeviceContext_OMSetBlendState(d3d.context, d3d.bs, NULL, ~0U);
+        ID3D11DeviceContext_OMSetDepthStencilState(d3d.context, d3d.dss_no_depth, 0);
+        ID3D11DeviceContext_OMSetRenderTargets(d3d.context, 1, &pass->render_target, NULL);
+
+        ID3D11DeviceContext_IASetInputLayout(d3d.context, NULL);
+
+        // set vertex shader
+        ID3D11DeviceContext_VSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);
+        ID3D11DeviceContext_VSSetShader(d3d.context, d3d.postprocess_vs, NULL, 0);
+
+        // set rasterizer state
+        ID3D11DeviceContext_RSSetViewports(d3d.context, 1, &pass->viewport);
+        ID3D11DeviceContext_RSSetState(d3d.context, d3d.rs_no_cull);
+        ID3D11DeviceContext_RSSetScissorRects(d3d.context, 1, (&(D3D11_RECT){ 0, 0, d3d.current_width, d3d.current_height }));
+
+        // set pixel shader
+        ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);
+        ID3D11DeviceContext_PSSetSamplers(d3d.context, 0, D3D_SAMPLER_COUNT, d3d.samplers);
+        ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, pass->srv_count, pass->srvs);
+        ID3D11DeviceContext_PSSetShader(d3d.context, pass->ps, NULL, 0);
+
+        ID3D11DeviceContext_Draw(d3d.context, 3, 0);
+
+        ID3D11ShaderResourceView *insane_people_made_this_api[] = { NULL, NULL, NULL, NULL };
+        ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 4, insane_people_made_this_api);
+}
+
+typedef struct d3d_create_rendertarget_t
+{
+    UINT        w, h;
+    DXGI_FORMAT format;
+    int         msaa_samples;
+    bool        create_srv;
+    bool        generate_mipmaps;
+} d3d_create_rendertarget_t;
+
+static d3d_rendertarget_t d3d_create_rendertarget(const d3d_create_rendertarget_t *params)
+{
+    d3d_rendertarget_t result = {0};
+
+    D3D11_TEXTURE2D_DESC rt_desc = {
+        .Width      = params->w,
+        .Height     = params->h,
+        .MipLevels  = params->generate_mipmaps ? 0 : 1,
+        .ArraySize  = 1,
+        .Format     = params->format,
+        .SampleDesc = { params->msaa_samples, 0 },
+        .Usage      = D3D11_USAGE_DEFAULT,
+        .BindFlags  = D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE,
+    };
+
+    if (params->generate_mipmaps)
     {
-        if (d3d.rt_rtv)
+        rt_desc.MiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
+    }
+
+    ID3D11Device_CreateTexture2D(d3d.device, &rt_desc, NULL, &result.tex);
+    ID3D11Device_CreateRenderTargetView(d3d.device, (ID3D11Resource *)result.tex, NULL, &result.rtv);
+    if (params->create_srv)
+    {
+        ID3D11Device_CreateShaderResourceView(d3d.device, (ID3D11Resource *)result.tex, NULL, &result.srv);
+    }
+
+    return result;
+}
+
+static void d3d_release_rendertarget(d3d_rendertarget_t *rt)
+{
+    if (rt->tex) { ID3D11Texture2D_Release(rt->tex);          rt->tex = NULL; }
+    if (rt->rtv) { ID3D11RenderTargetView_Release(rt->rtv);   rt->rtv = NULL; }
+    if (rt->srv) { ID3D11ShaderResourceView_Release(rt->tex); rt->srv = NULL; }
+}
+
+void d3d_ensure_swap_chain_size(int width, int height)
+{
+    if (d3d.backbuffer.rtv == NULL || width != d3d.current_width || height != d3d.current_height)
+    {
+        if (d3d.backbuffer.rtv)
         {
             // release old swap chain buffers
             ID3D11DeviceContext_ClearState(d3d.context);
-            ID3D11RenderTargetView_Release(d3d.rt_rtv);
-            ID3D11Texture2D_Release(d3d.rt_tex);
-            ID3D11Texture2D_Release(d3d.msaa_rt_tex);
-            ID3D11RenderTargetView_Release(d3d.msaa_rt_rtv);
-            ID3D11RenderTargetView_Release(d3d.msaa_rt_srv);
+            d3d_release_rendertarget(&d3d.scene_target);
+            d3d_release_rendertarget(&d3d.post_target);
+            d3d_release_rendertarget(&d3d.backbuffer);
             ID3D11DepthStencilView_Release(d3d.ds_view);
-            d3d.rt_rtv = NULL;
         }
 
         // resize to new size for non-zero size
@@ -658,23 +732,25 @@ void d3d11_ensure_swapchain_size(int width, int height)
             IDXGISwapChain1_ResizeBuffers(d3d.swap_chain, 0, width, height, DXGI_FORMAT_UNKNOWN, 0);
 
             // create RenderTarget view for new backbuffer texture
-            IDXGISwapChain1_GetBuffer(d3d.swap_chain, 0, &IID_ID3D11Texture2D, &d3d.rt_tex);
-            ID3D11Device_CreateRenderTargetView(d3d.device, (ID3D11Resource *)d3d.rt_tex, NULL, &d3d.rt_rtv);
+            IDXGISwapChain1_GetBuffer(d3d.swap_chain, 0, &IID_ID3D11Texture2D, &d3d.backbuffer.tex);
+            ID3D11Device_CreateRenderTargetView(d3d.device, (ID3D11Resource *)d3d.backbuffer.tex, NULL, &d3d.backbuffer.rtv);
 
-            D3D11_TEXTURE2D_DESC msaa_rt_desc = {
-                .Width      = width,
-                .Height     = height,
-                .MipLevels  = 1,
-                .ArraySize  = 1,
-                .Format     = DXGI_FORMAT_R11G11B10_FLOAT,
-                .SampleDesc = { 8, 0 },
-                .Usage      = D3D11_USAGE_DEFAULT,
-                .BindFlags  = D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE,
-            };
+            d3d.scene_target = d3d_create_rendertarget(&(d3d_create_rendertarget_t) {
+                .w            = width,
+                .h            = height,
+                .format       = DXGI_FORMAT_R11G11B10_FLOAT,
+                .msaa_samples = 8,
+                .create_srv   = true,
+            });
 
-            ID3D11Device_CreateTexture2D(d3d.device, &msaa_rt_desc, NULL, &d3d.msaa_rt_tex);
-            ID3D11Device_CreateRenderTargetView(d3d.device, (ID3D11Resource *)d3d.msaa_rt_tex, NULL, &d3d.msaa_rt_rtv);
-            ID3D11Device_CreateShaderResourceView(d3d.device, (ID3D11Resource *)d3d.msaa_rt_tex, NULL, &d3d.msaa_rt_srv);
+            d3d.post_target = d3d_create_rendertarget(&(d3d_create_rendertarget_t) {
+                .w                = width,
+                .h                = height,
+                .format           = DXGI_FORMAT_R11G11B10_FLOAT,
+                .msaa_samples     = 1,
+                .create_srv       = true,
+                .generate_mipmaps = true,
+            });
 
             D3D11_TEXTURE2D_DESC depth_desc = {
                 .Width      = width,
@@ -715,9 +791,9 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
 {
     uint32_t frame_index = d3d.frame_index;
 
-    d3d11_ensure_swapchain_size(width, height);
+    d3d_ensure_swap_chain_size(width, height);
 
-    if (d3d.rt_rtv)
+    if (d3d.backbuffer.rtv)
     {
         D3D11_VIEWPORT viewport =
         {
@@ -730,9 +806,9 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
         };
 
         // clear screen
-        FLOAT color[] = { 0.0f, 0.0f, 0.0f, 1.0f };
-        ID3D11DeviceContext_ClearRenderTargetView(d3d.context, d3d.rt_rtv, color);
-        ID3D11DeviceContext_ClearRenderTargetView(d3d.context, d3d.msaa_rt_rtv, color);
+        // FLOAT color[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+        // ID3D11DeviceContext_ClearRenderTargetView(d3d.context, d3d.back, color);
+        // ID3D11DeviceContext_ClearRenderTargetView(d3d.context, d3d.msaa_rt_rtv, color);
         ID3D11DeviceContext_ClearDepthStencilView(d3d.context, d3d.ds_view, D3D11_CLEAR_DEPTH, 0.0f, 0);
 
         // render any potential skyboxes
@@ -774,7 +850,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
             if (!texture)  texture = d3d.missing_texture_cubemap;
 
             render_model(&(render_pass_t) {
-                .render_target = d3d.msaa_rt_rtv,
+                .render_target = d3d.scene_target.rtv,
                 .depth_stencil = d3d.ds_view,
 
                 .model = model,
@@ -802,7 +878,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
 
         bool resolved_scene = false;
 
-        ID3D11RenderTargetView *current_render_target = d3d.msaa_rt_rtv;
+        ID3D11RenderTargetView *current_render_target = d3d.scene_target.rtv;
         ID3D11DepthStencilView *current_depth_stencil = d3d.ds_view;
 
         // meat and potatoes
@@ -963,35 +1039,30 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
 
                         update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
 
-                        // set output merger state
-                        ID3D11DeviceContext_OMSetBlendState(d3d.context, d3d.bs, NULL, ~0U);
-                        ID3D11DeviceContext_OMSetDepthStencilState(d3d.context, d3d.dss_no_depth, 0);
-                        ID3D11DeviceContext_OMSetRenderTargets(d3d.context, 1, &d3d.rt_rtv, NULL);
+                        d3d_do_post_pass(&(d3d_post_pass_t){
+                            .render_target = d3d.post_target.rtv,
+                            .ps            = d3d.msaa_resolve_ps,
+                            .srv_count     = 4,
+                            .srvs          = (ID3D11ShaderResourceView *[]){ d3d.scene_target.srv, d3d.ds_srv, d3d.blue_noise->srv, fogmap_srv },
+                            .viewport      = viewport,
+                        });
 
-                        ID3D11DeviceContext_IASetInputLayout(d3d.context, NULL);
+                        // Generate mipmaps for bloom
+                        ID3D11DeviceContext_GenerateMips(d3d.context, d3d.post_target.srv);
 
-                        // set vertex shader
-                        ID3D11DeviceContext_VSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);
-                        ID3D11DeviceContext_VSSetShader(d3d.context, d3d.msaa_resolve_vs, NULL, 0);
+                        //
+                        // Post processing, resolve HDR
+                        //
 
-                        // set rasterizer state
-                        ID3D11DeviceContext_RSSetViewports(d3d.context, 1, &viewport);
-                        ID3D11DeviceContext_RSSetState(d3d.context, d3d.rs_no_cull);
-                        ID3D11DeviceContext_RSSetScissorRects(d3d.context, 1, (&(D3D11_RECT){ 0, 0, width, height }));
+                        d3d_do_post_pass(&(d3d_post_pass_t){
+                            .render_target = d3d.backbuffer.rtv,
+                            .ps            = d3d.hdr_resolve_ps,
+                            .srv_count     = 3,
+                            .srvs          = (ID3D11ShaderResourceView *[]){ d3d.post_target.srv, NULL, d3d.blue_noise->srv },
+                            .viewport      = viewport,
+                        });
 
-                        // set pixel shader
-                        ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);
-                        ID3D11DeviceContext_PSSetSamplers(d3d.context, 0, D3D_SAMPLER_COUNT, d3d.samplers);
-                        ID3D11ShaderResourceView *srvs[] = { d3d.msaa_rt_srv, fogmap_srv, d3d.ds_srv, d3d.blue_noise->srv, };
-                        ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 4, srvs);
-                        ID3D11DeviceContext_PSSetShader(d3d.context, d3d.msaa_resolve_ps, NULL, 0);
-
-                        ID3D11DeviceContext_Draw(d3d.context, 3, 0);
-
-                        ID3D11ShaderResourceView *insane_people_made_this_api[] = { NULL, NULL, NULL, NULL };
-                        ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 4, insane_people_made_this_api);
-
-                        current_render_target = d3d.rt_rtv;
+                        current_render_target = d3d.backbuffer.rtv;
                         current_depth_stencil = NULL; // TODO: Get a depth stencil view for UI?
                     }
                 } break;

@@ -56,6 +56,13 @@ typedef enum d3d_sampler_t
     D3D_SAMPLER_COUNT,
 } d3d_sampler_t;
 
+typedef struct d3d_rendertarget_t
+{
+    ID3D11Texture2D          *tex;
+    ID3D11RenderTargetView   *rtv;
+    ID3D11ShaderResourceView *srv;
+} d3d_rendertarget_t;
+
 typedef struct d3d_state_t
 {
     d3d_texture_t *white_texture;
@@ -91,6 +98,10 @@ typedef struct d3d_state_t
     ID3D11DepthStencilView   *ds_view;
     ID3D11ShaderResourceView *ds_srv;
 
+    d3d_rendertarget_t        scene_target;
+    d3d_rendertarget_t        post_target;
+    d3d_rendertarget_t        backbuffer;
+
     ID3D11InputLayout        *layouts[VERTEX_FORMAT_COUNT];
 
     ID3D11Buffer             *ubuffer;
@@ -100,8 +111,9 @@ typedef struct d3d_state_t
     ID3D11PixelShader        *immediate_ps;
     ID3D11VertexShader       *skybox_vs;
     ID3D11PixelShader        *skybox_ps;
-    ID3D11VertexShader       *msaa_resolve_vs;
+    ID3D11VertexShader       *postprocess_vs;
     ID3D11PixelShader        *msaa_resolve_ps;
+    ID3D11PixelShader        *hdr_resolve_ps;
 
     ID3D11Texture3D          *fog_map;
     ID3D11ShaderResourceView *fog_map_srv;
@@ -157,6 +169,18 @@ typedef struct d3d_render_pass_t
     D3D11_VIEWPORT viewport;
     D3D11_RECT     scissor_rect;
 } render_pass_t;
+
+typedef struct d3d_post_pass_t
+{
+    ID3D11RenderTargetView *render_target;
+    ID3D11PixelShader *ps;
+
+    UINT srv_count;
+    ID3D11ShaderResourceView **srvs;
+
+    D3D11_VIEWPORT viewport;
+    D3D11_RECT     scissor_rect;
+} d3d_post_pass_t;
 
 void render_model(const render_pass_t *pass);
 

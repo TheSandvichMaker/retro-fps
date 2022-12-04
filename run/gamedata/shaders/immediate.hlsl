@@ -20,7 +20,7 @@ PS_INPUT vs(VS_INPUT_IMMEDIATE IN)
                      (float)((IN.col >>  8) & 0xFF) / 255.0f,
                      (float)((IN.col >> 16) & 0xFF) / 255.0f,
                      (float)((IN.col >> 24) & 0xFF) / 255.0f);
-    OUT.col.xyz = OUT.col.xyz*OUT.col.xyz;
+    // OUT.col.xyz = OUT.col.xyz*OUT.col.xyz;
 
     return OUT;
 }

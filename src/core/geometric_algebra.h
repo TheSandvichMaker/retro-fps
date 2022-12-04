@@ -136,8 +136,7 @@ static inline rotor3_t rotor3_product(rotor3_t p, rotor3_t q)
 
     r.a = p.a*q.a - p.xy*q.xy - p.zx*q.zx - p.yz*q.yz;
 
-    r.xy = p.xy * q.a  + p.a  * q.xy
-         + p.yz * q.zx - p.zx * q.yz;
+    r.xy = (p.xy * q.a) + (p.a * q.xy) + (p.yz * q.zx) - (p.zx * q.yz);
 
     r.zx = p.zx * q.a  + p.a  * q.zx
          - p.yz * q.xy + p.xy * q.yz;
