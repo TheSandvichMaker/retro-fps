@@ -166,7 +166,7 @@ void r_push_rect3_outline(r_immediate_draw_t *draw_call, rect3_t bounds, v4_t co
 
 void r_push_text(r_immediate_draw_t *draw_call, const bitmap_font_t *font, v2_t p, v4_t color, string_t string)
 {
-    ASSERT(RESOURCE_HANDLES_EQUAL(draw_call->texture, font->texture));
+    ASSERT(RESOURCE_HANDLES_EQUAL(draw_call->params.texture, font->texture));
 
     ASSERT(font->w / font->cw == 16);
     ASSERT(font->w % font->cw ==  0);

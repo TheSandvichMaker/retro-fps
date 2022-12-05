@@ -9,6 +9,9 @@ typedef struct render_settings_t
     int msaa_level;
     int rendertarget_precision; // 0 = default, 1 = high precision
 
+    int sun_shadowmap_resolution;
+    bool use_dynamic_sun_shadows;
+
     uint32_t version;
 } render_settings_t;
 
@@ -117,6 +120,7 @@ typedef struct vertex_brush_t
     v3_t pos;
     v2_t tex;
     v2_t tex_lightmap;
+    v3_t normal;
 } vertex_brush_t;
 
 typedef struct upload_model_t
@@ -152,6 +156,7 @@ extern const render_api_i *const render;
 
 typedef struct r_view_t
 {
+    v3_t camera_p;
     rect2_t clip_rect;
     m4x4_t camera, projection;
     resource_handle_t skybox;
@@ -171,10 +176,22 @@ typedef enum r_command_kind_t
     R_COMMAND_COUNT,
 } r_command_kind_t;
 
+typedef enum r_render_stage_t
+{
+    R_RENDER_STAGE_SCENE,
+    R_RENDER_STAGE_UI,
+} r_render_stage_t;
+
+typedef enum r_render_flags_t
+{
+    R_RENDER_FLAG_NO_SHADOW = 0x1,
+} r_render_flags_t;
+
 typedef struct r_command_base_t
 {
-    unsigned char kind;
-    unsigned char view;
+    unsigned char  kind;
+    unsigned char  view;
+    unsigned short flags;
 #ifndef NDEBUG
     string_t identifier;
 #endif
@@ -191,7 +208,7 @@ typedef struct r_command_model_t
     resource_handle_t lightmap;
 } r_command_model_t;
 
-typedef struct r_immediate_draw_t
+typedef struct r_immediate_params_t
 {
     r_primitive_topology_t topology;
     r_blend_mode_t blend_mode;
@@ -202,6 +219,11 @@ typedef struct r_immediate_draw_t
 
     bool  depth_test;
     float depth_bias;
+} r_immediate_params_t;
+
+typedef struct r_immediate_draw_t
+{
+    r_immediate_params_t params;
 
     uint32_t ioffset;
     uint32_t icount;
@@ -216,7 +238,7 @@ typedef struct r_command_immediate_t
     r_immediate_draw_t draw_call;
 } r_command_immediate_t;
 
-r_immediate_draw_t *r_immediate_draw_begin(const r_immediate_draw_t *draw_call);
+r_immediate_draw_t *r_immediate_draw_begin(const r_immediate_params_t *params);
 uint32_t            r_immediate_vertex    (r_immediate_draw_t *draw_call, const vertex_immediate_t *vertex);
 void                r_immediate_index     (r_immediate_draw_t *draw_call, uint32_t index);
 void                r_immediate_draw_end  (r_immediate_draw_t *draw_call);

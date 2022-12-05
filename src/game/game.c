@@ -1,7 +1,6 @@
 #include <stdlib.h>
 
 #include "core/core.h"
-#include "core/geometric_algebra.h"
 
 #include "game.h"
 #include "map.h"
@@ -10,6 +9,7 @@
 #include "intersect.h"
 #include "ui.h"
 #include "in_game_editor.h"
+
 #include "render/light_baker.h"
 #include "render/render.h"
 #include "render/render_helpers.h"
@@ -381,6 +381,7 @@ static void view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
     r_default_view(view);
 
     view->clip_rect = viewport;
+    view->camera_p  = camera->p;
 
     v3_t p = camera->p;
     v3_t d = negate(camera->computed_z);
@@ -599,6 +600,12 @@ void game_tick(game_io_t *io, float dt)
         map_poly_t *poly = &map->polys[poly_index];
         r_draw_model(m4x4_identity, poly->mesh, poly->texture, poly->lightmap);
     }
+
+    static float timer = 0.0f;
+    timer += 1.0f / 60.0f;
+
+    map_poly_t *poly = &map->polys[27];
+    r_draw_model(translate(m4x4_identity, make_v3(-70.0f + sinf(timer)*40.0f, 250.0f + 25.0f*cosf(0.5f*timer), 0)), poly->mesh, poly->texture, poly->lightmap);
 
     if (g_cursor_locked)
     {

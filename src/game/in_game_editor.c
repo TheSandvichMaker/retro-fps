@@ -182,6 +182,8 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
                 .sun_color           = mul(2.0f, make_v3(1, 1, 0.75f)),
                 .sky_color           = mul(1.0f, make_v3(0.15f, 0.30f, 0.62f)),
 
+                .use_dynamic_sun_shadows = true,
+
                 // TODO: Have a macro for optimization level to check instead of DEBUG
 #if DEBUG
                 .ray_count               = 8,
@@ -306,7 +308,7 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
     if (lm_editor->debug_lightmaps)
     {
         r_command_identifier(strlit("lightmap debug"));
-        r_immediate_draw_t *draw_call = r_immediate_draw_begin(&(r_immediate_draw_t){
+        r_immediate_draw_t *draw_call = r_immediate_draw_begin(&(r_immediate_params_t){
             .topology   = R_PRIMITIVE_TOPOLOGY_LINELIST,
             .depth_bias = 0.005f,
             .depth_test = !lm_editor->no_ray_depth_test,

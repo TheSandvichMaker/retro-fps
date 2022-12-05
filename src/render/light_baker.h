@@ -19,6 +19,7 @@ typedef struct lum_params_t
 
     struct image_t *skybox;
 
+    bool use_dynamic_sun_shadows;
     v3_t sun_direction;
     v3_t sun_color;
     v3_t sky_color;

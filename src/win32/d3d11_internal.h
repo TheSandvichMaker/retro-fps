@@ -10,6 +10,9 @@ typedef struct d3d_cbuffer_t
     m4x4_t view_matrix;
     m4x4_t proj_matrix;
     m4x4_t model_matrix;
+    m4x4_t sun_matrix;
+    v3_t     light_direction;
+    float    pad3;
     uint32_t frame_index;
     float    depth_bias;
     float    pad0;
@@ -53,14 +56,31 @@ typedef enum d3d_sampler_t
     D3D_SAMPLER_POINT_CLAMP,
     D3D_SAMPLER_LINEAR_CLAMP,
     D3D_SAMPLER_FOG,
+    D3D_SAMPLER_SHADOWMAP,
     D3D_SAMPLER_COUNT,
 } d3d_sampler_t;
 
+typedef struct d3d_create_rendertarget_t
+{
+    UINT        w, h;
+    DXGI_FORMAT format;
+    int         msaa_samples;
+    bool        create_color;
+    bool        create_depth;
+    bool        create_srv;
+    bool        allow_color_mipmaps;
+    bool        allow_depth_mipmaps;
+} d3d_create_rendertarget_t;
+
 typedef struct d3d_rendertarget_t
 {
-    ID3D11Texture2D          *tex;
-    ID3D11RenderTargetView   *rtv;
-    ID3D11ShaderResourceView *srv;
+    ID3D11Texture2D          *color_tex;
+    ID3D11RenderTargetView   *color_rtv;
+    ID3D11ShaderResourceView *color_srv;
+
+    ID3D11Texture2D          *depth_tex;
+    ID3D11DepthStencilView   *depth_dsv;
+    ID3D11ShaderResourceView *depth_srv;
 } d3d_rendertarget_t;
 
 typedef struct d3d_state_t
@@ -86,25 +106,28 @@ typedef struct d3d_state_t
     ID3D11BlendState         *bs;
     ID3D11BlendState         *bs_additive;
     ID3D11RasterizerState    *rs;
+    ID3D11RasterizerState    *rs_cull_front;
     ID3D11RasterizerState    *rs_no_cull;
     ID3D11DepthStencilState  *dss;
     ID3D11DepthStencilState  *dss_no_depth;
     ID3D11DepthStencilState  *dss_dont_write_depth;
+    ID3D11DepthStencilState  *dss_less;
     ID3D11Texture2D          *rt_tex;
     ID3D11RenderTargetView   *rt_rtv;
     ID3D11Texture2D          *msaa_rt_tex;
     ID3D11RenderTargetView   *msaa_rt_rtv;
     ID3D11ShaderResourceView *msaa_rt_srv;
-    ID3D11DepthStencilView   *ds_view;
-    ID3D11ShaderResourceView *ds_srv;
 
     d3d_rendertarget_t        scene_target;
     d3d_rendertarget_t        post_target;
     d3d_rendertarget_t        backbuffer;
 
+    d3d_rendertarget_t        sun_shadowmap;
+
     ID3D11InputLayout        *layouts[VERTEX_FORMAT_COUNT];
 
     ID3D11Buffer             *ubuffer;
+    ID3D11VertexShader       *shadowmap_vs;
     ID3D11VertexShader       *world_vs;
     ID3D11PixelShader        *world_ps;
     ID3D11VertexShader       *immediate_vs;
@@ -138,6 +161,20 @@ void set_model_buffers(d3d_model_t *model, DXGI_FORMAT index_format);
 
 void get_resolution(int *w, int *h);
 
+typedef enum d3d_cull_mode_t
+{
+    D3D_CULL_NONE,
+    D3D_CULL_BACK,
+    D3D_CULL_FRONT,
+} d3d_cull_mode_t;
+
+typedef enum d3d_depth_test_t
+{
+    D3D_DEPTH_TEST_GREATER,
+    D3D_DEPTH_TEST_LESS,
+    D3D_DEPTH_TEST_NONE,
+} d3d_depth_test_t;
+
 typedef struct d3d_render_pass_t
 {
     ID3D11RenderTargetView *render_target;
@@ -161,8 +198,8 @@ typedef struct d3d_render_pass_t
     uint32_t ioffset;
     uint32_t voffset;
 
-    bool depth;
-    bool cull;
+    d3d_depth_test_t depth;
+    d3d_cull_mode_t cull;
     bool sample_linear;
     bool scissor;
 
@@ -183,5 +220,8 @@ typedef struct d3d_post_pass_t
 } d3d_post_pass_t;
 
 void render_model(const render_pass_t *pass);
+
+d3d_rendertarget_t d3d_create_rendertarget(const d3d_create_rendertarget_t *params);
+void d3d_release_rendertarget(d3d_rendertarget_t *rt);
 
 #endif /* D3D11_INTERNAL_H */

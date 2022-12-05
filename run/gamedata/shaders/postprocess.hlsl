@@ -190,6 +190,7 @@ float4 hdr_resolve_ps(PS_INPUT IN) : SV_TARGET
 
     float3 color = hdr_rendertarget.Load(uint3(co, 0));
 
+#if 0
     float3 bloom = 0;
     bloom += hdr_rendertarget.SampleLevel(sampler_linear_clamped, IN.uv, 1);
     bloom += hdr_rendertarget.SampleLevel(sampler_linear_clamped, IN.uv, 2);
@@ -199,6 +200,7 @@ float4 hdr_resolve_ps(PS_INPUT IN) : SV_TARGET
     bloom /= 5.0;
 
     color = lerp(color, bloom, 0.1);
+#endif
 
     uint2 dither_dim;
     blue_noise.GetDimensions(dither_dim.x, dither_dim.y);

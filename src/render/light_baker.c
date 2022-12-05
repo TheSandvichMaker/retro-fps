@@ -43,7 +43,7 @@ static v3_t random_point_on_light(random_series_t *entropy, map_point_light_t *l
     return add(light->p, mul(16.0f, random_in_unit_cube(entropy)));
 }
 
-static v3_t evaluate_lighting(lum_thread_context_t *thread, lum_path_vertex_t *path_vertex, v3_t hit_p, v3_t hit_n)
+static v3_t evaluate_lighting(lum_thread_context_t *thread, lum_path_vertex_t *path_vertex, v3_t hit_p, v3_t hit_n, bool ignore_sun)
 {
     lum_params_t *params = &thread->params;
     map_t *map = params->map;
@@ -101,7 +101,7 @@ static v3_t evaluate_lighting(lum_thread_context_t *thread, lum_path_vertex_t *p
         }
     }
 
-    if (sun_ndotl > 0.0f)
+    if (!ignore_sun && sun_ndotl > 0.0f)
     {
         v3_t sun_d = add(sun_direction, mul(0.1f, random_in_unit_sphere(&thread->entropy)));
         sun_d = normalize(sun_d);
@@ -204,7 +204,7 @@ static v3_t pathtrace_recursively(lum_thread_context_t *thread, lum_path_t *path
 
         v3_t hit_p = add(intersect_params.o, mul(hit.t, intersect_params.d));
 
-        v3_t lighting = evaluate_lighting(thread, path_vertex, hit_p, n);
+        v3_t lighting = evaluate_lighting(thread, path_vertex, hit_p, n, false);
 
         v2_t sample = random_unilateral2(entropy);
         v3_t unrotated_dir = map_to_cosine_weighted_hemisphere(sample);
@@ -338,7 +338,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
                 path_vertex->o            = world_p;
                 path_vertex->throughput   = make_v3(1, 1, 1);
 
-                v3_t this_direct_lighting = evaluate_lighting(thread, path_vertex, world_p, n);
+                v3_t this_direct_lighting = evaluate_lighting(thread, path_vertex, world_p, n, params->use_dynamic_sun_shadows);
 
                 path_vertex->contribution = this_direct_lighting;
 

@@ -1006,6 +1006,18 @@ static inline m4x4_t make_view_matrix(v3_t p, v3_t d, v3_t up)
     return mat;
 }
 
+static inline m4x4_t make_orthographic_matrix(float w, float h, float d)
+{
+    m4x4_t result = make_m4x4(
+        2.0f / w, 0.0f    , 0.0f    , 0.0f,
+        0.0f    , 2.0f / h, 0.0f    , 0.0f,
+        0.0f    , 0.0f    , 1.0f / d, 0.0f,
+        0.0f    , 0.0f    , 0.0f    , 1.0f
+    );
+
+    return result;
+}
+
 // infinite far plane, inverse z
 static inline m4x4_t make_perspective_matrix(float vfov, float w_over_h, float near_plane)
 {

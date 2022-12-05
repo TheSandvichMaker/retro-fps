@@ -235,25 +235,25 @@ void r_draw_model(m4x4_t transform, resource_handle_t model, resource_handle_t t
     command->lightmap  = lightmap;
 }
 
-r_immediate_draw_t *r_immediate_draw_begin(const r_immediate_draw_t *draw_call)
+r_immediate_draw_t *r_immediate_draw_begin(const r_immediate_params_t *params)
 {
     r_command_immediate_t *command = r_submit_command(R_COMMAND_IMMEDIATE, sizeof(r_command_immediate_t));
 
-    if (draw_call)
-        copy_struct(&command->draw_call, draw_call);
+    if (params)
+        copy_struct(&command->draw_call.params, params);
 
     command->draw_call.ioffset = g_list->immediate_icount;
     command->draw_call.voffset = g_list->immediate_vcount;
 
-    if (command->draw_call.clip_rect.min.x == 0 &&
-        command->draw_call.clip_rect.min.y == 0 &&
-        command->draw_call.clip_rect.max.x == 0 &&
-        command->draw_call.clip_rect.max.y == 0)
+    if (command->draw_call.params.clip_rect.min.x == 0 &&
+        command->draw_call.params.clip_rect.min.y == 0 &&
+        command->draw_call.params.clip_rect.max.x == 0 &&
+        command->draw_call.params.clip_rect.max.y == 0)
     {
         int w, h;
         render->get_resolution(&w, &h);
 
-        command->draw_call.clip_rect.max = make_v2((float)w, (float)h);
+        command->draw_call.params.clip_rect.max = make_v2((float)w, (float)h);
     }
 
     g_list->immediate_draw_call = &command->draw_call;

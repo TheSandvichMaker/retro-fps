@@ -3,11 +3,12 @@
 
 float max3(float3 v) { return max(v.x, max(v.y, v.z)); }
 
-sampler sampler_point          : register(s0);
-sampler sampler_linear         : register(s1);
-sampler sampler_point_clamped  : register(s2);
-sampler sampler_linear_clamped : register(s3);
-sampler sampler_fog            : register(s4);
+sampler sampler_point                    : register(s0);
+sampler sampler_linear                   : register(s1);
+sampler sampler_point_clamped            : register(s2);
+sampler sampler_linear_clamped           : register(s3);
+sampler sampler_fog                      : register(s4);
+SamplerComparisonState sampler_shadowmap : register(s5);
 
 struct VS_INPUT_POS
 {
@@ -26,6 +27,7 @@ struct VS_INPUT_BRUSH
     float3 pos         : POSITION;
     float2 uv          : TEXCOORD;
     float2 uv_lightmap : TEXCOORD_LIGHTMAP;
+    float3 normal      : NORMAL;
 };
 
 cbuffer cbuffer0 : register(b0)
@@ -33,9 +35,15 @@ cbuffer cbuffer0 : register(b0)
     float4x4 view_matrix;
     float4x4 proj_matrix;
     float4x4 model_matrix;
+    float4x4 sun_matrix;
+    float3   light_direction;
+    float    pad0;
     uint     frame_index;
     float    depth_bias;
+    float    pad1;
+    float    pad2;
     float3   fog_offset;
+    float    pad3;
     float3   fog_dim;
 }
 

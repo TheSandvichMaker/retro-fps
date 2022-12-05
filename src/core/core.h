@@ -5,6 +5,7 @@
 #include "atomics.h"
 #include "intrin.h"
 #include "math.h"
+#include "geometric_algebra.h"
 #include "os.h"
 #include "vm.h"
 #include "arena.h"

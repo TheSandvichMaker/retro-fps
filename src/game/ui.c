@@ -804,7 +804,7 @@ static void ui_draw_box(ui_box_t *box, rect2_t clip_rect)
     ui_style_t *style = &box->style;
 
     {
-        r_immediate_draw_t *background = r_immediate_draw_begin(&(r_immediate_draw_t){
+        r_immediate_draw_t *background = r_immediate_draw_begin(&(r_immediate_params_t){
             .clip_rect = clip_rect,
         });
 
@@ -892,7 +892,7 @@ static void ui_draw_box(ui_box_t *box, rect2_t clip_rect)
 
     if (RESOURCE_HANDLE_VALID(box->texture))
     {
-        r_immediate_draw_t *image = r_immediate_draw_begin(&(r_immediate_draw_t){
+        r_immediate_draw_t *image = r_immediate_draw_begin(&(r_immediate_params_t){
             .clip_rect = clip_rect,
             .texture   = box->texture,
         });
@@ -910,7 +910,7 @@ static void ui_draw_box(ui_box_t *box, rect2_t clip_rect)
 
     if (box->text.count > 0 && has_flags_any(box->flags, UI_DRAW_TEXT))
     {
-        r_immediate_draw_t *text = r_immediate_draw_begin(&(r_immediate_draw_t){
+        r_immediate_draw_t *text = r_immediate_draw_begin(&(r_immediate_params_t){
             .clip_rect = clip_rect,
             .texture   = g_ui.font->texture,
         });

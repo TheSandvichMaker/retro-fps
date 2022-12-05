@@ -940,6 +940,7 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
                             .x = dot(sub(pos, plane->lm_origin), plane->lm_s) / plane->lm_scale_x,
                             .y = dot(sub(pos, plane->lm_origin), plane->lm_t) / plane->lm_scale_y,
                         },
+                        .normal = p.n,
                     };
                 }
 
