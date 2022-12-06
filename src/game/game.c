@@ -606,7 +606,10 @@ void game_tick(game_io_t *io, float dt)
     timer += 1.0f / 60.0f;
 
     map_poly_t *poly = &map->polys[27];
-    r_draw_model(translate(m4x4_identity, make_v3(-70.0f + sinf(timer)*40.0f, 250.0f + 25.0f*cosf(0.5f*timer), 0)), poly->mesh, poly->texture, poly->lightmap);
+
+    m4x4_t transform = translate(m4x4_identity, make_v3(-70.0f + sinf(timer)*40.0f, 250.0f + 25.0f*cosf(0.5f*timer), -170.0f));
+    transform.e[0][0] *= 2.0f; transform.e[1][1] *= 2.0f; transform.e[2][2] *= 2.0f;
+    r_draw_model(transform, poly->mesh, poly->texture, poly->lightmap);
 
     if (g_cursor_locked)
     {

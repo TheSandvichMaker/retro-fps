@@ -118,4 +118,30 @@ float4 pyramid_blur(Texture2D tex, sampler samp, float2 uv)
     return result;
 }
 
+float sample_pcf_3x3(Texture2D<float> shadowmap, float2 projected_pos, float current_depth, float bias)
+{
+    float biased_depth = current_depth + bias;
+
+    float2 shadowmap_dim;
+    shadowmap.GetDimensions(shadowmap_dim.x, shadowmap_dim.y);
+
+    float4 sfrac;
+    sfrac.xy = frac(projected_pos*shadowmap_dim - 0.5);
+    sfrac.zw = 1.0 - sfrac.xy;
+
+    float4 gather4_a = shadowmap.GatherRed(sampler_linear_clamped, projected_pos, int2(-1, -1));
+    float4 gather4_b = shadowmap.GatherRed(sampler_linear_clamped, projected_pos, int2( 1, -1));
+    float4 gather4_c = shadowmap.GatherRed(sampler_linear_clamped, projected_pos, int2(-1,  1));
+    float4 gather4_d = shadowmap.GatherRed(sampler_linear_clamped, projected_pos, int2( 1,  1));
+
+    float shadow = 0;
+    shadow += dot(float4(sfrac.z, 1, sfrac.w, sfrac.z*sfrac.w), gather4_a > biased_depth);
+    shadow += dot(float4(1, sfrac.x, sfrac.x*sfrac.w, sfrac.w), gather4_b > biased_depth);
+    shadow += dot(float4(sfrac.z*sfrac.y, sfrac.y, 1, sfrac.z), gather4_c > biased_depth);
+    shadow += dot(float4(sfrac.y, sfrac.x*sfrac.y, sfrac.x, 1), gather4_d > biased_depth);
+    shadow /= 9.0;
+
+    return shadow;
+}
+
 #endif

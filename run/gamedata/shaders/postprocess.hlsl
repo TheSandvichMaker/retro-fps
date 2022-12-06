@@ -76,9 +76,9 @@ float4 raymarch_fog(float2 uv, uint2 co, float dither, uint sample_index)
 
     float stop_distance = min(depth, max_distance);
 
-    float density    = 0.04;
-    float absorption = 0.002;
-    float scattering = 0.02;
+    float density    = 0.01;
+    float absorption = 0.001;
+    float scattering = 0.01;
     float extinction = absorption + scattering;
 
     float3 ambient = 0; // 0.5*float3(0.15, 0.30, 0.62);
@@ -93,23 +93,23 @@ float4 raymarch_fog(float2 uv, uint2 co, float dither, uint sample_index)
         float3 p = o + dist*d;
 
         float3 projected_p = mul(sun_matrix, float4(p, 1)).xyz;
-        projected_p.xy /= projected_p.z;
+        // projected_p.xy /= projected_p.z;
         projected_p.y  = -projected_p.y;
         projected_p.xy = 0.5*projected_p.xy + 0.5;
 
         float p_depth = projected_p.z;
 
-        float sun_occluded = shadowmap.SampleCmpLevelZero(sampler_shadowmap, projected_p.xy, p_depth);
+        float sun_shadow = sample_pcf_3x3(shadowmap, projected_p.xy, p_depth, 0.0f);
 
-        // float3 density_sample_p = p / 128.0 + (frame_index / 250.0);
-        float local_density = density; //  + 0.11*(noise_3d(density_sample_p) - 0.5);
+        float3 density_sample_p = p / 128.0 + (frame_index / 250.0);
+        float local_density = density; + 0.11*(noise_3d(density_sample_p) - 0.5);
 
         transmission *= exp(-local_density*extinction*step_size);
 
         float3 direct_light = sample_fog_lighting(p);
 
         float3 sun_color = 2.0*float3(1, 1, 0.75f);
-        direct_light += sun_color*(1.0 - sun_occluded);
+        direct_light += sun_color*(1.0 - sun_shadow);
 
         float3 in_scattering  = ambient + direct_light;
         float  out_scattering = scattering*local_density;
