@@ -604,6 +604,7 @@ void trace_volumetric_lighting(const lum_params_t *params, map_t *map)
                     }
                 }
 
+#if 0
                 intersect_result_t shadow_hit;
                 if (!intersect_map(map, &(intersect_params_t) {
                         .o                  = world_p,
@@ -614,6 +615,7 @@ void trace_volumetric_lighting(const lum_params_t *params, map_t *map)
                     v3_t contribution = params->sun_color;
                     sample_lighting = add(sample_lighting, contribution);
                 }
+#endif
 
                 lighting = add(lighting, sample_lighting);
             }

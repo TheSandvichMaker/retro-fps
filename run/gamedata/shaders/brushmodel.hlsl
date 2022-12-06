@@ -46,7 +46,7 @@ float test_shadow(float4 shadow_pos, float3 normal)
     }
     else
     {
-        float bias = max(0.02*(1.0 - max(0, dot(normal, light_direction))), 0.005);
+        float bias = max(0.025*(1.0 - max(0, dot(normal, light_direction))), 0.010);
         float biased_depth = current_depth + bias;
 
         float2 shadowmap_dim;

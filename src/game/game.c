@@ -420,6 +420,7 @@ void game_init(void)
     }
 
     world = m_bootstrap(world_t, arena);
+    world->fade_t = 1.0f;
 
     map_t    *map    = world->map    = load_map(&world->arena, strlit("gamedata/maps/test.map"));
     player_t *player = world->player = m_alloc_struct(&world->arena, player_t);
@@ -466,7 +467,7 @@ void game_init(void)
         else if (is_class(map, e, strlit("info_player_start")))
         {
             player->p = v3_from_key(map, e, strlit("origin"));
-            player->p.z += 10.0f;
+            //player->p.z += 10.0f;
         }
     }
 
@@ -640,6 +641,26 @@ void game_tick(game_io_t *io, float dt)
     update_and_render_in_game_editor(io, world);
 
     ui_end(dt);
+
+    {
+        //
+        // fade
+        //
+
+        world->fade_t += 0.45f*dt*(world->fade_target_t - world->fade_t);
+        float fade_t = world->fade_t;
+
+        r_push_view_screenspace();
+        r_immediate_draw_t *draw_call = r_immediate_draw_begin(NULL);
+
+        rect2_t rect = {
+            0, 0, (float)res_x, (float)res_y,
+        };
+        r_push_rect2_filled(draw_call, rect, make_v4(0, 0, 0, fade_t));
+
+        r_immediate_draw_end(draw_call);
+        r_pop_view();
+    }
 
     if (button_pressed(BUTTON_ESCAPE))
     {

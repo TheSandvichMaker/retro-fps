@@ -691,8 +691,8 @@ void d3d_do_post_pass(const d3d_post_pass_t *pass)
 
     ID3D11DeviceContext_Draw(d3d.context, 3, 0);
 
-    ID3D11ShaderResourceView *insane_people_made_this_api[] = { NULL, NULL, NULL, NULL };
-    ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 4, insane_people_made_this_api);
+    ID3D11ShaderResourceView *insane_people_made_this_api[] = { NULL, NULL, NULL, NULL, NULL };
+    ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 5, insane_people_made_this_api);
 }
 
 d3d_rendertarget_t d3d_create_rendertarget(const d3d_create_rendertarget_t *params)
@@ -1033,12 +1033,12 @@ done_with_sun_shadows:
                         camera_projection = mul(camera_projection, view->camera);
 
                         d3d_cbuffer_t cbuffer = {
-                            .view_matrix  = view->camera,
-                            .proj_matrix  = view->projection,
-                            .sun_matrix   = sun_matrix,
+                            .view_matrix     = view->camera,
+                            .proj_matrix     = view->projection,
+                            .sun_matrix      = sun_matrix,
                             .light_direction = sun_direction,
-                            .model_matrix = command->transform,
-                            .frame_index  = frame_index,
+                            .model_matrix    = command->transform,
+                            .frame_index     = frame_index,
                         };
 
                         update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
@@ -1161,6 +1161,7 @@ done_with_sun_shadows:
                             .view_matrix  = view->camera,
                             .proj_matrix  = view->projection,
                             .model_matrix = m4x4_identity,
+                            .sun_matrix   = sun_matrix,
                             .frame_index  = frame_index,
                             .fog_offset   = view->fog_offset,
                             .fog_dim      = view->fog_dim,
@@ -1171,8 +1172,8 @@ done_with_sun_shadows:
                         d3d_do_post_pass(&(d3d_post_pass_t){
                             .render_target = d3d.post_target.color_rtv,
                             .ps            = d3d.msaa_resolve_ps,
-                            .srv_count     = 4,
-                            .srvs          = (ID3D11ShaderResourceView *[]){ d3d.scene_target.color_srv, d3d.scene_target.depth_srv, d3d.blue_noise->srv, fogmap_srv },
+                            .srv_count     = 5,
+                            .srvs          = (ID3D11ShaderResourceView *[]){ d3d.scene_target.color_srv, d3d.scene_target.depth_srv, d3d.blue_noise->srv, fogmap_srv, d3d.sun_shadowmap.depth_srv},
                             .viewport      = viewport,
                         });
 

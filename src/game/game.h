@@ -71,6 +71,9 @@ typedef struct world_t
     map_t *map;
 
     player_t *player;
+
+    float fade_t;
+    float fade_target_t;
 } world_t;
 
 v3_t player_view_origin(player_t *player);
