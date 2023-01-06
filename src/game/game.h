@@ -10,6 +10,8 @@ typedef struct map_brush_t map_brush_t;
 typedef struct game_io_t
 {
     // in
+    string_t startup_map;
+
     bool has_focus;
 
     const input_state_t *input_state;

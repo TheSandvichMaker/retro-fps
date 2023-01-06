@@ -78,6 +78,15 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
     player_t *player = world->player;
     map_t    *map    = world->map;
 
+    map_entity_t *worldspawn = map->worldspawn;
+
+    v3_t sun_color = v3_normalize(v3_from_key(map, worldspawn, strlit("sun_color")));
+    float sun_brightness = float_from_key(map, worldspawn, strlit("sun_brightness"));
+    sun_color = mul(sun_brightness, sun_color);
+
+    v3_t ambient_color = v3_from_key(map, worldspawn, strlit("ambient_color"));
+    ambient_color = mul(1.0f / 255.0f, ambient_color);
+
     camera_t *camera = player->attached_camera;
 
     lightmap_editor_state_t *lm_editor = &g_editor.lightmap_editor;
@@ -173,19 +182,25 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
     {
         ui_label(strlit("Lightmaps have not been baked!"), 0);
 
+        // figure out the solid sky color from the fog
+        float absorption = 0.001f;
+        float density    = 0.02f;
+        float scattering = 0.03f;
+        v3_t sky_color = mul(sun_color, scattering*density / (scattering*absorption + scattering*density) / 4.0f*PI32);
+
         if (ui_button(strlit("Bake Lighting")).released)
         {
             bake_lighting(&(lum_params_t) {
                 .arena               = &world->arena,
                 .map                 = world->map,
                 .sun_direction       = make_v3(0.25f, 0.75f, 1),
-                .sun_color           = mul(2.0f, make_v3(1, 1, 0.75f)),
-                .sky_color           = mul(1.0f, make_v3(0.15f, 0.30f, 0.62f)),
+                .sun_color           = sun_color,
+                .sky_color           = sky_color,
 
                 .use_dynamic_sun_shadows = true,
 
                 // TODO: Have a macro for optimization level to check instead of DEBUG
-#if DEBUG
+#if 0
                 .ray_count               = 8,
                 .ray_recursion           = 4,
                 .fog_light_sample_count  = 4,

@@ -68,7 +68,6 @@ float4 ps(PS_INPUT IN) : SV_TARGET
 #if USE_DYNAMIC_SUN_SHADOWS
     float shadow = test_shadow(IN.shadowmap_pos, normal);
 
-    float3 sun_color = 2.0*float3(1, 1, 0.75f);
     float ndotl = max(0, dot(normal, light_direction));
     lighting += sun_color*ndotl*(1.0 - shadow);
 #endif

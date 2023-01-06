@@ -11,6 +11,8 @@
 #include <mmdeviceapi.h>
 #include <audioclient.h>
 
+#include <shellapi.h>
+
 #pragma warning(pop)
 
 #include "core/core.h"
@@ -224,7 +226,23 @@ int wWinMain(HINSTANCE instance,
 {
     IGNORED(instance);
     IGNORED(prev_instance);
-    IGNORED(command_line);
+
+    int argc;
+    wchar_t **argv_wide = CommandLineToArgvW(command_line, &argc);
+
+    string_t *argv = m_alloc_array(&win32_arena, argc, string_t);
+    for (int i = 0; i < argc; i++)
+    {
+        argv[i] = utf8_from_utf16(&win32_arena, string16_from_cstr(argv_wide[i]));
+    }
+
+    string_t startup_map = strlit("test");
+
+    for (int i = 0; i < argc; i++)
+    {
+        string_t arg = argv[i];
+        startup_map = arg;
+    }
 
     g_win32.wasapi_thread = CreateThread(NULL, 0, wasapi_thread_proc, NULL, 0, NULL);
 
@@ -377,6 +395,8 @@ int wWinMain(HINSTANCE instance,
         r_reset_command_list();
 
         game_io_t io = {
+            .startup_map = startup_map,
+
             .has_focus = has_focus,
             .input_state = &input,
         };

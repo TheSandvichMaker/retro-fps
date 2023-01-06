@@ -91,6 +91,8 @@ typedef struct map_t
     uint32_t fogmap_d;
     resource_handle_t fogmap;
 
+    map_entity_t *worldspawn;
+
     v3_t fogmap_offset;
     v3_t fogmap_dim;
 

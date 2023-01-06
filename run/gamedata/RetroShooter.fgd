@@ -1,6 +1,9 @@
 @SolidClass = worldspawn : "World entity" 
 [
     skytex(string) : "sky cubemap" : "sunny_minor_clouds"
+    sun_color(color255) : "sun color"
+    sun_brightness(float) : "sun brightness" : 2
+    ambient_color(color255) : "ambient color"
 ]
 
 @baseclass size(-16 -16 -24, 16 16 32) color(0 255 0) = PlayerClass []
@@ -12,3 +15,5 @@
     _color(color255) : "Color"
     brightness(float) : "Brightness" : 5
 ]
+
+@PointClass size(-16 -16 -16, 16  16  16) color(127 127 127) = anomaly : "Anomaly" []

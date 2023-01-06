@@ -163,6 +163,7 @@ typedef struct r_view_t
     resource_handle_t fogmap;
     v3_t fog_offset;
     v3_t fog_dim;
+    v3_t sun_color;
 } r_view_t;
 
 typedef enum r_command_kind_t

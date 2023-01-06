@@ -12,14 +12,18 @@ typedef struct d3d_cbuffer_t
     m4x4_t model_matrix;
     m4x4_t sun_matrix;
     v3_t     light_direction;
-    float    pad3;
+    float    pad0;
     uint32_t frame_index;
     float    depth_bias;
-    float    pad0;
     float    pad1;
-    v3_t     fog_offset;
     float    pad2;
+    v3_t     fog_offset;
+    float    pad3;
     v3_t     fog_dim;
+    float    pad4;
+    v3_t     sun_color;
+    float    pad5;
+    v3_t     sun_direction;
 } d3d_cbuffer_t;
 
 typedef struct d3d_model_t

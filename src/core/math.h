@@ -34,7 +34,7 @@ static const m4x4_t m4x4_identity = M4X4_IDENTITY_INIT;
         e03, e13, e23, e33, \
     }
 
-#define PI32 3.1415926535f
+#define PI32 3.1415926536f
 
 static inline float to_radians(float deg)
 {

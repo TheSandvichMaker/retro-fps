@@ -965,6 +965,7 @@ done_with_sun_shadows:
             d3d_cbuffer_t cbuffer = {
                 .view_matrix = mvp,
                 .frame_index = frame_index,
+                .sun_color   = view->sun_color,
             };
 
             update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
@@ -997,6 +998,8 @@ done_with_sun_shadows:
             });
         }
 
+        float clear_color[4] = { 0, 0, 0, 1 };
+        ID3D11DeviceContext_ClearRenderTargetView(d3d.context, d3d.scene_target.color_rtv, clear_color);
         ID3D11DeviceContext_ClearDepthStencilView(d3d.context, d3d.scene_target.depth_dsv, D3D11_CLEAR_DEPTH, 0.0f, 0);
 
         // update immediate index/vertex buffer
@@ -1039,6 +1042,8 @@ done_with_sun_shadows:
                             .light_direction = sun_direction,
                             .model_matrix    = command->transform,
                             .frame_index     = frame_index,
+                            .sun_color       = view->sun_color,
+                            .sun_direction   = sun_direction,
                         };
 
                         update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
@@ -1081,6 +1086,7 @@ done_with_sun_shadows:
                         .light_direction = sun_direction,
                         .model_matrix    = m4x4_identity,
                         .depth_bias      = draw_call->params.depth_bias,
+                        .sun_color       = view->sun_color,
                     };
 
                     update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
@@ -1165,6 +1171,7 @@ done_with_sun_shadows:
                             .frame_index  = frame_index,
                             .fog_offset   = view->fog_offset,
                             .fog_dim      = view->fog_dim,
+                            .sun_color    = view->sun_color,
                         };
 
                         update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));

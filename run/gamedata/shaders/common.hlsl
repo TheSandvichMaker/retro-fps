@@ -1,6 +1,8 @@
 #ifndef COMMON_HLSL
 #define COMMON_HLSL
 
+#define PI 3.1415926536
+
 float max3(float3 v) { return max(v.x, max(v.y, v.z)); }
 
 sampler sampler_point                    : register(s0);
@@ -45,6 +47,15 @@ cbuffer cbuffer0 : register(b0)
     float3   fog_offset;
     float    pad3;
     float3   fog_dim;
+    float    pad4;
+    float3   sun_color;
+    float    pad5;
+    float3   sun_direction;
+}
+
+float square(float x)
+{
+    return x*x;
 }
 
 float2 fat_pixel(float2 tex_dim, float2 in_uv)

@@ -264,6 +264,7 @@ int main(int argc, char **argv)
             strlit("user32"),
             strlit("ole32"),
             strlit("ksuser"),
+            strlit("shell32"),
         )),
 
         .defines = slist_from_array(temp, array_expand(string_t,

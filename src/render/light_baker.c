@@ -553,9 +553,9 @@ void trace_volumetric_lighting(const lum_params_t *params, map_t *map)
         size_t cluster_count_z = (depth  + cluster_size - 1) / cluster_size;
 #endif
 
-        uint32_t *fogmap = m_alloc_array(temp, width*height*depth, uint32_t);
+        v4_t *fogmap = m_alloc_array(temp, width*height*depth, v4_t);
 
-        uint32_t *dst = fogmap;
+        v4_t *dst = fogmap;
         for (size_t z = 0; z < depth;  z++)
         for (size_t y = 0; y < height; y++)
         for (size_t x = 0; x < width;  x++)
@@ -621,18 +621,18 @@ void trace_volumetric_lighting(const lum_params_t *params, map_t *map)
             }
             lighting = mul(lighting, 1.0f / (float)sample_count);
 
-            *dst++ = pack_r11g11b10f(lighting);
+            *dst++ = (v4_t){.xyz=lighting, .w0=1.0}; // pack_r11g11b10f(lighting);
         }
 
         map->fogmap = render->upload_texture(&(upload_texture_t) {
             .desc = {
                 .type        = TEXTURE_TYPE_3D,
-                .format      = PIXEL_FORMAT_R11G11B10F,
+                .format      = PIXEL_FORMAT_R32G32B32A32F,
                 .w           = width,
                 .h           = height,
                 .d           = depth,
-                .pitch       = sizeof(uint32_t)*width,
-                .slice_pitch = sizeof(uint32_t)*width*height,
+                .pitch       = sizeof(fogmap[0])*width,
+                .slice_pitch = sizeof(fogmap[0])*width*height,
             },
             .data = {
                 .pixels = fogmap,

@@ -1,0 +1,40 @@
+// Game: RetroShooter
+// Format: Quake2 (Valve)
+// entity 0
+{
+"mapversion" "220"
+"classname" "worldspawn"
+"_tb_textures" "textures;textures/environment/makkon_nature_textures"
+"_tb_def" "external:../RetroShooter.fgd"
+"sun_color" "255 240 180"
+"ambient_color" "52 53 83"
+"sun_brightness" "3"
+// brush 0
+{
+( -64 -64 -16 ) ( -64 -63 -16 ) ( -64 -64 -15 ) environment/makkon_nature_textures/sand_blck01 [ 0 -1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -64 -64 -16 ) ( -64 -64 -15 ) ( -63 -64 -16 ) environment/makkon_nature_textures/sand_blck01 [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -64 -64 -16 ) ( -63 -64 -16 ) ( -64 -63 -16 ) environment/makkon_nature_textures/sand_blck01 [ -1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( 64 64 16 ) ( 64 65 16 ) ( 65 64 16 ) environment/makkon_nature_textures/sand_blck01 [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( 64 64 16 ) ( 65 64 16 ) ( 64 64 17 ) environment/makkon_nature_textures/sand_blck01 [ -1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( 64 64 16 ) ( 64 64 17 ) ( 64 65 16 ) environment/makkon_nature_textures/sand_blck01 [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+}
+// brush 1
+{
+( -16 -16 16 ) ( -16 -15 16 ) ( -16 -16 17 ) environment/makkon_nature_textures/treebark_blue2 [ 0 -1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -16 -16 16 ) ( -16 -16 17 ) ( -15 -16 16 ) environment/makkon_nature_textures/treebark_blue2 [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -16 -16 16 ) ( -15 -16 16 ) ( -16 -15 16 ) environment/makkon_nature_textures/treebark_blue2 [ -1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( 16 16 96 ) ( 16 17 96 ) ( 17 16 96 ) environment/makkon_nature_textures/treebark_blue1 [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( 16 16 32 ) ( 17 16 32 ) ( 16 16 33 ) environment/makkon_nature_textures/treebark_blue2 [ -1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( 16 16 32 ) ( 16 16 33 ) ( 16 17 32 ) environment/makkon_nature_textures/treebark_blue2 [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+}
+}
+// entity 1
+{
+"classname" "info_player_start"
+"origin" "-48 0 120"
+}
+// entity 2
+{
+"classname" "anomaly"
+"origin" "0 0 128"
+}

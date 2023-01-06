@@ -38,6 +38,8 @@ float3 iq_hash2(uint3 x)
 
 float noise_3d(float3 co)
 {
+    co += 256;
+
     uint3  i = uint3(co);
     float3 f =  frac(co);
 
@@ -51,6 +53,25 @@ float noise_3d(float3 co)
                           iq_hash2(i + uint3(1, 1, 1)).x, f.x), f.y), f.z);
 }
 
+float perlin_3d(float3 co, int octaves, float persistence)
+{
+    float result = 0;
+    float frequency = 1;
+    float amplitude = 1;
+    float max_value = 0;
+
+    for (int i = 0; i < octaves; i++)
+    {
+        result += noise_3d(co*frequency);
+        max_value += amplitude;
+        amplitude *= persistence;
+        frequency *= 2;
+    }
+
+    result /= max_value;
+    return result;
+}
+
 float3 fog_blend(float3 color, float4 fog)
 {
     return color*fog.a + fog.rgb;
@@ -62,26 +83,33 @@ float3 sample_fog_lighting(float3 p)
     return fogmap.SampleLevel(sampler_fog, sample_p, 0).rgb;
 }
 
+float phase(float3 l, float3 v, float k)
+{
+    float numerator = (1.0 - k*k);
+    float denominator = square(1.0 - k*dot(l, v));
+    return (1.0 / 4*PI)*(numerator / denominator);
+}
+
 float4 raymarch_fog(float2 uv, uint2 co, float dither, uint sample_index)
 {
     float3 o, d;
     camera_ray(uv, o, d);
 
-    float max_distance = 1024.0f;
-    uint  steps        = 32;
+    float max_march_distance = 1024.0;
+    uint steps               = 32;
 
     float t      = 0;
     float t_step = rcp(steps);
     float depth  = 1.0f / depth_buffer.Load(co, sample_index);
 
-    float stop_distance = min(depth, max_distance);
+    float stop_distance = min(depth, max_march_distance);
 
-    float density    = 0.01;
+    float density    = 0.02;
     float absorption = 0.001;
-    float scattering = 0.01;
+    float scattering = 0.03;
     float extinction = absorption + scattering;
-
-    float3 ambient = 0; // 0.5*float3(0.15, 0.30, 0.62);
+    float phase_k    = 0.7;
+    float sun_phase  = phase(-d, sun_direction, phase_k);
 
     float3 illumination = 0;
     float  transmission = 1;
@@ -99,25 +127,39 @@ float4 raymarch_fog(float2 uv, uint2 co, float dither, uint sample_index)
 
         float p_depth = projected_p.z;
 
-        float sun_shadow = sample_pcf_3x3(shadowmap, projected_p.xy, p_depth, 0.0f);
+        float sun_shadow = 0.0f;
+        if (p_depth > 0.0f)
+        {
+            sun_shadow = sample_pcf_3x3(shadowmap, projected_p.xy, p_depth, 0.0f);
+        }
 
         float3 density_sample_p = p / 128.0 + (frame_index / 250.0);
-        float local_density = density; + 0.11*(noise_3d(density_sample_p) - 0.5);
+        float local_density = density + 0.02*(perlin_3d(0.25f*density_sample_p, 4, 0.7) - 0.5);
 
         transmission *= exp(-local_density*extinction*step_size);
 
-        float3 direct_light = sample_fog_lighting(p);
+        float3 direct_light = (1.0 / 4.0*PI)*sample_fog_lighting(p);
+        direct_light += sun_color*(1.0 - sun_shadow)*sun_phase;
 
-        float3 sun_color = 2.0*float3(1, 1, 0.75f);
-        direct_light += sun_color*(1.0 - sun_shadow);
-
-        float3 in_scattering  = ambient + direct_light;
+        float3 in_scattering  = direct_light;
         float  out_scattering = scattering*local_density;
 
         float3 current_light = in_scattering*out_scattering;
 
         illumination += transmission*current_light*step_size;    
         t += t_step;
+    }
+
+    float remainder = depth - stop_distance;
+    if (isinf(remainder))
+    {
+        transmission = 0;
+        illumination += sun_color*sun_phase*scattering*density*rcp(scattering*absorption + scattering*density);
+    }
+    else
+    {
+        transmission *= exp(-remainder*density*extinction);
+        illumination += transmission*sun_color*sun_phase*scattering*density*remainder;
     }
 
     return float4(illumination, transmission);

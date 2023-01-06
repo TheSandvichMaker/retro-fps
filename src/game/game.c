@@ -396,7 +396,7 @@ static void view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
     view->projection = make_perspective_matrix(camera->vfov, aspect, 1.0f);
 }
 
-void game_init(void)
+void game_init(game_io_t *io)
 {
     update_camera_rotation(&g_camera, 0.0f);
 
@@ -422,7 +422,7 @@ void game_init(void)
     world = m_bootstrap(world_t, arena);
     world->fade_t = 1.0f;
 
-    map_t    *map    = world->map    = load_map(&world->arena, strlit("gamedata/maps/test.map"));
+    map_t    *map    = world->map    = load_map(&world->arena, string_format(temp, "gamedata/maps/%.*s.map", strexpand(io->startup_map)));
     player_t *player = world->player = m_alloc_struct(&world->arena, player_t);
 
     for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
@@ -478,7 +478,7 @@ void game_tick(game_io_t *io, float dt)
 {
     if (!initialized)
     {
-        game_init();
+        game_init(io);
     }
 
     update_input_state(io->input_state);
@@ -565,6 +565,12 @@ void game_tick(game_io_t *io, float dt)
         0, 0, (float)res_x, (float)res_y,
     };
 
+    map_entity_t *worldspawn = map->worldspawn;
+
+    v3_t sun_color = v3_normalize(v3_from_key(map, worldspawn, strlit("sun_color")));
+    float sun_brightness = float_from_key(map, worldspawn, strlit("sun_brightness"));
+    sun_color = mul(sun_brightness, sun_color);
+
     r_view_t view;
     view_for_camera(camera, viewport, &view);
 
@@ -572,6 +578,7 @@ void game_tick(game_io_t *io, float dt)
     view.fogmap     = map->fogmap;
     view.fog_offset = rect3_center(map->bounds);
     view.fog_dim    = rect3_dim(map->bounds);
+    view.sun_color  = sun_color;
 
     r_push_view(&view);
 

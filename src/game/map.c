@@ -1269,6 +1269,17 @@ map_t *load_map(arena_t *arena, string_t path)
         map->bounds = map->nodes[0].bounds;
 
         gather_lights(arena, map);
+
+        for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
+        {
+            map_entity_t *e = &map->entities[entity_index];
+
+            if (is_class(map, e, strlit("worldspawn")))
+            {
+                map->worldspawn = e;
+                break;
+            }
+        }
     }
 
     return map;
