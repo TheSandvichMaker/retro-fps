@@ -83,11 +83,11 @@ float3 sample_fog_lighting(float3 p)
     return fogmap.SampleLevel(sampler_fog, sample_p, 0).rgb;
 }
 
-float phase(float3 l, float3 v, float k)
+float phase(float3 v, float3 l, float k)
 {
     float numerator = (1.0 - k*k);
     float denominator = square(1.0 - k*dot(l, v));
-    return (1.0 / 4*PI)*(numerator / denominator);
+    return (1.0 / (4*PI))*(numerator / denominator);
 }
 
 float4 raymarch_fog(float2 uv, uint2 co, float dither, uint sample_index)
@@ -102,15 +102,19 @@ float4 raymarch_fog(float2 uv, uint2 co, float dither, uint sample_index)
     float t_step = rcp(steps);
     float depth  = 1.0f / depth_buffer.Load(co, sample_index);
 
+    // float max_depth = 4096.0f;
+    // depth = min(depth, max_depth);
+
     float stop_distance = min(depth, max_march_distance);
 
-    float density    = 0.02;
-    float absorption = 0.001;
-    float scattering = 0.03;
+    float density    = fog_density;
+    float absorption = fog_absorption;
+    float scattering = fog_scattering;
     float extinction = absorption + scattering;
-    float phase_k    = 0.7;
-    float sun_phase  = phase(-d, sun_direction, phase_k);
+    float phase_k    = fog_phase_k;
+    float sun_phase  = phase(d, sun_direction, phase_k);
 
+    float3 ambient = float3(0.3f, 0.5f, 0.9f);
     float3 illumination = 0;
     float  transmission = 1;
     for (uint i = 0; i < steps; i++)
@@ -138,7 +142,7 @@ float4 raymarch_fog(float2 uv, uint2 co, float dither, uint sample_index)
 
         transmission *= exp(-local_density*extinction*step_size);
 
-        float3 direct_light = (1.0 / 4.0*PI)*sample_fog_lighting(p);
+        float3 direct_light = rcp(4.0f*PI)*sample_fog_lighting(p);
         direct_light += sun_color*(1.0 - sun_shadow)*sun_phase;
 
         float3 in_scattering  = direct_light;
@@ -154,14 +158,14 @@ float4 raymarch_fog(float2 uv, uint2 co, float dither, uint sample_index)
     if (isinf(remainder))
     {
         transmission = 0;
-        illumination += sun_color*sun_phase*scattering*density*rcp(scattering*absorption + scattering*density);
+        illumination += sun_color*sun_phase*scattering*density*rcp(density*extinction);
     }
     else
     {
         transmission *= exp(-remainder*density*extinction);
         illumination += transmission*sun_color*sun_phase*scattering*density*remainder;
     }
-
+    
     return float4(illumination, transmission);
 }
 

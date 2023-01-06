@@ -183,10 +183,10 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
         ui_label(strlit("Lightmaps have not been baked!"), 0);
 
         // figure out the solid sky color from the fog
-        float absorption = 0.001f;
-        float density    = 0.02f;
-        float scattering = 0.03f;
-        v3_t sky_color = mul(sun_color, scattering*density / (scattering*absorption + scattering*density) / 4.0f*PI32);
+        float absorption = map->fog_absorption;
+        float density    = map->fog_density;
+        float scattering = map->fog_scattering;
+        v3_t sky_color = mul(sun_color, (1.0f / (4.0f*PI32))*scattering*density / (density*(scattering + absorption)));
 
         if (ui_button(strlit("Bake Lighting")).released)
         {
@@ -200,7 +200,7 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
                 .use_dynamic_sun_shadows = true,
 
                 // TODO: Have a macro for optimization level to check instead of DEBUG
-#if 0
+#if DEBUG
                 .ray_count               = 8,
                 .ray_recursion           = 4,
                 .fog_light_sample_count  = 4,

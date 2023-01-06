@@ -164,6 +164,10 @@ typedef struct r_view_t
     v3_t fog_offset;
     v3_t fog_dim;
     v3_t sun_color;
+    float fog_density;
+    float fog_absorption;
+    float fog_scattering;
+    float fog_phase_k;
 } r_view_t;
 
 typedef enum r_command_kind_t

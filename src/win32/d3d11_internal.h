@@ -24,6 +24,10 @@ typedef struct d3d_cbuffer_t
     v3_t     sun_color;
     float    pad5;
     v3_t     sun_direction;
+    float    fog_density;
+    float    fog_absorption;
+    float    fog_scattering;
+    float    fog_phase_k;
 } d3d_cbuffer_t;
 
 typedef struct d3d_model_t

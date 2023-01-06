@@ -51,6 +51,10 @@ cbuffer cbuffer0 : register(b0)
     float3   sun_color;
     float    pad5;
     float3   sun_direction;
+    float    fog_density;
+    float    fog_absorption;
+    float    fog_scattering;
+    float    fog_phase_k;
 }
 
 float square(float x)

@@ -574,11 +574,20 @@ void game_tick(game_io_t *io, float dt)
     r_view_t view;
     view_for_camera(camera, viewport, &view);
 
-    view.skybox     = skybox;
-    view.fogmap     = map->fogmap;
-    view.fog_offset = rect3_center(map->bounds);
-    view.fog_dim    = rect3_dim(map->bounds);
-    view.sun_color  = sun_color;
+    map->fog_absorption = 0.002f;
+    map->fog_density    = 0.01f;
+    map->fog_scattering = 0.02f;
+    map->fog_phase_k    = 0.3f;
+
+    view.skybox         = skybox;
+    view.fogmap         = map->fogmap;
+    view.fog_offset     = rect3_center(map->bounds);
+    view.fog_dim        = rect3_dim(map->bounds);
+    view.sun_color      = sun_color;
+    view.fog_absorption = map->fog_absorption;
+    view.fog_density    = map->fog_density;
+    view.fog_scattering = map->fog_scattering;
+    view.fog_phase_k    = map->fog_phase_k;
 
     r_push_view(&view);
 

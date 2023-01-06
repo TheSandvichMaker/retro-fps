@@ -95,6 +95,10 @@ typedef struct map_t
 
     v3_t fogmap_offset;
     v3_t fogmap_dim;
+    float fog_absorption;
+    float fog_density;
+    float fog_scattering;
+    float fog_phase_k;
 
     uint32_t node_count;
     uint32_t entity_count;

@@ -8,8 +8,8 @@
 "skytex" "storforsen"
 "_tb_def" "external:gamedata/RetroShooter.fgd"
 "ambient_color" "0.25098 0.4 0.423529"
-"sun_color" "1 0.996078 0.898039"
-"sun_brightness" "2"
+"sun_color" "1 0.870588 0.686275"
+"sun_brightness" "4"
 // brush 0
 {
 ( 16 -48 128 ) ( 48 -16 128 ) ( 48 -16 256 ) environment/makkon4_horror_textures/bek_prpl1_w06_1 [ 3.090862038535036e-08 3.090862038535036e-08 0.9999999999999991 0 ] [ -0.7071067811865469 -0.7071067811865469 4.371139006309477e-08 0 ] -90 1 1
