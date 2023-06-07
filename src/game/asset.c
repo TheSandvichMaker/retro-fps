@@ -156,47 +156,54 @@ waveform_t load_waveform_from_memory(arena_t *arena, string_t file)
 {
 	waveform_t result = {0};
 
-	char *base = (char *)file.data;
-
-	wave_riff_chunk_t *riff_chunk = (wave_riff_chunk_t *)base;
-
-	if (riff_chunk->chunk_id == RIFF_ID("RIFF"))
+	if (file.count >= sizeof(wave_riff_chunk_t) + sizeof(wave_fmt_chunk_t) + sizeof(wave_data_chunk_t))
 	{
-		if (riff_chunk->format == RIFF_ID("WAVE"))
+		char *base = (char *)file.data;
+
+		wave_riff_chunk_t *riff_chunk = (wave_riff_chunk_t *)base;
+
+		if (riff_chunk->chunk_id == RIFF_ID("RIFF"))
 		{
-			wave_fmt_chunk_t *fmt_chunk = (wave_fmt_chunk_t *)(riff_chunk + 1);
-
-			if (fmt_chunk->chunk_id == RIFF_ID("fmt "))
+			if (riff_chunk->format == RIFF_ID("WAVE"))
 			{
-				if (fmt_chunk->audio_format == 1)
+				wave_fmt_chunk_t *fmt_chunk = (wave_fmt_chunk_t *)(riff_chunk + 1);
+
+				if (fmt_chunk->chunk_id == RIFF_ID("fmt "))
 				{
-					if (fmt_chunk->sample_rate == WAVE_SAMPLE_RATE)
+					if (fmt_chunk->audio_format == 1)
 					{
-						if (fmt_chunk->bits_per_sample == 16)
+						if (fmt_chunk->sample_rate == WAVE_SAMPLE_RATE)
 						{
-							wave_data_chunk_t *data_chunk = (wave_data_chunk_t *)(fmt_chunk + 1);
-
-							if (data_chunk->chunk_id == RIFF_ID("data"))
+							if (fmt_chunk->bits_per_sample == 16)
 							{
-								uint32_t sample_count = data_chunk->chunk_size / 2;
+								wave_data_chunk_t *data_chunk = (wave_data_chunk_t *)(fmt_chunk + 1);
 
-								result.channel_count = fmt_chunk->channel_count;
-								result.frame_count   = sample_count / result.channel_count;
-								result.frames        = m_copy(arena, data_chunk->data, data_chunk->chunk_size);
+								if (data_chunk->chunk_id == RIFF_ID("data"))
+								{
+									uint32_t sample_count = data_chunk->chunk_size / 2;
+
+									result.channel_count = fmt_chunk->channel_count;
+									result.frame_count   = sample_count / result.channel_count;
+									result.frames        = m_copy(arena, data_chunk->data, data_chunk->chunk_size);
+								}
+								else
+								{
+									// Dodgy .wav!
+								}
 							}
 							else
 							{
-								// Dodgy .wav!
+								// Just render it out as 16 bit please!
 							}
 						}
 						else
 						{
-							// Just render it out as 16 bit please!
+							// I don't want to implement sample rate conversion.
 						}
 					}
 					else
 					{
-						// I don't want to implement sample rate conversion.
+						// Dodgy .wav!
 					}
 				}
 				else

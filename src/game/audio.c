@@ -87,16 +87,19 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 		{
 			case MIX_PLAY_SOUND:
 			{
-				playing_sound_t playing = {
-					.id       = command->id,
-					.waveform = command->sound.waveform,
-					.volume   = command->sound.volume,
-					.flags    = command->sound.flags,
-					.p        = command->sound.p,
-				};
+				if (command->sound.waveform->frames)
+				{
+					playing_sound_t playing = {
+						.id       = command->id,
+						.waveform = command->sound.waveform,
+						.volume   = command->sound.volume,
+						.flags    = command->sound.flags,
+						.p        = command->sound.p,
+					};
 
-				resource_handle_t handle = bd_add_item(&playing_sounds, &playing);
-				hash_add(&playing_sound_from_id, playing.id.id, handle.value);
+					resource_handle_t handle = bd_add_item(&playing_sounds, &playing);
+					hash_add(&playing_sound_from_id, playing.id.id, handle.value);
+				}
 			} break;
 
 			case MIX_STOP_SOUND:
