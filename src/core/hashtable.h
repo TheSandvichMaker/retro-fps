@@ -18,11 +18,12 @@ typedef struct hash_t
     hash_entry_t *entries;
 } hash_t;
 
-bool hash_find(const hash_t *table, uint64_t key, uint64_t *value);
-void hash_add (      hash_t *table, uint64_t key, uint64_t  value);
+DREAM_API bool hash_find(const hash_t *table, uint64_t key, uint64_t *value);
+DREAM_API void hash_add (      hash_t *table, uint64_t key, uint64_t  value);
+DREAM_API bool hash_rem (      hash_t *table, uint64_t key);
 
-bool hash_find_ptr(const hash_t *table, uint64_t key, void **value);
-void hash_add_ptr (      hash_t *table, uint64_t key, void  *value);
+DREAM_API bool hash_find_ptr(const hash_t *table, uint64_t key, void **value);
+DREAM_API void hash_add_ptr (      hash_t *table, uint64_t key, void  *value);
 
 typedef struct hash_iter_t
 {
@@ -38,7 +39,7 @@ typedef struct hash_iter_t
     };
 } hash_iter_t;
 
-static inline hash_iter_t hash_iter(const hash_t *table)
+DREAM_INLINE hash_iter_t hash_iter(const hash_t *table)
 {
     hash_iter_t it = {
         .table = table,
@@ -48,7 +49,7 @@ static inline hash_iter_t hash_iter(const hash_t *table)
     return it;
 }
 
-static inline bool hash_iter_next(hash_iter_t *it)
+DREAM_INLINE bool hash_iter_next(hash_iter_t *it)
 {
     bool result = false;
 

@@ -59,7 +59,7 @@ static void hash_grow(hash_t *hash)
     copy_struct(hash, &new_hash);
 }
 
-bool hash_find(const hash_t *hash, uint64_t key, uint64_t *value)
+static bool hash_find_slot(const hash_t *hash, uint64_t key, uint64_t *slot)
 {
     if (!hash->entries)
         return false;
@@ -82,7 +82,7 @@ bool hash_find(const hash_t *hash, uint64_t key, uint64_t *value)
 
         if (entry->key == key)
         {
-            *value = entry->value;
+			*slot = probe;
             result = true;
             break;
         }
@@ -91,6 +91,22 @@ bool hash_find(const hash_t *hash, uint64_t key, uint64_t *value)
     }
 
     return result;
+}
+
+bool hash_find(const hash_t *hash, uint64_t key, uint64_t *value)
+{
+	bool result = false;
+
+	uint64_t slot;
+	if (hash_find_slot(hash, key, &slot))
+	{
+		hash_entry_t *entries = UNTAG_POINTER(hash->entries);
+
+		*value = entries[slot].value;
+		result = true;
+	}
+
+	return result;
 }
 
 void hash_add(hash_t *hash, uint64_t key, uint64_t value)
@@ -126,6 +142,50 @@ void hash_add(hash_t *hash, uint64_t key, uint64_t value)
         if (NEVER(probe == key))
             break;
     }
+}
+
+bool hash_rem(hash_t *hash, uint64_t key)
+{
+	uint64_t i;
+
+	if (!hash_find_slot(hash, key, &i))
+		return false;
+
+    uint64_t      mask    = hash->mask;
+    hash_entry_t *entries = UNTAG_POINTER(hash->entries);
+
+	if (entries[i].key == UNUSED_KEY_VALUE)
+		return false;
+
+	entries[i].key = UNUSED_KEY_VALUE;
+
+	uint64_t j = i;
+	for (;;)
+	{
+		j = (j + 1) & mask;
+
+		if (entries[j].key == UNUSED_KEY_VALUE)
+			break;
+
+		uint64_t k = entries[j].key & mask;
+
+		if (i <= j)
+		{
+			if (i < k && k <= j)
+				continue;
+		}
+		else
+		{
+			if (i < k || k <= j)
+				continue;
+		}
+
+		entries[i] = entries[j];
+		entries[j].key = UNUSED_KEY_VALUE;
+		i = j;
+	}
+
+	return true;
 }
 
 bool hash_find_ptr(const hash_t *table, uint64_t key, void **value)

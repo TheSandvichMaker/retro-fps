@@ -9,6 +9,14 @@
 #include <setjmp.h>
 #include <stdalign.h>
 
+#ifdef SINGLE_TRANSLATION_UNIT_BUILD
+#define DREAM_API static
+#else
+#define DREAM_API extern
+#endif
+
+#define DREAM_INLINE static inline
+
 // still not sure where this should go, but it should be present in headers as well.
 // if the convention is that headers include api_types.h, then I guess this is the place
 // to be.

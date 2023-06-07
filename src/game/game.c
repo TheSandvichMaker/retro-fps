@@ -8,6 +8,7 @@
 #include "asset.h"
 #include "intersect.h"
 #include "ui.h"
+#include "audio.h"
 #include "in_game_editor.h"
 
 #include "render/light_baker.h"
@@ -27,6 +28,8 @@ static waveform_t test_waveform;
 #define MAX_VERTICES (8192)
 static size_t map_vertex_count;
 static v3_t map_vertices[MAX_VERTICES];
+
+static mixer_id_t music;
 
 v3_t forward_vector_from_pitch_yaw(float pitch, float yaw)
 {
@@ -419,6 +422,10 @@ void game_init(game_io_t *io)
 
 	{
 		test_waveform = load_waveform_from_disk(&world->arena, strlit("gamedata/audio/cybersoundz 2.wav"));
+		music = play_sound(&(play_sound_params_t){
+			.waveform = &test_waveform,
+			.volume   = 0.5f,
+		});
 	}
 
     map_t    *map    = world->map    = load_map(&world->arena, string_format(temp, "gamedata/maps/%.*s.map", strexpand(io->startup_map)));
@@ -534,6 +541,9 @@ void game_tick(game_io_t *io, float dt)
     if (button_pressed(BUTTON_FIRE2))
         g_cursor_locked = !g_cursor_locked;
 
+    if (button_pressed(BUTTON_FIRE1))
+        stop_sound(music);
+
     io->cursor_locked = g_cursor_locked;
 
     map_t *map = world->map;
@@ -645,7 +655,6 @@ void game_tick(game_io_t *io, float dt)
         r_push_rect2_filled(draw_call, inner_rect, COLORF_WHITE);
 
         r_immediate_draw_end(draw_call);
-
         r_pop_view();
     }
 
@@ -686,41 +695,7 @@ void game_tick(game_io_t *io, float dt)
     }
 }
 
-static double g_audio_time;
-
 void game_mix_audio(game_audio_io_t *audio_io)
 {
-    // TODO: make a mixer and play some sounds
-
-	static uint32_t test_frame_index = 0;
-
-    size_t frames_to_mix = audio_io->frames_to_mix;
-    float *buffer = audio_io->buffer;
-
-	if (test_waveform.frames)
-	{
-		size_t test_frames_left = test_waveform.frame_count - test_frame_index;
-		size_t frames_left = MIN(frames_to_mix, test_frames_left);
-
-		int16_t *frames = test_waveform.frames + 2*test_frame_index;
-		float volume = 0.5f;
-
-		for (size_t frame_index = 0; frame_index < frames_left; frame_index++)
-		{
-			int16_t l = *frames++;
-			int16_t r = *frames++;
-			*buffer++ = volume*((float)l / (float)INT16_MAX);
-			*buffer++ = volume*((float)r / (float)INT16_MAX);
-		}
-
-		test_frame_index += (uint32_t)frames_left;
-	}
-	else
-	{
-		for (size_t frame_index = 0; frame_index < frames_to_mix; frame_index++)
-		{
-			*buffer++ = 0.0f;
-			*buffer++ = 0.0f;
-		}
-	}
+	mix_samples((uint32_t)audio_io->frames_to_mix, audio_io->buffer);
 }

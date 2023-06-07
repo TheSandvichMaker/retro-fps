@@ -41,4 +41,11 @@ static inline long atomic_increment(long volatile *target)
     return _InterlockedIncrement(target);
 }
 
+static inline uint32_t atomic_increment_u32(uint32_t volatile *target)
+{
+    return (uint32_t)_InterlockedIncrement((long volatile *)target);
+}
+
+#define COMPILER_BARRIER _ReadWriteBarrier()
+
 #endif /* ATOMICS_H */
