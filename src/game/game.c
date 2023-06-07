@@ -22,6 +22,7 @@ static bool g_cursor_locked;
 static world_t *world;
 static resource_handle_t skybox;
 static bitmap_font_t font;
+static waveform_t test_waveform;
 
 #define MAX_VERTICES (8192)
 static size_t map_vertex_count;
@@ -29,18 +30,12 @@ static v3_t map_vertices[MAX_VERTICES];
 
 v3_t forward_vector_from_pitch_yaw(float pitch, float yaw)
 {
-    // quat_t qpitch = make_quat_axis_angle((v3_t){ 0, 1, 0 }, DEG_TO_RAD*pitch);
-    // quat_t qyaw   = make_quat_axis_angle((v3_t){ 0, 0, 1 }, DEG_TO_RAD*yaw);
-
     rotor3_t r_pitch = rotor3_from_plane_angle(PLANE_ZX, DEG_TO_RAD*pitch);
     rotor3_t r_yaw   = rotor3_from_plane_angle(PLANE_YZ, DEG_TO_RAD*yaw  );
 
     v3_t forward = { 1, 0, 0 };
-    // forward = quat_rotatev(qpitch, forward);
-    // forward = quat_rotatev(qyaw, forward);
-
     forward = rotor3_rotatev(r_pitch, forward);
-    forward = rotor3_rotatev(r_yaw  , forward);
+    forward = rotor3_rotatev(r_yaw,   forward);
 
     return forward;
 }
@@ -60,12 +55,12 @@ v3_t player_view_direction(player_t *player)
     if (!camera)
         return make_v3(1, 0, 0);
     
-    quat_t qpitch = make_quat_axis_angle(make_v3(0, 1, 0), DEG_TO_RAD*camera->pitch);
-    quat_t qyaw   = make_quat_axis_angle(make_v3(0, 0, 1), DEG_TO_RAD*camera->yaw);
+    rotor3_t r_pitch = rotor3_from_plane_angle(PLANE_ZX, DEG_TO_RAD*camera->pitch);
+    rotor3_t r_yaw   = rotor3_from_plane_angle(PLANE_YZ, DEG_TO_RAD*camera->yaw);
 
     v3_t dir = { 1, 0, 0 };
-    dir = quat_rotatev(qpitch, dir);
-    dir = quat_rotatev(qyaw,   dir);
+    dir = rotor3_rotatev(r_pitch, dir);
+    dir = rotor3_rotatev(r_yaw,   dir);
 
     return dir;
 }
@@ -411,9 +406,9 @@ void game_init(game_io_t *io)
                 .format = PIXEL_FORMAT_RGBA8,
                 .w      = font_image.w,
                 .h      = font_image.h,
-                .pitch  = font_image.pitch,
             },
             .data = {
+                .pitch  = font_image.pitch,
                 .pixels = font_image.pixels,
             },
         });
@@ -421,6 +416,10 @@ void game_init(game_io_t *io)
 
     world = m_bootstrap(world_t, arena);
     world->fade_t = 1.0f;
+
+	{
+		test_waveform = load_waveform_from_disk(&world->arena, strlit("gamedata/audio/cybersoundz 2.wav"));
+	}
 
     map_t    *map    = world->map    = load_map(&world->arena, string_format(temp, "gamedata/maps/%.*s.map", strexpand(io->startup_map)));
     player_t *player = world->player = m_alloc_struct(&world->arena, player_t);
@@ -448,10 +447,10 @@ void game_init(game_io_t *io)
                         .format = PIXEL_FORMAT_SRGB8_A8,
                         .w     = faces[0].w,
                         .h     = faces[0].h,
-                        .pitch = faces[0].pitch,
                         .flags = TEXTURE_FLAG_CUBEMAP,
                     },
                     .data = {
+                        .pitch = faces[0].pitch,
                         .faces = {
                             faces[0].pixels,
                             faces[1].pixels,
@@ -575,9 +574,9 @@ void game_tick(game_io_t *io, float dt)
     view_for_camera(camera, viewport, &view);
 
     map->fog_absorption = 0.002f;
-    map->fog_density    = 0.01f;
-    map->fog_scattering = 0.02f;
-    map->fog_phase_k    = 0.3f;
+    map->fog_density    = 0.02f;
+    map->fog_scattering = 0.04f;
+    map->fog_phase_k    = 0.6f;
 
     view.skybox         = skybox;
     view.fogmap         = map->fogmap;
@@ -693,12 +692,35 @@ void game_mix_audio(game_audio_io_t *audio_io)
 {
     // TODO: make a mixer and play some sounds
 
+	static uint32_t test_frame_index = 0;
+
     size_t frames_to_mix = audio_io->frames_to_mix;
     float *buffer = audio_io->buffer;
 
-    for (size_t frame_index = 0; frame_index < frames_to_mix; frame_index++)
-    {
-        *buffer++ = 0.0f;
-        *buffer++ = 0.0f;
-    }
+	if (test_waveform.frames)
+	{
+		size_t test_frames_left = test_waveform.frame_count - test_frame_index;
+		size_t frames_left = MIN(frames_to_mix, test_frames_left);
+
+		int16_t *frames = test_waveform.frames + 2*test_frame_index;
+		float volume = 0.5f;
+
+		for (size_t frame_index = 0; frame_index < frames_left; frame_index++)
+		{
+			int16_t l = *frames++;
+			int16_t r = *frames++;
+			*buffer++ = volume*((float)l / (float)INT16_MAX);
+			*buffer++ = volume*((float)r / (float)INT16_MAX);
+		}
+
+		test_frame_index += (uint32_t)frames_left;
+	}
+	else
+	{
+		for (size_t frame_index = 0; frame_index < frames_to_mix; frame_index++)
+		{
+			*buffer++ = 0.0f;
+			*buffer++ = 0.0f;
+		}
+	}
 }

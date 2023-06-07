@@ -59,12 +59,14 @@ typedef struct texture_desc_t
 {
     texture_type_t type;
     pixel_format_t format;
-    uint32_t w, h, d, pitch, slice_pitch;
+    uint32_t w, h, d;
     uint32_t flags;
 } texture_desc_t;
 
 typedef struct texture_data_t
 {
+    uint32_t pitch;
+    uint32_t slice_pitch;
     union
     {
         void *pixels;

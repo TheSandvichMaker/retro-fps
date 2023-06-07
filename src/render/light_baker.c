@@ -103,7 +103,8 @@ static v3_t evaluate_lighting(lum_thread_context_t *thread, lum_path_vertex_t *p
 
     if (!ignore_sun && sun_ndotl > 0.0f)
     {
-        v3_t sun_d = add(sun_direction, mul(0.1f, random_in_unit_sphere(&thread->entropy)));
+        v3_t sun_d = sun_direction;
+        // sun_d = add(sun_d, mul(0.1f, random_in_unit_sphere(&thread->entropy)));
         sun_d = normalize(sun_d);
 
         lum_light_sample_t *sample = &samples[sample_count++];
@@ -604,18 +605,19 @@ void trace_volumetric_lighting(const lum_params_t *params, map_t *map)
                     }
                 }
 
-#if 0
-                intersect_result_t shadow_hit;
-                if (!intersect_map(map, &(intersect_params_t) {
-                        .o                  = world_p,
-                        .d                  = params->sun_direction,
-                        .occlusion_test     = true,
-                    }, &shadow_hit))
+                if (!params->use_dynamic_sun_shadows)
                 {
-                    v3_t contribution = params->sun_color;
-                    sample_lighting = add(sample_lighting, contribution);
+                    intersect_result_t shadow_hit;
+                    if (!intersect_map(map, &(intersect_params_t) {
+                            .o              = world_p,
+                            .d              = params->sun_direction,
+                            .occlusion_test = true,
+                        }, &shadow_hit))
+                    {
+                        v3_t contribution = params->sun_color;
+                        sample_lighting = add(sample_lighting, contribution);
+                    }
                 }
-#endif
 
                 lighting = add(lighting, sample_lighting);
             }
@@ -631,11 +633,11 @@ void trace_volumetric_lighting(const lum_params_t *params, map_t *map)
                 .w           = width,
                 .h           = height,
                 .d           = depth,
-                .pitch       = sizeof(fogmap[0])*width,
-                .slice_pitch = sizeof(fogmap[0])*width*height,
             },
             .data = {
-                .pixels = fogmap,
+                .pitch       = sizeof(fogmap[0])*width,
+                .slice_pitch = sizeof(fogmap[0])*width*height,
+                .pixels      = fogmap,
             },
         });
     }
@@ -708,9 +710,9 @@ void bake_lighting(const lum_params_t *params_init, lum_results_t *results)
                     .format = PIXEL_FORMAT_R11G11B10F,
                     .w      = result->w,
                     .h      = result->h,
-                    .pitch  = sizeof(uint32_t)*result->w,
                 },
                 .data = {
+                    .pitch  = sizeof(uint32_t)*result->w,
                     .pixels = result->pixels,
                 },
             });

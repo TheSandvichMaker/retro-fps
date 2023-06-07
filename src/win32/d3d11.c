@@ -769,11 +769,11 @@ void d3d_release_rendertarget(d3d_rendertarget_t *rt)
 {
     if (rt->color_tex) { ID3D11Texture2D_Release         (rt->color_tex); rt->color_tex = NULL; }
     if (rt->color_rtv) { ID3D11RenderTargetView_Release  (rt->color_rtv); rt->color_rtv = NULL; }
-    if (rt->color_srv) { ID3D11ShaderResourceView_Release(rt->color_tex); rt->color_srv = NULL; }
+    if (rt->color_srv) { ID3D11ShaderResourceView_Release(rt->color_srv); rt->color_srv = NULL; }
 
     if (rt->depth_tex) { ID3D11Texture2D_Release         (rt->depth_tex); rt->depth_tex = NULL; }
     if (rt->depth_dsv) { ID3D11RenderTargetView_Release  (rt->depth_dsv); rt->depth_dsv = NULL; }
-    if (rt->depth_srv) { ID3D11ShaderResourceView_Release(rt->depth_tex); rt->depth_srv = NULL; }
+    if (rt->depth_srv) { ID3D11ShaderResourceView_Release(rt->depth_srv); rt->depth_srv = NULL; }
 }
 
 void d3d_ensure_swap_chain_size(int width, int height)
@@ -795,7 +795,14 @@ void d3d_ensure_swap_chain_size(int width, int height)
             IDXGISwapChain1_ResizeBuffers(d3d.swap_chain, 0, width, height, DXGI_FORMAT_UNKNOWN, 0);
 
             IDXGISwapChain1_GetBuffer(d3d.swap_chain, 0, &IID_ID3D11Texture2D, &d3d.backbuffer.color_tex);
-            ID3D11Device_CreateRenderTargetView(d3d.device, (ID3D11Resource *)d3d.backbuffer.color_tex, NULL, &d3d.backbuffer.color_rtv);
+			D3D11_RENDER_TARGET_VIEW_DESC rtv_desc = {
+				.Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+				.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D,
+				.Texture2D = {
+					.MipSlice = 0,
+				},
+			};
+            ID3D11Device_CreateRenderTargetView(d3d.device, (ID3D11Resource *)d3d.backbuffer.color_tex, &rtv_desc, &d3d.backbuffer.color_rtv);
 
             d3d.scene_target = d3d_create_rendertarget(&(d3d_create_rendertarget_t) {
                 .w            = width,
@@ -1265,12 +1272,12 @@ resource_handle_t upload_texture(const upload_texture_t *params)
             INVALID_DEFAULT_CASE;
         }
 
-        uint32_t pitch = params->desc.pitch;
+        uint32_t pitch = params->data.pitch;
 
         if (!pitch)  
             pitch = params->desc.w*pixel_size;
 
-        uint32_t slice_pitch = params->desc.slice_pitch;
+        uint32_t slice_pitch = params->data.slice_pitch;
 
         if (!slice_pitch)  
             slice_pitch = params->desc.w*params->desc.h*pixel_size;

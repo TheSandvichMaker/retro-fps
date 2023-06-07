@@ -575,6 +575,9 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
     stretchy_buffer(v2_t)     map_texcoords          = NULL;
     stretchy_buffer(v2_t)     map_lightmap_texcoords = NULL;
 
+	map->poly_count = map->plane_count;
+	map->polys      = m_alloc_array(arena, map->poly_count, map_poly_t);
+
     for (size_t brush_index = 0; brush_index < map->brush_count; brush_index++)
     {
         map_brush_t *brush = &map->brushes[brush_index];
@@ -876,9 +879,9 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
                                 .format = PIXEL_FORMAT_SRGB8_A8,
                                 .w      = image.w,
                                 .h      = image.h,
-                                .pitch  = image.pitch,
                             },
                             .data = {
+                                .pitch  = image.pitch,
                                 .pixels = image.pixels,
                             },
                         });
@@ -1239,6 +1242,72 @@ static void gather_lights(arena_t *arena, map_t *map)
     map->lights = sb_copy(arena, lights);
 }
 
+static void merge_coplanar_lightmaps(arena_t *arena, map_t *map)
+{
+	(void)arena;
+	(void)map;
+#if 0
+	for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
+	{
+		map_poly_t *poly = &map->polys[poly_index];
+
+		for (size_t test_poly_index = 0; test_poly_index < map->poly_count; test_poly_index++)
+		{
+			if (test_poly_index == poly_index)
+			{
+				continue;
+			}
+
+			map_poly_t *test_poly = &map->polys[test_poly_index];
+
+			if (!v3_equal(poly->normal, test_poly->normal, 0.01f))
+			{
+				continue;
+			}
+
+			if (!flt_equal(poly->distance, test_poly->distance, 0.01f))
+			{
+				continue;
+			}
+
+			// the polys need to share at least one edge.
+
+			bool coplanar = false;
+
+			for (size_t edge_index = 0; edge_index < poly->index_count - 1; edge_index++)
+			{
+				uint32_t edge_a = map->indices[poly->first_index + edge_index];
+				uint32_t edge_b = map->indices[poly->first_index + edge_index + 1];
+
+				v3_t vertex_a = map->vertices[edge_a];
+				v3_t vertex_b = map->vertices[edge_b];
+
+				for (size_t test_edge_index = 0; test_edge_index < test_poly->index_count - 1; test_edge_index)
+				{
+					uint32_t test_edge_a = map->indices[test_poly->first_index + test_edge_index];
+					uint32_t test_edge_b = map->indices[test_poly->first_index + test_edge_index + 1];
+
+					v3_t test_vertex_a = map->vertices[test_edge_a];
+					v3_t test_vertex_b = map->vertices[test_edge_b];
+
+					if ((v3_equal(test_vertex_a, vertex_a, 0.01f) && v3_equal(test_vertex_b, vertex_b, 0.01f)) ||
+						(v3_equal(test_vertex_b, vertex_a, 0.01f) && v3_equal(test_vertex_a, vertex_b, 0.01f)))
+					{
+						coplanar = true;
+						break;
+					}
+				}
+			}
+
+			if (coplanar)
+			{
+				// merge.
+			}
+		}
+	}
+#endif
+}
+
 map_t *load_map(arena_t *arena, string_t path)
 {
     map_t *map = NULL;
@@ -1260,10 +1329,13 @@ map_t *load_map(arena_t *arena, string_t path)
         map->brushes    = parse_result.brushes;
         map->planes     = parse_result.planes;
 
-        map->poly_count = map->plane_count;
-        map->polys      = m_alloc_array(arena, map->poly_count, map_poly_t);
-
         generate_map_geometry(arena, map);
+
+		bool fix_lightmap_seams = false;
+		if (fix_lightmap_seams)
+		{
+			merge_coplanar_lightmaps(arena, map);
+		}
 
         build_bvh(arena, map);
         map->bounds = map->nodes[0].bounds;

@@ -96,7 +96,7 @@ float4 raymarch_fog(float2 uv, uint2 co, float dither, uint sample_index)
     camera_ray(uv, o, d);
 
     float max_march_distance = 1024.0;
-    uint steps               = 32;
+    uint steps               = 16;
 
     float t      = 0;
     float t_step = rcp(steps);
@@ -195,7 +195,10 @@ float4 msaa_resolve_ps(PS_INPUT IN) : SV_TARGET
     blue_noise.GetDimensions(dither_dim.x, dither_dim.y);
     
     float4 dither = blue_noise.Load(uint3(co % dither_dim, 0)); 
-    dither = dither.xyzw - dither.yzwx;
+    if (IN.uv.x < 0.5)
+        dither = dither.xyzw + dither.yzwx - 1.0;
+    else
+        dither = dither.xyzw - dither.yzwx;
 
     {for (uint i = 1; i < sample_count; i++)
     {

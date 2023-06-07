@@ -25,16 +25,23 @@ typedef struct map_plane_t
     int   lm_tex_w,   lm_tex_h;
 } map_plane_t;
 
+typedef struct map_coplanar_surface_t
+{
+	uint32_t plane_poly_count;
+	uint32_t first_plane_poly;
+} map_coplanar_surface_t;
+
 typedef struct map_poly_t
 {
     uint32_t index_count;
     uint32_t first_index; // NOTE: indices are _not_ absolute. They are relative to the first vertex.
+						  // TODO: Why aren't they absolute?
 
     uint32_t vertex_count;
-    uint32_t first_vertex; // NOTE: This is overspecified, since it will be the same for all polys in a brush
-                           // but that is useful when you just want to talk about a poly.
+    uint32_t first_vertex;
 
     v3_t normal;
+	float distance;
 
     image_t texture_cpu;
 
@@ -42,6 +49,21 @@ typedef struct map_poly_t
     resource_handle_t texture;
     resource_handle_t lightmap;
 } map_poly_t;
+
+typedef struct map_lightmap_t
+{
+	uint32_t poly_count;
+	uint32_t first_lightmap_poly_index;
+
+	v3_t origin;
+	v3_t s, t;
+	float scale_x, scale_y;
+} map_lightmap_t;
+
+typedef struct map_poly_hull_t
+{
+	uint32_t index_count;
+} map_poly_hull_t;
 
 typedef struct map_property_t
 {
@@ -106,6 +128,7 @@ typedef struct map_t
     uint32_t brush_count;
     uint32_t plane_count;
     uint32_t poly_count;
+	uint32_t edge_count;
     uint32_t light_count;
     uint32_t index_count;
     uint32_t vertex_count;
@@ -117,6 +140,7 @@ typedef struct map_t
     uint32_t          *brush_edges;
     map_plane_t       *planes;
     map_poly_t        *polys;
+	// map_edge_t        *edges;
     map_point_light_t *lights;
 
     uint16_t *indices;

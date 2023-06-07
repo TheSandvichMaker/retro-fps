@@ -1,6 +1,7 @@
 static string_t msvc_warning_to_string[WARNING_COUNT] = {
     [WARNING_ANONYMOUS_STRUCT]               = strinit("/wd4201"),
     [WARNING_TYPE_DEFINITION_IN_PARENTHESIS] = strinit("/wd4115"),
+    [WARNING_FLEXIBLE_ARRAY_MEMBER]          = strinit("/wd4200"),
 };
 
 static build_result_t msvc_build(build_context_t *context, const source_files_t *files_, const build_job_t *job)

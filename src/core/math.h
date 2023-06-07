@@ -150,6 +150,12 @@ static inline float flt_div(float l, float r) { return l / r; }
 static inline float flt_min(float a, float b) { return a < b ? a : b; }
 static inline float flt_max(float a, float b) { return a > b ? a : b; }
 
+static inline bool flt_equal(float a, float b, float margin)
+{
+	float diff = abs_ss(a - b);
+	return diff <= margin;
+}
+
 static inline float lerp(float l, float r, float t)
 {
     return l*(1.0f - t) + r*t;
@@ -630,6 +636,13 @@ static inline v3_t cross(v3_t a, v3_t b)
     result.y = a.z*b.x - a.x*b.z;
     result.z = a.x*b.y - a.y*b.x;
     return result;
+}
+
+static bool v3_equal(v3_t a, v3_t b, float margin)
+{
+	return (flt_equal(a.x, b.x, margin) &&
+			flt_equal(a.y, b.y, margin) &&
+			flt_equal(a.z, b.z, margin));
 }
 
 // v4_t

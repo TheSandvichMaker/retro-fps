@@ -68,9 +68,7 @@ float2 fat_pixel(float2 tex_dim, float2 in_uv)
 
     float2 uv = floor(texel_coord) + 0.5;
     
-    float2 duv;
-    duv.x = length(float2(ddx(in_uv.x), ddy(in_uv.x)));
-    duv.y = length(float2(ddx(in_uv.y), ddy(in_uv.y)));
+    float2 duv = fwidth(in_uv);
 
     float2 texel_derivatives = tex_dim*duv;
     float2 scale = 1 / texel_derivatives;

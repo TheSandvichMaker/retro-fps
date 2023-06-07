@@ -17,6 +17,7 @@ static void *stbi_realloc(void *ptr, size_t new_size);
 #include "core/common.h"
 #include "core/arena.h"
 #include "core/string.h"
+#include "core/fs.h"
 
 //
 // stbi support
@@ -117,4 +118,119 @@ bool split_image_into_cubemap_faces(const image_t *source, cubemap_t *cubemap)
     }
 
     return true;
+}
+
+//
+//
+//
+
+#define RIFF_ID(string) (((uint32_t)(string)[0] << 0)|((uint32_t)(string)[1] << 8)|((uint32_t)(string)[2] << 16)|((uint32_t)(string)[3] << 24))
+
+typedef struct wave_riff_chunk_t
+{
+	uint32_t chunk_id;
+	uint32_t chunk_size;
+	uint32_t format;
+} wave_riff_chunk_t;
+
+typedef struct wave_fmt_chunk_t
+{
+	uint32_t chunk_id;
+	uint32_t chunk_size;
+	uint16_t audio_format;
+	uint16_t channel_count;
+	uint32_t sample_rate; 
+	uint32_t byte_rate;
+	uint16_t block_align;
+	uint16_t bits_per_sample;
+} wave_fmt_chunk_t;
+
+typedef struct wave_data_chunk_t
+{
+	uint32_t chunk_id;
+	uint32_t chunk_size;
+	int16_t  data[];
+} wave_data_chunk_t;
+
+waveform_t load_waveform_from_memory(arena_t *arena, string_t file)
+{
+	waveform_t result = {0};
+
+	char *base = (char *)file.data;
+
+	wave_riff_chunk_t *riff_chunk = (wave_riff_chunk_t *)base;
+
+	if (riff_chunk->chunk_id == RIFF_ID("RIFF"))
+	{
+		if (riff_chunk->format == RIFF_ID("WAVE"))
+		{
+			wave_fmt_chunk_t *fmt_chunk = (wave_fmt_chunk_t *)(riff_chunk + 1);
+
+			if (fmt_chunk->chunk_id == RIFF_ID("fmt "))
+			{
+				if (fmt_chunk->audio_format == 1)
+				{
+					if (fmt_chunk->sample_rate == WAVE_SAMPLE_RATE)
+					{
+						if (fmt_chunk->bits_per_sample == 16)
+						{
+							wave_data_chunk_t *data_chunk = (wave_data_chunk_t *)(fmt_chunk + 1);
+
+							if (data_chunk->chunk_id == RIFF_ID("data"))
+							{
+								uint32_t sample_count = data_chunk->chunk_size / 2;
+
+								result.channel_count = fmt_chunk->channel_count;
+								result.frame_count   = sample_count / result.channel_count;
+								result.frames        = m_copy(arena, data_chunk->data, data_chunk->chunk_size);
+							}
+							else
+							{
+								// Dodgy .wav!
+							}
+						}
+						else
+						{
+							// Just render it out as 16 bit please!
+						}
+					}
+					else
+					{
+						// I don't want to implement sample rate conversion.
+					}
+				}
+				else
+				{
+					// Dodgy .wav!
+				}
+			}
+			else
+			{
+				// Dodgy .wav!
+			}
+		}
+		else
+		{
+			// Dodgy .wav!
+		}
+	}
+	else
+	{
+		// Dodgy .wav!
+	}
+
+	return result;
+}
+
+waveform_t load_waveform_from_disk(arena_t *arena, string_t path)
+{
+	waveform_t result = {0};
+
+	m_scoped(temp)
+	{
+		string_t file = fs_read_entire_file(temp, path);
+		result = load_waveform_from_memory(arena, file);
+	}
+
+	return result;
 }
