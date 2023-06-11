@@ -426,7 +426,7 @@ void game_init(game_io_t *io)
 			.waveform = &test_waveform,
 			.volume       = 1.0f,
 			.p            = make_v3(0, 0, 0),
-			.min_distance = 10000.0f,
+			.min_distance = 100000.0f,
 			.flags        = PLAY_SOUND_SPATIAL|PLAY_SOUND_FORCE_MONO,
 		});
 	}
@@ -643,6 +643,13 @@ void game_tick(game_io_t *io, float dt)
     transform.e[0][0] *= 2.0f; transform.e[1][1] *= 2.0f; transform.e[2][2] *= 2.0f;
     r_draw_model(transform, poly->mesh, poly->texture, poly->lightmap);
 
+    // ---------------------------------------------------------------------
+    // end scene render
+
+    r_end_scene_pass();
+
+    // ---
+
     if (g_cursor_locked)
     {
         //
@@ -664,13 +671,6 @@ void game_tick(game_io_t *io, float dt)
         r_immediate_draw_end(draw_call);
         r_pop_view();
     }
-
-    // ---------------------------------------------------------------------
-    // end scene render
-
-    r_end_scene_pass();
-
-    // ---
 
     update_and_render_in_game_editor(io, world);
 

@@ -281,7 +281,8 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 			// mix samples
 			//
 
-			v2_t final_volume = v2_maxs(v2_mins(mul(volume, volume_mod), 1.0f), 0.0f);
+			v2_t final_volume = mul(volume, volume_mod);
+			final_volume = max(0.0f, final_volume);
 
 			if (playing->flags & PLAY_SOUND_FORCE_MONO)
 			{

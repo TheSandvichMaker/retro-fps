@@ -37,32 +37,32 @@ static const m4x4_t m4x4_identity = M4X4_IDENTITY_INIT;
 
 #define PI32 3.1415926536f
 
-static inline float to_radians(float deg)
+DREAM_INLINE float to_radians(float deg)
 {
     return deg*(PI32 / 180.0f);
 }
 
-static inline float to_degrees(float rad)
+DREAM_INLINE float to_degrees(float rad)
 {
     return rad*(180.0f / PI32);
 }
 
-static inline float sqrt_ss(float x)
+DREAM_INLINE float sqrt_ss(float x)
 {
     return _mm_cvtss_f32(_mm_sqrt_ss(_mm_set1_ps(x)));
 }
 
-static inline float rsqrt_ss(float x)
+DREAM_INLINE float rsqrt_ss(float x)
 {
     return _mm_cvtss_f32(_mm_rsqrt_ss(_mm_set1_ps(x)));
 }
 
-static inline float abs_ss(float x)
+DREAM_INLINE float abs_ss(float x)
 {
     return (x < 0 ? -x : x); // TODO: fast version? does the compiler spot this and optimize it?
 }
 
-static inline float sign_of(float x)
+DREAM_INLINE float sign_of(float x)
 {
     if (x >= 0.0f)
         return 1.0f;
@@ -71,36 +71,35 @@ static inline float sign_of(float x)
 }
 
 // forward declarations of sse_mathfun.h
-static inline v4sf log_ps(v4sf x);
-static inline v4sf exp_ps(v4sf x);
-static inline v4sf sin_ps(v4sf x);
-static inline v4sf cos_ps(v4sf x);
-static inline void sincos_ps(v4sf x, v4sf *s, v4sf *c);
+DREAM_INLINE v4sf log_ps(v4sf x);
+DREAM_INLINE v4sf exp_ps(v4sf x);
+DREAM_INLINE v4sf sin_ps(v4sf x);
+DREAM_INLINE v4sf cos_ps(v4sf x);
+DREAM_INLINE void sincos_ps(v4sf x, v4sf *s, v4sf *c);
 
-// make this stuff always optimized, no need to step through maths routines in debug
 // #pragma optimize("t", on)
 
-static inline float log_ss(float x)
+DREAM_INLINE float log_ss(float x)
 {
     return _mm_cvtss_f32(log_ps(_mm_set1_ps(x)));
 }
 
-static inline float exp_ss(float x)
+DREAM_INLINE float exp_ss(float x)
 {
     return _mm_cvtss_f32(exp_ps(_mm_set1_ps(x)));
 }
 
-static inline float sin_ss(float x)
+DREAM_INLINE float sin_ss(float x)
 {
     return _mm_cvtss_f32(sin_ps(_mm_set1_ps(x)));
 }
 
-static inline float cos_ss(float x)
+DREAM_INLINE float cos_ss(float x)
 {
     return _mm_cvtss_f32(cos_ps(_mm_set1_ps(x)));
 }
 
-static inline void sincos_ss(float x, float *s, float *c)
+DREAM_INLINE void sincos_ss(float x, float *s, float *c)
 {
     v4sf s_ps, c_ps;
     sincos_ps(_mm_set1_ps(x), &s_ps, &c_ps);
@@ -109,7 +108,7 @@ static inline void sincos_ss(float x, float *s, float *c)
     *c = _mm_cvtss_f32(c_ps);
 }
 
-static inline float tan_ss(float x)
+DREAM_INLINE float tan_ss(float x)
 {
     float s, c;
     sincos_ss(x, &s, &c);
@@ -117,7 +116,7 @@ static inline float tan_ss(float x)
     return s / c;
 }
 
-static inline float fmod_ss(float x, float y)
+DREAM_INLINE float fmod_ss(float x, float y)
 {
     int n = (int)(x / y);
     return x - n*y;
@@ -144,33 +143,33 @@ inline float fabsf(float x) { return abs_ss(x); }
 
 // float
 
-static inline float flt_add(float l, float r) { return l + r; }
-static inline float flt_sub(float l, float r) { return l - r; }
-static inline float flt_mul(float l, float r) { return l * r; }
-static inline float flt_div(float l, float r) { return l / r; }
-static inline float flt_min(float a, float b) { return a < b ? a : b; }
-static inline float flt_max(float a, float b) { return a > b ? a : b; }
-static inline float flt_clamp(float x, float l, float h) { return x < l ? l : x > h ? h : x; }
-static inline float flt_saturate(float x) { return x < 0.0f ? 0.0f : x > 1.0f ? 1.0f : x; }
+DREAM_INLINE float flt_add(float l, float r) { return l + r; }
+DREAM_INLINE float flt_sub(float l, float r) { return l - r; }
+DREAM_INLINE float flt_mul(float l, float r) { return l * r; }
+DREAM_INLINE float flt_div(float l, float r) { return l / r; }
+DREAM_INLINE float flt_min(float a, float b) { return a < b ? a : b; }
+DREAM_INLINE float flt_max(float a, float b) { return a > b ? a : b; }
+DREAM_INLINE float flt_clamp(float x, float l, float h) { return x < l ? l : x > h ? h : x; }
+DREAM_INLINE float flt_saturate(float x) { return x < 0.0f ? 0.0f : x > 1.0f ? 1.0f : x; }
 
-static inline bool flt_equal(float a, float b, float margin)
+DREAM_INLINE bool flt_equal(float a, float b, float margin)
 {
 	float diff = abs_ss(a - b);
 	return diff <= margin;
 }
 
-static inline float lerp(float l, float r, float t)
+DREAM_INLINE float lerp(float l, float r, float t)
 {
     return l*(1.0f - t) + r*t;
 }
 
-static inline float smoothstep(float x)
+DREAM_INLINE float smoothstep(float x)
 {
     float result = x*x*(3.0f - 2.0f*x);
     return result;
 }
 
-static inline float smootherstep(float x)
+DREAM_INLINE float smootherstep(float x)
 {
     float result = x*x*x*(x*(x*6.0f - 15.0f) + 10.0f);
     return result;
@@ -198,7 +197,7 @@ static inline float smootherstep(float x)
 #define COLOR32_CYAN    pack_rgba(0, 1, 1, 1)
 #define COLOR32_YELLOW  pack_rgba(1, 1, 0, 1)
 
-static inline v4_t linear_to_srgb(v4_t color)
+DREAM_INLINE v4_t linear_to_srgb(v4_t color)
 {
     // TODO: more accurate srgb transforms?
     color.xyz = (v3_t){
@@ -209,7 +208,7 @@ static inline v4_t linear_to_srgb(v4_t color)
     return color;
 }
 
-static inline v4_t srgb_to_linear(v4_t color)
+DREAM_INLINE v4_t srgb_to_linear(v4_t color)
 {
     // TODO: more accurate srgb transforms?
     color.xyz = (v3_t){
@@ -220,7 +219,7 @@ static inline v4_t srgb_to_linear(v4_t color)
     return color;
 }
 
-static inline uint32_t pack_color(v4_t color)
+DREAM_INLINE uint32_t pack_color(v4_t color)
 {
     color.x = CLAMP(color.x, 0.0f, 1.0f);
     color.y = CLAMP(color.y, 0.0f, 1.0f);
@@ -240,7 +239,7 @@ static inline uint32_t pack_color(v4_t color)
     return result;
 }
 
-static inline uint32_t pack_rgba(float r, float g, float b, float a)
+DREAM_INLINE uint32_t pack_rgba(float r, float g, float b, float a)
 {
     r *= a;
     g *= a;
@@ -248,12 +247,12 @@ static inline uint32_t pack_rgba(float r, float g, float b, float a)
     return pack_color((v4_t){r, g, b, a});
 }
 
-static inline uint32_t pack_rgb(float r, float g, float b)
+DREAM_INLINE uint32_t pack_rgb(float r, float g, float b)
 {
     return pack_color((v4_t){r, g, b, 1.0f});
 }
 
-static inline v4_t unpack_color(uint32_t color)
+DREAM_INLINE v4_t unpack_color(uint32_t color)
 {
     float rcp_255 = 1.0f / 255.0f;
 
@@ -268,7 +267,7 @@ static inline v4_t unpack_color(uint32_t color)
 
 // https://registry.khronos.org/OpenGL/extensions/EXT/EXT_packed_float.txt
 
-static inline unsigned pack_float11(float value)
+DREAM_INLINE unsigned pack_float11(float value)
 {
 	// This does not handle NaN or infinity.
 
@@ -292,7 +291,7 @@ static inline unsigned pack_float11(float value)
     return (((exponent + 15) << 6) | (mantissa >> (23 - 6))) & MASK_BITS(11);
 }
 
-static inline unsigned pack_float10(float value)
+DREAM_INLINE unsigned pack_float10(float value)
 {
 	// This does not handle NaN or infinity.
 
@@ -316,7 +315,7 @@ static inline unsigned pack_float10(float value)
     return (((exponent + 15) << 5) | (mantissa >> (23 - 5))) & MASK_BITS(10);
 }
 
-static inline uint32_t pack_r11g11b10f(v3_t color)
+DREAM_INLINE uint32_t pack_r11g11b10f(v3_t color)
 {
     unsigned r = pack_float11(color.x);
     unsigned g = pack_float11(color.y);
@@ -331,7 +330,7 @@ static inline uint32_t pack_r11g11b10f(v3_t color)
 // v2i_t
 //
 
-static inline bool v2i_are_equal(v2i_t a, v2i_t b)
+DREAM_INLINE bool v2i_are_equal(v2i_t a, v2i_t b)
 {
     return a.x == b.x && a.y == b.y;
 }
@@ -341,21 +340,21 @@ static inline bool v2i_are_equal(v2i_t a, v2i_t b)
 //
 
 #define DECLARE_VECTOR2_OP(name, op) \
-static inline v2_t v2_##name   (v2_t    l, v2_t    r) { return (v2_t){ l.x op r.x, l.y op r.y }; } \
-static inline v2_t v2_s##name  (float   l, v2_t    r) { return (v2_t){ l   op r.x, l   op r.y }; } \
-static inline v2_t v2_##name##s(v2_t    l, float   r) { return (v2_t){ l.x op r  , l.y op r   }; }
+DREAM_INLINE v2_t v2_##name   (v2_t    l, v2_t    r) { return (v2_t){ l.x op r.x, l.y op r.y }; } \
+DREAM_INLINE v2_t v2_s##name  (float   l, v2_t    r) { return (v2_t){ l   op r.x, l   op r.y }; } \
+DREAM_INLINE v2_t v2_##name##s(v2_t    l, float   r) { return (v2_t){ l.x op r  , l.y op r   }; }
 
 DECLARE_VECTOR2_OP(add, +)
 DECLARE_VECTOR2_OP(sub, -)
 DECLARE_VECTOR2_OP(mul, *)
 DECLARE_VECTOR2_OP(div, /)
 
-static inline v2_t make_v2(float x, float y)
+DREAM_INLINE v2_t make_v2(float x, float y)
 {
     return (v2_t){x,y};
 }
 
-static inline v2_t v2_add3(v2_t a, v2_t b, v2_t c)
+DREAM_INLINE v2_t v2_add3(v2_t a, v2_t b, v2_t c)
 {
     v2_t result = {
         a.x + b.x + c.x,
@@ -364,28 +363,28 @@ static inline v2_t v2_add3(v2_t a, v2_t b, v2_t c)
     return result;
 }
 
-static inline float v2_dot(v2_t l, v2_t r)
+DREAM_INLINE float v2_dot(v2_t l, v2_t r)
 {
     return l.x*r.x + l.y*r.y;
 }
 
-static inline float v2_lensq(v2_t x)
+DREAM_INLINE float v2_lensq(v2_t x)
 {
     return x.x*x.x + x.y*x.y;
 }
 
-static inline float v2_len(v2_t x)
+DREAM_INLINE float v2_len(v2_t x)
 {
     return sqrt_ss(x.x*x.x + x.y*x.y);
 }
 
-static inline v2_t v2_normalize(v2_t x)
+DREAM_INLINE v2_t v2_normalize(v2_t x)
 {
     float rcp_len = 1.0f / sqrt_ss(x.x*x.x + x.y*x.y);
     return (v2_t){ rcp_len*x.x, rcp_len*x.y };
 }
 
-static inline v2_t v2_normalize_or_zero(v2_t x)
+DREAM_INLINE v2_t v2_normalize_or_zero(v2_t x)
 {
     float len = sqrt_ss(x.x*x.x + x.y*x.y);
 
@@ -396,24 +395,24 @@ static inline v2_t v2_normalize_or_zero(v2_t x)
     return (v2_t){ rcp_len*x.x, rcp_len*x.y };
 }
 
-static inline v2_t v2_negate(v2_t x)
+DREAM_INLINE v2_t v2_negate(v2_t x)
 {
     return (v2_t){ -x.x, -x.y };
 }
 
-static inline v2_t v2_lerp(v2_t l, v2_t r, v2_t t)
+DREAM_INLINE v2_t v2_lerp(v2_t l, v2_t r, v2_t t)
 {
     v2_t inv_t = { 1.0f - t.x, 1.0f - t.y };
     return (v2_t){ l.x*inv_t.x + r.x*t.x, l.y*inv_t.y + r.y*t.y };
 }
 
-static inline v2_t v2_lerps(v2_t l, v2_t r, float t)
+DREAM_INLINE v2_t v2_lerps(v2_t l, v2_t r, float t)
 {
     float inv_t = 1.0f - t;
     return (v2_t){ l.x*inv_t + r.x*t, l.y*inv_t + r.y*t };
 }
 
-static inline v2_t v2_min(v2_t l, v2_t r)
+DREAM_INLINE v2_t v2_min(v2_t l, v2_t r)
 {
     return (v2_t){
         l.x < r.x ? l.x : r.x,
@@ -421,7 +420,7 @@ static inline v2_t v2_min(v2_t l, v2_t r)
     };
 }
 
-static inline v2_t v2_smin(float l, v2_t r)
+DREAM_INLINE v2_t v2_smin(float l, v2_t r)
 {
     return (v2_t){
         l   < r.x ? l   : r.x,
@@ -429,7 +428,7 @@ static inline v2_t v2_smin(float l, v2_t r)
     };
 }
 
-static inline v2_t v2_mins(v2_t l, float r)
+DREAM_INLINE v2_t v2_mins(v2_t l, float r)
 {
     return (v2_t){
         l.x < r   ? l.x : r  ,
@@ -437,7 +436,7 @@ static inline v2_t v2_mins(v2_t l, float r)
     };
 }
 
-static inline v2_t v2_max(v2_t l, v2_t r)
+DREAM_INLINE v2_t v2_max(v2_t l, v2_t r)
 {
     return (v2_t){
         l.x > r.x ? l.x : r.x,
@@ -445,7 +444,7 @@ static inline v2_t v2_max(v2_t l, v2_t r)
     };
 }
 
-static inline v2_t v2_smax(float l, v2_t r)
+DREAM_INLINE v2_t v2_smax(float l, v2_t r)
 {
     return (v2_t){
         l   > r.x ? l   : r.x,
@@ -453,7 +452,7 @@ static inline v2_t v2_smax(float l, v2_t r)
     };
 }
 
-static inline v2_t v2_maxs(v2_t l, float r)
+DREAM_INLINE v2_t v2_maxs(v2_t l, float r)
 {
     return (v2_t){
         l.x > r   ? l.x : r  ,
@@ -461,7 +460,7 @@ static inline v2_t v2_maxs(v2_t l, float r)
     };
 }
 
-static inline float v2_minval(v2_t v)
+DREAM_INLINE float v2_minval(v2_t v)
 {
     float m;
     m = v.x;
@@ -469,7 +468,7 @@ static inline float v2_minval(v2_t v)
     return m;
 }
 
-static inline float v2_maxval(v2_t v)
+DREAM_INLINE float v2_maxval(v2_t v)
 {
     float m;
     m = v.x;
@@ -480,21 +479,21 @@ static inline float v2_maxval(v2_t v)
 // v3_t
 
 #define DECLARE_VECTOR3_OP(name, op) \
-static inline v3_t v3_##name   (v3_t    l, v3_t    r) { return (v3_t){ l.x op r.x, l.y op r.y, l.z op r.z }; } \
-static inline v3_t v3_s##name  (float   l, v3_t    r) { return (v3_t){ l   op r.x, l   op r.y, l   op r.z }; } \
-static inline v3_t v3_##name##s(v3_t    l, float   r) { return (v3_t){ l.x op r  , l.y op r  , l.z op r   }; }
+DREAM_INLINE v3_t v3_##name   (v3_t    l, v3_t    r) { return (v3_t){ l.x op r.x, l.y op r.y, l.z op r.z }; } \
+DREAM_INLINE v3_t v3_s##name  (float   l, v3_t    r) { return (v3_t){ l   op r.x, l   op r.y, l   op r.z }; } \
+DREAM_INLINE v3_t v3_##name##s(v3_t    l, float   r) { return (v3_t){ l.x op r  , l.y op r  , l.z op r   }; }
 
 DECLARE_VECTOR3_OP(add, +)
 DECLARE_VECTOR3_OP(sub, -)
 DECLARE_VECTOR3_OP(mul, *)
 DECLARE_VECTOR3_OP(div, /)
 
-static inline v3_t make_v3(float x, float y, float z)
+DREAM_INLINE v3_t make_v3(float x, float y, float z)
 {
     return (v3_t){x,y,z};
 }
 
-static inline v3_t v3_add3(v3_t a, v3_t b, v3_t c)
+DREAM_INLINE v3_t v3_add3(v3_t a, v3_t b, v3_t c)
 {
     v3_t result = {
         a.x + b.x + c.x,
@@ -504,28 +503,28 @@ static inline v3_t v3_add3(v3_t a, v3_t b, v3_t c)
     return result;
 }
 
-static inline float v3_dot(v3_t l, v3_t r)
+DREAM_INLINE float v3_dot(v3_t l, v3_t r)
 {
     return l.x*r.x + l.y*r.y + l.z*r.z;
 }
 
-static inline float v3_lensq(v3_t x)
+DREAM_INLINE float v3_lensq(v3_t x)
 {
     return x.x*x.x + x.y*x.y + x.z*x.z;
 }
 
-static inline float v3_len(v3_t x)
+DREAM_INLINE float v3_len(v3_t x)
 {
     return sqrt_ss(x.x*x.x + x.y*x.y + x.z*x.z);
 }
 
-static inline v3_t v3_normalize(v3_t x)
+DREAM_INLINE v3_t v3_normalize(v3_t x)
 {
     float rcp_len = 1.0f / sqrt_ss(x.x*x.x + x.y*x.y + x.z*x.z);
     return (v3_t){ rcp_len*x.x, rcp_len*x.y, rcp_len*x.z };
 }
 
-static inline v3_t v3_normalize_or_zero(v3_t x)
+DREAM_INLINE v3_t v3_normalize_or_zero(v3_t x)
 {
     float len = sqrt_ss(x.x*x.x + x.y*x.y + x.z*x.z);
 
@@ -536,24 +535,24 @@ static inline v3_t v3_normalize_or_zero(v3_t x)
     return (v3_t){ rcp_len*x.x, rcp_len*x.y, rcp_len*x.z };
 }
 
-static inline v3_t v3_negate(v3_t x)
+DREAM_INLINE v3_t v3_negate(v3_t x)
 {
     return (v3_t){ -x.x, -x.y, -x.z };
 }
 
-static inline v3_t v3_lerp(v3_t l, v3_t r, v3_t t)
+DREAM_INLINE v3_t v3_lerp(v3_t l, v3_t r, v3_t t)
 {
     v3_t inv_t = { 1.0f - t.x, 1.0f - t.y, 1.0f - t.z };
     return (v3_t){ l.x*inv_t.x + r.x*t.x, l.y*inv_t.y + r.y*t.y, l.z*inv_t.z + r.z*t.z };
 }
 
-static inline v3_t v3_lerps(v3_t l, v3_t r, float t)
+DREAM_INLINE v3_t v3_lerps(v3_t l, v3_t r, float t)
 {
     float inv_t = 1.0f - t;
     return (v3_t){ l.x*inv_t + r.x*t, l.y*inv_t + r.y*t, l.z*inv_t + r.z*t };
 }
 
-static inline v3_t v3_min(v3_t l, v3_t r)
+DREAM_INLINE v3_t v3_min(v3_t l, v3_t r)
 {
     return (v3_t){
         l.x < r.x ? l.x : r.x,
@@ -562,7 +561,7 @@ static inline v3_t v3_min(v3_t l, v3_t r)
     };
 }
 
-static inline v3_t v3_smin(float l, v3_t r)
+DREAM_INLINE v3_t v3_smin(float l, v3_t r)
 {
     return (v3_t){
         l   < r.x ? l   : r.x,
@@ -571,7 +570,7 @@ static inline v3_t v3_smin(float l, v3_t r)
     };
 }
 
-static inline v3_t v3_mins(v3_t l, float r)
+DREAM_INLINE v3_t v3_mins(v3_t l, float r)
 {
     return (v3_t){
         l.x < r   ? l.x : r  ,
@@ -580,14 +579,14 @@ static inline v3_t v3_mins(v3_t l, float r)
     };
 }
 
-static inline float v3_max3(v3_t v)
+DREAM_INLINE float v3_max3(v3_t v)
 {
     float result = (v.x > v.y ? v.x : v.y);
     result = (v.z > result ? v.z : result);
     return result;
 }
 
-static inline v3_t v3_max(v3_t l, v3_t r)
+DREAM_INLINE v3_t v3_max(v3_t l, v3_t r)
 {
     return (v3_t){
         l.x > r.x ? l.x : r.x,
@@ -596,7 +595,7 @@ static inline v3_t v3_max(v3_t l, v3_t r)
     };
 }
 
-static inline v3_t v3_smax(float l, v3_t r)
+DREAM_INLINE v3_t v3_smax(float l, v3_t r)
 {
     return (v3_t){
         l   > r.x ? l   : r.x,
@@ -605,7 +604,7 @@ static inline v3_t v3_smax(float l, v3_t r)
     };
 }
 
-static inline v3_t v3_maxs(v3_t l, float r)
+DREAM_INLINE v3_t v3_maxs(v3_t l, float r)
 {
     return (v3_t){
         l.x > r   ? l.x : r  ,
@@ -614,7 +613,7 @@ static inline v3_t v3_maxs(v3_t l, float r)
     };
 }
 
-static inline float v3_minval(v3_t v)
+DREAM_INLINE float v3_minval(v3_t v)
 {
     float m;
     m = v.x;
@@ -623,7 +622,7 @@ static inline float v3_minval(v3_t v)
     return m;
 }
 
-static inline float v3_maxval(v3_t v)
+DREAM_INLINE float v3_maxval(v3_t v)
 {
     float m;
     m = v.x;
@@ -632,7 +631,7 @@ static inline float v3_maxval(v3_t v)
     return m;
 }
 
-static inline v3_t cross(v3_t a, v3_t b)
+DREAM_INLINE v3_t cross(v3_t a, v3_t b)
 {
     v3_t result;
     result.x = a.y*b.z - a.z*b.y;
@@ -651,42 +650,42 @@ static bool v3_equal(v3_t a, v3_t b, float margin)
 // v4_t
 
 #define DECLARE_VECTOR4_OP(name, op) \
-static inline v4_t v4_##name   (v4_t    l, v4_t    r) { return (v4_t){ l.x op r.x, l.y op r.y, l.z op r.z, l.w op r.w }; } \
-static inline v4_t v4_s##name  (float   l, v4_t    r) { return (v4_t){ l   op r.x, l   op r.y, l   op r.z, l   op r.w }; } \
-static inline v4_t v4_##name##s(v4_t    l, float   r) { return (v4_t){ l.x op r  , l.y op r  , l.z op r  , l.w op r   }; }
+DREAM_INLINE v4_t v4_##name   (v4_t    l, v4_t    r) { return (v4_t){ l.x op r.x, l.y op r.y, l.z op r.z, l.w op r.w }; } \
+DREAM_INLINE v4_t v4_s##name  (float   l, v4_t    r) { return (v4_t){ l   op r.x, l   op r.y, l   op r.z, l   op r.w }; } \
+DREAM_INLINE v4_t v4_##name##s(v4_t    l, float   r) { return (v4_t){ l.x op r  , l.y op r  , l.z op r  , l.w op r   }; }
 
 DECLARE_VECTOR4_OP(add, +)
 DECLARE_VECTOR4_OP(sub, -)
 DECLARE_VECTOR4_OP(mul, *)
 DECLARE_VECTOR4_OP(div, /)
 
-static inline v4_t make_v4(float x, float y, float z, float w)
+DREAM_INLINE v4_t make_v4(float x, float y, float z, float w)
 {
     return (v4_t){x,y,z,w};
 }
 
-static inline float v4_dot(v4_t l, v4_t r)
+DREAM_INLINE float v4_dot(v4_t l, v4_t r)
 {
     return l.x*r.x + l.y*r.y + l.z*r.z + l.w*r.w;
 }
 
-static inline float v4_lensq(v4_t x)
+DREAM_INLINE float v4_lensq(v4_t x)
 {
     return x.x*x.x + x.y*x.y + x.z*x.z + x.w*x.w;
 }
 
-static inline float v4_len(v4_t x)
+DREAM_INLINE float v4_len(v4_t x)
 {
     return sqrt_ss(x.x*x.x + x.y*x.y + x.z*x.z + x.w*x.w);
 }
 
-static inline v4_t v4_normalize(v4_t x)
+DREAM_INLINE v4_t v4_normalize(v4_t x)
 {
     float rcp_len = 1.0f / sqrt_ss(x.x*x.x + x.y*x.y + x.z*x.z + x.w*x.w);
     return (v4_t){ rcp_len*x.x, rcp_len*x.y, rcp_len*x.z, rcp_len*x.w };
 }
 
-static inline v4_t v4_normalize_or_zero(v4_t x)
+DREAM_INLINE v4_t v4_normalize_or_zero(v4_t x)
 {
     float len = sqrt_ss(x.x*x.x + x.y*x.y + x.z*x.z + x.w*x.w);
 
@@ -697,24 +696,24 @@ static inline v4_t v4_normalize_or_zero(v4_t x)
     return (v4_t){ rcp_len*x.x, rcp_len*x.y, rcp_len*x.z, rcp_len*x.w };
 }
 
-static inline v4_t v4_negate(v4_t x)
+DREAM_INLINE v4_t v4_negate(v4_t x)
 {
     return (v4_t){ -x.x, -x.y, -x.z, -x.w };
 }
 
-static inline v4_t v4_lerp(v4_t l, v4_t r, v4_t t)
+DREAM_INLINE v4_t v4_lerp(v4_t l, v4_t r, v4_t t)
 {
     v4_t inv_t = { 1.0f - t.x, 1.0f - t.y, 1.0f - t.z, 1.0f - t.w };
     return (v4_t){ l.x*inv_t.x + r.x*t.x, l.y*inv_t.y + r.y*t.y, l.z*inv_t.z + r.z*t.z, l.w*inv_t.w + r.w*t.w };
 }
 
-static inline v4_t v4_lerps(v4_t l, v4_t r, float t)
+DREAM_INLINE v4_t v4_lerps(v4_t l, v4_t r, float t)
 {
     float inv_t = 1.0f - t;
     return (v4_t){ l.x*inv_t + r.x*t, l.y*inv_t + r.y*t, l.z*inv_t + r.z*t, l.w*inv_t + r.w*t };
 }
 
-static inline v4_t v4_min(v4_t l, v4_t r)
+DREAM_INLINE v4_t v4_min(v4_t l, v4_t r)
 {
     return (v4_t){
         l.x < r.x ? l.x : r.x,
@@ -724,7 +723,7 @@ static inline v4_t v4_min(v4_t l, v4_t r)
     };
 }
 
-static inline v4_t v4_smin(float l, v4_t r)
+DREAM_INLINE v4_t v4_smin(float l, v4_t r)
 {
     return (v4_t){
         l   < r.x ? l   : r.x,
@@ -734,7 +733,7 @@ static inline v4_t v4_smin(float l, v4_t r)
     };
 }
 
-static inline v4_t v4_mins(v4_t l, float r)
+DREAM_INLINE v4_t v4_mins(v4_t l, float r)
 {
     return (v4_t){
         l.x < r   ? l.x : r  ,
@@ -744,7 +743,7 @@ static inline v4_t v4_mins(v4_t l, float r)
     };
 }
 
-static inline v4_t v4_max(v4_t l, v4_t r)
+DREAM_INLINE v4_t v4_max(v4_t l, v4_t r)
 {
     return (v4_t){
         l.x > r.x ? l.x : r.x,
@@ -754,7 +753,7 @@ static inline v4_t v4_max(v4_t l, v4_t r)
     };
 }
 
-static inline v4_t v4_smax(float l, v4_t r)
+DREAM_INLINE v4_t v4_smax(float l, v4_t r)
 {
     return (v4_t){
         l   > r.x ? l   : r.x,
@@ -764,7 +763,7 @@ static inline v4_t v4_smax(float l, v4_t r)
     };
 }
 
-static inline v4_t v4_maxs(v4_t l, float r)
+DREAM_INLINE v4_t v4_maxs(v4_t l, float r)
 {
     return (v4_t){
         l.x > r   ? l.x : r  ,
@@ -774,7 +773,7 @@ static inline v4_t v4_maxs(v4_t l, float r)
     };
 }
 
-static inline float v4_minval(v4_t v)
+DREAM_INLINE float v4_minval(v4_t v)
 {
     float m;
     m = v.x;
@@ -784,7 +783,7 @@ static inline float v4_minval(v4_t v)
     return m;
 }
 
-static inline float v4_maxval(v4_t v)
+DREAM_INLINE float v4_maxval(v4_t v)
 {
     float m;
     m = v.x;
@@ -796,7 +795,7 @@ static inline float v4_maxval(v4_t v)
 
 // m4x4
 
-static inline m4x4_t m4x4_mul(m4x4_t b, m4x4_t a)
+DREAM_INLINE m4x4_t m4x4_mul(m4x4_t b, m4x4_t a)
 {
     m4x4_t result;
     result.e[0][0] = a.e[0][0]*b.e[0][0] + a.e[0][1]*b.e[1][0] + a.e[0][2]*b.e[2][0] + a.e[0][3]*b.e[3][0];
@@ -818,7 +817,7 @@ static inline m4x4_t m4x4_mul(m4x4_t b, m4x4_t a)
     return result;
 }
 
-static inline v4_t m4x4_mulv(m4x4_t a, v4_t b)
+DREAM_INLINE v4_t m4x4_mulv(m4x4_t a, v4_t b)
 {
     v4_t result;
     result.x = a.e[0][0]*b.x + a.e[1][0]*b.y + a.e[2][0]*b.z + a.e[3][0]*b.w;
@@ -872,10 +871,11 @@ bool solve_system_of_equations(mat_t *m, float *x);
 #define div(l, r) GENERIC_VECTOR_BINARY_OP(div, l, r)
 #define min(l, r) GENERIC_VECTOR_BINARY_OP(min, l, r)
 #define max(l, r) GENERIC_VECTOR_BINARY_OP(max, l, r)
+#define saturate(x) (max(0.0f, min(1.0f, x)))
 
 #define dot(l, r) _Generic(l, v2_t: v2_dot, v3_t: v3_dot, v4_t: v4_dot)(l, r)
 
-static inline void basis_vectors(v3_t d, v3_t up, v3_t *x, v3_t *y, v3_t *z)
+DREAM_INLINE void basis_vectors(v3_t d, v3_t up, v3_t *x, v3_t *y, v3_t *z)
 {
     *z = negate(d);
     *x = normalize(cross(up, *z));
@@ -884,12 +884,12 @@ static inline void basis_vectors(v3_t d, v3_t up, v3_t *x, v3_t *y, v3_t *z)
 
 // quat
 
-static inline quat_t make_quat(v3_t imag, float real)
+DREAM_INLINE quat_t make_quat(v3_t imag, float real)
 {
     return (quat_t){ imag.x, imag.y, imag.z, real };
 }
 
-static inline quat_t make_quat_axis_angle(v3_t axis, float angle)
+DREAM_INLINE quat_t make_quat_axis_angle(v3_t axis, float angle)
 {
     axis = normalize(axis);
 
@@ -900,7 +900,7 @@ static inline quat_t make_quat_axis_angle(v3_t axis, float angle)
     return result;
 }
 
-static inline quat_t quat_mul(quat_t a, quat_t b)
+DREAM_INLINE quat_t quat_mul(quat_t a, quat_t b)
 {
     quat_t result;
     result.x = a.e[3]*b.e[0] + a.e[0]*b.e[3] + a.e[1]*b.e[2] - a.e[2]*b.e[1];
@@ -910,22 +910,22 @@ static inline quat_t quat_mul(quat_t a, quat_t b)
     return result;
 }
 
-static inline quat_t quat_conjugate(quat_t q)
+DREAM_INLINE quat_t quat_conjugate(quat_t q)
 {
     return (quat_t){ -q.x, -q.y, -q.z, q.w };
 }
 
-static inline v3_t quat_imag(quat_t q)
+DREAM_INLINE v3_t quat_imag(quat_t q)
 {
     return (v3_t){ q.x, q.y, q.z };
 }
 
-static inline float quat_real(quat_t q)
+DREAM_INLINE float quat_real(quat_t q)
 {
     return q.w;
 }
 
-static inline v3_t quat_rotatev(quat_t q, v3_t v)
+DREAM_INLINE v3_t quat_rotatev(quat_t q, v3_t v)
 {
     quat_t p = make_quat(v, 0.0f);
 
@@ -936,7 +936,7 @@ static inline v3_t quat_rotatev(quat_t q, v3_t v)
     return quat_imag(r);
 }
 
-static inline m4x4_t m4x4_from_quat(quat_t q)
+DREAM_INLINE m4x4_t m4x4_from_quat(quat_t q)
 {
     m4x4_t result;
 
@@ -979,7 +979,7 @@ static inline m4x4_t m4x4_from_quat(quat_t q)
 
 // m4x4_t
 
-static inline m4x4_t transpose(m4x4_t mat)
+DREAM_INLINE m4x4_t transpose(m4x4_t mat)
 {
     m4x4_t result;
     for (size_t i = 0; i < 4; i++)
@@ -992,7 +992,7 @@ static inline m4x4_t transpose(m4x4_t mat)
     return result;
 }
 
-static inline m4x4_t translate(m4x4_t mat, v3_t p)
+DREAM_INLINE m4x4_t translate(m4x4_t mat, v3_t p)
 {
     mat.col[3] = add(mat.col[3], mul(mat.col[0], p.x));
     mat.col[3] = add(mat.col[3], mul(mat.col[1], p.y));
@@ -1000,7 +1000,7 @@ static inline m4x4_t translate(m4x4_t mat, v3_t p)
     return mat;
 }
 
-static inline m4x4_t make_view_matrix(v3_t p, v3_t d, v3_t up)
+DREAM_INLINE m4x4_t make_view_matrix(v3_t p, v3_t d, v3_t up)
 {
     v3_t x, y, z;
     basis_vectors(d, up, &x, &y, &z);
@@ -1023,7 +1023,7 @@ static inline m4x4_t make_view_matrix(v3_t p, v3_t d, v3_t up)
     return mat;
 }
 
-static inline m4x4_t make_orthographic_matrix(float w, float h, float d)
+DREAM_INLINE m4x4_t make_orthographic_matrix(float w, float h, float d)
 {
     m4x4_t result = make_m4x4(
         2.0f / w, 0.0f    , 0.0f    , 0.0f,
@@ -1036,7 +1036,7 @@ static inline m4x4_t make_orthographic_matrix(float w, float h, float d)
 }
 
 // infinite far plane, inverse z
-static inline m4x4_t make_perspective_matrix(float vfov, float w_over_h, float near_plane)
+DREAM_INLINE m4x4_t make_perspective_matrix(float vfov, float w_over_h, float near_plane)
 {
     float g = 1.0f / tan_ss(to_radians(0.5f*vfov));
     float s = w_over_h;
@@ -1057,19 +1057,19 @@ static inline m4x4_t make_perspective_matrix(float vfov, float w_over_h, float n
 // rect2i
 //
 
-static inline bool rect2i_contains_inclusive(rect2i_t rect, v2i_t p)
+DREAM_INLINE bool rect2i_contains_inclusive(rect2i_t rect, v2i_t p)
 {
     return (p.x >= rect.min.x && p.x <= rect.max.x &&
             p.y >= rect.min.y && p.y <= rect.max.y);
 }
 
-static inline bool rect2i_contains_exclusive(rect2i_t rect, v2i_t p)
+DREAM_INLINE bool rect2i_contains_exclusive(rect2i_t rect, v2i_t p)
 {
     return (p.x >= rect.min.x && p.x < rect.max.x &&
             p.y >= rect.min.y && p.y < rect.max.y);
 }
 
-static inline v2i_t rect2i_get_dim(rect2i_t rect)
+DREAM_INLINE v2i_t rect2i_get_dim(rect2i_t rect)
 {
     v2i_t result = {
         rect.max.x - rect.min.x,
@@ -1082,7 +1082,7 @@ static inline v2i_t rect2i_get_dim(rect2i_t rect)
 // rect2
 //
 
-static inline rect2_t rect2_center_dim(v2_t center, v2_t dim)
+DREAM_INLINE rect2_t rect2_center_dim(v2_t center, v2_t dim)
 {
     rect2_t result = {
         .min = sub(center, mul(0.5f, dim)),
@@ -1091,7 +1091,7 @@ static inline rect2_t rect2_center_dim(v2_t center, v2_t dim)
     return result;
 }
 
-static inline rect2_t rect2_add_radius(rect2_t rect, v2_t radius)
+DREAM_INLINE rect2_t rect2_add_radius(rect2_t rect, v2_t radius)
 {
     rect2_t result = {
         .min = sub(rect.min, radius),
@@ -1100,7 +1100,7 @@ static inline rect2_t rect2_add_radius(rect2_t rect, v2_t radius)
     return result;
 }
 
-static inline rect2_t rect2_sub_radius(rect2_t rect, v2_t radius)
+DREAM_INLINE rect2_t rect2_sub_radius(rect2_t rect, v2_t radius)
 {
     rect2_t result = {
         .min = add(rect.min, radius),
@@ -1109,13 +1109,13 @@ static inline rect2_t rect2_sub_radius(rect2_t rect, v2_t radius)
     return result;
 }
 
-static inline bool rect2_contains_point(rect2_t rect, v2_t point)
+DREAM_INLINE bool rect2_contains_point(rect2_t rect, v2_t point)
 {
     return (point.x >= rect.min.x && point.x < rect.max.x &&
             point.y >= rect.min.y && point.y < rect.max.y);
 }
 
-static inline rect2_t rect2_intersect(rect2_t a, rect2_t b)
+DREAM_INLINE rect2_t rect2_intersect(rect2_t a, rect2_t b)
 {
     rect2_t result = {
         .min = max(a.min, b.min),
@@ -1124,7 +1124,7 @@ static inline rect2_t rect2_intersect(rect2_t a, rect2_t b)
     return result;
 }
 
-static inline rect2_t rect2_infinity(void)
+DREAM_INLINE rect2_t rect2_infinity(void)
 {
     rect2_t result = {
         .min = { -FLT_MAX, -FLT_MAX },
@@ -1133,7 +1133,7 @@ static inline rect2_t rect2_infinity(void)
     return result;
 }
 
-static inline v2_t rect2_get_dim(rect2_t rect)
+DREAM_INLINE v2_t rect2_get_dim(rect2_t rect)
 {
     v2_t result = {
         rect.max.x - rect.min.x,
@@ -1146,7 +1146,7 @@ static inline v2_t rect2_get_dim(rect2_t rect)
 // rect3
 //
 
-static inline rect3_t rect3_inverted_infinity(void)
+DREAM_INLINE rect3_t rect3_inverted_infinity(void)
 {
     rect3_t result = {
         .min = { FLT_MAX, FLT_MAX, FLT_MAX },
@@ -1155,7 +1155,7 @@ static inline rect3_t rect3_inverted_infinity(void)
     return result;
 }
 
-static inline rect3_t rect3_grow_to_contain(rect3_t rect, v3_t p)
+DREAM_INLINE rect3_t rect3_grow_to_contain(rect3_t rect, v3_t p)
 {
     rect3_t result = {
         .min = min(rect.min, p),
@@ -1164,7 +1164,7 @@ static inline rect3_t rect3_grow_to_contain(rect3_t rect, v3_t p)
     return result;
 }
 
-static inline rect3_t rect3_union(rect3_t a, rect3_t b)
+DREAM_INLINE rect3_t rect3_union(rect3_t a, rect3_t b)
 {
     rect3_t result = {
         .min = min(a.min, b.min),
@@ -1173,7 +1173,7 @@ static inline rect3_t rect3_union(rect3_t a, rect3_t b)
     return result;
 }
 
-static inline rect3_t rect3_add(rect3_t a, rect3_t b)
+DREAM_INLINE rect3_t rect3_add(rect3_t a, rect3_t b)
 {
     rect3_t result = {
         .min = add(a.min, b.min),
@@ -1182,7 +1182,7 @@ static inline rect3_t rect3_add(rect3_t a, rect3_t b)
     return result;
 }
 
-static inline rect3_t rect3_grow_radius(rect3_t rect, v3_t radius)
+DREAM_INLINE rect3_t rect3_grow_radius(rect3_t rect, v3_t radius)
 {
     rect3_t result = {
         .min = sub(rect.min, radius),
@@ -1191,17 +1191,17 @@ static inline rect3_t rect3_grow_radius(rect3_t rect, v3_t radius)
     return result;
 }
 
-static inline v3_t rect3_center(rect3_t rect)
+DREAM_INLINE v3_t rect3_center(rect3_t rect)
 {
     return mul(0.5f, add(rect.min, rect.max));
 }
 
-static inline v3_t rect3_dim(rect3_t rect)
+DREAM_INLINE v3_t rect3_dim(rect3_t rect)
 {
     return sub(rect.max, rect.min);
 }
 
-static inline rect3_t rect3_center_radius(v3_t center, v3_t radius)
+DREAM_INLINE rect3_t rect3_center_radius(v3_t center, v3_t radius)
 {
     rect3_t result = {
         .min = sub(center, radius),
@@ -1210,7 +1210,7 @@ static inline rect3_t rect3_center_radius(v3_t center, v3_t radius)
     return result;
 }
 
-static inline uint8_t rect3_largest_axis(rect3_t rect)
+DREAM_INLINE uint8_t rect3_largest_axis(rect3_t rect)
 {
     v3_t dim = {
         rect.max.x - rect.min.x,
@@ -1234,7 +1234,7 @@ static inline uint8_t rect3_largest_axis(rect3_t rect)
     return result;
 }
 
-static inline void get_tangent_vectors(v3_t n, v3_t *t, v3_t *b)
+DREAM_INLINE void get_tangent_vectors(v3_t n, v3_t *t, v3_t *b)
 {
     v3_t up = { 0, 0, 1 };
     *t = cross(up, n);
@@ -1250,7 +1250,7 @@ static inline void get_tangent_vectors(v3_t n, v3_t *t, v3_t *b)
 }
 
 // points go clockwise
-static inline void plane_from_points(v3_t a, v3_t b, v3_t c, plane_t *p)
+DREAM_INLINE void plane_from_points(v3_t a, v3_t b, v3_t c, plane_t *p)
 {
     p->n = normalize(cross(sub(c, a), sub(b, a)));
     p->d = dot(p->n, a);
