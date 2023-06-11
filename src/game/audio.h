@@ -8,7 +8,8 @@ typedef struct mixer_id_t
 
 typedef enum play_sound_flags_t
 {
-	PLAY_SOUND_SPATIAL = 0x1,
+	PLAY_SOUND_SPATIAL    = (1 << 0),
+	PLAY_SOUND_FORCE_MONO = (1 << 1),
 } play_sound_flags_t;
 
 typedef enum fade_flags_t
@@ -47,10 +48,17 @@ typedef struct mix_command_t
 	{
 		struct
 		{
+			v3_t p;
+			v3_t d;
+		} listener;
+
+		struct
+		{
 			waveform_t *waveform;
 			float       volume;
 			uint32_t    flags;
 			v3_t        p;
+			float       min_distance;
 		} sound;
 
 		struct
@@ -77,12 +85,13 @@ typedef struct play_sound_params_t
 	float       volume;
 	uint32_t    flags;
 	v3_t        p;
+	float       min_distance;
 } play_sound_params_t;
 
 DREAM_INLINE mix_command_t *push_mix_command(const mix_command_t *command)
 {
 	uint32_t command_index = g_mixer_command_write_index;
-	copy_struct(&g_mixer_commands[command_index], command);
+	copy_struct(&g_mixer_commands[command_index % MIXER_COMMAND_BUFFER_SIZE], command);
 
 	COMPILER_BARRIER;
 
@@ -101,10 +110,11 @@ DREAM_INLINE mixer_id_t play_sound(const play_sound_params_t *params)
 		.kind = MIX_PLAY_SOUND,
 		.id   = id.id,
 		.sound = {
-			.waveform = params->waveform,
-			.volume   = params->volume,
-			.flags    = params->flags,
-			.p        = params->p,
+			.waveform     = params->waveform,
+			.volume       = params->volume,
+			.flags        = params->flags,
+			.p            = params->p,
+			.min_distance = params->min_distance,
 		},
 	};
 	push_mix_command(&command);
@@ -160,12 +170,13 @@ DREAM_INLINE void fade_out_sound(mixer_id_t id, float fade_time)
 }
 
 
-DREAM_INLINE void set_listener_position(v3_t p)
+DREAM_INLINE void set_listener(v3_t p, v3_t d)
 {
 	mix_command_t command = {
 		.kind = MIX_LISTENER_POSITION,
-		.sound = {
+		.listener = {
 			.p = p,
+			.d = d,
 		},
 	};
 	push_mix_command(&command);

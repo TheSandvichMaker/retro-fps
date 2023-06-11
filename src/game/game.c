@@ -424,7 +424,10 @@ void game_init(game_io_t *io)
 		test_waveform = load_waveform_from_disk(&world->arena, strlit("gamedata/audio/cybersoundz 2.wav"));
 		music = play_sound(&(play_sound_params_t){
 			.waveform = &test_waveform,
-			.volume   = 0.5f,
+			.volume       = 1.0f,
+			.p            = make_v3(0, 0, 0),
+			.min_distance = 10000.0f,
+			.flags        = PLAY_SOUND_SPATIAL|PLAY_SOUND_FORCE_MONO,
 		});
 	}
 
@@ -541,8 +544,10 @@ void game_tick(game_io_t *io, float dt)
     if (button_pressed(BUTTON_FIRE2))
         g_cursor_locked = !g_cursor_locked;
 
+#if 0
     if (button_pressed(BUTTON_FIRE1))
         stop_sound(music);
+#endif
 
     io->cursor_locked = g_cursor_locked;
 
@@ -569,6 +574,8 @@ void game_tick(game_io_t *io, float dt)
         case PLAYER_MOVE_NORMAL:  player_movement(map, player, dt); break;
         case PLAYER_MOVE_FREECAM: player_freecam(player, dt); break;
     }
+
+	set_listener(camera->p, negate(camera->computed_z));
 
     rect2_t viewport = {
         0, 0, (float)res_x, (float)res_y,

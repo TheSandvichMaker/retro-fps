@@ -3,6 +3,7 @@
 
 #include <xmmintrin.h>
 #include <float.h>
+#include <math.h>
 
 //
 
@@ -149,6 +150,8 @@ static inline float flt_mul(float l, float r) { return l * r; }
 static inline float flt_div(float l, float r) { return l / r; }
 static inline float flt_min(float a, float b) { return a < b ? a : b; }
 static inline float flt_max(float a, float b) { return a > b ? a : b; }
+static inline float flt_clamp(float x, float l, float h) { return x < l ? l : x > h ? h : x; }
+static inline float flt_saturate(float x) { return x < 0.0f ? 0.0f : x > 1.0f ? 1.0f : x; }
 
 static inline bool flt_equal(float a, float b, float margin)
 {
@@ -843,6 +846,7 @@ bool solve_system_of_equations(mat_t *m, float *x);
 
 #define vlensq(v)            GENERIC_VECTOR_OP(lensq, v)
 #define vlen(v)              GENERIC_VECTOR_OP(len, v)
+#define vlen_sq(v)           GENERIC_VECTOR_OP(lensq, v)
 #define vminval(v)           GENERIC_VECTOR_OP(minval, v)
 #define vmaxval(v)           GENERIC_VECTOR_OP(maxval, v)
 #define normalize(v)         GENERIC_VECTOR_OP(normalize, v)

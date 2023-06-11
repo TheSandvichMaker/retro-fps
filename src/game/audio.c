@@ -29,6 +29,7 @@ typedef struct playing_sound_t
 	float    volume;
 	uint32_t flags;
 	v3_t     p;
+	float    min_distance;
 	fade_t  *first_fade;
 } playing_sound_t;
 
@@ -52,6 +53,16 @@ static bulk_t active_fades = INIT_BULK_DATA(fade_t);
 
 static uint64_t mixer_frame_index;
 static v3_t listener_p;
+static v3_t listener_d;
+static v3_t listener_x;
+static v3_t listener_y;
+static v3_t listener_z;
+
+DREAM_INLINE float limit(float s)
+{
+	s = max(-1.0f, min(1.0f, s));
+	return s;
+}
 
 static void stop_playing_sound_internal(playing_sound_t *playing)
 {
@@ -90,11 +101,12 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 				if (command->sound.waveform->frames)
 				{
 					playing_sound_t playing = {
-						.id       = command->id,
-						.waveform = command->sound.waveform,
-						.volume   = command->sound.volume,
-						.flags    = command->sound.flags,
-						.p        = command->sound.p,
+						.id           = command->id,
+						.waveform     = command->sound.waveform,
+						.volume       = command->sound.volume,
+						.flags        = command->sound.flags,
+						.p            = command->sound.p,
+						.min_distance = command->sound.min_distance,
 					};
 
 					resource_handle_t handle = bd_add_item(&playing_sounds, &playing);
@@ -137,7 +149,9 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 
 			case MIX_LISTENER_POSITION:
 			{
-				listener_p = command->sound.p;
+				listener_p = command->listener.p;
+				listener_d = normalize_or_zero(command->listener.d);
+				basis_vectors(listener_d, make_v3(0, 0, 1), &listener_x, &listener_y, &listener_z);
 			} break;
 
 			case MIX_SOUND_POSITION:
@@ -170,12 +184,40 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 		uint32_t frames_left     = waveform->frame_count - playing->at_index;
 		uint32_t frames_to_write = MIN(frames_to_mix, frames_left);
 
-		float volume = playing->volume;
+		v2_t volume = make_v2(playing->volume, playing->volume);
 
 		int16_t *src = waveform->frames + waveform->channel_count*playing->at_index;
 		float   *dst = buffer;
 
 		bool sound_should_stop = false;
+
+		if (playing->flags & PLAY_SOUND_SPATIAL)
+		{
+			v3_t to_sound = sub(playing->p, listener_p);
+
+			float distance_sq = vlensq(to_sound);
+
+			if (distance_sq > 0.01f)
+			{
+				to_sound = div(to_sound, sqrt_ss(distance_sq));
+			}
+			else
+			{
+				to_sound = (v3_t){ 0.0f, 0.0f, 0.0f };
+			}
+
+			float m = playing->min_distance;
+			float attenuation = m / (m + distance_sq);
+
+			float flatten = 1.0f - max(0.0f, m - distance_sq) / m;
+
+			float cos_theta  = flatten*(to_sound.x*listener_x.x + to_sound.y*listener_x.y);
+			float cos_theta2 = sqrt_ss(0.5f*(cos_theta + 1.0f));
+			float sin_theta2 = sqrt_ss(1.0f - cos_theta2*cos_theta2);
+
+			volume.x *= attenuation*sin_theta2;
+			volume.y *= attenuation*cos_theta2;
+		}
 
 		for (size_t frame_index = 0; frame_index < frames_to_write; frame_index++)
 		{
@@ -183,7 +225,7 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 			// process fades
 			//
 
-			float volume_mod = volume;
+			float volume_mod = 1.0f;
 
 			for (fade_t **fade_at = &playing->first_fade;
 			 	 *fade_at;
@@ -239,10 +281,33 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 			// mix samples
 			//
 
-			for (size_t channel_index = 0; channel_index < waveform->channel_count; channel_index++)
+			v2_t final_volume = v2_maxs(v2_mins(mul(volume, volume_mod), 1.0f), 0.0f);
+
+			if (playing->flags & PLAY_SOUND_FORCE_MONO)
 			{
-				int16_t sample = *src++;
-				*dst++ = volume_mod*((float)sample / (float)INT16_MAX);
+				float final = 0.0f;
+				float mod = 1.0f / (float)waveform->channel_count;
+
+				for (size_t channel_index = 0; channel_index < waveform->channel_count; channel_index++)
+				{
+					int16_t sample = *src++;
+
+					final += mod*((float)sample / (float)INT16_MAX);
+				}
+
+				for (size_t channel_index = 0; channel_index < mix_channel_count; channel_index++)
+				{
+					*dst++ += limit(final_volume.e[channel_index]*final);
+				}
+			}
+			else
+			{
+				for (size_t channel_index = 0; channel_index < waveform->channel_count; channel_index++)
+				{
+					int16_t sample = *src++;
+
+					*dst++ += limit(final_volume.e[channel_index]*((float)sample / (float)INT16_MAX));
+				}
 			}
 
 			if (sound_should_stop)
