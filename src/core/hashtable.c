@@ -3,8 +3,6 @@
 #include "assert.h"
 #include "vm.h"
 
-// TODO: removal (chain repair)
-
 enum { HASHTABLE_RESERVE_CAPACITY = 1 << 20, HASHTABLE_HALF_CAPACITY = 1 << 19 }; // up to ~500k entries
 enum { HASH_SECONDARY_BUFFER = 1 << 0, HASH_EXTERNAL_MEMORY = 1 << 1 };
 
