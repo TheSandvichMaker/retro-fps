@@ -176,7 +176,7 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 
 	for (bd_iter_t it = bd_iter(&playing_sounds);
 		 bd_iter_valid(&it);
-		 )
+		 bd_iter_next(&it))
 	{
 		playing_sound_t *playing  = it.data;
 		waveform_t      *waveform = playing->waveform;
@@ -335,11 +335,18 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 			}
 		}
 
-		playing->at_index = (playing->at_index + frames_to_write) % waveform->frame_count;
+		playing->at_index += frames_to_write;
 
-		bd_iter_next(&it);
+		if (playing->flags & PLAY_SOUND_LOOPING)
+		{
+			playing->at_index %= waveform->frame_count;
+		}
+		else if (playing->at_index == waveform->frame_count)
+		{
+			sound_should_stop = true;
+		}
 
-		if (sound_should_stop || playing->at_index == waveform->frame_count)
+		if (sound_should_stop)
 		{
 			stop_playing_sound_internal(playing);
 		}

@@ -24,6 +24,7 @@ static world_t *world;
 static resource_handle_t skybox;
 static bitmap_font_t font;
 static waveform_t test_waveform;
+static waveform_t short_sound;
 
 #define MAX_VERTICES (8192)
 static size_t map_vertex_count;
@@ -422,6 +423,7 @@ void game_init(game_io_t *io)
 
 	{
 		test_waveform = load_waveform_from_disk(&world->arena, strlit("gamedata/audio/lego durbo.wav"));
+		short_sound = load_waveform_from_disk(&world->arena, strlit("gamedata/audio/menu_select.wav"));
 		music = play_sound(&(play_sound_params_t){
 			.waveform = &test_waveform,
 			.volume       = 1.0f,
@@ -547,6 +549,14 @@ void game_tick(game_io_t *io, float dt)
 #if 0
     if (button_pressed(BUTTON_FIRE1))
         stop_sound(music);
+#endif
+
+#if 1
+    if (button_pressed(BUTTON_FIRE1))
+        play_sound(&(play_sound_params_t){
+			.waveform = &short_sound,
+			.volume   = 1.0f,
+		});
 #endif
 
     io->cursor_locked = g_cursor_locked;

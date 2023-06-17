@@ -43,5 +43,6 @@ typedef struct bd_iter_t
 bd_iter_t bd_iter(bulk_t *bd);
 bool bd_iter_valid(bd_iter_t *it);
 void bd_iter_next(bd_iter_t *it);
+void bd_iter_rem(bd_iter_t *it);
 
 #endif /* BULK_DATA_H */

@@ -206,3 +206,8 @@ void bd_iter_next(bd_iter_t *it)
             break;
     }
 }
+
+void bd_iter_rem(bd_iter_t *it)
+{
+	bd_rem_item(it->bd, it->data);
+}
