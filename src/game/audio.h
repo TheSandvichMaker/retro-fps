@@ -10,6 +10,7 @@ typedef enum play_sound_flags_t
 {
 	PLAY_SOUND_SPATIAL    = (1 << 0),
 	PLAY_SOUND_FORCE_MONO = (1 << 1),
+	PLAY_SOUND_LOOPING    = (1 << 2),
 } play_sound_flags_t;
 
 typedef enum fade_flags_t

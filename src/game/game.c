@@ -421,13 +421,13 @@ void game_init(game_io_t *io)
     world->fade_t = 1.0f;
 
 	{
-		test_waveform = load_waveform_from_disk(&world->arena, strlit("gamedata/audio/cybersoundz 2.wav"));
+		test_waveform = load_waveform_from_disk(&world->arena, strlit("gamedata/audio/lego durbo.wav"));
 		music = play_sound(&(play_sound_params_t){
 			.waveform = &test_waveform,
 			.volume       = 1.0f,
 			.p            = make_v3(0, 0, 0),
 			.min_distance = 100000.0f,
-			.flags        = PLAY_SOUND_SPATIAL|PLAY_SOUND_FORCE_MONO,
+			.flags        = PLAY_SOUND_SPATIAL|PLAY_SOUND_FORCE_MONO|PLAY_SOUND_LOOPING,
 		});
 	}
 

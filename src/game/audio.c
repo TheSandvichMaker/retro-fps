@@ -181,15 +181,19 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 		playing_sound_t *playing  = it.data;
 		waveform_t      *waveform = playing->waveform;
 
-		uint32_t frames_left     = waveform->frame_count - playing->at_index;
-		uint32_t frames_to_write = MIN(frames_to_mix, frames_left);
+		uint32_t frames_left = waveform->frame_count - playing->at_index;
+
+		uint32_t frames_to_write;
+		if (playing->flags & PLAY_SOUND_LOOPING)
+		{
+			frames_to_write = frames_to_mix;
+		}
+		else
+		{
+			frames_to_write = MIN(frames_to_mix, frames_left);
+		}
 
 		v2_t volume = make_v2(playing->volume, playing->volume);
-
-		int16_t *src = waveform->frames + waveform->channel_count*playing->at_index;
-		float   *dst = buffer;
-
-		bool sound_should_stop = false;
 
 		if (playing->flags & PLAY_SOUND_SPATIAL)
 		{
@@ -219,8 +223,22 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 			volume.y *= attenuation*cos_theta2;
 		}
 
+		int16_t *src = waveform->frames + waveform->channel_count*playing->at_index;
+		int16_t *end = waveform->frames + waveform->channel_count*waveform->frame_count;
+		float   *dst = buffer;
+
+		bool sound_should_stop = false;
+
 		for (size_t frame_index = 0; frame_index < frames_to_write; frame_index++)
 		{
+			// wrap looping sounds
+
+			if (src >= end)
+			{
+				size_t diff = end - src;
+				src = waveform->frames + diff;
+			}
+
 			//
 			// process fades
 			//
@@ -317,7 +335,8 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 			}
 		}
 
-		playing->at_index += frames_to_write;
+		playing->at_index = (playing->at_index + frames_to_write) % waveform->frame_count;
+
 		bd_iter_next(&it);
 
 		if (sound_should_stop || playing->at_index == waveform->frame_count)
