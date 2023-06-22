@@ -510,10 +510,10 @@ int init_d3d11(void *hwnd_)
     // blue noise texture
     m_scoped(temp)
     {
-        image_t t0 = load_image(temp, strlit("gamedata/textures/noise/LDR_LLL1_0.png"), 1);
-        image_t t1 = load_image(temp, strlit("gamedata/textures/noise/LDR_LLL1_7.png"), 1);
-        image_t t2 = load_image(temp, strlit("gamedata/textures/noise/LDR_LLL1_15.png"), 1);
-        image_t t3 = load_image(temp, strlit("gamedata/textures/noise/LDR_LLL1_23.png"), 1);
+        image_t t0 = load_image_from_disk(temp, strlit("gamedata/textures/noise/LDR_LLL1_0.png"), 1);
+        image_t t1 = load_image_from_disk(temp, strlit("gamedata/textures/noise/LDR_LLL1_7.png"), 1);
+        image_t t2 = load_image_from_disk(temp, strlit("gamedata/textures/noise/LDR_LLL1_15.png"), 1);
+        image_t t3 = load_image_from_disk(temp, strlit("gamedata/textures/noise/LDR_LLL1_23.png"), 1);
 
         uint32_t *pixels = m_alloc_array(temp, t0.w*t0.h, uint32_t);
 

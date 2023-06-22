@@ -19,6 +19,7 @@
 #define FATAL_ERROR(msg, ...) ASSERT_MSG(false, msg, ##__VA_ARGS__)
 
 #define INVALID_DEFAULT_CASE default: { FATAL_ERROR("Reached invalid default case!"); } break;
+#define INVALID_CODE_PATH FATAL_ERROR("Invalid code path!");
 
 void fatal_error(int line, string_t file, const char *fmt, ...);
 void fatal_error_va(int line, string_t file, const char *fmt, va_list args);

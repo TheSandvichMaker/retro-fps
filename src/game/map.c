@@ -550,18 +550,6 @@ static bool parse_map(arena_t *arena, string_t path, map_parse_result_t *result)
 // map geometry generation
 //
 
-typedef struct map_cached_texture_t
-{
-    STRING_STORAGE(256) name;
-
-    unsigned w, h;
-    resource_handle_t gpu_handle;
-    image_t image;
-} map_cached_texture_t;
-
-static hash_t g_texture_cache_hash;
-static bulk_t g_texture_cache = INIT_BULK_DATA(map_cached_texture_t);
-
 static void generate_map_geometry(arena_t *arena, map_t *map)
 {
     ASSERT(arena != temp);
@@ -836,67 +824,27 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
             float texscale_x = MISSING_TEXTURE_SIZE;
             float texscale_y = MISSING_TEXTURE_SIZE;
 
-            // see if texture was loaded before
+            // load texture
 
-            uint64_t value;
-            if (hash_find(&g_texture_cache_hash, string_hash(plane->texture), &value))
-            {
-                resource_handle_t handle = { .value = value };
+			m_scoped(temp)
+			{
+				// TODO: pretty sad... handle file formats properly...
+				string_t texture_path_png = string_format(temp, "gamedata/textures/%.*s.png", strexpand(plane->texture));
+				string_t texture_path_tga = string_format(temp, "gamedata/textures/%.*s.tga", strexpand(plane->texture));
 
-                map_cached_texture_t *cached = bd_get(&g_texture_cache, handle);
-                ASSERT(string_match(plane->texture, STRING_FROM_STORAGE(cached->name)));
+				image_t *image = blocking_get_image(asset_hash_from_string(texture_path_png));
 
-                texscale_x = (float)cached->w;
-                texscale_y = (float)cached->h;
+				if (!image->pixels)
+					image = blocking_get_image(asset_hash_from_string(texture_path_tga));
 
-                poly->texture     = cached->gpu_handle;
-                poly->texture_cpu = cached->image;
-            }
+				if (image->pixels)
+				{
+					poly->image = image;
 
-            // load texture if required
-
-            if (!RESOURCE_HANDLE_VALID(poly->texture))
-            {
-                m_scoped(temp)
-                {
-                    // TODO: pretty sad... handle file formats properly...
-                    string_t texture_path_png = string_format(temp, "gamedata/textures/%.*s.png", strexpand(plane->texture));
-                    string_t texture_path_tga = string_format(temp, "gamedata/textures/%.*s.tga", strexpand(plane->texture));
-
-                    image_t image = load_image(arena, texture_path_png, 4);
-
-                    if (!image.pixels)
-                        image = load_image(arena, texture_path_tga, 4);
-
-                    if (image.pixels)
-                    {
-                        poly->texture_cpu = image;
-
-                        texscale_x = (float)image.w;
-                        texscale_y = (float)image.h;
-                        poly->texture = render->upload_texture(&(upload_texture_t) {
-                            .desc = {
-                                .format = PIXEL_FORMAT_SRGB8_A8,
-                                .w      = image.w,
-                                .h      = image.h,
-                            },
-                            .data = {
-                                .pitch  = image.pitch,
-                                .pixels = image.pixels,
-                            },
-                        });
-
-                        map_cached_texture_t *cached = bd_add(&g_texture_cache);
-                        cached->w          = image.w;
-                        cached->h          = image.h;
-                        cached->gpu_handle = poly->texture;
-                        cached->image      = poly->texture_cpu;
-                        STRING_INTO_STORAGE(cached->name, plane->texture);
-
-                        resource_handle_t handle = bd_get_handle(&g_texture_cache, cached);
-                        hash_add(&g_texture_cache_hash, string_hash(plane->texture), handle.value);
-                    }
-                }
+					texscale_x = (float)image->w;
+					texscale_y = (float)image->h;
+					poly->texture = image->gpu; // TODO: Weird
+				}
             }
 
             // triangulate

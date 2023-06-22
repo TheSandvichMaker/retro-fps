@@ -185,7 +185,7 @@ static v3_t pathtrace_recursively(lum_thread_context_t *thread, lum_path_t *path
 
         v3_t albedo = {0, 0, 0};
 
-        image_t *texture = &hit_poly->texture_cpu;
+        image_t *texture = hit_poly->image;
         if (texture->pixels)
         {
             // TODO: Enforce pow2 textures?

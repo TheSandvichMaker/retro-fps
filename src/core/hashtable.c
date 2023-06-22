@@ -129,9 +129,11 @@ void hash_add(hash_t *hash, uint64_t key, uint64_t value)
         if (entry->key == UNUSED_KEY_VALUE ||
             entry->key == key)
         {
+            hash->load += (entry->key == UNUSED_KEY_VALUE);
+
             entry->key   = key;
             entry->value = value;
-            hash->load += (entry->key == UNUSED_KEY_VALUE);
+
             break;
         }
 
@@ -186,12 +188,14 @@ bool hash_rem(hash_t *hash, uint64_t key)
 	return true;
 }
 
-bool hash_find_ptr(const hash_t *table, uint64_t key, void **value)
+void *hash_find_object(const hash_t *table, uint64_t key)
 {
-    return hash_find(table, key, (uint64_t *)value);
+	void *result = NULL;
+    hash_find(table, key, (uint64_t *)&result);
+	return result;
 }
 
-void hash_add_ptr(hash_t *table, uint64_t key, void *value)
+void hash_add_object(hash_t *table, uint64_t key, void *value)
 {
     hash_add(table, key, (uint64_t)value);
 }

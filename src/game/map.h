@@ -43,7 +43,7 @@ typedef struct map_poly_t
     v3_t normal;
 	float distance;
 
-    image_t texture_cpu;
+    image_t *image;
 
     resource_handle_t mesh;
     resource_handle_t texture;

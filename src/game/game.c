@@ -23,8 +23,8 @@ static bool g_cursor_locked;
 static world_t *world;
 static resource_handle_t skybox;
 static bitmap_font_t font;
-static waveform_t test_waveform;
-static waveform_t short_sound;
+static waveform_t *test_waveform;
+static waveform_t *short_sound;
 
 #define MAX_VERTICES (8192)
 static size_t map_vertex_count;
@@ -397,35 +397,28 @@ static void view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
 
 void game_init(game_io_t *io)
 {
+	initialize_asset_system();
+
     update_camera_rotation(&g_camera, 0.0f);
 
     {
-        image_t font_image = load_image(temp, strlit("gamedata/textures/font.png"), 4);
-        font.w = font_image.w;
-        font.h = font_image.h;
+		image_t *font_image = get_image(asset_hash_from_string(strlit("gamedata/textures/font.png")));
+        font.w = font_image->w;
+        font.h = font_image->h;
         font.cw = 10;
         font.ch = 12;
-        font.texture = render->upload_texture(&(upload_texture_t) {
-            .desc = {
-                .format = PIXEL_FORMAT_RGBA8,
-                .w      = font_image.w,
-                .h      = font_image.h,
-            },
-            .data = {
-                .pitch  = font_image.pitch,
-                .pixels = font_image.pixels,
-            },
-        });
+        font.texture = font_image->gpu;
     }
 
     world = m_bootstrap(world_t, arena);
     world->fade_t = 1.0f;
 
 	{
-		test_waveform = load_waveform_from_disk(&world->arena, strlit("gamedata/audio/lego durbo.wav"));
-		short_sound = load_waveform_from_disk(&world->arena, strlit("gamedata/audio/menu_select.wav"));
-		music = play_sound(&(play_sound_params_t){
-			.waveform = &test_waveform,
+		test_waveform = get_waveform(asset_hash_from_string(strlit("gamedata/audio/lego durbo.wav")));
+		short_sound   = get_waveform(asset_hash_from_string(strlit("gamedata/audio/menu_select.wav")));
+
+		music = play_sound(&(play_sound_t){
+			.waveform     = test_waveform,
 			.volume       = 1.0f,
 			.p            = make_v3(0, 0, 0),
 			.min_distance = 100000.0f,
@@ -446,12 +439,12 @@ void game_init(game_io_t *io)
             m_scoped(temp)
             {
                 image_t faces[6] = {
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/posx.jpg", strexpand(skytex)), 4),
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/negx.jpg", strexpand(skytex)), 4),
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/posy.jpg", strexpand(skytex)), 4),
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/negy.jpg", strexpand(skytex)), 4),
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/posz.jpg", strexpand(skytex)), 4),
-                    load_image(temp, string_format(temp, "gamedata/textures/sky/%.*s/negz.jpg", strexpand(skytex)), 4),
+                    load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/posx.jpg", strexpand(skytex)), 4),
+                    load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/negx.jpg", strexpand(skytex)), 4),
+                    load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/posy.jpg", strexpand(skytex)), 4),
+                    load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/negy.jpg", strexpand(skytex)), 4),
+                    load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/posz.jpg", strexpand(skytex)), 4),
+                    load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/negz.jpg", strexpand(skytex)), 4),
                 };
 
                 skybox = render->upload_texture(&(upload_texture_t){
@@ -553,8 +546,8 @@ void game_tick(game_io_t *io, float dt)
 
 #if 1
     if (button_pressed(BUTTON_FIRE1))
-        play_sound(&(play_sound_params_t){
-			.waveform = &short_sound,
+        play_sound(&(play_sound_t){
+			.waveform = short_sound,
 			.volume   = 1.0f,
 		});
 #endif

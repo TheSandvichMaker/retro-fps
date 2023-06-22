@@ -80,14 +80,14 @@ DREAM_API uint32_t g_mixer_command_read_index;
 DREAM_API uint32_t g_mixer_command_write_index;
 DREAM_API mix_command_t g_mixer_commands[MIXER_COMMAND_BUFFER_SIZE];
 
-typedef struct play_sound_params_t
+typedef struct play_sound_t
 {
 	waveform_t *waveform;
 	float       volume;
 	uint32_t    flags;
 	v3_t        p;
 	float       min_distance;
-} play_sound_params_t;
+} play_sound_t;
 
 DREAM_INLINE mix_command_t *push_mix_command(const mix_command_t *command)
 {
@@ -100,7 +100,7 @@ DREAM_INLINE mix_command_t *push_mix_command(const mix_command_t *command)
 	return &g_mixer_commands[command_index];
 }
 
-DREAM_INLINE mixer_id_t play_sound(const play_sound_params_t *params)
+DREAM_INLINE mixer_id_t play_sound(const play_sound_t *params)
 {
 	if (g_mixer_next_playing_sound_id == 0)
 		g_mixer_next_playing_sound_id = 1;

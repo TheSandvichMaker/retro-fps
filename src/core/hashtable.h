@@ -22,8 +22,8 @@ DREAM_API bool hash_find(const hash_t *table, uint64_t key, uint64_t *value);
 DREAM_API void hash_add (      hash_t *table, uint64_t key, uint64_t  value);
 DREAM_API bool hash_rem (      hash_t *table, uint64_t key);
 
-DREAM_API bool hash_find_ptr(const hash_t *table, uint64_t key, void **value);
-DREAM_API void hash_add_ptr (      hash_t *table, uint64_t key, void  *value);
+DREAM_API void *hash_find_object(const hash_t *table, uint64_t key);
+DREAM_API void  hash_add_object (      hash_t *table, uint64_t key, void *value);
 
 typedef struct hash_iter_t
 {

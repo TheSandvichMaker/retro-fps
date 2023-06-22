@@ -16,8 +16,10 @@ static void *stbi_realloc(void *ptr, size_t new_size);
 
 #include "core/common.h"
 #include "core/arena.h"
-#include "core/string.h"
 #include "core/fs.h"
+#include "core/bulk_data.h"
+#include "core/hashtable.h"
+#include "render/render.h"
 
 //
 // stbi support
@@ -46,10 +48,149 @@ void *stbi_realloc(void *ptr, size_t new_size)
 }
 
 //
+// streaming asset API
+//
+
+typedef struct asset_slot_t
+{
+	asset_hash_t hash;
+	asset_kind_t kind;
+	asset_state_t state;
+
+	STRING_STORAGE(256) path;
+
+	union
+	{
+		image_t    image;
+		waveform_t waveform;
+	};
+} asset_slot_t;
+
+static image_t missing_image;
+static waveform_t missing_waveform;
+
+static arena_t asset_arena;
+static bulk_t  asset_store = INIT_BULK_DATA(asset_slot_t);
+static hash_t  asset_index;
+
+void initialize_asset_system(void)
+{
+	m_scoped(temp)
+	{
+		for (fs_entry_t *entry = fs_scan_directory(temp, strlit("gamedata"), FS_SCAN_RECURSIVE);
+			 entry;
+			 entry = fs_entry_next(entry))
+		{
+			if (entry->kind == FS_ENTRY_DIRECTORY)
+				continue;
+
+			asset_kind_t kind = ASSET_KIND_NONE;
+
+			string_t ext = string_extension(entry->name);
+			if (string_match_nocase(ext, strlit(".png")) ||
+			    string_match_nocase(ext, strlit(".jpg")) ||
+				string_match_nocase(ext, strlit(".tga")))
+			{
+				kind = ASSET_KIND_IMAGE;
+			}
+			else if (string_match_nocase(ext, strlit(".wav")))
+			{
+				kind = ASSET_KIND_WAVEFORM;
+			}
+
+			if (kind)
+			{
+				asset_slot_t *asset = bd_add(&asset_store);
+				asset->hash  = asset_hash_from_string(entry->path);
+				asset->kind  = kind;
+				asset->state = ASSET_STATE_ON_DISK;
+				STRING_INTO_STORAGE(asset->path, entry->path);
+				hash_add_object(&asset_index, asset->hash.value, asset);
+			}
+		}
+	}
+}
+
+image_t *get_image(asset_hash_t hash)
+{
+	image_t *image = &missing_image;
+
+	asset_slot_t *asset = hash_find_object(&asset_index, hash.value);
+	if (asset && asset->kind == ASSET_KIND_IMAGE)
+	{
+		if (asset->state == ASSET_STATE_IN_MEMORY)
+		{
+			image = &asset->image;
+		}
+		else if (asset->state == ASSET_STATE_ON_DISK)
+		{
+			// TODO: asynchronous
+			asset->image = load_image_from_disk(&asset_arena, STRING_FROM_STORAGE(asset->path), 4);
+			asset->image.gpu = render->upload_texture(&(upload_texture_t){
+				.desc = {
+					.type   = TEXTURE_TYPE_2D,
+					.format = PIXEL_FORMAT_SRGB8_A8,
+					.w      = asset->image.w,
+					.h      = asset->image.h,
+				},
+				.data = {
+					.pitch  = asset->image.pitch,
+					.pixels = asset->image.pixels,
+				},
+			});
+			asset->state = ASSET_STATE_IN_MEMORY;
+			image = &asset->image;
+		}
+	}
+
+	return image;
+}
+
+image_t *blocking_get_image(asset_hash_t hash)
+{
+	return get_image(hash); // TODO: async
+}
+
+waveform_t *get_waveform(asset_hash_t hash)
+{
+	waveform_t *waveform = &missing_waveform;
+
+	asset_slot_t *asset = hash_find_object(&asset_index, hash.value);
+	if (asset && asset->kind == ASSET_KIND_WAVEFORM)
+	{
+		if (asset->state == ASSET_STATE_IN_MEMORY)
+		{
+			waveform = &asset->waveform;
+		}
+		else if (asset->state == ASSET_STATE_ON_DISK)
+		{
+			// TODO: asynchronous
+			asset->waveform = load_waveform_from_disk(&asset_arena, STRING_FROM_STORAGE(asset->path));
+			asset->state = ASSET_STATE_IN_MEMORY;
+			waveform = &asset->waveform;
+		}
+	}
+
+	return waveform;
+}
+
+//
 //
 //
 
-image_t load_image(arena_t *arena, string_t path, unsigned nchannels)
+image_t load_image_from_memory(arena_t *arena, string_t path, unsigned nchannels)
+{
+	(void)arena;
+	(void)path;
+	(void)nchannels;
+
+	// TODO: Implement
+	INVALID_CODE_PATH;
+
+	return (image_t){0};
+}
+
+image_t load_image_from_disk(arena_t *arena, string_t path, unsigned nchannels)
 {
     stbi_arena = arena;
 
@@ -156,75 +297,45 @@ waveform_t load_waveform_from_memory(arena_t *arena, string_t file)
 {
 	waveform_t result = {0};
 
-	if (file.count >= sizeof(wave_riff_chunk_t) + sizeof(wave_fmt_chunk_t) + sizeof(wave_data_chunk_t))
-	{
-		char *base = (char *)file.data;
+	if (file.count < sizeof(wave_riff_chunk_t) + sizeof(wave_fmt_chunk_t) + sizeof(wave_data_chunk_t))
+		goto bail; // implausible file size
 
-		wave_riff_chunk_t *riff_chunk = (wave_riff_chunk_t *)base;
+	char *base = (char *)file.data;
 
-		if (riff_chunk->chunk_id == RIFF_ID("RIFF"))
-		{
-			if (riff_chunk->format == RIFF_ID("WAVE"))
-			{
-				wave_fmt_chunk_t *fmt_chunk = (wave_fmt_chunk_t *)(riff_chunk + 1);
+	wave_riff_chunk_t *riff_chunk = (wave_riff_chunk_t *)base;
 
-				if (fmt_chunk->chunk_id == RIFF_ID("fmt "))
-				{
-					if (fmt_chunk->audio_format == 1)
-					{
-						if (fmt_chunk->sample_rate == WAVE_SAMPLE_RATE)
-						{
-							if (fmt_chunk->bits_per_sample == 16)
-							{
-								wave_data_chunk_t *data_chunk = (wave_data_chunk_t *)(fmt_chunk + 1);
+	if (riff_chunk->chunk_id != RIFF_ID("RIFF"))
+		goto bail; // unexpected chunk
 
-								if (data_chunk->chunk_id == RIFF_ID("data"))
-								{
-									uint32_t sample_count = data_chunk->chunk_size / 2;
+	if (riff_chunk->format != RIFF_ID("WAVE"))
+		goto bail; // wrong format
 
-									result.channel_count = fmt_chunk->channel_count;
-									result.frame_count   = sample_count / result.channel_count;
-									result.frames        = m_copy(arena, data_chunk->data, data_chunk->chunk_size);
-								}
-								else
-								{
-									// Dodgy .wav!
-								}
-							}
-							else
-							{
-								// Just render it out as 16 bit please!
-							}
-						}
-						else
-						{
-							// I don't want to implement sample rate conversion.
-						}
-					}
-					else
-					{
-						// Dodgy .wav!
-					}
-				}
-				else
-				{
-					// Dodgy .wav!
-				}
-			}
-			else
-			{
-				// Dodgy .wav!
-			}
-		}
-		else
-		{
-			// Dodgy .wav!
-		}
-	}
-	else
-	{
-		// Dodgy .wav!
-	}
+	wave_fmt_chunk_t *fmt_chunk = (wave_fmt_chunk_t *)(riff_chunk + 1);
+
+	if (fmt_chunk->chunk_id != RIFF_ID("fmt "))
+		goto bail; // unexpected chunk
+
+	if (fmt_chunk->audio_format != 1)
+		goto bail; // unexpected format (only want uncompressed PCM)
+
+	if (fmt_chunk->sample_rate != WAVE_SAMPLE_RATE)
+		goto bail; // unexpected sample rate (I don't want to do sample rate conversion)
+
+	if (fmt_chunk->bits_per_sample != 16)
+		goto bail; // unexpected bits per sample (I may later allow other bit depths)
+
+	wave_data_chunk_t *data_chunk = (wave_data_chunk_t *)(fmt_chunk + 1);
+
+	if (data_chunk->chunk_id != RIFF_ID("data"))
+		goto bail; // unexpected chunk
+
+	uint32_t sample_count = data_chunk->chunk_size / 2;
+
+	result.channel_count = fmt_chunk->channel_count;
+	result.frame_count   = sample_count / result.channel_count;
+	result.frames        = m_copy(arena, data_chunk->data, data_chunk->chunk_size);
+
+bail:
 
 	return result;
 }
