@@ -665,9 +665,6 @@ void render_model(const render_pass_t *pass)
         ID3D11DeviceContext_Draw(d3d.context, pass->model->vcount, pass->voffset);
 }
 
-// FIXME: This should have a constraint parameter for the kind of texture. Otherwise, it won't know to return which kind of missing texture to return (cubemap, 3D, etc)
-// FIXME: This should have a constraint parameter for the kind of texture. Otherwise, it won't know to return which kind of missing texture to return (cubemap, 3D, etc)
-// FIXME: This should have a constraint parameter for the kind of texture. Otherwise, it won't know to return which kind of missing texture to return (cubemap, 3D, etc)
 static d3d_texture_t *d3d_get_texture_or(resource_handle_t handle, d3d_texture_t *fallback)
 {
 	d3d_texture_t *texture = bd_get(&d3d_textures, handle);
