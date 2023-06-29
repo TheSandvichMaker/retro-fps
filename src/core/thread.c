@@ -5,8 +5,63 @@
 //
 //
 
-#include "job_queue.h"
-#include "core/core.h"
+#include "core/thread.h"
+#include "core/atomics.h"
+#include "core/arena.h"
+
+//
+// mutex
+//
+
+void rw_mutex_lock(rw_mutex_t mutex)
+{
+	SRWLOCK internal = { .Ptr = mutex.opaque };
+	AcquireSRWLockExclusive(&internal);
+}
+
+void rw_mutex_unlock(rw_mutex_t mutex)
+{
+	SRWLOCK internal = { .Ptr = mutex.opaque };
+	ReleaseSRWLockExclusive(&internal);
+}
+
+bool rw_mutex_try_lock(rw_mutex_t mutex)
+{
+	SRWLOCK internal = { .Ptr = mutex.opaque };
+	return TryAcquireSRWLockExclusive(&internal);
+}
+
+void rw_mutex_shared_lock(rw_mutex_t mutex)
+{
+	SRWLOCK internal = { .Ptr = mutex.opaque };
+	AcquireSRWLockShared(&internal);
+}
+
+void rw_mutex_shared_unlock(rw_mutex_t mutex)
+{
+	SRWLOCK internal = { .Ptr = mutex.opaque };
+	ReleaseSRWLockShared(&internal);
+}
+
+bool rw_mutex_try_shared_lock(rw_mutex_t mutex)
+{
+	SRWLOCK internal = { .Ptr = mutex.opaque };
+	return TryAcquireSRWLockShared(&internal);
+}
+
+//
+//
+//
+
+size_t query_processor_count(void)
+{
+	SYSTEM_INFO info;
+	GetSystemInfo(&info);
+
+	// boldly presume hyperthreading
+	size_t actual_processor_count = info.dwNumberOfProcessors / 2;
+	return actual_processor_count;
+}
 
 typedef struct job_thread_t
 {
@@ -15,7 +70,7 @@ typedef struct job_thread_t
 
 typedef struct job_queue_entry_t
 {
-    job_t job;
+    job_proc_t proc;
     void *userdata;
 } job_queue_entry_t;
 
@@ -66,7 +121,7 @@ static DWORD WINAPI job_queue_thread_proc(void *userdata)
             if (exchanged_index == entry_index)
             {
                 job_queue_entry_t *entry = &queue->entries[entry_index % queue->queue_size];
-                entry->job(&context, entry->userdata);
+                entry->proc(&context, entry->userdata);
 
                 uint32_t jobs_count = InterlockedDecrement((volatile long *)&queue->jobs_in_flight);
 
@@ -137,7 +192,7 @@ void destroy_job_queue(job_queue_t handle)
     m_release(&queue->arena);
 }
 
-void add_job_to_queue(job_queue_t handle, job_t job, void *userdata)
+void add_job_to_queue(job_queue_t handle, job_proc_t proc, void *userdata)
 {
     job_queue_internal_t *queue = handle.opaque;
 
@@ -145,7 +200,7 @@ void add_job_to_queue(job_queue_t handle, job_t job, void *userdata)
     uint32_t next_write = write + 1;
 
     job_queue_entry_t *entry = &queue->entries[write % queue->queue_size];
-    entry->job      = job;
+    entry->proc     = proc;
     entry->userdata = userdata;
 
     MemoryBarrier();

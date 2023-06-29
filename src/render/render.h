@@ -144,9 +144,14 @@ typedef struct render_api_i
     void (*get_resolution)(int *w, int *h);
 
     // TODO: Querying this from the backend seems pointless, just remember it on the user side...
-    void (*describe_texture)(resource_handle_t handle, texture_desc_t *desc);
+    bool (*describe_texture)(resource_handle_t handle, texture_desc_t *desc);
 
-    resource_handle_t (*upload_texture)(const upload_texture_t *params);
+	// FIXME: Thread safe, but right now doesn't provide a synchronization option.
+	// When the texture is not yet done loading, it will instead show as a missing texture.
+	// Should be fixed!
+	resource_handle_t (*reserve_texture)(void);
+	void (*populate_texture)(resource_handle_t handle, const upload_texture_t *params);
+    resource_handle_t (*upload_texture)(const upload_texture_t *params); // implemented in terms of reserve + populate, I presume
     void (*destroy_texture)(resource_handle_t texture);
 
     resource_handle_t (*upload_model)(const upload_model_t *params);

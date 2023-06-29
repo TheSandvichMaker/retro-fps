@@ -829,22 +829,25 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
 			m_scoped(temp)
 			{
 				// TODO: pretty sad... handle file formats properly...
-				string_t texture_path_png = string_format(temp, "gamedata/textures/%.*s.png", strexpand(plane->texture));
-				string_t texture_path_tga = string_format(temp, "gamedata/textures/%.*s.tga", strexpand(plane->texture));
+				asset_hash_t texture_png = asset_hash_from_string(string_format(temp, "gamedata/textures/%.*s.png", strexpand(plane->texture)));
+				asset_hash_t texture_tga = asset_hash_from_string(string_format(temp, "gamedata/textures/%.*s.tga", strexpand(plane->texture)));
+				// TODO ALSO: String + formatting helper function for asset hashes
 
-				image_t *image = blocking_get_image(asset_hash_from_string(texture_path_png));
+				image_t *image = &missing_image;
 
-				if (!image->pixels)
-					image = blocking_get_image(asset_hash_from_string(texture_path_tga));
-
-				if (image->pixels)
+				if (asset_exists(texture_png, ASSET_KIND_IMAGE))
 				{
-					poly->image = image;
-
-					texscale_x = (float)image->w;
-					texscale_y = (float)image->h;
-					poly->texture = image->gpu; // TODO: Weird
+					image = get_image(texture_png);
 				}
+				else if (asset_exists(texture_tga, ASSET_KIND_IMAGE))
+				{
+					image = get_image(texture_tga);
+				}
+
+				poly->image = image;
+				texscale_x = (float)image->w;
+				texscale_y = (float)image->h;
+				poly->texture = image->gpu; // TODO: Weird? Maybe?
             }
 
             // triangulate

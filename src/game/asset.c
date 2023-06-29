@@ -19,13 +19,16 @@ static void *stbi_realloc(void *ptr, size_t new_size);
 #include "core/fs.h"
 #include "core/bulk_data.h"
 #include "core/hashtable.h"
+
+#include "game/job_queues.h"
+
 #include "render/render.h"
 
 //
 // stbi support
 //
 
-static arena_t *stbi_arena;
+static thread_local arena_t *stbi_arena;
 
 void *stbi_malloc(size_t size)
 {
@@ -55,7 +58,7 @@ typedef struct asset_slot_t
 {
 	asset_hash_t hash;
 	asset_kind_t kind;
-	asset_state_t state;
+	int64_t state;
 
 	STRING_STORAGE(256) path;
 
@@ -66,12 +69,131 @@ typedef struct asset_slot_t
 	};
 } asset_slot_t;
 
-static image_t missing_image;
-static waveform_t missing_waveform;
+image_t    missing_image;
+waveform_t missing_waveform;
 
 static arena_t asset_arena;
 static bulk_t  asset_store = INIT_BULK_DATA(asset_slot_t);
 static hash_t  asset_index;
+
+typedef enum asset_job_kind_t
+{
+	ASSET_JOB_NONE,
+
+	ASSET_JOB_LOAD_FROM_DISK,
+
+	ASSET_JOB_COUNT,
+} asset_job_kind_t;
+
+typedef struct asset_job_t
+{
+	asset_job_kind_t kind;
+	asset_slot_t *asset;
+} asset_job_t;
+
+static void asset_job(job_context_t *context, void *userdata)
+{
+	(void)context;
+
+	asset_job_t  *job   = userdata;
+	asset_slot_t *asset = job->asset;
+
+	switch (job->kind)
+	{
+		case ASSET_JOB_LOAD_FROM_DISK:
+		{
+			asset_state_t state = asset->state;
+
+			if (state != ASSET_STATE_BEING_LOADED_ASYNC)
+				break;
+
+			bool loaded_successfully = true;
+
+			switch (asset->kind)
+			{
+				case ASSET_KIND_IMAGE:
+				{
+					// FIXME: idiot code
+					// FIXME: idiot code
+					// FIXME: idiot code
+					// FIXME: idiot code
+
+					resource_handle_t idiot_code = asset->image.gpu;
+
+					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
+					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
+					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
+					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
+					asset->image = load_image_from_disk(temp, STRING_FROM_STORAGE(asset->path), 4);
+					asset->image.gpu = idiot_code;
+
+					render->populate_texture(asset->image.gpu, &(upload_texture_t){
+						.desc = {
+							.type   = TEXTURE_TYPE_2D,
+							.format = PIXEL_FORMAT_SRGB8_A8,
+							.w      = asset->image.w,
+							.h      = asset->image.h,
+						},
+						.data = {
+							.pitch  = asset->image.pitch,
+							.pixels = asset->image.pixels,
+						},
+					});
+				} break;
+
+				case ASSET_KIND_WAVEFORM:
+				{
+					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
+					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
+					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
+					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
+					asset->waveform = load_waveform_from_disk(temp, STRING_FROM_STORAGE(asset->path));
+				} break;
+
+				default:
+				{
+					loaded_successfully = false;
+				} break;
+			}
+
+			if (loaded_successfully)
+			{
+				// x64: writes are atomic (right?)
+				asset->state = ASSET_STATE_IN_MEMORY;
+			}
+		} break;
+	}
+}
+
+static void preload_asset_info(asset_slot_t *asset)
+{
+	switch (asset->kind)
+	{
+		case ASSET_KIND_IMAGE:
+		{
+			image_t *image = &asset->image;
+
+			stbi_arena = temp;
+
+			m_scoped(temp)
+			{
+				string_t path = STRING_FROM_STORAGE(asset->path);
+
+				int x, y, comp;
+				if (stbi_info(string_null_terminate(temp, path), &x, &y, &comp))
+				{
+					image->w             = (uint32_t)x;
+					image->h             = (uint32_t)y;
+					image->channel_count = (uint32_t)comp;
+				}
+			}
+
+			image->gpu = render->reserve_texture();
+		} break;
+
+		// TODO: others
+	}
+}
 
 void initialize_asset_system(void)
 {
@@ -105,50 +227,91 @@ void initialize_asset_system(void)
 				asset->kind  = kind;
 				asset->state = ASSET_STATE_ON_DISK;
 				STRING_INTO_STORAGE(asset->path, entry->path);
+
 				hash_add_object(&asset_index, asset->hash.value, asset);
+
+				preload_asset_info(asset); // stuff like image dimensions we'd like to know right away
 			}
 		}
 	}
+}
+
+bool asset_exists(asset_hash_t hash, asset_kind_t kind)
+{
+	asset_slot_t *asset = hash_find_object(&asset_index, hash.value);
+	return asset && asset->kind == kind;
+}
+
+static asset_slot_t *get_or_load_asset_async(asset_hash_t hash, asset_kind_t kind)
+{
+	asset_slot_t *asset = hash_find_object(&asset_index, hash.value);
+	if (asset && asset->kind == kind)
+	{
+		int64_t state = asset->state;
+
+		if (state == ASSET_STATE_ON_DISK &&
+			atomic_cas64(&asset->state, ASSET_STATE_BEING_LOADED_ASYNC, ASSET_STATE_ON_DISK) == ASSET_STATE_ON_DISK)
+		{
+			// FIXME: FIX LEAK!!!!!
+			// FIXME: FIX LEAK!!!!!
+			// FIXME: FIX LEAK!!!!!
+			// FIXME: FIX LEAK!!!!!
+			// FIXME: FIX LEAK!!!!!
+			asset_job_t *job = m_alloc_struct(&asset_arena, asset_job_t);
+			job->kind  = ASSET_JOB_LOAD_FROM_DISK;
+			job->asset = asset,
+
+			add_job_to_queue(high_priority_job_queue, asset_job, job);
+		}
+	}
+	return asset;
+}
+
+static asset_slot_t *get_or_load_asset_blocking(asset_hash_t hash, asset_kind_t kind)
+{
+	asset_slot_t *asset = hash_find_object(&asset_index, hash.value);
+	if (asset && asset->kind == kind)
+	{
+		if (asset->state == ASSET_STATE_ON_DISK)
+		{
+			asset_job_t job = {
+				.kind  = ASSET_JOB_LOAD_FROM_DISK,
+				.asset = asset,
+			};
+
+			job_context_t context = { 0 };
+			asset_job(&context, &job);
+		}
+	}
+	return asset;
 }
 
 image_t *get_image(asset_hash_t hash)
 {
 	image_t *image = &missing_image;
 
-	asset_slot_t *asset = hash_find_object(&asset_index, hash.value);
-	if (asset && asset->kind == ASSET_KIND_IMAGE)
+	asset_slot_t *asset = get_or_load_asset_async(hash, ASSET_KIND_IMAGE);
+	if (asset)
 	{
-		if (asset->state == ASSET_STATE_IN_MEMORY)
-		{
-			image = &asset->image;
-		}
-		else if (asset->state == ASSET_STATE_ON_DISK)
-		{
-			// TODO: asynchronous
-			asset->image = load_image_from_disk(&asset_arena, STRING_FROM_STORAGE(asset->path), 4);
-			asset->image.gpu = render->upload_texture(&(upload_texture_t){
-				.desc = {
-					.type   = TEXTURE_TYPE_2D,
-					.format = PIXEL_FORMAT_SRGB8_A8,
-					.w      = asset->image.w,
-					.h      = asset->image.h,
-				},
-				.data = {
-					.pitch  = asset->image.pitch,
-					.pixels = asset->image.pixels,
-				},
-			});
-			asset->state = ASSET_STATE_IN_MEMORY;
-			image = &asset->image;
-		}
+		// Always returns the image. Even if it's not resident. You'd know by seeing if pixels is null.
+		image = &asset->image;
 	}
 
 	return image;
 }
 
-image_t *blocking_get_image(asset_hash_t hash)
+image_t *get_image_blocking(asset_hash_t hash)
 {
-	return get_image(hash); // TODO: async
+	image_t *image = &missing_image;
+
+	asset_slot_t *asset = get_or_load_asset_blocking(hash, ASSET_KIND_IMAGE);
+	if (asset)
+	{
+		// Always returns the image. Even if it's not resident. You'd know by seeing if pixels is null.
+		image = &asset->image;
+	}
+
+	return image;
 }
 
 waveform_t *get_waveform(asset_hash_t hash)

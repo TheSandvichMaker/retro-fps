@@ -665,6 +665,19 @@ void render_model(const render_pass_t *pass)
         ID3D11DeviceContext_Draw(d3d.context, pass->model->vcount, pass->voffset);
 }
 
+// FIXME: This should have a constraint parameter for the kind of texture. Otherwise, it won't know to return which kind of missing texture to return (cubemap, 3D, etc)
+// FIXME: This should have a constraint parameter for the kind of texture. Otherwise, it won't know to return which kind of missing texture to return (cubemap, 3D, etc)
+// FIXME: This should have a constraint parameter for the kind of texture. Otherwise, it won't know to return which kind of missing texture to return (cubemap, 3D, etc)
+static d3d_texture_t *d3d_get_texture_or(resource_handle_t handle, d3d_texture_t *fallback)
+{
+	d3d_texture_t *texture = bd_get(&d3d_textures, handle);
+
+	if (!texture || texture->state != D3D_TEXTURE_STATE_LOADED)  
+		texture = fallback;
+
+	return texture;
+}
+
 void d3d_do_post_pass(const d3d_post_pass_t *pass)
 {
     // set output merger state
@@ -982,8 +995,7 @@ done_with_sun_shadows:
 
             d3d_model_t   *model   = d3d.skybox_model;
 
-            d3d_texture_t *texture = bd_get(&d3d_textures, view->skybox);
-            if (!texture)  texture = d3d.missing_texture_cubemap;
+            d3d_texture_t *texture = d3d_get_texture_or(view->skybox, d3d.missing_texture_cubemap);
 
             render_model(&(render_pass_t) {
                 .render_target = d3d.scene_target.color_rtv,
@@ -1033,11 +1045,8 @@ done_with_sun_shadows:
                     d3d_model_t *model = bd_get(&d3d_models, command->model);
                     if (model)
                     {
-                        d3d_texture_t *texture = bd_get(&d3d_textures, command->texture);
-                        if (!texture)  texture = d3d.missing_texture;
-
-                        d3d_texture_t *lightmap = bd_get(&d3d_textures, command->lightmap);
-                        if (!lightmap) lightmap = d3d.white_texture;
+                        d3d_texture_t *texture  = d3d_get_texture_or(command->texture, d3d.missing_texture);
+                        d3d_texture_t *lightmap = d3d_get_texture_or(command->lightmap, d3d.white_texture);
 
                         m4x4_t camera_projection = m4x4_identity;
                         camera_projection = mul(camera_projection, view->projection);
@@ -1127,8 +1136,7 @@ done_with_sun_shadows:
                         .vbuffer            = d3d.immediate_vbuffer,
                     };
 
-                    d3d_texture_t *texture = bd_get(&d3d_textures, draw_call->params.texture);
-                    if (!texture)  texture = d3d.white_texture;
+                    d3d_texture_t *texture = d3d_get_texture_or(draw_call->params.texture, d3d.white_texture);
 
                     render_model(&(render_pass_t) {
                         .render_target = current_render_target->color_rtv,
@@ -1171,7 +1179,7 @@ done_with_sun_shadows:
                     {
                         resolved_scene = true;
 
-                        d3d_texture_t *fogmap = bd_get(&d3d_textures, view->fogmap);
+                        d3d_texture_t *fogmap = d3d_get_texture_or(view->fogmap, NULL); // TODO: Don't crash on missing fogmap!
 
                         ID3D11ShaderResourceView *fogmap_srv = NULL;
                         if (fogmap)
@@ -1246,16 +1254,36 @@ void get_resolution(int *w, int *h)
     *h = d3d.current_height;
 }
 
-resource_handle_t upload_texture(const upload_texture_t *params)
+resource_handle_t reserve_texture(void)
 {
-    resource_handle_t result = { 0 };
-
-    if (!params->data.pixels)
-        return result;
+	rw_mutex_lock(d3d.texture_lock);
 
     d3d_texture_t *resource = bd_add(&d3d_textures);
+	resource->state = D3D_TEXTURE_STATE_RESERVED;
+
+	resource_handle_t result = bd_get_handle(&d3d_textures, resource);
+
+	rw_mutex_unlock(d3d.texture_lock);
+
+	return result;
+}
+
+void populate_texture(resource_handle_t handle, const upload_texture_t *params)
+{
+    if (!params->data.pixels)
+        return;
+
+	// TODO: Not sure this lock is needed here. Just being paranoid.
+	rw_mutex_lock(d3d.texture_lock);
+    d3d_texture_t *resource = bd_get(&d3d_textures, handle);
+	rw_mutex_unlock(d3d.texture_lock);
+
     if (resource)
     {
+		resource->state = D3D_TEXTURE_STATE_LOADING;
+
+		COMPILER_BARRIER;
+
         resource->desc = params->desc;
 
         uint32_t pixel_size = 1;
@@ -1370,10 +1398,19 @@ resource_handle_t upload_texture(const upload_texture_t *params)
             ID3D11Device_CreateShaderResourceView(d3d.device, (ID3D11Resource *)resource->tex_3d, &srv_desc, &resource->srv);
             ID3D11DeviceContext_GenerateMips(d3d.context, resource->srv);
         }
-        result = bd_get_handle(&d3d_textures, resource);
-    }
 
-    return result;
+		COMPILER_BARRIER;
+
+		resource->state = D3D_TEXTURE_STATE_LOADED;
+    }
+}
+
+resource_handle_t upload_texture(const upload_texture_t *params)
+{
+	resource_handle_t result = reserve_texture();
+	populate_texture(result, params);
+
+	return result;
 }
 
 void destroy_texture(resource_handle_t handle)
@@ -1520,31 +1557,28 @@ void set_model_buffers(d3d_model_t *model, DXGI_FORMAT index_format)
     ID3D11DeviceContext_IASetIndexBuffer(d3d.context, model->ibuffer, index_format, 0);
 }
 
-void describe_texture(resource_handle_t handle, texture_desc_t *result)
+bool describe_texture(resource_handle_t handle, texture_desc_t *result)
 {
-    d3d_texture_t *texture = bd_get(&d3d_textures, handle);
-    if (texture)
-    {
-        copy_struct(result, &texture->desc);
-    }
-    else
-    {
-        copy_struct(result, &d3d.missing_texture->desc);
-    }
+    d3d_texture_t *texture = d3d_get_texture_or(handle, d3d.missing_texture);
+	copy_struct(result, &texture->desc);
+
+	return texture != d3d.missing_texture;
 }
 
 render_api_i *d3d11_get_api()
 {
     static render_api_i api = {
-        .get_resolution  = get_resolution,
+        .get_resolution   = get_resolution,
 
         .describe_texture = describe_texture,
 
-        .upload_texture  = upload_texture,
-        .destroy_texture = destroy_texture,
+		.reserve_texture  = reserve_texture,
+		.populate_texture = populate_texture,
+        .upload_texture   = upload_texture,
+        .destroy_texture  = destroy_texture,
 
-        .upload_model    = upload_model,
-        .destroy_model   = destroy_model,
+        .upload_model     = upload_model,
+        .destroy_model    = destroy_model,
     };
     return &api;
 }

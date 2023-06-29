@@ -8,7 +8,7 @@
 #include "game/intersect.h"
 #include "core/core.h"
 #include "core/random.h"
-#include "core/job_queue.h"
+#include "core/thread.h"
 
 typedef struct lum_thread_context_t
 {
@@ -481,19 +481,19 @@ static void lum_job(job_context_t *job_context, void *userdata)
             .pitch  = sizeof(uint32_t)*w,
             .pixels = packed,
         };
-    }
 
-#if 0
-    // TODO: Make upload_texture thread-safe
-    map_poly_t *poly = &brush->polys[plane->poly_index];
-    poly->lightmap = render->upload_texture(&(upload_texture_t) {
-        .format = PIXEL_FORMAT_RGBA8,
-        .w      = w,
-        .h      = h,
-        .pitch  = sizeof(uint32_t)*w,
-        .pixels = lighting,
-    });
-#endif
+		poly->lightmap = render->upload_texture(&(upload_texture_t){
+			.desc = {
+				.format = PIXEL_FORMAT_R11G11B10F,
+				.w      = w,
+				.h      = h,
+			},
+			.data = {
+				.pitch  = sizeof(uint32_t)*w,
+				.pixels = packed,
+			},
+		});
+    }
 }
 
 typedef struct lum_voxel_cluster_t
@@ -646,47 +646,44 @@ void trace_volumetric_lighting(const lum_params_t *params, map_t *map)
 void bake_lighting(const lum_params_t *params_init, lum_results_t *results)
 {
     // making a copy of the params so they can be massaged against bad input
-    lum_params_t params;
-    copy_struct(&params, params_init);
+    lum_params_t *params = m_copy_struct(params_init->arena, params_init);
 
-    params.sun_direction = normalize(params.sun_direction);
+    params->sun_direction = normalize(params->sun_direction);
 
-    map_t *map = params.map;
+    map_t *map = params->map;
 
-    m_scoped(temp)
-    {
-        size_t thread_count = 6;
+	size_t thread_count = 6;
 
-        size_t job_count = 0;
-        lum_job_t *jobs = m_alloc_array(temp, map->plane_count, lum_job_t);
+	size_t job_count = 0;
+	lum_job_t *jobs = m_alloc_array(params->arena, map->plane_count, lum_job_t);
 
-        // silly, silly.
-        job_queue_t queue = create_job_queue(thread_count, map->plane_count);
+	// silly, silly.
+	job_queue_t queue = create_job_queue(thread_count, map->plane_count);
 
-        lum_thread_context_t *thread_contexts = m_alloc_array(temp, thread_count, lum_thread_context_t);
+	lum_thread_context_t *thread_contexts = m_alloc_array(params->arena, thread_count, lum_thread_context_t);
 
-        for (size_t i = 0; i < thread_count; i++)
-        {
-            lum_thread_context_t *thread_context = &thread_contexts[i];
-            copy_struct(&thread_context->params, &params);
+	for (size_t i = 0; i < thread_count; i++)
+	{
+		lum_thread_context_t *thread_context = &thread_contexts[i];
+		copy_struct(&thread_context->params, params);
 
-            thread_context->entropy.state = (uint32_t)(i + 1);
-        }
+		thread_context->entropy.state = (uint32_t)(i + 1);
+	}
 
-        for (size_t brush_index = 0; brush_index < map->brush_count; brush_index++)
-        {
-            map_brush_t *brush = &map->brushes[brush_index];
+	for (size_t brush_index = 0; brush_index < map->brush_count; brush_index++)
+	{
+		map_brush_t *brush = &map->brushes[brush_index];
 
-            for (size_t plane_index = 0; plane_index < brush->plane_poly_count; plane_index++)
-            {
-                lum_job_t *job = &jobs[job_count++];
-                job->thread_contexts = thread_contexts;
-                job->brush_index     = (uint32_t)(brush_index);
-                job->plane_index     = (uint32_t)(brush->first_plane_poly + plane_index);
+		for (size_t plane_index = 0; plane_index < brush->plane_poly_count; plane_index++)
+		{
+			lum_job_t *job = &jobs[job_count++];
+			job->thread_contexts = thread_contexts;
+			job->brush_index     = (uint32_t)(brush_index);
+			job->plane_index     = (uint32_t)(brush->first_plane_poly + plane_index);
 
-                add_job_to_queue(queue, lum_job, job);
-            }
-        }
+			add_job_to_queue(queue, lum_job, job);
+		}
+	}
 
 #if 0
         for (size_t job_index = 0; job_index < job_count; job_index++)
@@ -694,9 +691,10 @@ void bake_lighting(const lum_params_t *params_init, lum_results_t *results)
             lum_job(&jobs[job_index]);
         }
 #else
-        wait_on_queue(queue);
+        // wait_on_queue(queue);
 #endif
 
+#if 0
         for (size_t job_index = 0; job_index < job_count; job_index++)
         {
             lum_job_t *job = &jobs[job_index];
@@ -717,7 +715,9 @@ void bake_lighting(const lum_params_t *params_init, lum_results_t *results)
                 },
             });
         }
+#endif
 
+#if 0
         if (results)
         {
             lum_debug_data_t *result_debug_data = &results->debug_data;
@@ -733,11 +733,13 @@ void bake_lighting(const lum_params_t *params_init, lum_results_t *results)
                 // m_release(&thread_context->arena);
             }
         }
+#endif
+		(void)results;
 
-        destroy_job_queue(queue);
-    }
+        // destroy_job_queue(queue);
+    // }
 
-    trace_volumetric_lighting(&params, map);
+    // trace_volumetric_lighting(&params, map);
 
     map->light_baked = true;
 }

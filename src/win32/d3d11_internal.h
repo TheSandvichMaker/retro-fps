@@ -2,6 +2,7 @@
 #define D3D11_INTERNAL_H
 
 #include "core/api_types.h"
+#include "core/thread.h"
 #include "render/render.h"
 #include "game/asset.h"
 
@@ -42,9 +43,21 @@ typedef struct d3d_model_t
     ID3D11Buffer *ibuffer;
 } d3d_model_t;
 
+typedef enum d3d_texture_state_t
+{
+	D3D_TEXTURE_STATE_NONE,
+	D3D_TEXTURE_STATE_RESERVED,
+	D3D_TEXTURE_STATE_LOADING,
+	D3D_TEXTURE_STATE_NEEDS_MIPS,
+	D3D_TEXTURE_STATE_LOADED,
+	D3D_TEXTURE_STATE_COUNT,
+} d3d_texture_state_t;
+
 typedef struct d3d_texture_t
 {
     texture_desc_t desc;
+
+	uint32_t state;
 
     union
     {
@@ -93,6 +106,8 @@ typedef struct d3d_rendertarget_t
 
 typedef struct d3d_state_t
 {
+	rw_mutex_t texture_lock;
+
     d3d_texture_t *white_texture;
     d3d_texture_t *missing_texture;
     d3d_texture_t *missing_texture_cubemap;

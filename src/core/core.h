@@ -17,5 +17,6 @@
 #include "bulk_data.h"
 #include "stretchy_buffer.h"
 #include "hashtable.h"
+#include "thread.h"
 
 #endif /* CORE_H */

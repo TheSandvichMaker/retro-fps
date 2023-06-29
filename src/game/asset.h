@@ -23,6 +23,7 @@ typedef enum asset_state_t
 	ASSET_STATE_NONE,
 
 	ASSET_STATE_ON_DISK,
+	ASSET_STATE_BEING_LOADED_ASYNC,
 	ASSET_STATE_IN_MEMORY,
 
 	ASSET_STATE_COUNT,
@@ -73,11 +74,18 @@ typedef struct waveform_t
 DREAM_API void initialize_asset_system(void);
 DREAM_API void preload_asset(asset_hash_t hash);
 
-DREAM_API image_t    *get_image            (asset_hash_t hash);
-DREAM_API waveform_t *get_waveform         (asset_hash_t hash);
+DREAM_API image_t    missing_image;
+DREAM_API waveform_t missing_waveform;
 
-DREAM_API image_t    *blocking_get_image   (asset_hash_t hash);
-DREAM_API waveform_t *blocking_get_waveform(asset_hash_t hash);
+DREAM_API bool        asset_exists         (asset_hash_t hash, asset_kind_t kind);
+
+DREAM_API image_t    *get_image            (asset_hash_t hash);
+DREAM_API image_t    *get_missing_image    (void);
+DREAM_API waveform_t *get_waveform         (asset_hash_t hash);
+DREAM_API image_t    *get_missing_waveform (void);
+
+DREAM_API image_t    *get_image_blocking   (asset_hash_t hash);
+DREAM_API waveform_t *get_waveform_blocking(asset_hash_t hash);
 
 //
 // raw asset loading
