@@ -195,6 +195,11 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 			float scattering = map->fog_scattering;
 			v3_t sky_color = mul(sun_color, (1.0f / (4.0f*PI32))*scattering*density / (density*(scattering + absorption)));
 
+			if (map->lightmap_state)
+			{
+				release_bake_state(map->lightmap_state);
+			}
+
 			map->lightmap_state = bake_lighting(&(lum_params_t) {
 				.map                 = map,
 				.sun_direction       = make_v3(0.25f, 0.75f, 1),
