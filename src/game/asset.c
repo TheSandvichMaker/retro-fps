@@ -113,21 +113,14 @@ static void asset_job(job_context_t *context, void *userdata)
 			{
 				case ASSET_KIND_IMAGE:
 				{
-					// FIXME: idiot code
-					// FIXME: idiot code
-					// FIXME: idiot code
-					// FIXME: idiot code
-
 					resource_handle_t idiot_code = asset->image.gpu;
 
-					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
-					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
-					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
 					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
 					asset->image = load_image_from_disk(temp, STRING_FROM_STORAGE(asset->path), 4);
 					asset->image.gpu = idiot_code;
 
 					render->populate_texture(asset->image.gpu, &(upload_texture_t){
+						.upload_flags = UPLOAD_TEXTURE_GEN_MIPMAPS,
 						.desc = {
 							.type   = TEXTURE_TYPE_2D,
 							.format = PIXEL_FORMAT_SRGB8_A8,
@@ -143,9 +136,6 @@ static void asset_job(job_context_t *context, void *userdata)
 
 				case ASSET_KIND_WAVEFORM:
 				{
-					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
-					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
-					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
 					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
 					asset->waveform = load_waveform_from_disk(temp, STRING_FROM_STORAGE(asset->path));
 				} break;
@@ -279,6 +269,8 @@ static asset_slot_t *get_or_load_asset_blocking(asset_hash_t hash, asset_kind_t 
 				.asset = asset,
 			};
 
+			asset->state = ASSET_STATE_BEING_LOADED_ASYNC;
+
 			job_context_t context = { 0 };
 			asset_job(&context, &job);
 		}
@@ -291,6 +283,7 @@ image_t *get_image(asset_hash_t hash)
 	image_t *image = &missing_image;
 
 	asset_slot_t *asset = get_or_load_asset_async(hash, ASSET_KIND_IMAGE);
+	// asset_slot_t *asset = get_or_load_asset_blocking(hash, ASSET_KIND_IMAGE);
 	if (asset)
 	{
 		// Always returns the image. Even if it's not resident. You'd know by seeing if pixels is null.

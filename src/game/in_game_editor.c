@@ -41,7 +41,6 @@ typedef struct lightmap_editor_state_t
     v2_t window_position;
 
     bool debug_lightmaps;
-    lum_results_t bake_results;
 
     map_brush_t *selected_brush;
     map_plane_t *selected_plane;
@@ -178,144 +177,187 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 
     ui_spacer(ui_txt(1.0f));
 
-    if (!map->light_baked)
-    {
-        ui_label(strlit("Lightmaps have not been baked!"), 0);
+	if (ui_button(strlit("Bake Lighting")).released)
+	{
+		if (map->lightmap_state)
+		{
+			if (release_bake_state(map->lightmap_state))
+			{
+				map->lightmap_state = NULL;
+			}
+		}
 
-        // figure out the solid sky color from the fog
-        float absorption = map->fog_absorption;
-        float density    = map->fog_density;
-        float scattering = map->fog_scattering;
-        v3_t sky_color = mul(sun_color, (1.0f / (4.0f*PI32))*scattering*density / (density*(scattering + absorption)));
+		if (!map->lightmap_state)
+		{
+			// figure out the solid sky color from the fog
+			float absorption = map->fog_absorption;
+			float density    = map->fog_density;
+			float scattering = map->fog_scattering;
+			v3_t sky_color = mul(sun_color, (1.0f / (4.0f*PI32))*scattering*density / (density*(scattering + absorption)));
 
-        if (ui_button(strlit("Bake Lighting")).released)
-        {
-            bake_lighting(&(lum_params_t) {
-                .arena               = &world->arena,
-                .map                 = world->map,
-                .sun_direction       = make_v3(0.25f, 0.75f, 1),
-                .sun_color           = sun_color,
-                .sky_color           = sky_color,
+			map->lightmap_state = bake_lighting(&(lum_params_t) {
+				.map                 = map,
+				.sun_direction       = make_v3(0.25f, 0.75f, 1),
+				.sun_color           = sun_color,
+				.sky_color           = sky_color,
 
-                .use_dynamic_sun_shadows = true,
+				.use_dynamic_sun_shadows = true,
 
-                // TODO: Have a macro for optimization level to check instead of DEBUG
+				// TODO: Have a macro for optimization level to check instead of DEBUG
 #if DEBUG
-                .ray_count               = 8,
-                .ray_recursion           = 4,
-                .fog_light_sample_count  = 4,
-                .fogmap_scale            = 16,
+				.ray_count               = 8,
+				.ray_recursion           = 4,
+				.fog_light_sample_count  = 4,
+				.fogmap_scale            = 16,
 #else
-                .ray_count               = 64,
-                .ray_recursion           = 4,
-                .fog_light_sample_count  = 64,
-                .fogmap_scale            = 8,
+				.ray_count               = 64,
+				.ray_recursion           = 4,
+				.fog_light_sample_count  = 64,
+				.fogmap_scale            = 8,
 #endif
-            }, &lm_editor->bake_results);
-        }
-    }
-    else
-    {
-        ui_label(string_format(temp, "fogmap resolution: %u %u %u", map->fogmap_w, map->fogmap_h, map->fogmap_d), 0);
+			});
+		}
+	}
 
-        ui_checkbox(strlit("enabled"), &lm_editor->debug_lightmaps);
-        ui_checkbox(strlit("show direct light rays"), &lm_editor->show_direct_light_rays);
-        ui_checkbox(strlit("show indirect light rays"), &lm_editor->show_indirect_light_rays);
-        ui_checkbox(strlit("fullbright rays"), &lm_editor->fullbright_rays);
-        ui_checkbox(strlit("no ray depth test"), &lm_editor->no_ray_depth_test);
+	if (!map->lightmap_state)
+		ui_label(strlit("Lightmaps have not been baked!"), 0);
 
-        ui_increment_decrement(strlit("min recursion level"), &lm_editor->min_display_recursion, 0, 16);
-        ui_increment_decrement(strlit("max recursion level"), &lm_editor->max_display_recursion, 0, 16);
+	if (map->lightmap_state && bake_completed(map->lightmap_state))
+	{
+		if (ui_button(strlit("Clear Lightmaps")).released)
+		{
+			for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
+			{
+				map_poly_t *poly = &map->polys[poly_index];
+				if (RESOURCE_HANDLE_VALID(poly->lightmap))
+				{
+					render->destroy_texture(poly->lightmap);
+					poly->lightmap = NULL_RESOURCE_HANDLE;
+				}
+			}
 
-        if (lm_editor->selected_poly)
-        {
-            map_poly_t *poly = lm_editor->selected_poly;
+			render->destroy_texture(map->fogmap);
+			map->fogmap = NULL_RESOURCE_HANDLE;
 
-            texture_desc_t desc;
-            render->describe_texture(poly->lightmap, &desc);
+			release_bake_state(map->lightmap_state);
+			map->lightmap_state = NULL;
+		}
+	}
 
-            ui_label(string_format(temp, "resolution: %u x %u", desc.w, desc.h), 0);
-            if (lm_editor->pixel_selection_active)
-            {
-                ui_label(string_format(temp, "selected pixel region: (%d, %d) (%d, %d)", 
-                                       lm_editor->selected_pixels.min.x,
-                                       lm_editor->selected_pixels.min.y,
-                                       lm_editor->selected_pixels.max.x,
-                                       lm_editor->selected_pixels.max.y), 0);
+	if (map->lightmap_state)
+	{
+		lum_bake_state_t *state = map->lightmap_state;
 
-                if (ui_button(strlit("clear selection")).released)
-                {
-                    lm_editor->pixel_selection_active = false;
-                    lm_editor->selected_pixels = (rect2i_t){ 0 };
-                }
-            }
-            else
-            {
-                ui_spacer(ui_txt(1.0f));
-                ui_spacer(ui_txt(1.0f));
-            }
+		if (state->finalized)
+		{
+			ui_label(string_format(temp, "fogmap resolution: %u %u %u", map->fogmap_w, map->fogmap_h, map->fogmap_d), 0);
 
-            ui_box_t *image_viewer = ui_box(strlit("lightmap image"), UI_CLICKABLE|UI_DRAGGABLE|UI_DRAW_BACKGROUND);
-            if (desc.w >= desc.h)
-            {
-                ui_set_size(image_viewer, AXIS2_X, ui_pct(1.0f, 1.0f));
-                ui_set_size(image_viewer, AXIS2_Y, ui_aspect_ratio((float)desc.h / (float)desc.w, 1.0f));
-            }
-            else
-            {
-                ui_set_size(image_viewer, AXIS2_X, ui_aspect_ratio((float)desc.w / (float)desc.h, 1.0f));
-                ui_set_size(image_viewer, AXIS2_Y, ui_pct(1.0f, 1.0f));
-            }
-            image_viewer->texture = poly->lightmap;
+			ui_checkbox(strlit("enabled"), &lm_editor->debug_lightmaps);
+			ui_checkbox(strlit("show direct light rays"), &lm_editor->show_direct_light_rays);
+			ui_checkbox(strlit("show indirect light rays"), &lm_editor->show_indirect_light_rays);
+			ui_checkbox(strlit("fullbright rays"), &lm_editor->fullbright_rays);
+			ui_checkbox(strlit("no ray depth test"), &lm_editor->no_ray_depth_test);
 
-            ui_interaction_t interaction = ui_interaction_from_box(image_viewer);
-            if (interaction.hovering || lm_editor->pixel_selection_active)
-            {
-                v2_t rel_press_p = sub(interaction.press_p, image_viewer->rect.min);
-                v2_t rel_mouse_p = sub(interaction.mouse_p, image_viewer->rect.min);
+			ui_increment_decrement(strlit("min recursion level"), &lm_editor->min_display_recursion, 0, 16);
+			ui_increment_decrement(strlit("max recursion level"), &lm_editor->max_display_recursion, 0, 16);
 
-                v2_t rect_dim   = rect2_get_dim(image_viewer->rect);
-                v2_t pixel_size = div(rect_dim, make_v2((float)desc.w, (float)desc.h));
+			if (lm_editor->selected_poly)
+			{
+				map_poly_t *poly = lm_editor->selected_poly;
 
-                UI_Parent(image_viewer)
-                {
-                    ui_box_t *selection_highlight = ui_box(strlit("selection highlight"), UI_DRAW_OUTLINE);
-                    selection_highlight->style.outline_color = ui_gradient_from_rgba(1, 0, 0, 1);
+				texture_desc_t desc;
+				render->describe_texture(poly->lightmap, &desc);
 
-                    v2_t selection_start = { rel_press_p.x, rel_press_p.y };
-                    v2_t selection_end   = { rel_mouse_p.x, rel_mouse_p.y };
-                    
-                    rect2i_t pixel_selection = { 
-                        .min = {
-                            (int)(selection_start.x / pixel_size.x),
-                            (int)(selection_start.y / pixel_size.y),
-                        },
-                        .max = {
-                            (int)(selection_end.x / pixel_size.x) + 1,
-                            (int)(selection_end.y / pixel_size.y) + 1,
-                        },
-                    };
+				ui_label(string_format(temp, "resolution: %u x %u", desc.w, desc.h), 0);
+				if (lm_editor->pixel_selection_active)
+				{
+					ui_label(string_format(temp, "selected pixel region: (%d, %d) (%d, %d)", 
+										   lm_editor->selected_pixels.min.x,
+										   lm_editor->selected_pixels.min.y,
+										   lm_editor->selected_pixels.max.x,
+										   lm_editor->selected_pixels.max.y), 0);
 
-                    if (pixel_selection.max.y < pixel_selection.min.y)
-                        SWAP(int, pixel_selection.max.y, pixel_selection.min.y);
+					if (ui_button(strlit("clear selection")).released)
+					{
+						lm_editor->pixel_selection_active = false;
+						lm_editor->selected_pixels = (rect2i_t){ 0 };
+					}
+				}
+				else
+				{
+					ui_spacer(ui_txt(1.0f));
+					ui_spacer(ui_txt(1.0f));
+				}
 
-                    if (interaction.dragging)
-                    {
-                        lm_editor->pixel_selection_active = true;
-                        lm_editor->selected_pixels = pixel_selection;
-                    }
+				ui_box_t *image_viewer = ui_box(strlit("lightmap image"), UI_CLICKABLE|UI_DRAGGABLE|UI_DRAW_BACKGROUND);
+				if (desc.w >= desc.h)
+				{
+					ui_set_size(image_viewer, AXIS2_X, ui_pct(1.0f, 1.0f));
+					ui_set_size(image_viewer, AXIS2_Y, ui_aspect_ratio((float)desc.h / (float)desc.w, 1.0f));
+				}
+				else
+				{
+					ui_set_size(image_viewer, AXIS2_X, ui_aspect_ratio((float)desc.w / (float)desc.h, 1.0f));
+					ui_set_size(image_viewer, AXIS2_Y, ui_pct(1.0f, 1.0f));
+				}
+				image_viewer->texture = poly->lightmap;
 
-                    v2i_t selection_dim = rect2i_get_dim(lm_editor->selected_pixels);
+				ui_interaction_t interaction = ui_interaction_from_box(image_viewer);
+				if (interaction.hovering || lm_editor->pixel_selection_active)
+				{
+					v2_t rel_press_p = sub(interaction.press_p, image_viewer->rect.min);
+					v2_t rel_mouse_p = sub(interaction.mouse_p, image_viewer->rect.min);
 
-                    ui_set_size(selection_highlight, AXIS2_X, ui_pixels((float)selection_dim.x*pixel_size.x, 1.0f));
-                    ui_set_size(selection_highlight, AXIS2_Y, ui_pixels((float)selection_dim.y*pixel_size.y, 1.0f));
+					v2_t rect_dim   = rect2_get_dim(image_viewer->rect);
+					v2_t pixel_size = div(rect_dim, make_v2((float)desc.w, (float)desc.h));
 
-                    selection_highlight->position_offset[AXIS2_X] = (float)lm_editor->selected_pixels.min.x * pixel_size.x;
-                    selection_highlight->position_offset[AXIS2_Y] = rect_dim.y - (float)(lm_editor->selected_pixels.min.y + selection_dim.y) * pixel_size.y;
+					UI_Parent(image_viewer)
+					{
+						ui_box_t *selection_highlight = ui_box(strlit("selection highlight"), UI_DRAW_OUTLINE);
+						selection_highlight->style.outline_color = ui_gradient_from_rgba(1, 0, 0, 1);
 
-                }
-            }
-        }
+						v2_t selection_start = { rel_press_p.x, rel_press_p.y };
+						v2_t selection_end   = { rel_mouse_p.x, rel_mouse_p.y };
+						
+						rect2i_t pixel_selection = { 
+							.min = {
+								(int)(selection_start.x / pixel_size.x),
+								(int)(selection_start.y / pixel_size.y),
+							},
+							.max = {
+								(int)(selection_end.x / pixel_size.x) + 1,
+								(int)(selection_end.y / pixel_size.y) + 1,
+							},
+						};
+
+						if (pixel_selection.max.y < pixel_selection.min.y)
+							SWAP(int, pixel_selection.max.y, pixel_selection.min.y);
+
+						if (interaction.dragging)
+						{
+							lm_editor->pixel_selection_active = true;
+							lm_editor->selected_pixels = pixel_selection;
+						}
+
+						v2i_t selection_dim = rect2i_get_dim(lm_editor->selected_pixels);
+
+						ui_set_size(selection_highlight, AXIS2_X, ui_pixels((float)selection_dim.x*pixel_size.x, 1.0f));
+						ui_set_size(selection_highlight, AXIS2_Y, ui_pixels((float)selection_dim.y*pixel_size.y, 1.0f));
+
+						selection_highlight->position_offset[AXIS2_X] = (float)lm_editor->selected_pixels.min.x * pixel_size.x;
+						selection_highlight->position_offset[AXIS2_Y] = rect_dim.y - (float)(lm_editor->selected_pixels.min.y + selection_dim.y) * pixel_size.y;
+
+					}
+				}
+			}
+		}
+		else
+		{
+			bake_finalize(map->lightmap_state);
+
+			float progress = 100.0f*bake_progress(map->lightmap_state);
+			ui_label(string_format(temp, "bake progress: %u / %u (%.02f%%)", map->lightmap_state->jobs_completed, map->lightmap_state->job_count, progress), 0);
+		}
     }
 
     ui_pop_parent();
@@ -425,105 +467,110 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
             }
         }
 
-        if (lm_editor->show_indirect_light_rays)
-        {
-            for (lum_path_t *path = lm_editor->bake_results.debug_data.first_path;
-                 path;
-                 path = path->next)
-            {
-                if (lm_editor->pixel_selection_active &&
-                    !rect2i_contains_exclusive(lm_editor->selected_pixels, path->source_pixel))
-                {
-                    continue;
-                }
+		if (map->lightmap_state && map->lightmap_state->finalized)
+		{
+			lum_debug_data_t *debug_data = &map->lightmap_state->results.debug;
 
-                if (path->first_vertex->poly != lm_editor->selected_poly)
-                    continue;
+			if (lm_editor->show_indirect_light_rays)
+			{
+				for (lum_path_t *path = debug_data->first_path;
+					 path;
+					 path = path->next)
+				{
+					if (lm_editor->pixel_selection_active &&
+						!rect2i_contains_exclusive(lm_editor->selected_pixels, path->source_pixel))
+					{
+						continue;
+					}
 
-                int vertex_index = 0;
-                if ((int)path->vertex_count >= lm_editor->min_display_recursion &&
-                    (int)path->vertex_count <= lm_editor->max_display_recursion)
-                {
-                    for (lum_path_vertex_t *vertex = path->first_vertex;
-                         vertex;
-                         vertex = vertex->next)
-                    {
-                        if (lm_editor->show_direct_light_rays)
-                        {
-                            for (size_t sample_index = 0; sample_index < vertex->light_sample_count; sample_index++)
-                            {
-                                lum_light_sample_t *sample = &vertex->light_samples[sample_index];
+					if (path->first_vertex->poly != lm_editor->selected_poly)
+						continue;
 
-                                if (sample->shadow_ray_t > 0.0f && sample->shadow_ray_t < FLT_MAX)
-                                {
-                                    // r_push_line(draw_call, vertex->o, add(vertex->o, mul(sample->shadow_ray_t, sample->d)), COLORF_RED);
-                                }
-                                else if (sample->shadow_ray_t == FLT_MAX && sample_index < map->light_count)
-                                {
-                                    map_point_light_t *point_light = &map->lights[sample_index];
+					int vertex_index = 0;
+					if ((int)path->vertex_count >= lm_editor->min_display_recursion &&
+						(int)path->vertex_count <= lm_editor->max_display_recursion)
+					{
+						for (lum_path_vertex_t *vertex = path->first_vertex;
+							 vertex;
+							 vertex = vertex->next)
+						{
+							if (lm_editor->show_direct_light_rays)
+							{
+								for (size_t sample_index = 0; sample_index < vertex->light_sample_count; sample_index++)
+								{
+									lum_light_sample_t *sample = &vertex->light_samples[sample_index];
 
-                                    v3_t color = sample->contribution;
+									if (sample->shadow_ray_t > 0.0f && sample->shadow_ray_t < FLT_MAX)
+									{
+										// r_push_line(draw_call, vertex->o, add(vertex->o, mul(sample->shadow_ray_t, sample->d)), COLORF_RED);
+									}
+									else if (sample->shadow_ray_t == FLT_MAX && sample_index < map->light_count)
+									{
+										map_point_light_t *point_light = &map->lights[sample_index];
 
-                                    if (lm_editor->fullbright_rays)
-                                    {
-                                        color = normalize(color);
-                                    }
+										v3_t color = sample->contribution;
+
+										if (lm_editor->fullbright_rays)
+										{
+											color = normalize(color);
+										}
 
 #if 0
-                                    if (vertex == path->first_vertex)
-                                    {
-                                        r_push_arrow(draw_call, point_light->p, vertex->o, 
-                                                     make_v4(color.x, color.y, color.z, 1.0f));
-                                    }
+										if (vertex == path->first_vertex)
+										{
+											r_push_arrow(draw_call, point_light->p, vertex->o, 
+														 make_v4(color.x, color.y, color.z, 1.0f));
+										}
 #endif
 
-                                    if (!vertex->next || vertex_index + 2 == (int)path->vertex_count)
-                                    {
-                                        r_push_line(draw_call, vertex->o, point_light->p, 
-                                                    make_v4(color.x, color.y, color.z, 1.0f));
-                                    }
-                                }
-                            }
-                        }
+										if (!vertex->next || vertex_index + 2 == (int)path->vertex_count)
+										{
+											r_push_line(draw_call, vertex->o, point_light->p, 
+														make_v4(color.x, color.y, color.z, 1.0f));
+										}
+									}
+								}
+							}
 
-                        if (vertex->next)
-                        {
-                            lum_path_vertex_t *next_vertex = vertex->next;
+							if (vertex->next)
+							{
+								lum_path_vertex_t *next_vertex = vertex->next;
 
-                            if (next_vertex->brush)
-                            {
-                                v4_t start_color = make_v4(vertex->contribution.x,
-                                                           vertex->contribution.y,
-                                                           vertex->contribution.z,
-                                                           1.0f);
+								if (next_vertex->brush)
+								{
+									v4_t start_color = make_v4(vertex->contribution.x,
+															   vertex->contribution.y,
+															   vertex->contribution.z,
+															   1.0f);
 
-                                v4_t end_color = make_v4(next_vertex->contribution.x,
-                                                         next_vertex->contribution.y,
-                                                         next_vertex->contribution.z,
-                                                         1.0f);
+									v4_t end_color = make_v4(next_vertex->contribution.x,
+															 next_vertex->contribution.y,
+															 next_vertex->contribution.z,
+															 1.0f);
 
-                                if (lm_editor->fullbright_rays)
-                                {
-                                    start_color.xyz = normalize(start_color.xyz);
-                                    end_color.xyz = normalize(end_color.xyz);
-                                }
+									if (lm_editor->fullbright_rays)
+									{
+										start_color.xyz = normalize(start_color.xyz);
+										end_color.xyz = normalize(end_color.xyz);
+									}
 
-                                if (vertex == path->first_vertex)
-                                {
-                                    r_push_arrow_gradient(draw_call, next_vertex->o, vertex->o, end_color, start_color);
-                                }
-                                else
-                                {
-                                    r_push_line_gradient(draw_call, vertex->o, next_vertex->o, start_color, end_color);
-                                }
-                            }
-                        }
+									if (vertex == path->first_vertex)
+									{
+										r_push_arrow_gradient(draw_call, next_vertex->o, vertex->o, end_color, start_color);
+									}
+									else
+									{
+										r_push_line_gradient(draw_call, vertex->o, next_vertex->o, start_color, end_color);
+									}
+								}
+							}
 
-                        vertex_index += 1;
-                    }
-                }
-            }
-        }
+							vertex_index += 1;
+						}
+					}
+				}
+			}
+		}
 
         r_immediate_draw_end(draw_call);
     }

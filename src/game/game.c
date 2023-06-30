@@ -428,54 +428,63 @@ void game_init(game_io_t *io)
 		});
 	}
 
-    map_t    *map    = world->map    = load_map(&world->arena, string_format(temp, "gamedata/maps/%.*s.map", strexpand(io->startup_map)));
+	string_t startup_map = io->startup_map;
+	if (string_empty(startup_map))
+	{
+		startup_map = strlit("test");
+	}
+
+    map_t    *map    = world->map    = load_map(&world->arena, string_format(temp, "gamedata/maps/%.*s.map", strexpand(startup_map)));
     player_t *player = world->player = m_alloc_struct(&world->arena, player_t);
 
-    for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
-    {
-        map_entity_t *e = &map->entities[entity_index];
+	if (!map)
+		FATAL_ERROR("Failed to load map %.*s", strexpand(startup_map));
 
-        if (is_class(map, e, strlit("worldspawn")))
-        {
-            string_t skytex = value_from_key(map, e, strlit("skytex"));
-            m_scoped(temp)
-            {
-                image_t faces[6] = {
-                    load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/posx.jpg", strexpand(skytex)), 4),
-                    load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/negx.jpg", strexpand(skytex)), 4),
-                    load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/posy.jpg", strexpand(skytex)), 4),
-                    load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/negy.jpg", strexpand(skytex)), 4),
-                    load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/posz.jpg", strexpand(skytex)), 4),
-                    load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/negz.jpg", strexpand(skytex)), 4),
-                };
+	for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
+	{
+		map_entity_t *e = &map->entities[entity_index];
 
-                skybox = render->upload_texture(&(upload_texture_t){
-                    .desc = {
-                        .format = PIXEL_FORMAT_SRGB8_A8,
-                        .w     = faces[0].w,
-                        .h     = faces[0].h,
-                        .flags = TEXTURE_FLAG_CUBEMAP,
-                    },
-                    .data = {
-                        .pitch = faces[0].pitch,
-                        .faces = {
-                            faces[0].pixels,
-                            faces[1].pixels,
-                            faces[2].pixels,
-                            faces[3].pixels,
-                            faces[4].pixels,
-                            faces[5].pixels,
-                        },
-                    },
-                });
-            }
-        }
-        else if (is_class(map, e, strlit("info_player_start")))
-        {
-            player->p = v3_from_key(map, e, strlit("origin"));
-            //player->p.z += 10.0f;
-        }
-    }
+		if (is_class(map, e, strlit("worldspawn")))
+		{
+			string_t skytex = value_from_key(map, e, strlit("skytex"));
+			m_scoped(temp)
+			{
+				image_t faces[6] = {
+					load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/posx.jpg", strexpand(skytex)), 4),
+					load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/negx.jpg", strexpand(skytex)), 4),
+					load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/posy.jpg", strexpand(skytex)), 4),
+					load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/negy.jpg", strexpand(skytex)), 4),
+					load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/posz.jpg", strexpand(skytex)), 4),
+					load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/negz.jpg", strexpand(skytex)), 4),
+				};
+
+				skybox = render->upload_texture(&(upload_texture_t){
+					.desc = {
+						.format = PIXEL_FORMAT_SRGB8_A8,
+						.w     = faces[0].w,
+						.h     = faces[0].h,
+						.flags = TEXTURE_FLAG_CUBEMAP,
+					},
+					.data = {
+						.pitch = faces[0].pitch,
+						.faces = {
+							faces[0].pixels,
+							faces[1].pixels,
+							faces[2].pixels,
+							faces[3].pixels,
+							faces[4].pixels,
+							faces[5].pixels,
+						},
+					},
+				});
+			}
+		}
+		else if (is_class(map, e, strlit("info_player_start")))
+		{
+			player->p = v3_from_key(map, e, strlit("origin"));
+			//player->p.z += 10.0f;
+		}
+	}
 
     initialized = true;
 }

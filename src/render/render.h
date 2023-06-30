@@ -47,7 +47,7 @@ typedef enum pixel_format_t
 typedef enum texture_flags_t
 {
     TEXTURE_FLAG_CUBEMAP = 0x1,
-} upload_texture_flags_e;
+} texture_flags_t;
 
 typedef enum texture_type_t
 {
@@ -74,8 +74,14 @@ typedef struct texture_data_t
     };
 } texture_data_t;
 
+typedef enum upload_texture_flags_t
+{
+	UPLOAD_TEXTURE_GEN_MIPMAPS = 0x1, // NOTE: Causes synchronization with the main thread for concurrent access to ID3D11DeviceContext. Generating mips at runtime is yucky.
+} upload_texture_flags_t;
+
 typedef struct upload_texture_t
 {
+	uint32_t upload_flags;
     texture_desc_t desc;
     texture_data_t data;
 } upload_texture_t;

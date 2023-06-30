@@ -112,7 +112,8 @@ void m_reset_and_decommit(arena_t *arena)
         char  *decommit_from  = arena->buffer + ARENA_DEFAULT_COMMIT_PRESERVE_THRESHOLD;
         size_t decommit_bytes = MAX(0, arena->committed - decommit_from);
 
-        vm_decommit(decommit_from, decommit_bytes);
+		if (decommit_bytes)
+			vm_decommit(decommit_from, decommit_bytes);
 
         arena->at        = arena->buffer;
         arena->committed = arena->buffer;

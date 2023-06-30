@@ -1,11 +1,6 @@
 #ifndef RANDOM_H
 #define RANDOM_H
 
-typedef struct random_series_t
-{
-    uint32_t state;
-} random_series_t;
-
 static inline uint32_t random_uint32(random_series_t *r)
 {
     uint32_t x = r->state;

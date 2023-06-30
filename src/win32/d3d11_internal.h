@@ -6,6 +6,11 @@
 #include "render/render.h"
 #include "game/asset.h"
 
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+#define D3D_SAFE_RELEASE(x) if (x) { IUnknown_Release((IUnknown *)(x)); (x) = NULL; }
+
 typedef struct d3d_cbuffer_t
 {
     m4x4_t view_matrix;
@@ -48,7 +53,6 @@ typedef enum d3d_texture_state_t
 	D3D_TEXTURE_STATE_NONE,
 	D3D_TEXTURE_STATE_RESERVED,
 	D3D_TEXTURE_STATE_LOADING,
-	D3D_TEXTURE_STATE_NEEDS_MIPS,
 	D3D_TEXTURE_STATE_LOADED,
 	D3D_TEXTURE_STATE_COUNT,
 } d3d_texture_state_t;
@@ -67,8 +71,8 @@ typedef struct d3d_texture_t
     ID3D11ShaderResourceView *srv;
 } d3d_texture_t;
 
-extern bulk_t d3d_models;
-extern bulk_t d3d_textures;
+DREAM_API bulk_t d3d_models;
+DREAM_API bulk_t d3d_textures;
 
 typedef enum d3d_sampler_t
 {
@@ -104,9 +108,22 @@ typedef struct d3d_rendertarget_t
     ID3D11ShaderResourceView *depth_srv;
 } d3d_rendertarget_t;
 
+typedef struct d3d_gen_mipmaps_t
+{
+	struct d3d_gen_mipmaps_t *next;
+
+	resource_handle_t handle;
+    texture_desc_t    desc;
+    texture_data_t    data;
+} d3d_gen_mipmaps_t;
+
 typedef struct d3d_state_t
 {
-	rw_mutex_t texture_lock;
+	arena_t gen_mipmaps_arena;
+	d3d_gen_mipmaps_t *first_gen_mipmaps;
+
+	SRWLOCK texture_lock;
+	SRWLOCK context_lock;
 
     d3d_texture_t *white_texture;
     d3d_texture_t *missing_texture;
@@ -167,22 +184,22 @@ typedef struct d3d_state_t
     uint32_t frame_index;
 } d3d_state_t;
 
-extern d3d_state_t d3d;
+DREAM_API d3d_state_t d3d;
 
-resource_handle_t upload_texture(const upload_texture_t *params);
-void destroy_texture(resource_handle_t handle);
+DREAM_API resource_handle_t upload_texture(const upload_texture_t *params);
+DREAM_API void destroy_texture(resource_handle_t handle);
 
-resource_handle_t upload_model(const upload_model_t *params);
-void destroy_model(resource_handle_t model);
+DREAM_API resource_handle_t upload_model(const upload_model_t *params);
+DREAM_API void destroy_model(resource_handle_t model);
 
-ID3DBlob *compile_shader(string_t hlsl_file, string_t hlsl, const char *entry_point, const char *kind);
-ID3D11PixelShader *compile_ps(string_t hlsl_file, string_t hlsl, const char *entry_point);
-ID3D11VertexShader *compile_vs(string_t hlsl_file, string_t hlsl, const char *entry_point);
+DREAM_API ID3DBlob *compile_shader(string_t hlsl_file, string_t hlsl, const char *entry_point, const char *kind);
+DREAM_API ID3D11PixelShader *compile_ps(string_t hlsl_file, string_t hlsl, const char *entry_point);
+DREAM_API ID3D11VertexShader *compile_vs(string_t hlsl_file, string_t hlsl, const char *entry_point);
 
-void update_buffer(ID3D11Buffer *buffer, const void *data, size_t size);
-void set_model_buffers(d3d_model_t *model, DXGI_FORMAT index_format);
+DREAM_API void update_buffer(ID3D11Buffer *buffer, const void *data, size_t size);
+DREAM_API void set_model_buffers(d3d_model_t *model, DXGI_FORMAT index_format);
 
-void get_resolution(int *w, int *h);
+DREAM_API void get_resolution(int *w, int *h);
 
 typedef enum d3d_cull_mode_t
 {
@@ -242,9 +259,9 @@ typedef struct d3d_post_pass_t
     D3D11_RECT     scissor_rect;
 } d3d_post_pass_t;
 
-void render_model(const render_pass_t *pass);
+DREAM_API void render_model(const render_pass_t *pass);
 
-d3d_rendertarget_t d3d_create_rendertarget(const d3d_create_rendertarget_t *params);
-void d3d_release_rendertarget(d3d_rendertarget_t *rt);
+DREAM_API d3d_rendertarget_t d3d_create_rendertarget(const d3d_create_rendertarget_t *params);
+DREAM_API void d3d_release_rendertarget(d3d_rendertarget_t *rt);
 
 #endif /* D3D11_INTERNAL_H */

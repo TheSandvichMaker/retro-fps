@@ -14,10 +14,14 @@ int64_t _InterlockedCompareExchange64(int64_t volatile *destination, int64_t exc
 #pragma intrinsic(_InterlockedCompareExchange64)
 
 int64_t _InterlockedExchange64(int64_t volatile *destination, int64_t exchange);
-#pragma intrinsic(_InterlockedCompareExchange64)
+#pragma intrinsic(_InterlockedExchange64)
 
 long _InterlockedIncrement(long volatile *destination);
 #pragma intrinsic(_InterlockedIncrement)
+
+long _InterlockedExchange(long volatile *destination, long exchange);
+#pragma intrinsic(_InterlockedCompareExchange)
+
 
 // ------------------------------------------------------------------
 
@@ -39,6 +43,11 @@ static inline int64_t atomic_exchange64(int64_t volatile *target, int64_t value)
 static inline long atomic_increment(long volatile *target)
 {
     return _InterlockedIncrement(target);
+}
+
+static inline uint32_t atomic_cas_u32(uint32_t volatile *destination, uint32_t exchange, uint32_t comparand)
+{
+    return _InterlockedCompareExchange((long volatile *)destination, exchange, comparand);
 }
 
 static inline uint32_t atomic_increment_u32(uint32_t volatile *target)

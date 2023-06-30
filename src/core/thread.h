@@ -3,20 +3,31 @@
 
 #include "core/api_types.h"
 
-// TODO: Not loving this style of code organization where all these things get their own little
-// header. Casey's platform layer design seems nicer.
+DREAM_API bool wait_on_address(volatile void *address, void *compare_address, size_t address_size);
+DREAM_API void wake_by_address(void *address);
+DREAM_API void wake_all_by_address(void *address);
 
-typedef struct rw_mutex_t
+typedef struct mutex_t
 {
 	void *opaque; // legal to be zero-initialized
-} rw_mutex_t;
+} mutex_t;
 
-DREAM_API void rw_mutex_lock           (rw_mutex_t mutex);
-DREAM_API void rw_mutex_unlock         (rw_mutex_t mutex);
-DREAM_API bool rw_mutex_try_lock       (rw_mutex_t mutex);
-DREAM_API void rw_mutex_shared_lock    (rw_mutex_t mutex);
-DREAM_API void rw_mutex_shared_unlock  (rw_mutex_t mutex);
-DREAM_API bool rw_mutex_shared_try_lock(rw_mutex_t mutex);
+DREAM_API void mutex_lock           (mutex_t mutex);
+DREAM_API void mutex_unlock         (mutex_t mutex);
+DREAM_API bool mutex_try_lock       (mutex_t mutex);
+DREAM_API void mutex_shared_lock    (mutex_t mutex);
+DREAM_API void mutex_shared_unlock  (mutex_t mutex);
+DREAM_API bool mutex_shared_try_lock(mutex_t mutex);
+
+typedef struct cond_t
+{
+	void *opaque; // legal to be zero-initialized
+} cond_t;
+
+DREAM_API void cond_sleep       (cond_t cond, mutex_t mutex);
+DREAM_API void cond_sleep_shared(cond_t cond, mutex_t mutex);
+DREAM_API void cond_wake        (cond_t cond);
+DREAM_API void cond_wake_all    (cond_t cond);
 
 DREAM_API size_t query_processor_count(void);
 
@@ -27,6 +38,7 @@ typedef struct job_queue_t
 
 DREAM_API job_queue_t create_job_queue(size_t thread_count, size_t queue_size);
 DREAM_API void destroy_job_queue(job_queue_t queue);
+DREAM_API size_t get_job_queue_thread_count(job_queue_t queue);
 
 typedef struct job_context_t
 {

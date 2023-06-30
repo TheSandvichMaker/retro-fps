@@ -5,8 +5,6 @@
 
 typedef struct lum_params_t
 {
-    arena_t *arena;
-
     struct map_t *map;
 
     int ray_count;      // number of diffuse rays per lightmap pixel
@@ -81,11 +79,56 @@ typedef struct lum_debug_data_t
     lum_path_t *last_path;
 } lum_debug_data_t;
 
-typedef struct lum_results_t
+typedef struct lum_thread_context_t
 {
-    lum_debug_data_t debug_data;
-} lum_results_t;
+    arena_t          arena;    // 48
+    random_series_t  entropy;  // 52
+    lum_debug_data_t debug;    // 68
+	PAD(60);
+} lum_thread_context_t;
 
-void bake_lighting(const lum_params_t *params, lum_results_t *results);
+typedef struct lum_job_t
+{
+    lum_thread_context_t    *thread_contexts; // 8
+	struct lum_bake_state_t *state;           // 16
+
+    uint32_t brush_index;                     // 20
+    uint32_t plane_index;                     // 24
+	PAD(48);
+} lum_job_t;
+
+typedef struct lum_bake_state_t
+{
+	volatile uint32_t jobs_completed; PAD(60);
+	uint32_t          job_count;
+	uint32_t          thread_count;
+
+	lum_job_t            *jobs;
+	lum_thread_context_t *thread_contexts;
+
+	arena_t      arena;
+	lum_params_t params;
+
+	bool finalized;
+
+	struct
+	{
+		lum_debug_data_t debug; // TODO: Fix debug data
+	} results; // results are only valid if the bake is done and bake_finalize was called and returned true
+} lum_bake_state_t;
+
+DREAM_API lum_bake_state_t *bake_lighting     (const lum_params_t *params);
+DREAM_API bool              bake_finalize     (lum_bake_state_t *state); // returns true if the bake completed successfully, can be called as much as you want until it returns true
+DREAM_API bool              release_bake_state(lum_bake_state_t *state);
+
+DREAM_INLINE bool bake_completed(lum_bake_state_t *state)
+{
+	return state->jobs_completed == state->job_count;
+}
+
+DREAM_INLINE float bake_progress(lum_bake_state_t *state)
+{
+	return (float)state->jobs_completed / (float)state->job_count;
+}
 
 #endif /* LIGHT_BAKER_H */

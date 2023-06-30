@@ -72,12 +72,12 @@ typedef struct string16_t
 
 typedef struct arena_t
 {
-    bool owns_memory;
+    bool owns_memory; // 1
 
-    char *committed;
-    char *end;
-    char *at;
-    char *buffer;
+    char *committed;  // 16
+    char *end;        // 24
+    char *at;         // 32
+    char *buffer;     // 48
 } arena_t;
 
 typedef struct arena_marker_t
@@ -215,5 +215,10 @@ typedef enum axis2_t
     AXIS2_Y,
     AXIS2_COUNT,
 } axis2_t;
+
+typedef struct random_series_t
+{
+    uint32_t state;
+} random_series_t;
 
 #endif /* API_TYPES_H */

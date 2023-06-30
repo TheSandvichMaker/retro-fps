@@ -238,12 +238,6 @@ int wWinMain(HINSTANCE instance,
 
     string_t startup_map = strlit("test");
 
-    for (int i = 0; i < argc; i++)
-    {
-        string_t arg = argv[i];
-        startup_map = arg;
-    }
-
     g_win32.wasapi_thread = CreateThread(NULL, 0, wasapi_thread_proc, NULL, 0, NULL);
 
     equip_render_api(d3d11_get_api());

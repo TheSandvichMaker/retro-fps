@@ -150,7 +150,7 @@ int main(int argc, char **argv)
     // ==========================================================================================================================
     // parse arguments
 
-    bool build_all = false;
+    bool build_all = true;
     bool no_cache  = false;
     bool ndebug    = false;
     bool release   = false;
@@ -168,9 +168,15 @@ int main(int argc, char **argv)
         {
             no_cache = true;
         }
+        else if (args_match(args, "-debug"))
+        {
+            release = true;
+			build_all = false;
+        }
         else if (args_match(args, "-release"))
         {
             release = true;
+			build_all = false;
         }
         else if (args_match(args, "-all"))
         {
@@ -264,7 +270,8 @@ int main(int argc, char **argv)
             strlit("user32"),
             strlit("ole32"),
             strlit("ksuser"),
-            strlit("shell32"),
+			strlit("shell32"),
+			strlit("Synchronization")
         )),
 
         .defines = slist_from_array(temp, array_expand(string_t,

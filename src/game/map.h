@@ -104,10 +104,9 @@ typedef struct map_bvh_node_t
 
 typedef struct map_t
 {
-    bool light_baked;
-
     rect3_t bounds;
 
+	struct lum_bake_state_t *lightmap_state;
     uint32_t fogmap_w;
     uint32_t fogmap_h;
     uint32_t fogmap_d;

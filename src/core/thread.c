@@ -9,44 +9,89 @@
 #include "core/atomics.h"
 #include "core/arena.h"
 
+bool wait_on_address(volatile void *address, void *compare_address, size_t address_size)
+{
+	return WaitOnAddress(address, compare_address, address_size, INFINITE);
+}
+
+void wake_by_address(void *address)
+{
+	WakeByAddressSingle(address);
+}
+
+void wake_all_by_address(void *address)
+{
+	WakeByAddressAll(address);
+}
+
 //
 // mutex
 //
 
-void rw_mutex_lock(rw_mutex_t mutex)
+void mutex_lock(mutex_t mutex)
 {
 	SRWLOCK internal = { .Ptr = mutex.opaque };
 	AcquireSRWLockExclusive(&internal);
 }
 
-void rw_mutex_unlock(rw_mutex_t mutex)
+void mutex_unlock(mutex_t mutex)
 {
 	SRWLOCK internal = { .Ptr = mutex.opaque };
 	ReleaseSRWLockExclusive(&internal);
 }
 
-bool rw_mutex_try_lock(rw_mutex_t mutex)
+bool mutex_try_lock(mutex_t mutex)
 {
 	SRWLOCK internal = { .Ptr = mutex.opaque };
 	return TryAcquireSRWLockExclusive(&internal);
 }
 
-void rw_mutex_shared_lock(rw_mutex_t mutex)
+void mutex_shared_lock(mutex_t mutex)
 {
 	SRWLOCK internal = { .Ptr = mutex.opaque };
 	AcquireSRWLockShared(&internal);
 }
 
-void rw_mutex_shared_unlock(rw_mutex_t mutex)
+void mutex_shared_unlock(mutex_t mutex)
 {
 	SRWLOCK internal = { .Ptr = mutex.opaque };
 	ReleaseSRWLockShared(&internal);
 }
 
-bool rw_mutex_try_shared_lock(rw_mutex_t mutex)
+bool mutex_try_shared_lock(mutex_t mutex)
 {
 	SRWLOCK internal = { .Ptr = mutex.opaque };
 	return TryAcquireSRWLockShared(&internal);
+}
+
+//
+// condition variable
+//
+
+void cond_sleep(cond_t cond, mutex_t mutex)
+{
+	CONDITION_VARIABLE win32_cond  = { .Ptr = cond .opaque };
+	SRWLOCK            win32_mutex = { .Ptr = mutex.opaque };
+	SleepConditionVariableSRW(&win32_cond, &win32_mutex, INFINITE, 0);
+}
+
+void cond_sleep_shared(cond_t cond, mutex_t mutex)
+{
+	CONDITION_VARIABLE win32_cond  = { .Ptr = cond .opaque };
+	SRWLOCK            win32_mutex = { .Ptr = mutex.opaque };
+	SleepConditionVariableSRW(&win32_cond, &win32_mutex, INFINITE, CONDITION_VARIABLE_LOCKMODE_SHARED);
+}
+
+void cond_wake(cond_t cond)
+{
+	CONDITION_VARIABLE win32_cond = { .Ptr = cond .opaque };
+	WakeConditionVariable(&win32_cond);
+}
+
+void cond_wake_all(cond_t cond)
+{
+	CONDITION_VARIABLE win32_cond = { .Ptr = cond .opaque };
+	WakeAllConditionVariable(&win32_cond);
 }
 
 //
@@ -172,6 +217,12 @@ job_queue_t create_job_queue(size_t thread_count, size_t queue_size)
 
     job_queue_t result = { queue };
     return result;
+}
+
+size_t get_job_queue_thread_count(job_queue_t handle)
+{
+    job_queue_internal_t *queue = handle.opaque;
+	return queue->thread_count;
 }
 
 void destroy_job_queue(job_queue_t handle)

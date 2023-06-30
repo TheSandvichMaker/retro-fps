@@ -3,13 +3,12 @@
 
 #pragma warning(push, 0)
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #include <dxgi.h>
 #include <d3d11.h>
 #include <d3d11_2.h>
 #include <d3dcompiler.h>
 #include <math.h>
+#include <stdio.h>
 
 #pragma warning(pop)
 
@@ -844,6 +843,8 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
 {
     uint32_t frame_index = d3d.frame_index;
 
+	AcquireSRWLockExclusive(&d3d.context_lock);
+
     d3d_ensure_swap_chain_size(width, height);
 
     if (d3d.backbuffer.color_rtv)
@@ -1234,12 +1235,16 @@ done_with_sun_shadows:
         }
     }
 
+	ReleaseSRWLockExclusive(&d3d.context_lock);
+
     d3d.frame_index++;
 }
 
 void d3d11_present()
 {
+	AcquireSRWLockExclusive(&d3d.context_lock);
     HRESULT hr = IDXGISwapChain_Present(d3d.swap_chain, 1, 0);
+	ReleaseSRWLockExclusive(&d3d.context_lock);
 
     if (hr == DXGI_STATUS_OCCLUDED)
         Sleep(16);
@@ -1253,14 +1258,14 @@ void get_resolution(int *w, int *h)
 
 resource_handle_t reserve_texture(void)
 {
-	rw_mutex_lock(d3d.texture_lock);
+	AcquireSRWLockExclusive(&d3d.texture_lock);
 
     d3d_texture_t *resource = bd_add(&d3d_textures);
 	resource->state = D3D_TEXTURE_STATE_RESERVED;
 
 	resource_handle_t result = bd_get_handle(&d3d_textures, resource);
 
-	rw_mutex_unlock(d3d.texture_lock);
+	ReleaseSRWLockExclusive(&d3d.texture_lock);
 
 	return result;
 }
@@ -1271,16 +1276,18 @@ void populate_texture(resource_handle_t handle, const upload_texture_t *params)
         return;
 
 	// TODO: Not sure this lock is needed here. Just being paranoid.
-	rw_mutex_lock(d3d.texture_lock);
+	AcquireSRWLockExclusive(&d3d.texture_lock);
     d3d_texture_t *resource = bd_get(&d3d_textures, handle);
-	rw_mutex_unlock(d3d.texture_lock);
+	ReleaseSRWLockExclusive(&d3d.texture_lock);
 
-    if (resource)
+	uint32_t state = resource->state;
+
+	if (state > D3D_TEXTURE_STATE_RESERVED)
+		return;
+
+    if (resource &&
+		atomic_cas_u32(&resource->state, D3D_TEXTURE_STATE_LOADING, state) == state)
     {
-		resource->state = D3D_TEXTURE_STATE_LOADING;
-
-		COMPILER_BARRIER;
-
         resource->desc = params->desc;
 
         uint32_t pixel_size = 1;
@@ -1346,59 +1353,124 @@ void populate_texture(resource_handle_t handle, const upload_texture_t *params)
             }
             else
             {
-                desc.Usage = D3D11_USAGE_DEFAULT;
-                desc.MipLevels = 0;
-                desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
-                desc.MiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
+				if (params->upload_flags & UPLOAD_TEXTURE_GEN_MIPMAPS)
+				{
+					desc.Usage      = D3D11_USAGE_DEFAULT;
+					desc.MipLevels  = 0;
+					desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
+					desc.MiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
 
-                ID3D11Device_CreateTexture2D(d3d.device, &desc, NULL, &resource->tex[0]);
-                ID3D11DeviceContext_UpdateSubresource(d3d.context, (ID3D11Resource *)resource->tex[0], 0, NULL, params->data.pixels, pitch, params->desc.h*pitch);
+					ID3D11Device_CreateTexture2D(d3d.device, &desc, NULL, &resource->tex[0]);
 
-                D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {
-                    .Format              = desc.Format,
-                    .ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE2D,
-                    .Texture2D.MipLevels = UINT_MAX,
-                };
+					D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {
+						.Format              = desc.Format,
+						.ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE2D,
+						.Texture2D.MipLevels = UINT_MAX,
+					};
 
-                ID3D11Device_CreateShaderResourceView(d3d.device, (ID3D11Resource *)resource->tex[0], &srv_desc, &resource->srv);
-                ID3D11DeviceContext_GenerateMips(d3d.context, resource->srv);
+					ID3D11Device_CreateShaderResourceView(d3d.device, (ID3D11Resource *)resource->tex[0], &srv_desc, &resource->srv);
+
+					AcquireSRWLockExclusive(&d3d.context_lock);
+
+					ID3D11DeviceContext_UpdateSubresource(d3d.context, (ID3D11Resource *)resource->tex[0], 0, NULL, params->data.pixels, pitch, params->desc.h*pitch);
+					ID3D11DeviceContext_GenerateMips(d3d.context, resource->srv);
+
+					ReleaseSRWLockExclusive(&d3d.context_lock);
+				}
+				else
+				{
+					D3D11_SUBRESOURCE_DATA data = {
+						.pSysMem     = params->data.pixels,
+						.SysMemPitch = pitch,
+					};
+
+					ID3D11Device_CreateTexture2D(d3d.device, &desc, &data, &resource->tex[0]);
+
+					D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {
+						.Format              = desc.Format,
+						.ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE2D,
+						.Texture2D.MipLevels = 1,
+					};
+
+					ID3D11Device_CreateShaderResourceView(d3d.device, (ID3D11Resource *)resource->tex[0], &srv_desc, &resource->srv);
+				}
             }
         }
         else
         {
             ASSERT(params->desc.type == TEXTURE_TYPE_3D);
 
-            ID3D11Device_CreateTexture3D(
-                d3d.device,
-                (&(D3D11_TEXTURE3D_DESC) {
-                    .Width     = params->desc.w,
-                    .Height    = params->desc.h,
-                    .Depth     = params->desc.d,
-                    .MipLevels = 0,
-                    .Format    = format,
-                    .Usage     = D3D11_USAGE_DEFAULT,
-                    .BindFlags = D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET,
-                    .MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS,
-                }),
-                NULL,
-                &resource->tex_3d
-            );
+			if (params->upload_flags & UPLOAD_TEXTURE_GEN_MIPMAPS)
+			{
+				ID3D11Device_CreateTexture3D(
+					d3d.device,
+					(&(D3D11_TEXTURE3D_DESC) {
+						.Width     = params->desc.w,
+						.Height    = params->desc.h,
+						.Depth     = params->desc.d,
+						.MipLevels = 1,
+						.Format    = format,
+						.Usage     = D3D11_USAGE_DEFAULT,
+						.Usage     = D3D11_USAGE_IMMUTABLE,
+						.BindFlags = D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET,
+						.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS,
+					}),
+					NULL,
+					&resource->tex_3d
+				);
 
-            ID3D11DeviceContext_UpdateSubresource(d3d.context, (ID3D11Resource *)resource->tex_3d, 0, NULL, params->data.pixels, pitch, slice_pitch);
+				D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {
+					.Format              = format,
+					.ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE3D,
+					.Texture3D.MipLevels = UINT_MAX,
+				};
 
-            D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {
-                .Format              = format,
-                .ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE3D,
-                .Texture3D.MipLevels = UINT_MAX,
-            };
+				ID3D11Device_CreateShaderResourceView(d3d.device, (ID3D11Resource *)resource->tex_3d, &srv_desc, &resource->srv);
 
-            ID3D11Device_CreateShaderResourceView(d3d.device, (ID3D11Resource *)resource->tex_3d, &srv_desc, &resource->srv);
-            ID3D11DeviceContext_GenerateMips(d3d.context, resource->srv);
+				AcquireSRWLockExclusive(&d3d.context_lock);
+
+				ID3D11DeviceContext_GenerateMips(d3d.context, resource->srv);
+				ID3D11DeviceContext_UpdateSubresource(d3d.context, (ID3D11Resource *)resource->tex_3d, 0, NULL, params->data.pixels, pitch, slice_pitch);
+
+				ReleaseSRWLockExclusive(&d3d.context_lock);
+			}
+			else
+			{
+				D3D11_SUBRESOURCE_DATA data = {
+					.pSysMem          = params->data.pixels,
+					.SysMemPitch      = pitch,
+					.SysMemSlicePitch = slice_pitch,
+				};
+
+				ID3D11Device_CreateTexture3D(
+					d3d.device,
+					(&(D3D11_TEXTURE3D_DESC) {
+						.Width     = params->desc.w,
+						.Height    = params->desc.h,
+						.Depth     = params->desc.d,
+						.MipLevels = 1,
+						.Format    = format,
+						.Usage     = D3D11_USAGE_IMMUTABLE,
+						.BindFlags = D3D11_BIND_SHADER_RESOURCE,
+					}),
+					&data,
+					&resource->tex_3d
+				);
+
+				D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {
+					.Format              = format,
+					.ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE3D,
+					.Texture3D.MipLevels = 1,
+				};
+
+				ID3D11Device_CreateShaderResourceView(d3d.device, (ID3D11Resource *)resource->tex_3d, &srv_desc, &resource->srv);
+			}
         }
 
 		COMPILER_BARRIER;
 
 		resource->state = D3D_TEXTURE_STATE_LOADED;
+		wake_all_by_address(&resource->state);
     }
 }
 
@@ -1412,8 +1484,40 @@ resource_handle_t upload_texture(const upload_texture_t *params)
 
 void destroy_texture(resource_handle_t handle)
 {
-    IGNORED(handle);
-    FATAL_ERROR("TODO: Implement");
+    d3d_texture_t *resource = bd_get(&d3d_textures, handle);
+
+	while (resource->state == D3D_TEXTURE_STATE_LOADING)
+	{
+		uint32_t unwanted_state = D3D_TEXTURE_STATE_LOADING;
+		wait_on_address(&resource->state, &unwanted_state, sizeof(resource->state));
+	}
+
+	if (atomic_cas_u32(&resource->state, D3D_TEXTURE_STATE_NONE, D3D_TEXTURE_STATE_LOADED) == D3D_TEXTURE_STATE_LOADED)
+	{
+		switch (resource->desc.type)
+		{
+			case TEXTURE_TYPE_2D:
+			{
+				D3D_SAFE_RELEASE(resource->tex[0]);
+				D3D_SAFE_RELEASE(resource->tex[1]);
+				D3D_SAFE_RELEASE(resource->tex[2]);
+				D3D_SAFE_RELEASE(resource->tex[3]);
+				D3D_SAFE_RELEASE(resource->tex[4]);
+				D3D_SAFE_RELEASE(resource->tex[5]);
+			} break;
+
+			case TEXTURE_TYPE_3D:
+			{
+				D3D_SAFE_RELEASE(resource->tex_3d);
+			} break;
+		}
+
+		D3D_SAFE_RELEASE(resource->srv);
+
+		AcquireSRWLockExclusive(&d3d.texture_lock);
+		bd_rem(&d3d_textures, handle);
+		ReleaseSRWLockExclusive(&d3d.texture_lock);
+	}
 }
 
 resource_handle_t upload_model(const upload_model_t *params)
@@ -1441,8 +1545,8 @@ resource_handle_t upload_model(const upload_model_t *params)
                 INVALID_DEFAULT_CASE;
             }
 
-            resource->vertex_format      = params->vertex_format;
-            resource->vcount             = params->vertex_count;
+            resource->vertex_format = params->vertex_format;
+            resource->vcount        = params->vertex_count;
 
             UINT stride = vertex_format_size[resource->vertex_format];
 

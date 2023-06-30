@@ -6,6 +6,11 @@
 size_t string_count(const char *string);
 size_t string16_count(const wchar_t *string);
 
+DREAM_INLINE bool string_empty(string_t string)
+{
+	return string.count == 0 || !string.data;
+}
+
 static inline string_t string_from_cstr(const char *string)
 {
     string_t result;

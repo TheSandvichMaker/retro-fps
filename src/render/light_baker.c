@@ -6,19 +6,10 @@
 #include "game/map.h"
 #include "game/asset.h"
 #include "game/intersect.h"
+#include "game/job_queues.h"
 #include "core/core.h"
 #include "core/random.h"
 #include "core/thread.h"
-
-typedef struct lum_thread_context_t
-{
-    arena_t arena;
-
-    random_series_t entropy;
-
-    lum_params_t params;
-    lum_debug_data_t debug;
-} lum_thread_context_t;
 
 v3_t map_to_cosine_weighted_hemisphere(v2_t sample)
 {
@@ -43,9 +34,8 @@ static v3_t random_point_on_light(random_series_t *entropy, map_point_light_t *l
     return add(light->p, mul(16.0f, random_in_unit_cube(entropy)));
 }
 
-static v3_t evaluate_lighting(lum_thread_context_t *thread, lum_path_vertex_t *path_vertex, v3_t hit_p, v3_t hit_n, bool ignore_sun)
+static v3_t evaluate_lighting(lum_thread_context_t *thread, lum_params_t *params, lum_path_vertex_t *path_vertex, v3_t hit_p, v3_t hit_n, bool ignore_sun)
 {
-    lum_params_t *params = &thread->params;
     map_t *map = params->map;
 
     map_brush_t *brush = path_vertex->brush;
@@ -137,12 +127,11 @@ static v3_t evaluate_lighting(lum_thread_context_t *thread, lum_path_vertex_t *p
     return lighting;
 }
 
-static v3_t pathtrace_recursively(lum_thread_context_t *thread, lum_path_t *path, v3_t o, v3_t d, int recursion)
+static v3_t pathtrace_recursively(lum_thread_context_t *thread, lum_params_t *params, lum_path_t *path, v3_t o, v3_t d, int recursion)
 {
-    if (recursion >= thread->params.ray_recursion)
+    if (recursion >= params->ray_recursion)
         return (v3_t){0,0,0};
 
-    lum_params_t *params = &thread->params;
     map_t *map = params->map;
 
     arena_t *arena = &thread->arena;
@@ -205,7 +194,7 @@ static v3_t pathtrace_recursively(lum_thread_context_t *thread, lum_path_t *path
 
         v3_t hit_p = add(intersect_params.o, mul(hit.t, intersect_params.d));
 
-        v3_t lighting = evaluate_lighting(thread, path_vertex, hit_p, n, false);
+        v3_t lighting = evaluate_lighting(thread, params, path_vertex, hit_p, n, false);
 
         v2_t sample = random_unilateral2(entropy);
         v3_t unrotated_dir = map_to_cosine_weighted_hemisphere(sample);
@@ -214,7 +203,7 @@ static v3_t pathtrace_recursively(lum_thread_context_t *thread, lum_path_t *path
         bounce_dir = add(bounce_dir, mul(unrotated_dir.y, b));
         bounce_dir = add(bounce_dir, mul(unrotated_dir.z, n));
 
-        lighting = add(lighting, mul(albedo, pathtrace_recursively(thread, path, hit_p, bounce_dir, recursion + 1)));
+        lighting = add(lighting, mul(albedo, pathtrace_recursively(thread, params, path, hit_p, bounce_dir, recursion + 1)));
         color = mul(albedo, lighting);
 
         path_vertex->brush        = hit.brush;
@@ -234,17 +223,6 @@ static v3_t pathtrace_recursively(lum_thread_context_t *thread, lum_path_t *path
 
     return color;
 }
-
-typedef struct lum_job_t
-{
-    lum_thread_context_t *thread_contexts;
-
-    uint32_t brush_index;
-    uint32_t plane_index;
-
-    // insanity
-    image_t result;
-} lum_job_t;
 
 #if 0
 static inline uint32_t pack_lightmap_color(v4_t color)
@@ -275,20 +253,20 @@ static void lum_job(job_context_t *job_context, void *userdata)
 {
     lum_job_t *job = userdata;
 
+	lum_bake_state_t     *state  = job->state;
+	lum_params_t         *params = &state->params;
     lum_thread_context_t *thread = &job->thread_contexts[job_context->thread_index];
 
-    lum_params_t *params = &thread->params;
     map_t *map = params->map;
-
     map_brush_t *brush = &map->brushes[job->brush_index];
     map_plane_t *plane = &map->planes [job->plane_index];
     map_poly_t  *poly  = &map->polys  [job->plane_index];
 
-    arena_t *arena = &thread->arena;
+    arena_t *thread_arena = &thread->arena;
 
     random_series_t *entropy = &thread->entropy;
 
-    int ray_count     = params->ray_count;
+    int ray_count = params->ray_count;
 
     plane_t p;
     plane_from_points(plane->a, plane->b, plane->c, &p);
@@ -326,11 +304,11 @@ static void lum_job(job_context_t *job_context, void *userdata)
 
             for (int i = 0; i < ray_count; i++)
             {
-                lum_path_t *path = m_alloc_struct(arena, lum_path_t);
+                lum_path_t *path = m_alloc_struct(thread_arena, lum_path_t);
                 path->source_pixel = (v2i_t){ (int)x, (int)y };
                 sll_push_back(thread->debug.first_path, thread->debug.last_path, path);
 
-                lum_path_vertex_t *path_vertex = m_alloc_struct(arena, lum_path_vertex_t);
+                lum_path_vertex_t *path_vertex = m_alloc_struct(thread_arena, lum_path_vertex_t);
                 path->vertex_count++;
                 dll_push_back(path->first_vertex, path->last_vertex, path_vertex);
 
@@ -339,7 +317,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
                 path_vertex->o            = world_p;
                 path_vertex->throughput   = make_v3(1, 1, 1);
 
-                v3_t this_direct_lighting = evaluate_lighting(thread, path_vertex, world_p, n, params->use_dynamic_sun_shadows);
+                v3_t this_direct_lighting = evaluate_lighting(thread, params, path_vertex, world_p, n, params->use_dynamic_sun_shadows);
 
                 path_vertex->contribution = this_direct_lighting;
 
@@ -352,7 +330,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
                 dir = add(dir, mul(unrotated_dir.y, b));
                 dir = add(dir, mul(unrotated_dir.z, n));
 
-                v3_t this_indirect_lighting = pathtrace_recursively(thread, path, world_p, dir, 0);
+                v3_t this_indirect_lighting = pathtrace_recursively(thread, params, path, world_p, dir, 0);
 
                 path->contribution = add(this_direct_lighting, this_indirect_lighting);
 
@@ -468,21 +446,20 @@ static void lum_job(job_context_t *job_context, void *userdata)
             direct_lighting_pixels[y*w + x] = add(direct_lighting_pixels[y*w + x], indirect_lighting_pixels[y*w + x]);
         }
 
-        uint32_t *packed = m_alloc_array(arena, w*h, uint32_t);
+        uint32_t *packed = m_alloc_array(temp, w*h, uint32_t);
 
         for (int i = 0; i < w*h; i++)
         {
             packed[i] = pack_r11g11b10f(direct_lighting_pixels[i]);
         }
 
-        job->result = (image_t){
-            .w      = w,
-            .h      = h,
-            .pitch  = sizeof(uint32_t)*w,
-            .pixels = packed,
-        };
+		if (RESOURCE_HANDLE_VALID(poly->lightmap))
+		{
+			render->destroy_texture(poly->lightmap);
+		}
 
 		poly->lightmap = render->upload_texture(&(upload_texture_t){
+			.upload_flags = UPLOAD_TEXTURE_GEN_MIPMAPS,
 			.desc = {
 				.format = PIXEL_FORMAT_R11G11B10F,
 				.w      = w,
@@ -494,6 +471,8 @@ static void lum_job(job_context_t *job_context, void *userdata)
 			},
 		});
     }
+
+	atomic_increment_u32(&state->jobs_completed);
 }
 
 typedef struct lum_voxel_cluster_t
@@ -515,17 +494,23 @@ static inline lum_voxel_cluster_t *lum_allocate_cluster(const lum_params_t *para
     int cluster_size = params->fogmap_cluster_size;
 
     lum_voxel_cluster_t *cluster = m_alloc_struct_nozero(arena, lum_voxel_cluster_t);
-    cluster->next = NULL;
+    cluster->next     = NULL;
     cluster->position = position;
-    cluster->voxels = m_alloc_array_nozero(arena, cluster_size*cluster_size*cluster_size, v4_t); // TODO: Pack as R11G11B10
+    cluster->voxels   = m_alloc_array_nozero(arena, cluster_size*cluster_size*cluster_size, v4_t); // TODO: Pack as R11G11B10
 
     sll_push_back(list->first, list->last, cluster);
 
     return cluster;
 }
 
-void trace_volumetric_lighting(const lum_params_t *params, map_t *map)
+static void trace_volumetric_lighting_job(job_context_t *job_context, void *userdata)
 {
+	(void)job_context;
+
+	lum_bake_state_t *state  = userdata;
+	lum_params_t     *params = &state->params;
+	map_t            *map    = params->map;
+
     rect3_t fogmap_bounds = map->bounds;
 
     map->fogmap_offset = rect3_center(fogmap_bounds);
@@ -626,6 +611,11 @@ void trace_volumetric_lighting(const lum_params_t *params, map_t *map)
             *dst++ = (v4_t){.xyz=lighting, .w0=1.0}; // pack_r11g11b10f(lighting);
         }
 
+		if (RESOURCE_HANDLE_VALID(map->fogmap))
+		{
+			render->destroy_texture(map->fogmap);
+		}
+
         map->fogmap = render->upload_texture(&(upload_texture_t) {
             .desc = {
                 .type        = TEXTURE_TYPE_3D,
@@ -641,32 +631,32 @@ void trace_volumetric_lighting(const lum_params_t *params, map_t *map)
             },
         });
     }
+
+	atomic_increment_u32(&state->jobs_completed);
 }
 
-void bake_lighting(const lum_params_t *params_init, lum_results_t *results)
+lum_bake_state_t *bake_lighting(const lum_params_t *in_params)
 {
-    // making a copy of the params so they can be massaged against bad input
-    lum_params_t *params = m_copy_struct(params_init->arena, params_init);
+	lum_bake_state_t *state = m_bootstrap(lum_bake_state_t, arena);
+	copy_struct(&state->params, in_params);
+
+	arena_t      *arena  = &state->arena;
+    lum_params_t *params = &state->params;
 
     params->sun_direction = normalize(params->sun_direction);
 
     map_t *map = params->map;
 
-	size_t thread_count = 6;
+	job_queue_t queue = high_priority_job_queue;
 
-	size_t job_count = 0;
-	lum_job_t *jobs = m_alloc_array(params->arena, map->plane_count, lum_job_t);
+	lum_job_t *jobs = m_alloc_array(arena, map->plane_count, lum_job_t);
 
-	// silly, silly.
-	job_queue_t queue = create_job_queue(thread_count, map->plane_count);
-
-	lum_thread_context_t *thread_contexts = m_alloc_array(params->arena, thread_count, lum_thread_context_t);
+	size_t thread_count = get_job_queue_thread_count(queue);
+	lum_thread_context_t *thread_contexts = m_alloc_array(arena, thread_count, lum_thread_context_t);
 
 	for (size_t i = 0; i < thread_count; i++)
 	{
 		lum_thread_context_t *thread_context = &thread_contexts[i];
-		copy_struct(&thread_context->params, params);
-
 		thread_context->entropy.state = (uint32_t)(i + 1);
 	}
 
@@ -676,8 +666,9 @@ void bake_lighting(const lum_params_t *params_init, lum_results_t *results)
 
 		for (size_t plane_index = 0; plane_index < brush->plane_poly_count; plane_index++)
 		{
-			lum_job_t *job = &jobs[job_count++];
+			lum_job_t *job = &jobs[state->job_count++];
 			job->thread_contexts = thread_contexts;
+			job->state           = state;
 			job->brush_index     = (uint32_t)(brush_index);
 			job->plane_index     = (uint32_t)(brush->first_plane_poly + plane_index);
 
@@ -685,135 +676,48 @@ void bake_lighting(const lum_params_t *params_init, lum_results_t *results)
 		}
 	}
 
-#if 0
-        for (size_t job_index = 0; job_index < job_count; job_index++)
-        {
-            lum_job(&jobs[job_index]);
-        }
-#else
-        // wait_on_queue(queue);
-#endif
+	state->job_count++;
+	add_job_to_queue(queue, trace_volumetric_lighting_job, state);
 
-#if 0
-        for (size_t job_index = 0; job_index < job_count; job_index++)
-        {
-            lum_job_t *job = &jobs[job_index];
-
-            map_poly_t *poly = &map->polys[job->plane_index];
-
-            image_t *result = &job->result;
-
-            poly->lightmap = render->upload_texture(&(upload_texture_t) {
-                .desc = {
-                    .format = PIXEL_FORMAT_R11G11B10F,
-                    .w      = result->w,
-                    .h      = result->h,
-                },
-                .data = {
-                    .pitch  = sizeof(uint32_t)*result->w,
-                    .pixels = result->pixels,
-                },
-            });
-        }
-#endif
-
-#if 0
-        if (results)
-        {
-            lum_debug_data_t *result_debug_data = &results->debug_data;
-
-            for (size_t i = 0; i < thread_count; i++)
-            {
-                lum_thread_context_t *thread_context = &thread_contexts[i];
-                lum_debug_data_t *source_debug_data = &thread_context->debug;
-
-                sll_append(result_debug_data->first_path, result_debug_data->last_path,
-                           source_debug_data->first_path, source_debug_data->last_path);
-
-                // m_release(&thread_context->arena);
-            }
-        }
-#endif
-		(void)results;
-
-        // destroy_job_queue(queue);
-    // }
-
-    // trace_volumetric_lighting(&params, map);
-
-    map->light_baked = true;
+	return state;
 }
 
-// --------------------------------------------------------
-
-#if 0
-static v3i_t world_dim_to_lightmap_dim(v3_t dim)
+bool bake_finalize(lum_bake_state_t *state)
 {
-    v3i_t result = {
-        (int)max(1.0f, ceilf(dim.x / LIGHTMAP_SCALE)),
-        (int)max(1.0f, ceilf(dim.y / LIGHTMAP_SCALE)),
-        (int)max(1.0f, ceilf(dim.z / LIGHTMAP_SCALE)),
-    };
-    return result;
+	if (!state->finalized && bake_completed(state))
+	{
+		lum_debug_data_t *debug = &state->results.debug;
+
+		for (size_t i = 0; i < state->thread_count; i++)
+		{
+			lum_thread_context_t *thread_context = &state->thread_contexts[i];
+			lum_debug_data_t *thread_debug = &thread_context->debug;
+
+			sll_append(       debug->first_path,        debug->last_path,
+					   thread_debug->first_path, thread_debug->last_path);
+
+			// TODO: Copy debug data to state arena
+			// m_release(&thread_context->arena);
+		}
+
+		COMPILER_BARRIER;
+
+		state->finalized = true;
+	}
+
+	return state->finalized;
 }
 
-typedef struct lum_planar_texel_t
+bool release_bake_state(lum_bake_state_t *state)
 {
-    struct lum_planar_texel_t *next;
-    float depth;
-} lum_planar_texel_t;
+	bool result = false;
 
-typedef struct lum_planar_view_t
-{
-    v2i_t dim;
-    lum_planar_texel_t **texels;
-} lum_planar_view_t;
+	// TODO: Allow aborting bake
+	if (bake_completed(state))
+	{
+		result = true;
+		m_release(&state->arena);
+	}
 
-static void lum_generate_triplanar_textures(map_t *map)
-{
-    rect3_t bounds = map->bounds;
-
-    v3i_t dim = world_dim_to_lightmap_dim(rect3_dim(bounds));
-
-    v2i_t plane_dims[] = {
-        make_v2(dim.x, dim.y),
-        make_v2(dim.z, dim.x),
-        make_v2(dim.y, dim.z),
-    };
-
-    for (size_t plane_index = 0; plane_index < 3; plane_index++)
-    {
-        int i1 = (plane_index + 0);
-        int i2 = (plane_index + 1) % 3;
-        int i3 = (plane_index + 2) % 3;
-
-        v2i_t plane_dim = plane_dims[plane_index];
-
-        for (size_t side = 0; side < 2; side++)
-        {
-            // basis vectors
-
-            v3_t e1 = {}; 
-            e1.e[i1] = 1;
-
-            v3_t e2 = {};
-            e2.e[i2] = 1;
-
-            v3_t e3 = {};
-            e3.e[i3] = side == 0 ? 1 : -1;
-
-            for (size_t brush_index = 0; brush_index < map->brush_count; brush_index++)
-            {
-                map_brush_t *brush = map->brushes[brush_index];
-
-                for (size_t poly_index = 0; poly_index < brush->poly_count; poly_index++)
-                {
-                    map_poly_t *poly = brush->polys[poly_index];
-
-
-                }
-            }
-        }
-    }
+	return result;
 }
-#endif
