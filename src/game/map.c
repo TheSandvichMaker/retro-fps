@@ -1263,6 +1263,8 @@ map_t *load_map(arena_t *arena, string_t path)
 {
     map_t *map = NULL;
 
+	hires_time_t start_time = os_hires_time();
+
     map_parse_result_t parse_result;
     bool successful_parse = parse_map(arena, path, &parse_result);
 
@@ -1304,6 +1306,14 @@ map_t *load_map(arena_t *arena, string_t path)
             }
         }
     }
+
+	hires_time_t end_time = os_hires_time();
+	double time = os_seconds_elapsed(start_time, end_time);
+
+	if (map)
+	{
+		debug_print("Map '%.*s' loaded in %.02f seconds.\n", strexpand(path), time);
+	}
 
     return map;
 }

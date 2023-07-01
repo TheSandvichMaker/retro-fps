@@ -227,7 +227,7 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 	if (!map->lightmap_state)
 		ui_label(strlit("Lightmaps have not been baked!"), 0);
 
-	if (map->lightmap_state && bake_completed(map->lightmap_state))
+	if (map->lightmap_state && map->lightmap_state->finalized)
 	{
 		if (ui_button(strlit("Clear Lightmaps")).released)
 		{
@@ -255,6 +255,12 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 
 		if (state->finalized)
 		{
+			double time_elapsed = state->final_bake_time;
+			int minutes = (int)floor(time_elapsed / 60.0);
+			int seconds = (int)floor(time_elapsed - 60.0*minutes);
+			int microseconds = (int)floor(1000.0*(time_elapsed - 60.0*minutes - seconds));
+			ui_label(string_format(temp, "total bake time:  %02u:%02u:%03u", minutes, seconds, microseconds), 0);
+
 			ui_label(string_format(temp, "fogmap resolution: %u %u %u", map->fogmap_w, map->fogmap_h, map->fogmap_d), 0);
 
 			ui_checkbox(strlit("enabled"), &lm_editor->debug_lightmaps);
@@ -351,17 +357,19 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 
 						selection_highlight->position_offset[AXIS2_X] = (float)lm_editor->selected_pixels.min.x * pixel_size.x;
 						selection_highlight->position_offset[AXIS2_Y] = rect_dim.y - (float)(lm_editor->selected_pixels.min.y + selection_dim.y) * pixel_size.y;
-
 					}
 				}
 			}
 		}
 		else
 		{
-			bake_finalize(map->lightmap_state);
-
 			float progress = 100.0f*bake_progress(map->lightmap_state);
 			ui_label(string_format(temp, "bake progress: %u / %u (%.02f%%)", map->lightmap_state->jobs_completed, map->lightmap_state->job_count, progress), 0);
+			hires_time_t current_time = os_hires_time();
+			double time_elapsed = os_seconds_elapsed(map->lightmap_state->start_time, current_time);
+			int minutes = (int)floor(time_elapsed / 60.0);
+			int seconds = (int)floor(time_elapsed - 60.0*minutes);
+			ui_label(string_format(temp, "time elapsed:  %02u:%02u", minutes, seconds), 0);
 		}
     }
 

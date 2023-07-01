@@ -176,7 +176,7 @@ static build_result_t msvc_build(build_context_t *context, const source_files_t 
                         string_list_t link_flags_list = { 0 };
                         slist_appendf(&link_flags_list, temp, "/DEBUG:FULL");
                         slist_appendf(&link_flags_list, temp, "/SUBSYSTEM:WINDOWS");
-                        slist_appendf(&link_flags_list, temp, "/OUT:\"%.*s\"", strexpand(job->output_exe));
+                        slist_appendf(&link_flags_list, temp, "/OUT:\"%.*s.exe\"", strexpand(job->output_exe));
 
                         for (string_node_t *lib = job->libraries.first; lib; lib = lib->next)
                         {
@@ -245,5 +245,6 @@ static build_result_t msvc_build(build_context_t *context, const source_files_t 
 }
 
 static backend_i backend_msvc = {
+	.name  = "msvc",
     .build = msvc_build,
 };

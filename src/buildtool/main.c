@@ -5,6 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#pragma comment(lib, "kernel32.lib")
+#pragma comment(lib, "user32.lib")
+#pragma comment(lib, "shell32.lib")
+
 #include "build.h"
 #include "assets.h"
 #include "backend.h"
@@ -170,7 +174,7 @@ int main(int argc, char **argv)
         }
         else if (args_match(args, "-debug"))
         {
-            release = true;
+            release = false;
 			build_all = false;
         }
         else if (args_match(args, "-release"))
@@ -257,8 +261,10 @@ int main(int argc, char **argv)
         .warning_level           = W4,
         .optimization_level      = O0,
 
-        .output_exe              = strlit("retro.exe"),
+        .output_exe              = strlit("retro"),
         .configuration           = strlit("debug"),
+		.run_dir                 = strlit("run"),
+		.copy_executables_to_run = true,
 
         .libraries = slist_from_array(temp, array_expand(string_t, 
             strlit("user32"),
@@ -327,8 +333,10 @@ int main(int argc, char **argv)
 
     if (result == BUILD_SUCCESS)
     {
-        build_maps(strlit("assets/maps"), strlit("run/gamedata/maps"));
+        // build_maps(strlit("assets/maps"), strlit("run/gamedata/maps"));
     }
+
+	// copy_assets();
 
     // ==========================================================================================================================
 
@@ -336,4 +344,26 @@ int main(int argc, char **argv)
 
     string_t total_running_time = format_seconds(temp, os_seconds_elapsed(total_time_start, total_time_end));
     fprintf(stderr, "\nTOTAL BUILD TIME: %.*s\n", strexpand(total_running_time));
+
+	// TODO: print out most of this per build job rather than at the end
+
+	fprintf(stderr, "built configurations: ");
+	if (build_all || !release) fprintf(stderr, "debug ");
+	if (build_all ||  release) fprintf(stderr, "release ");
+	fprintf(stderr, "\n");
+
+	fprintf(stderr, "build options: ");
+	if (asan)     fprintf(stderr, "-asan ");
+	if (ndebug)   fprintf(stderr, "-ndebug ");
+	if (not_slow) fprintf(stderr, "-not_slow ");
+	if (stub)     fprintf(stderr, "-stub ");
+	fprintf(stderr, "\n");
+
+	char *backend_name = "unknown";
+	switch (backend)
+	{
+		case BACKEND_MSVC:  backend_name = "msvc";  break;
+		case BACKEND_CLANG: backend_name = "clang"; break;
+	}
+	fprintf(stderr, "compiler: %s\n", backend_name);
 }

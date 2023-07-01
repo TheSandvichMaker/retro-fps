@@ -109,40 +109,49 @@ build_result_t build_directory(string_t directory, build_job_t *job)
 
 build_result_t build_files(source_files_t source, build_job_t *job)
 {
-    arena_marker_t temp_marker = m_get_marker(temp);
+	build_result_t result = BUILD_SUCCESS;
 
-    build_context_t *context = m_alloc_struct(temp, build_context_t);
-    context->arena = temp;
-    context->job   = job;
+	m_scoped(temp)
+	{
+		build_context_t *context = m_alloc_struct(temp, build_context_t);
+		context->arena = temp;
+		context->job   = job;
 
-    context->build_dir = string_format(context->arena, "build/%.*s", strexpand(job->configuration));
-    fs_create_directory(context->build_dir);
+		context->build_dir = string_format(context->arena, "build/%.*s", strexpand(job->configuration));
+		fs_create_directory(context->build_dir);
 
-    if (job->single_translation_unit)
-    {
-        transform_into_stub(context, &source);
-    }
+		if (job->single_translation_unit)
+		{
+			transform_into_stub(context, &source);
+		}
 
-    if (job->no_std_lib)
-    {
-        slist_appends(&job->defines, context->arena, strlit("NO_STD_LIB"));
-    }
+		if (job->no_std_lib)
+		{
+			slist_appends(&job->defines, context->arena, strlit("NO_STD_LIB"));
+		}
 
-    backend_i *backend = NULL;
-    switch (job->backend)
-    {
-        case BACKEND_MSVC:  backend = &backend_msvc;  break;
-        case BACKEND_CLANG: backend = &backend_clang; break;
-    }
+		backend_i *backend = NULL;
+		switch (job->backend)
+		{
+			case BACKEND_MSVC:  backend = &backend_msvc;  break;
+			case BACKEND_CLANG: backend = &backend_clang; break;
+		}
 
-    if (!backend)
-    {
-        fprintf(stderr, "Unimplemented or invalid backend selected!\n");
-        return BUILD_OTHER_FAILURE;
-    }
+		if (!backend)
+		{
+			fprintf(stderr, "Unimplemented or invalid backend selected!\n");
+			return BUILD_OTHER_FAILURE;
+		}
 
-    build_result_t result = backend->build(context, &source, job);
-    m_reset_to_marker(temp, temp_marker);
+		result = backend->build(context, &source, job);
+
+		if (result == BUILD_SUCCESS && job->copy_executables_to_run)
+		{
+			fs_create_directory(job->run_dir);
+			fs_copy(string_format(temp, "%.*s/%.*s.exe", strexpand(context->build_dir), strexpand(job->output_exe)),
+					string_format(temp, "%.*s/%.*s_%.*s.exe", strexpand(job->run_dir), strexpand(job->output_exe), strexpand(job->configuration)));
+		}
+	}
 
     return result;
 }

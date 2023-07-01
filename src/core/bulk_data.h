@@ -16,12 +16,19 @@ typedef struct free_item_t
     uint32_t next;
 } free_item_t;
 
+typedef enum bulk_flags_t
+{
+	BULK_FLAGS_CONCURRENT = 0x1,
+} bulk_flags_t;
+
 typedef struct bulk_t
 {
     size_t watermark;
     uint32_t item_size;
     uint32_t align;
     char *buffer;
+	uint32_t flags;
+	mutex_t lock;
 } bulk_t;
 
 resource_handle_t bd_get_handle(bulk_t *bd, void *item);
@@ -33,6 +40,7 @@ bool  bd_rem(bulk_t *bd, resource_handle_t handle);
 bool  bd_rem_item(bulk_t *bd, void *item);
 
 #define INIT_BULK_DATA(type) { .item_size = sizeof(type), .align = alignof(type) }
+#define INIT_BULK_DATA_EX(Type, Flags) { .item_size = sizeof(Type), .align = alignof(Type), .flags = Flags }
 
 typedef struct bd_iter_t
 {

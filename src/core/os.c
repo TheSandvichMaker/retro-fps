@@ -5,13 +5,11 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <shellapi.h>
 
 #include <stdio.h>
 
 #pragma warning(pop)
-
-#pragma comment(lib, "kernel32.lib")
-#pragma comment(lib, "user32.lib")
 
 static arena_t api_arena;
 static bool cursor_locked;
@@ -256,14 +254,58 @@ bool fs_write_entire_file(string_t path, string_t file)
     return !no_errors;
 }
 
+bool fs_copy(string_t source, string_t destination)
+{
+	bool result = false;
+
+	m_scoped(temp)
+	{
+		string16_t src16 = utf16_from_utf8(temp, source);
+		string16_t dst16 = utf16_from_utf8(temp, destination);
+
+		result = CopyFile(src16.data, dst16.data, FALSE);
+		if (!result)  output_last_error(strlit16("fs_copy failed"));
+	}
+
+    return result;
+}
+
 bool fs_move(string_t source, string_t destination)
 {
-    string16_t src16 = utf16_from_utf8(temp, source);
-    string16_t dst16 = utf16_from_utf8(temp, destination);
+	bool result = false;
 
-    bool result = MoveFileExW(src16.data, dst16.data, MOVEFILE_REPLACE_EXISTING);
-    if (!result)  output_last_error(strlit16("fs_move failed"));
+	m_scoped(temp)
+	{
+		string16_t src16 = utf16_from_utf8(temp, source);
+		string16_t dst16 = utf16_from_utf8(temp, destination);
+
+		result = MoveFileExW(src16.data, dst16.data, MOVEFILE_REPLACE_EXISTING);
+		if (!result)  output_last_error(strlit16("fs_move failed"));
+	}
+
     return result;
+}
+
+bool fs_copy_directory(string_t source, string_t destination)
+{
+	bool result = false;
+
+	m_scoped(temp)
+	{
+		string16_t src16 = utf16_from_utf8(temp, source);
+		string16_t dst16 = utf16_from_utf8(temp, destination);
+
+		SHFILEOPSTRUCTW s = {
+			.wFunc = FO_COPY,
+			.pFrom = src16.data,
+			.pTo = dst16.data,
+			.fFlags = FOF_SILENT|FOF_NOCONFIRMMKDIR|FOF_NOCONFIRMATION|FOF_NOERRORUI|FOF_NO_UI,
+		};
+
+		result = !!SHFileOperationW(&s);
+	}
+
+	return result;
 }
 
 static bool wide_strings_equal(wchar_t *a, wchar_t *b)

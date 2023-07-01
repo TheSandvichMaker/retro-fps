@@ -22,8 +22,8 @@
 
 #define SUN_SHADOWMAP_RESOLUTION (1024)
 
-bulk_t d3d_models   = INIT_BULK_DATA(d3d_model_t);
-bulk_t d3d_textures = INIT_BULK_DATA(d3d_texture_t);
+bulk_t d3d_models   = INIT_BULK_DATA_EX(d3d_model_t,   BULK_FLAGS_CONCURRENT);
+bulk_t d3d_textures = INIT_BULK_DATA_EX(d3d_texture_t, BULK_FLAGS_CONCURRENT);
 
 d3d_state_t d3d;
 
@@ -1177,13 +1177,9 @@ done_with_sun_shadows:
                     {
                         resolved_scene = true;
 
-                        d3d_texture_t *fogmap = d3d_get_texture_or(view->fogmap, NULL); // TODO: Don't crash on missing fogmap!
+                        d3d_texture_t *fogmap = d3d_get_texture_or(view->fogmap, NULL);
 
-                        ID3D11ShaderResourceView *fogmap_srv = NULL;
-                        if (fogmap)
-                        {
-                            fogmap_srv = fogmap->srv;
-                        }
+                        ID3D11ShaderResourceView *fogmap_srv = fogmap ? fogmap->srv : NULL;
 
                         d3d_cbuffer_t cbuffer = {
                             .view_matrix  = view->camera,
@@ -1207,7 +1203,7 @@ done_with_sun_shadows:
                             .render_target = d3d.post_target.color_rtv,
                             .ps            = d3d.msaa_resolve_ps,
                             .srv_count     = 5,
-                            .srvs          = (ID3D11ShaderResourceView *[]){ d3d.scene_target.color_srv, d3d.scene_target.depth_srv, d3d.blue_noise->srv, fogmap_srv, d3d.sun_shadowmap.depth_srv},
+                            .srvs          = (ID3D11ShaderResourceView *[]){ d3d.scene_target.color_srv, d3d.scene_target.depth_srv, d3d.blue_noise->srv, fogmap_srv, d3d.sun_shadowmap.depth_srv },
                             .viewport      = viewport,
                         });
 
@@ -1258,14 +1254,10 @@ void get_resolution(int *w, int *h)
 
 resource_handle_t reserve_texture(void)
 {
-	AcquireSRWLockExclusive(&d3d.texture_lock);
-
     d3d_texture_t *resource = bd_add(&d3d_textures);
 	resource->state = D3D_TEXTURE_STATE_RESERVED;
 
 	resource_handle_t result = bd_get_handle(&d3d_textures, resource);
-
-	ReleaseSRWLockExclusive(&d3d.texture_lock);
 
 	return result;
 }
@@ -1275,10 +1267,7 @@ void populate_texture(resource_handle_t handle, const upload_texture_t *params)
     if (!params->data.pixels)
         return;
 
-	// TODO: Not sure this lock is needed here. Just being paranoid.
-	AcquireSRWLockExclusive(&d3d.texture_lock);
     d3d_texture_t *resource = bd_get(&d3d_textures, handle);
-	ReleaseSRWLockExclusive(&d3d.texture_lock);
 
 	uint32_t state = resource->state;
 
@@ -1470,7 +1459,7 @@ void populate_texture(resource_handle_t handle, const upload_texture_t *params)
 		COMPILER_BARRIER;
 
 		resource->state = D3D_TEXTURE_STATE_LOADED;
-		wake_all_by_address(&resource->state);
+		WakeByAddressAll(&resource->state);
     }
 }
 
@@ -1486,10 +1475,13 @@ void destroy_texture(resource_handle_t handle)
 {
     d3d_texture_t *resource = bd_get(&d3d_textures, handle);
 
+	if (!resource)
+		return;
+
 	while (resource->state == D3D_TEXTURE_STATE_LOADING)
 	{
 		uint32_t unwanted_state = D3D_TEXTURE_STATE_LOADING;
-		wait_on_address(&resource->state, &unwanted_state, sizeof(resource->state));
+		WaitOnAddress(&resource->state, &unwanted_state, sizeof(resource->state), INFINITE);
 	}
 
 	if (atomic_cas_u32(&resource->state, D3D_TEXTURE_STATE_NONE, D3D_TEXTURE_STATE_LOADED) == D3D_TEXTURE_STATE_LOADED)
@@ -1514,9 +1506,7 @@ void destroy_texture(resource_handle_t handle)
 
 		D3D_SAFE_RELEASE(resource->srv);
 
-		AcquireSRWLockExclusive(&d3d.texture_lock);
 		bd_rem(&d3d_textures, handle);
-		ReleaseSRWLockExclusive(&d3d.texture_lock);
 	}
 }
 
@@ -1528,6 +1518,7 @@ resource_handle_t upload_model(const upload_model_t *params)
         return result;
 
     d3d_model_t *resource = bd_add(&d3d_models);
+
     if (resource)
     {
         ASSERT(resource->vbuffer == NULL);

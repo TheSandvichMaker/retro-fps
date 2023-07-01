@@ -6,7 +6,10 @@
 string_t fs_read_entire_file (arena_t *arena, string_t path);
 bool     fs_write_entire_file(string_t path, string_t file);
 
+bool fs_copy(string_t source, string_t destination);
 bool fs_move(string_t source, string_t destination);
+
+bool fs_copy_directory(string_t source, string_t destination);
 
 typedef enum fs_entry_kind_t
 {

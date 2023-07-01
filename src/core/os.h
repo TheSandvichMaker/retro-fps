@@ -13,11 +13,6 @@ bool os_execute(string_t command, int *exit_code);
 bool os_execute_capture(string_t command, int *exit_code, arena_t *arena, string_t *out, string_t *err);
 // TODO: async os_execute, ability to capture stderr/stdout, provide stdin
 
-typedef struct hires_time_t
-{
-    uint64_t value;
-} hires_time_t;
-
 hires_time_t os_hires_time(void);
 double os_seconds_elapsed(hires_time_t start, hires_time_t end);
 

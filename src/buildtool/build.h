@@ -57,6 +57,8 @@ typedef struct build_job_t
 
     string_t output_exe;
     string_t configuration;
+	string_t run_dir;
+	bool copy_executables_to_run;
 
     string_list_t defines;
     string_list_t forced_includes;

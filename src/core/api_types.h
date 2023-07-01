@@ -221,4 +221,19 @@ typedef struct random_series_t
     uint32_t state;
 } random_series_t;
 
+typedef struct mutex_t
+{
+	void *opaque; // legal to be zero-initialized
+} mutex_t;
+
+typedef struct cond_t
+{
+	void *opaque; // legal to be zero-initialized
+} cond_t;
+
+typedef struct hires_time_t
+{
+    uint64_t value;
+} hires_time_t;
+
 #endif /* API_TYPES_H */

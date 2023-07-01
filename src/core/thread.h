@@ -7,22 +7,12 @@ DREAM_API bool wait_on_address(volatile void *address, void *compare_address, si
 DREAM_API void wake_by_address(void *address);
 DREAM_API void wake_all_by_address(void *address);
 
-typedef struct mutex_t
-{
-	void *opaque; // legal to be zero-initialized
-} mutex_t;
-
 DREAM_API void mutex_lock           (mutex_t mutex);
 DREAM_API void mutex_unlock         (mutex_t mutex);
 DREAM_API bool mutex_try_lock       (mutex_t mutex);
 DREAM_API void mutex_shared_lock    (mutex_t mutex);
 DREAM_API void mutex_shared_unlock  (mutex_t mutex);
 DREAM_API bool mutex_shared_try_lock(mutex_t mutex);
-
-typedef struct cond_t
-{
-	void *opaque; // legal to be zero-initialized
-} cond_t;
 
 DREAM_API void cond_sleep       (cond_t cond, mutex_t mutex);
 DREAM_API void cond_sleep_shared(cond_t cond, mutex_t mutex);

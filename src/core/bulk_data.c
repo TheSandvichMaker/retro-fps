@@ -32,6 +32,8 @@ static void bd_init(bulk_t *bd)
 {
     ASSERT_MSG(bd->item_size, "BULK DATA INITIALIZATION FAILURE: ITEM SIZE IS ZERO"); // this needs to be initialized by the user
 
+	if (bd->flags & BULK_FLAGS_CONCURRENT) mutex_lock(bd->lock);
+
     if (ALWAYS(!bd->buffer))
     {
         bd->buffer = vm_reserve(NULL, BULK_DATA_RESERVE_SIZE);
@@ -39,6 +41,8 @@ static void bd_init(bulk_t *bd)
 
         bd->watermark = bd_stride(bd); // first entry is the freelist sentinel
     }
+
+	if (bd->flags & BULK_FLAGS_CONCURRENT) mutex_unlock(bd->lock);
 }
 
 void *bd_add(bulk_t *bd)
@@ -46,6 +50,8 @@ void *bd_add(bulk_t *bd)
     if (!bd->buffer)  bd_init(bd);
 
     void *result = NULL;
+
+	if (bd->flags & BULK_FLAGS_CONCURRENT) mutex_lock(bd->lock);
 
     free_item_t *sentinel = bd_at_index(bd, 0);
     if (sentinel->next != 0)
@@ -65,13 +71,11 @@ void *bd_add(bulk_t *bd)
         size_t stride = bd_stride(bd);
 
         size_t new_size = bd->watermark + stride;
+
         bool new_chunk = (align_forward(new_size, BULK_DATA_COMMIT_SIZE) > align_forward(bd->watermark, BULK_DATA_COMMIT_SIZE));
+
         if (new_chunk)
-        {
-            bool success = vm_commit(bd->buffer + align_backward(new_size, BULK_DATA_COMMIT_SIZE), BULK_DATA_COMMIT_SIZE);
-            if (NEVER(!success))
-                return NULL;
-        }
+            vm_commit(bd->buffer + align_backward(new_size, BULK_DATA_COMMIT_SIZE), BULK_DATA_COMMIT_SIZE);
 
         size_t index = bd->watermark / stride;
 
@@ -83,6 +87,8 @@ void *bd_add(bulk_t *bd)
         // don't need to zero the memory because it's fresh from VirtualAlloc, guaranteed to be zero
         result = item_from_bulk_item(bulk_item);
     }
+
+	if (bd->flags & BULK_FLAGS_CONCURRENT) mutex_unlock(bd->lock);
 
     return result;
 }
@@ -121,6 +127,8 @@ bool bd_rem(bulk_t *bd, resource_handle_t handle)
 
     bool result = false;
 
+	if (bd->flags & BULK_FLAGS_CONCURRENT) mutex_lock(bd->lock);
+
     size_t stride = bd_stride(bd);
     size_t count  = bd->watermark / stride;
 
@@ -137,6 +145,8 @@ bool bd_rem(bulk_t *bd, resource_handle_t handle)
 
         result = true;
     }
+
+	if (bd->flags & BULK_FLAGS_CONCURRENT) mutex_unlock(bd->lock);
 
     return result;
 }
@@ -156,7 +166,8 @@ resource_handle_t bd_get_handle(bulk_t *bd, void *item)
     if ((((uintptr_t)bulk_item) & (bd->align-1)) != 0)
         FATAL_ERROR("Funny bulk data item align!");
 
-    size_t   count = bd->watermark / bd_stride(bd);
+    size_t count = bd->watermark / bd_stride(bd);
+
     uint32_t index = index_from_bulk_item(bd, bulk_item);
 
     if (NEVER(index < 0))      return NULL_RESOURCE_HANDLE;

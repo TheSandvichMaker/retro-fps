@@ -473,6 +473,11 @@ static void lum_job(job_context_t *job_context, void *userdata)
     }
 
 	atomic_increment_u32(&state->jobs_completed);
+
+	if (bake_jobs_completed(state))
+	{
+		bake_finalize(state);
+	}
 }
 
 typedef struct lum_voxel_cluster_t
@@ -529,16 +534,6 @@ static void trace_volumetric_lighting_job(job_context_t *job_context, void *user
 
     m_scoped(temp)
     {
-#if 0
-        lum_voxel_cluster_list_t clusters = { 0 };
-
-        int cluster_size = params->fogmap_cluster_size;
-
-        size_t cluster_count_x = (width  + cluster_size - 1) / cluster_size;
-        size_t cluster_count_y = (height + cluster_size - 1) / cluster_size;
-        size_t cluster_count_z = (depth  + cluster_size - 1) / cluster_size;
-#endif
-
         v4_t *fogmap = m_alloc_array(temp, width*height*depth, v4_t);
 
         v4_t *dst = fogmap;
@@ -633,12 +628,19 @@ static void trace_volumetric_lighting_job(job_context_t *job_context, void *user
     }
 
 	atomic_increment_u32(&state->jobs_completed);
+
+	if (bake_jobs_completed(state))
+	{
+		bake_finalize(state);
+	}
 }
 
 lum_bake_state_t *bake_lighting(const lum_params_t *in_params)
 {
 	lum_bake_state_t *state = m_bootstrap(lum_bake_state_t, arena);
 	copy_struct(&state->params, in_params);
+
+	state->start_time = os_hires_time();
 
 	arena_t      *arena  = &state->arena;
     lum_params_t *params = &state->params;
@@ -684,7 +686,7 @@ lum_bake_state_t *bake_lighting(const lum_params_t *in_params)
 
 bool bake_finalize(lum_bake_state_t *state)
 {
-	if (!state->finalized && bake_completed(state))
+	if (!state->finalized && bake_jobs_completed(state))
 	{
 		lum_debug_data_t *debug = &state->results.debug;
 
@@ -700,6 +702,9 @@ bool bake_finalize(lum_bake_state_t *state)
 			// m_release(&thread_context->arena);
 		}
 
+		state->end_time = os_hires_time();
+		state->final_bake_time = os_seconds_elapsed(state->start_time, state->end_time);
+
 		COMPILER_BARRIER;
 
 		state->finalized = true;
@@ -713,7 +718,7 @@ bool release_bake_state(lum_bake_state_t *state)
 	bool result = false;
 
 	// TODO: Allow aborting bake
-	if (bake_completed(state))
+	if (state->finalized)
 	{
 		result = true;
 		m_release(&state->arena);

@@ -46,3 +46,8 @@ void build_maps(string_t source_maps, string_t dest)
         }
     }
 }
+
+void copy_assets(void)
+{
+	fs_copy_directory(strlit("src/assets/*"), strlit("run/gamedata"));
+}

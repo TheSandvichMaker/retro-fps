@@ -109,6 +109,10 @@ typedef struct lum_bake_state_t
 	arena_t      arena;
 	lum_params_t params;
 
+	hires_time_t start_time;
+	hires_time_t end_time;
+	double       final_bake_time;
+
 	bool finalized;
 
 	struct
@@ -121,7 +125,7 @@ DREAM_API lum_bake_state_t *bake_lighting     (const lum_params_t *params);
 DREAM_API bool              bake_finalize     (lum_bake_state_t *state); // returns true if the bake completed successfully, can be called as much as you want until it returns true
 DREAM_API bool              release_bake_state(lum_bake_state_t *state);
 
-DREAM_INLINE bool bake_completed(lum_bake_state_t *state)
+DREAM_INLINE bool bake_jobs_completed(lum_bake_state_t *state)
 {
 	return state->jobs_completed == state->job_count;
 }

@@ -58,7 +58,7 @@ typedef struct asset_slot_t
 {
 	asset_hash_t hash;
 	asset_kind_t kind;
-	int64_t state;
+	uint32_t state;
 
 	STRING_STORAGE(256) path;
 
@@ -89,6 +89,7 @@ typedef struct asset_job_t
 {
 	asset_job_kind_t kind;
 	asset_slot_t *asset;
+	arena_t *arena; // TODO: figure it out.
 } asset_job_t;
 
 static void asset_job(job_context_t *context, void *userdata)
@@ -97,6 +98,11 @@ static void asset_job(job_context_t *context, void *userdata)
 
 	asset_job_t  *job   = userdata;
 	asset_slot_t *asset = job->asset;
+	arena_t      *arena = job->arena;
+
+	// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
+	if (!arena)
+		arena = temp;
 
 	switch (job->kind)
 	{
@@ -115,8 +121,7 @@ static void asset_job(job_context_t *context, void *userdata)
 				{
 					resource_handle_t idiot_code = asset->image.gpu;
 
-					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
-					asset->image = load_image_from_disk(temp, STRING_FROM_STORAGE(asset->path), 4);
+					asset->image = load_image_from_disk(arena, STRING_FROM_STORAGE(asset->path), 4);
 					asset->image.gpu = idiot_code;
 
 					render->populate_texture(asset->image.gpu, &(upload_texture_t){
@@ -136,8 +141,7 @@ static void asset_job(job_context_t *context, void *userdata)
 
 				case ASSET_KIND_WAVEFORM:
 				{
-					// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
-					asset->waveform = load_waveform_from_disk(temp, STRING_FROM_STORAGE(asset->path));
+					asset->waveform = load_waveform_from_disk(arena, STRING_FROM_STORAGE(asset->path));
 				} break;
 
 				default:
@@ -148,7 +152,6 @@ static void asset_job(job_context_t *context, void *userdata)
 
 			if (loaded_successfully)
 			{
-				// x64: writes are atomic (right?)
 				asset->state = ASSET_STATE_IN_MEMORY;
 			}
 		} break;
@@ -240,7 +243,7 @@ static asset_slot_t *get_or_load_asset_async(asset_hash_t hash, asset_kind_t kin
 		int64_t state = asset->state;
 
 		if (state == ASSET_STATE_ON_DISK &&
-			atomic_cas64(&asset->state, ASSET_STATE_BEING_LOADED_ASYNC, ASSET_STATE_ON_DISK) == ASSET_STATE_ON_DISK)
+			atomic_cas_u32(&asset->state, ASSET_STATE_BEING_LOADED_ASYNC, ASSET_STATE_ON_DISK) == ASSET_STATE_ON_DISK)
 		{
 			// FIXME: FIX LEAK!!!!!
 			// FIXME: FIX LEAK!!!!!
@@ -249,7 +252,7 @@ static asset_slot_t *get_or_load_asset_async(asset_hash_t hash, asset_kind_t kin
 			// FIXME: FIX LEAK!!!!!
 			asset_job_t *job = m_alloc_struct(&asset_arena, asset_job_t);
 			job->kind  = ASSET_JOB_LOAD_FROM_DISK;
-			job->asset = asset,
+			job->asset = asset;
 
 			add_job_to_queue(high_priority_job_queue, asset_job, job);
 		}
@@ -267,6 +270,7 @@ static asset_slot_t *get_or_load_asset_blocking(asset_hash_t hash, asset_kind_t 
 			asset_job_t job = {
 				.kind  = ASSET_JOB_LOAD_FROM_DISK,
 				.asset = asset,
+				.arena = &asset_arena,
 			};
 
 			asset->state = ASSET_STATE_BEING_LOADED_ASYNC;

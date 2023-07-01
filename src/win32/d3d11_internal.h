@@ -122,7 +122,6 @@ typedef struct d3d_state_t
 	arena_t gen_mipmaps_arena;
 	d3d_gen_mipmaps_t *first_gen_mipmaps;
 
-	SRWLOCK texture_lock;
 	SRWLOCK context_lock;
 
     d3d_texture_t *white_texture;
