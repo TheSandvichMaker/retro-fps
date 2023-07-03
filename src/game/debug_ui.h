@@ -92,6 +92,27 @@ DREAM_INLINE rect2_t ui_do_cut(ui_cut_t cut, float a)
 	return (rect2_t){ 0 };
 }
 
+typedef struct ui_style_t
+{
+	v4_t text;
+
+	struct
+	{
+		v4_t background;
+		v4_t title_bar;
+	} window;
+
+	struct
+	{
+		v4_t background;
+		v4_t hot;
+		v4_t active;
+		v4_t fired;
+	} button;
+} ui_style_t;
+
+DREAM_API void ui_set_style(const ui_style_t *style);
+
 DREAM_API void ui_begin(float dt);
 DREAM_API rect2_t ui_window(string_t label, rect2_t size);
 

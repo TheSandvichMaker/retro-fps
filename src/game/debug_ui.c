@@ -38,6 +38,8 @@ typedef struct ui_t
 	ui_id_t hot;
 	ui_id_t active;
 
+	ui_style_t style;
+
 	v2_t mouse;
 
 	bitmap_font_t font;
@@ -119,6 +121,15 @@ void ui_begin(float dt)
         ui.font.texture = font_image->gpu;
 
 		ui.initialized = true;
+
+		ui_style_t *style = &ui.style;
+		style->text              = make_v4(0.90f, 0.90f, 0.90f, 1.0f);
+		style->window.background = make_v4(0.15f, 0.15f, 0.15f, 1.0f);
+		style->window.title_bar  = make_v4(0.45f, 0.25f, 0.25f, 1.0f);
+		style->button.background = make_v4(0.25f, 0.25f, 0.25f, 1.0f);
+		style->button.hot        = make_v4(0.25f, 0.35f, 0.65f, 1.0f);
+		style->button.active     = make_v4(0.35f, 0.45f, 0.85f, 1.0f);
+		style->button.fired      = make_v4(0.45f, 0.30f, 0.25f, 1.0f);
 	}
 
 	ui.frame_index += 1;
@@ -149,29 +160,25 @@ rect2_t ui_window(string_t label, rect2_t rect)
 
 	rect2_t bar = ui_add_top(&rect, (float)ui.font.ch);
 
-	v4_t text_color = make_v4(0.90f, 0.90f, 0.90f, 1.0f);
-	v4_t bar_color  = make_v4(0.45f, 0.25f, 0.25f, 1.0f);
-	v4_t body_color = make_v4(0.15f, 0.15f, 0.15f, 1.0f);
-
 	// TODO: This drawing API is horrible fix it. FIX IT. DO SOMETHING ABOUT IT
 	// TODO: This drawing API is horrible fix it. FIX IT. DO SOMETHING ABOUT IT
 	// TODO: This drawing API is horrible fix it. FIX IT. DO SOMETHING ABOUT IT
 	// TODO: This drawing API is horrible fix it. FIX IT. DO SOMETHING ABOUT IT
 	{
 		r_immediate_draw_t *draw = r_immediate_draw_begin(NULL);
-		r_push_rect2_filled(draw, bar, bar_color);
+		r_push_rect2_filled(draw, bar, ui.style.window.title_bar);
 		r_immediate_draw_end(draw);
 	}
 
 	{
 		r_immediate_draw_t *draw = r_immediate_draw_begin(&(r_immediate_params_t){ .texture = ui.font.texture, .clip_rect = bar });
-		r_push_text(draw, &ui.font, bar.min, text_color, label);
+		r_push_text(draw, &ui.font, bar.min, ui.style.text, label);
 		r_immediate_draw_end(draw);
 	}
 
 	{
 		r_immediate_draw_t *draw = r_immediate_draw_begin(NULL);
-		r_push_rect2_filled(draw, rect, body_color);
+		r_push_rect2_filled(draw, rect, ui.style.window.background);
 		r_immediate_draw_end(draw);
 	}
 
@@ -230,19 +237,13 @@ bool ui_button(ui_cut_t cut, string_t label)
 		ui_set_active(id);
 	}
 
-	v4_t back_color   = make_v4(0.25f, 0.25f, 0.25f, 1.0f);
-	v4_t hot_color    = make_v4(0.25f, 0.35f, 0.65f, 1.0f);
-	v4_t active_color = make_v4(0.35f, 0.45f, 0.85f, 1.0f);
-	v4_t fired_color  = make_v4(0.45f, 0.30f, 0.25f, 1.0f);
-	v4_t text_color   = make_v4(0.90f, 0.90f, 0.90f, 1.0f);
-
-	v4_t color = back_color;
+	v4_t color = ui.style.button.background;
 
 	if (ui_is_hot(id))
-		color = hot_color;
+		color = ui.style.button.hot;
 
 	if (ui_is_active(id))
-		color = active_color;
+		color = ui.style.button.active;
 
 	if (widget->t >= 0.0f)
 	{
@@ -251,7 +252,7 @@ bool ui_button(ui_cut_t cut, string_t label)
 		float t = widget->t;
 		t *= t;
 
-		color = v4_lerps(color, fired_color, t);
+		color = v4_lerps(color, ui.style.button.fired, t);
 
 		widget->t -= ui.dt / rate;
 
@@ -267,7 +268,7 @@ bool ui_button(ui_cut_t cut, string_t label)
 
 	{
 		r_immediate_draw_t *draw = r_immediate_draw_begin(&(r_immediate_params_t){ .texture = ui.font.texture, .clip_rect = rect });
-		r_push_text(draw, &ui.font, rect.min, text_color, label);
+		r_push_text(draw, &ui.font, rect.min, ui.style.text, label);
 		r_immediate_draw_end(draw);
 	}
 
