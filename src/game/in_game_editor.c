@@ -118,6 +118,9 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 		});
 	}
 
+	static float slide_this = 10.0f;
+	ui_slider(&window, string_format(temp, "slide this %.02f", slide_this), &slide_this, 5.0f, 25.0f);
+
 	r_pop_view();
 
 #if 0

@@ -27,6 +27,14 @@ DREAM_INLINE ui_id_t ui_id(string_t string)
 	return result;
 }
 
+DREAM_INLINE ui_id_t ui_id_pointer(void *pointer)
+{
+	ui_id_t result = {
+		.value = (uintptr_t)pointer,
+	};
+	return result;
+}
+
 typedef struct ui_t
 {
 	bool initialized;
@@ -40,7 +48,9 @@ typedef struct ui_t
 
 	ui_style_t style;
 
-	v2_t mouse;
+	v2_t mouse_p;
+	v2_t mouse_pressed_p;
+	v2_t mouse_pressed_offset;
 
 	bitmap_font_t font;
 } ui_t;
@@ -130,6 +140,10 @@ void ui_begin(float dt)
 		style->button.hot        = make_v4(0.25f, 0.35f, 0.65f, 1.0f);
 		style->button.active     = make_v4(0.35f, 0.45f, 0.85f, 1.0f);
 		style->button.fired      = make_v4(0.45f, 0.30f, 0.25f, 1.0f);
+		style->slider.background = make_v4(0.25f, 0.25f, 0.25f, 1.0f);
+		style->slider.foreground = make_v4(0.25f, 0.35f, 0.65f, 1.0f);
+		style->slider.hot        = make_v4(0.35f, 0.45f, 0.85f, 1.0f);
+		style->slider.active     = make_v4(0.45f, 0.30f, 0.25f, 1.0f);
 	}
 
 	ui.frame_index += 1;
@@ -151,7 +165,7 @@ void ui_begin(float dt)
     int mouse_x, mouse_y;
     get_mouse(&mouse_x, &mouse_y);
 
-	ui.mouse = (v2_t){ (float)mouse_x, (float)mouse_y };
+	ui.mouse_p = (v2_t){ (float)mouse_x, (float)mouse_y };
 }
 
 rect2_t ui_window(string_t label, rect2_t rect)
@@ -185,6 +199,48 @@ rect2_t ui_window(string_t label, rect2_t rect)
 	return rect;
 }
 
+typedef enum ui_interaction_t
+{
+	UI_PRESSED  = 0x1,
+	UI_HELD     = 0x2,
+	UI_RELEASED = 0x4,
+} ui_interaction_t;
+
+DREAM_INLINE uint32_t ui_button_behaviour(ui_id_t id, rect2_t rect)
+{
+	uint32_t result = 0;
+
+	if (ui_is_active(id))
+	{
+		result |= UI_HELD;
+
+		if (ui_button_released(BUTTON_FIRE1))
+		{
+			if (rect2_contains_point(rect, ui.mouse_p))
+			{
+				result |= UI_RELEASED;
+			}
+
+			ui_clear_active();
+		}
+	}
+	else if (rect2_contains_point(rect, ui.mouse_p))
+	{
+		ui_set_hot(id);
+	}
+
+	if (ui_is_hot(id) &&
+		ui_button_pressed(BUTTON_FIRE1))
+	{
+		result |= UI_PRESSED;
+		ui.mouse_pressed_p      = ui.mouse_p;
+		ui.mouse_pressed_offset = sub(ui.mouse_p, rect2_center(rect));
+		ui_set_active(id);
+	}
+
+	return result;
+}
+
 bool ui_button(ui_cut_t cut, string_t label)
 {
 	if (NEVER(!ui.initialized)) return false;
@@ -213,28 +269,12 @@ bool ui_button(ui_cut_t cut, string_t label)
 
 	rect2_t rect = ui_do_cut(cut, a);
 
-	if (ui_is_active(id))
-	{
-		if (ui_button_released(BUTTON_FIRE1))
-		{
-			if (rect2_contains_point(rect, ui.mouse))
-			{
-				result = true;
-				widget->t = 1.0f;
-			}
+	uint32_t interaction = ui_button_behaviour(id, rect);
+	result = interaction & UI_RELEASED;
 
-			ui_clear_active();
-		}
-	}
-	else if (rect2_contains_point(rect, ui.mouse))
+	if (result)
 	{
-		ui_set_hot(id);
-	}
-
-	if (ui_is_hot(id) &&
-		ui_button_pressed(BUTTON_FIRE1))
-	{
-		ui_set_active(id);
+		widget->t = 1.0f;
 	}
 
 	v4_t color = ui.style.button.background;
@@ -247,9 +287,10 @@ bool ui_button(ui_cut_t cut, string_t label)
 
 	if (widget->t >= 0.0f)
 	{
-		float rate = 0.25f;
+		float rate = 0.5f;
 
 		float t = widget->t;
+		t *= t;
 		t *= t;
 
 		color = v4_lerps(color, ui.style.button.fired, t);
@@ -273,4 +314,84 @@ bool ui_button(ui_cut_t cut, string_t label)
 	}
 
 	return result;
+}
+
+void ui_slider(rect2_t *layout, string_t label, float *v, float min, float max)
+{
+	if (NEVER(!v)) return;
+
+	ui_id_t          id = ui_id_pointer(v);
+	ui_widget_t *widget = ui_get_widget(id);
+
+	rect2_t outer      = ui_cut_bottom(layout, (float)ui.font.ch);
+	rect2_t label_rect = ui_cut_left(&outer, (float)label.count*ui.font.cw);
+
+	float handle_width = 16.0f;
+	float handle_half_width = 0.5f*handle_width;
+	
+	float width = rect2_width(outer);
+	float relative_x = CLAMP((ui.mouse_p.x - ui.mouse_pressed_offset.x) - outer.min.x - handle_half_width, 0.0f, width - handle_width);
+
+	float pct = 0.0f;
+
+	if (ui_is_active(id))
+	{
+		pct = relative_x / (width - handle_width);
+		*v = min + pct*(max - min);
+	}
+	else
+	{
+		float value = *v;
+		pct = (value - min) / (max - min); // TODO: protect against division by zero, think about min > max case
+	}
+
+	float width_exclusive = width - handle_width;
+	float handle_offset = pct*width_exclusive;
+
+	rect2_t left   = ui_cut_left(&outer, handle_offset);
+	rect2_t handle = ui_cut_left(&outer, handle_width);
+	rect2_t right  = outer;
+
+	uint32_t interaction = ui_button_behaviour(id, handle);
+
+	if (interaction & UI_RELEASED)
+		widget->t = 1.0f;
+
+	v4_t color = ui.style.slider.foreground;
+
+	if (ui_is_hot(id))
+		color = ui.style.slider.hot;
+
+	if (ui_is_active(id))
+		color = ui.style.slider.active;
+
+	if (widget->t >= 0.0f)
+	{
+		float rate = 0.5f;
+
+		float t = widget->t;
+		t *= t;
+		t *= t;
+
+		color = v4_lerps(color, ui.style.slider.active, t);
+
+		widget->t -= ui.dt / rate;
+
+		if (widget->t < 0.0f)
+			widget->t = 0.0f;
+	}
+
+	{
+		r_immediate_draw_t *draw = r_immediate_draw_begin(NULL);
+		r_push_rect2_filled(draw, left, ui.style.slider.background);
+		r_push_rect2_filled(draw, handle, color);
+		r_push_rect2_filled(draw, right, ui.style.slider.background);
+		r_immediate_draw_end(draw);
+	}
+
+	{
+		r_immediate_draw_t *draw = r_immediate_draw_begin(&(r_immediate_params_t){ .texture = ui.font.texture, .clip_rect = label_rect });
+		r_push_text(draw, &ui.font, label_rect.min, ui.style.text, label);
+		r_immediate_draw_end(draw);
+	}
 }

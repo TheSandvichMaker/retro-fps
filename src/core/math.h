@@ -1142,6 +1142,11 @@ DREAM_INLINE rect2_t rect2_infinity(void)
     return result;
 }
 
+DREAM_INLINE v2_t rect2_center(rect2_t rect)
+{
+	return mul(0.5f, add(rect.min, rect.max));
+}
+
 DREAM_INLINE v2_t rect2_get_dim(rect2_t rect)
 {
     v2_t result = {
@@ -1149,6 +1154,11 @@ DREAM_INLINE v2_t rect2_get_dim(rect2_t rect)
         rect.max.y - rect.min.y,
     };
     return result;
+}
+
+DREAM_INLINE float rect2_width(rect2_t rect)
+{
+	return rect.max.x - rect.min.x;
 }
 
 //

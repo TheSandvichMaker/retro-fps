@@ -109,6 +109,14 @@ typedef struct ui_style_t
 		v4_t active;
 		v4_t fired;
 	} button;
+
+	struct
+	{
+		v4_t background;
+		v4_t foreground;
+		v4_t hot;
+		v4_t active;
+	} slider;
 } ui_style_t;
 
 DREAM_API void ui_set_style(const ui_style_t *style);
@@ -117,5 +125,6 @@ DREAM_API void ui_begin(float dt);
 DREAM_API rect2_t ui_window(string_t label, rect2_t size);
 
 DREAM_API bool ui_button(ui_cut_t cut, string_t label);
+DREAM_API void ui_slider(rect2_t *layout, string_t label, float *v, float min, float max);
 
 #endif
