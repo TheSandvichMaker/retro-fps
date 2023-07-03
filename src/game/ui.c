@@ -1,3 +1,5 @@
+#if 0
+
 #include "ui.h"
 #include "input.h"
 #include "core/arena.h"
@@ -955,3 +957,5 @@ void ui_end(float dt)
     ui_process_interactions();
     ui_draw();
 }
+
+#endif

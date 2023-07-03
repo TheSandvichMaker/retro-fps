@@ -7,7 +7,8 @@
 #include "input.h"
 #include "asset.h"
 #include "intersect.h"
-#include "ui.h"
+// #include "ui.h"
+#include "debug_ui.h"
 #include "audio.h"
 #include "in_game_editor.h"
 #include "job_queues.h"
@@ -506,6 +507,7 @@ void game_tick(game_io_t *io, float dt)
 
     v2_t res = make_v2((float)res_x, (float)res_y);
 
+#if 0
     ui_style_t ui_style = {
         .text_color = make_v4(0.9f, 0.9f, 0.9f, 1.0f),
 
@@ -531,31 +533,16 @@ void game_tick(game_io_t *io, float dt)
 
     if (ui_focused)
     {
-        // no more input for you, game
-        // but the UI code still needs to see input
-        // the way I did a lot of the code base for this project is sort of different
-        // from how I usually do things, just to keep me on my toes, but as a result
-        // a lot of it is kind of... bad. the input included. it receives a game_io_t
-        // struct from the platform layer just like in handmade hero, but then instead
-        // of passing down the input state to functions that need it, update_input_state
-        // will set some global stuff which can then be accessed anywhere in the code,
-        // so there is no obvious way to control who gets to query input.
-
-        // instead it will be just, hey, before any other game code runs, maybe eat the
-        // inputs.
-
         suppress_game_input(true);
     }
+#endif
+
+	ui_begin(dt);
 
     if (button_pressed(BUTTON_FIRE2))
         g_cursor_locked = !g_cursor_locked;
 
 #if 0
-    if (button_pressed(BUTTON_FIRE1))
-        stop_sound(music);
-#endif
-
-#if 1
     if (button_pressed(BUTTON_FIRE1))
         play_sound(&(play_sound_t){
 			.waveform = short_sound,
@@ -688,7 +675,9 @@ void game_tick(game_io_t *io, float dt)
 
     update_and_render_in_game_editor(io, world);
 
+#if 0
     ui_end(dt);
+#endif
 
     {
         //

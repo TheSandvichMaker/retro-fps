@@ -58,6 +58,7 @@ typedef struct string_t
 
 #define strinit(text) { sizeof(text)-1, (const char *)("" text) }
 #define strlit(text) ((string_t) { sizeof(text)-1, (const char *)("" text) })
+#define S(text) strlit(text) // new laziness thing, will it stick?
 #define strexpand(string) (int)(string).count, (string).data
 #define strnull (string_t){ 0 }
 

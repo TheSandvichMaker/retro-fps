@@ -87,6 +87,16 @@ DREAM_API image_t    *get_missing_waveform (void);
 DREAM_API image_t    *get_image_blocking   (asset_hash_t hash);
 DREAM_API waveform_t *get_waveform_blocking(asset_hash_t hash);
 
+DREAM_INLINE image_t *get_image_from_string(string_t string)
+{
+	return get_image(asset_hash_from_string(string));
+}
+
+DREAM_INLINE waveform_t *get_waveform_from_string(string_t string)
+{
+	return get_waveform(asset_hash_from_string(string));
+}
+
 //
 // raw asset loading
 //

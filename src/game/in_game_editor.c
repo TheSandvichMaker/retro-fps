@@ -7,8 +7,11 @@
 #include "in_game_editor.h"
 #include "game.h"
 #include "map.h"
-#include "ui.h"
+// #include "ui.h"
+#include "debug_ui.h"
 #include "intersect.h"
+#include "asset.h"
+#include "audio.h"
 
 static void push_poly_wireframe(map_t *map, r_immediate_draw_t *draw_call, map_poly_t *poly, v4_t color)
 {
@@ -74,22 +77,50 @@ static editor_state_t g_editor = {
 
 static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 {
+	(void)io;
+
     player_t *player = world->player;
     map_t    *map    = world->map;
 
     map_entity_t *worldspawn = map->worldspawn;
 
-    v3_t sun_color = v3_normalize(v3_from_key(map, worldspawn, strlit("sun_color")));
-    float sun_brightness = float_from_key(map, worldspawn, strlit("sun_brightness"));
+    v3_t sun_color = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
+    float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
     sun_color = mul(sun_brightness, sun_color);
 
-    v3_t ambient_color = v3_from_key(map, worldspawn, strlit("ambient_color"));
+    v3_t ambient_color = v3_from_key(map, worldspawn, S("ambient_color"));
     ambient_color = mul(1.0f / 255.0f, ambient_color);
 
     camera_t *camera = player->attached_camera;
+	(void)camera;
 
     lightmap_editor_state_t *lm_editor = &g_editor.lightmap_editor;
+	(void)lm_editor;
 
+	waveform_t *test_sound = get_waveform(asset_hash_from_string(S("gamedata/audio/menu_select.wav")));
+
+	r_push_view_screenspace();
+
+	rect2_t window = ui_window(S("Lightmap Editor"), rect2_min_dim(make_v2(32.0f, 32.0f), make_v2(512.0f, 512.0f)));
+
+	static ui_cut_side_t side = UI_CUT_BOTTOM;
+
+	if (ui_button(ui_cut(&window, UI_CUT_BOTTOM), S("Next cut direction")))
+	{
+		side = ((int)side + 1) % UI_CUT_COUNT;
+	}
+
+	if (ui_button(ui_cut(&window, side), S("Test Button")))
+	{
+		play_sound(&(play_sound_t){
+			.waveform = test_sound,
+			.volume   = 1.0f,
+		});
+	}
+
+	r_pop_view();
+
+#if 0
     ui_box_t *window_panel = ui_box(strlit("Lightmap Editor##panel"), UI_DRAW_BACKGROUND|UI_DRAW_OUTLINE);
 
     float window_width  = 512;
@@ -587,6 +618,7 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 
         r_immediate_draw_end(draw_call);
     }
+#endif
 }
 
 void update_and_render_in_game_editor(game_io_t *io, world_t *world)

@@ -1082,6 +1082,15 @@ DREAM_INLINE v2i_t rect2i_get_dim(rect2i_t rect)
 // rect2
 //
 
+DREAM_INLINE rect2_t rect2_min_dim(v2_t min, v2_t dim)
+{
+    rect2_t result = {
+        .min = min,
+        .max = add(min, dim),
+    };
+    return result;
+}
+
 DREAM_INLINE rect2_t rect2_center_dim(v2_t center, v2_t dim)
 {
     rect2_t result = {

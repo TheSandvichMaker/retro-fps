@@ -306,6 +306,18 @@ string_t string_trim_spaces(string_t string)
     return string;
 }
 
+size_t string_count_newlines(string_t string)
+{
+	size_t result = 0;
+
+	for (size_t i = 0; i < string.count; i++)
+	{
+		if (string.data[i] == '\n') result++;
+	}
+
+	return result;
+}
+
 string_t string_split_word(string_t *string)
 {
     string_t result = *string;
