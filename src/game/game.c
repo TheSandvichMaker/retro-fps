@@ -531,13 +531,14 @@ void game_tick(game_io_t *io, float dt)
 
     bool ui_focused = ui_begin(&font, &ui_style);
 
+#endif
+
+	bool ui_focused = ui_begin(dt);
+
     if (ui_focused)
     {
         suppress_game_input(true);
     }
-#endif
-
-	ui_begin(dt);
 
     if (button_pressed(BUTTON_FIRE2))
         g_cursor_locked = !g_cursor_locked;
@@ -675,9 +676,7 @@ void game_tick(game_io_t *io, float dt)
 
     update_and_render_in_game_editor(io, world);
 
-#if 0
-    ui_end(dt);
-#endif
+    ui_end();
 
     {
         //

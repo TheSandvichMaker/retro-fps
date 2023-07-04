@@ -1133,6 +1133,15 @@ DREAM_INLINE rect2_t rect2_intersect(rect2_t a, rect2_t b)
     return result;
 }
 
+DREAM_INLINE rect2_t rect2_uninvert(rect2_t rect)
+{
+	rect2_t result = {
+		.min = min(rect.min, rect.max),
+		.max = max(rect.min, rect.max),
+	};
+	return result;
+}
+
 DREAM_INLINE rect2_t rect2_infinity(void)
 {
     rect2_t result = {
@@ -1140,6 +1149,15 @@ DREAM_INLINE rect2_t rect2_infinity(void)
         .max = {  FLT_MAX,  FLT_MAX },
     };
     return result;
+}
+
+DREAM_INLINE rect2_t rect2_add_offset(rect2_t rect, v2_t offset)
+{
+	rect2_t result = {
+		.min = add(rect.min, offset),
+		.max = add(rect.max, offset),
+	};
+	return result;
 }
 
 DREAM_INLINE v2_t rect2_center(rect2_t rect)
@@ -1159,6 +1177,18 @@ DREAM_INLINE v2_t rect2_get_dim(rect2_t rect)
 DREAM_INLINE float rect2_width(rect2_t rect)
 {
 	return rect.max.x - rect.min.x;
+}
+
+DREAM_INLINE float rect2_height(rect2_t rect)
+{
+	return rect.max.y - rect.min.y;
+}
+
+DREAM_INLINE float rect2_area(rect2_t rect)
+{
+	float w = rect2_width(rect);
+	float h = rect2_height(rect);
+	return w*h;
 }
 
 //

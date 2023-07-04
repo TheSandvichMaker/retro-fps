@@ -297,6 +297,7 @@ void r_reset_command_list(void);
 void r_default_view(r_view_t *view);
 void r_push_view(const r_view_t *view);
 void r_push_view_screenspace(void);
+void r_push_view_screenspace_clip_rect(rect2_t clip_rect);
 void r_copy_top_view(r_view_t *view);
 r_view_t *r_get_top_view(void);
 v3_t r_to_view_space(const r_view_t *view, v3_t p, float w);

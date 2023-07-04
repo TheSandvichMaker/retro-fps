@@ -97,29 +97,53 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
     lightmap_editor_state_t *lm_editor = &g_editor.lightmap_editor;
 	(void)lm_editor;
 
-	waveform_t *test_sound = get_waveform(asset_hash_from_string(S("gamedata/audio/menu_select.wav")));
+	waveform_t *test_sound = get_waveform_from_string(S("gamedata/audio/menu_select.wav"));
 
 	r_push_view_screenspace();
 
-	rect2_t window = ui_window(S("Lightmap Editor"), rect2_min_dim(make_v2(32.0f, 32.0f), make_v2(512.0f, 512.0f)));
-
-	static ui_cut_side_t side = UI_CUT_BOTTOM;
-
-	if (ui_button(ui_cut(&window, UI_CUT_BOTTOM), S("Next cut direction")))
+	ui_window_begin(S("Lightmap Editor"), rect2_min_dim(make_v2(32.0f, 128.0f), make_v2(512.0f, 512.0f)));
 	{
-		side = ((int)side + 1) % UI_CUT_COUNT;
-	}
+		rect2_t *layout = ui_layout_rect();
 
-	if (ui_button(ui_cut(&window, side), S("Test Button")))
-	{
-		play_sound(&(play_sound_t){
-			.waveform = test_sound,
-			.volume   = 1.0f,
-		});
-	}
+		ui_panel_begin(ui_cut_top(layout, 18.0f));
+		{
+			rect2_t *sub_layout = ui_layout_rect();
+			ui_set_layout_direction(UI_CUT_LEFT);
 
-	static float slide_this = 10.0f;
-	ui_slider(&window, string_format(temp, "slide this %.02f", slide_this), &slide_this, 5.0f, 25.0f);
+			float width = ui_divide_space(5);
+			for (int i = 0; i < 5; i++)
+			{
+				ui_set_next_rect(ui_cut_left(sub_layout, width));
+				ui_button(Sf("Butt #%d", i));
+			}
+		}
+		ui_panel_end();
+
+		static ui_cut_side_t side = UI_CUT_TOP;
+
+		if (ui_button(S("Next cut direction")))
+		{
+			side = ((int)side + 1) % UI_CUT_COUNT;
+		}
+		ui_set_layout_direction(side);
+
+		if (ui_button(S("Test Button")))
+		{
+			play_sound(&(play_sound_t){
+				.waveform = test_sound,
+				.volume   = 1.0f,
+			});
+		}
+
+		static float slide_this = 10.0f;
+		ui_slider(Sf("slide this %.02f", slide_this), &slide_this, 5.0f, 25.0f);
+
+		for (int i = 0; i < 64; i++)
+		{
+			ui_button(Sf("Test Button #%d", i));
+		}
+	}
+	ui_window_end();
 
 	r_pop_view();
 

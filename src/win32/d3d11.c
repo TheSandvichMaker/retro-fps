@@ -622,8 +622,12 @@ void render_model(const render_pass_t *pass)
 
     ID3D11DeviceContext_RSSetState(d3d.context, rs);
 
+	D3D11_RECT scissor_rect = pass->scissor_rect;
+	if (scissor_rect.bottom < scissor_rect.top) scissor_rect.bottom = scissor_rect.top;
+	if (scissor_rect.right < scissor_rect.left) scissor_rect.right = scissor_rect.left;
+
     if (pass->scissor)
-        ID3D11DeviceContext_RSSetScissorRects(d3d.context, 1, &pass->scissor_rect);
+        ID3D11DeviceContext_RSSetScissorRects(d3d.context, 1, &scissor_rect);
     else
         ID3D11DeviceContext_RSSetScissorRects(d3d.context, 1, (&(D3D11_RECT){ 0, 0, d3d.current_width, d3d.current_height }));
 
@@ -1136,6 +1140,8 @@ done_with_sun_shadows:
 
                     d3d_texture_t *texture = d3d_get_texture_or(draw_call->params.texture, d3d.white_texture);
 
+					rect2_t clip_rect = rect2_intersect(draw_call->params.clip_rect, view->clip_rect);
+
                     render_model(&(render_pass_t) {
                         .render_target = current_render_target->color_rtv,
                         .depth_stencil = current_render_target->depth_dsv,
@@ -1161,10 +1167,10 @@ done_with_sun_shadows:
                         .viewport = viewport,
                         .scissor  = true,
                         .scissor_rect = {
-                            .left   = (LONG)draw_call->params.clip_rect.min.x,
-                            .right  = (LONG)draw_call->params.clip_rect.max.x,
-                            .bottom = height - (LONG)draw_call->params.clip_rect.min.y,
-                            .top    = height - (LONG)draw_call->params.clip_rect.max.y - 1,
+                            .left   = (LONG)clip_rect.min.x,
+                            .right  = (LONG)clip_rect.max.x,
+                            .bottom = height - (LONG)clip_rect.min.y,
+                            .top    = height - (LONG)clip_rect.max.y,
                         },
                     });
                 } break;

@@ -150,6 +150,30 @@ void r_push_view_screenspace(void)
     }
 }
 
+void r_push_view_screenspace_clip_rect(rect2_t clip_rect)
+{
+	r_view_t view;
+	r_default_view(&view);
+
+    int w, h;
+    render->get_resolution(&w, &h);
+
+	float a = 2.0f / (float)w;
+	float b = 2.0f / (float)h;
+
+	view.camera = make_m4x4(
+		a, 0, 0, -1,
+		0, b, 0, -1,
+		0, 0, 1,  0,
+		0, 0, 0,  1
+	);
+
+	r_view_t *parent = r_get_top_view();
+
+	view.clip_rect = rect2_intersect(clip_rect, parent->clip_rect);
+	r_push_view(&view);
+}
+
 void r_default_view(r_view_t *view)
 {
     zero_struct(view);

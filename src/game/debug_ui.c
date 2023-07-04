@@ -9,39 +9,32 @@
 #include "game/asset.h"
 #include "game/debug_ui.h"
 
-typedef struct ui_id_t
+typedef struct ui_panel_t
 {
-	uint64_t value;
-} ui_id_t;
-
-DREAM_INLINE ui_id_t ui_id(string_t string)
-{
-	uint64_t hash = string_hash(string);
-
-	if (hash == 0)
-		hash = ~(uint64_t)0;
-
-	ui_id_t result = {
-		.value = hash,
+	union
+	{
+		struct ui_panel_t *parent;
+		struct ui_panel_t *next_free;
 	};
-	return result;
-}
-
-DREAM_INLINE ui_id_t ui_id_pointer(void *pointer)
-{
-	ui_id_t result = {
-		.value = (uintptr_t)pointer,
-	};
-	return result;
-}
+	ui_id_t          id;
+	ui_cut_side_t    layout_direction;
+	ui_panel_flags_t flags;
+	rect2_t          init_rect;
+	rect2_t          rect;
+} ui_panel_t;
 
 typedef struct ui_t
 {
 	bool initialized;
 
+	arena_t arena;
+
 	uint64_t frame_index;
 
 	float dt;
+
+	bool has_focus;
+	bool hovered;
 
 	ui_id_t hot;
 	ui_id_t active;
@@ -52,16 +45,118 @@ typedef struct ui_t
 	v2_t mouse_pressed_p;
 	v2_t mouse_pressed_offset;
 
+	ui_panel_t *panel;
+	ui_panel_t *first_free_panel;
+
+	rect2_t next_rect;
+
 	bitmap_font_t font;
 } ui_t;
 
 static ui_t ui;
+
+DREAM_INLINE ui_panel_t *ui_push_panel(rect2_t rect)
+{
+	if (!ui.first_free_panel)
+	{
+		ui.first_free_panel = m_alloc_struct_nozero(&ui.arena, ui_panel_t);
+		ui.first_free_panel->next_free = NULL;
+	}
+
+	ui_panel_t *panel = ui.first_free_panel;
+	ui.first_free_panel = panel->next_free;
+
+	zero_struct(panel);
+
+	panel->layout_direction = UI_CUT_TOP;
+	panel->rect = rect;
+
+	panel->parent = ui.panel;
+	ui.panel = panel;
+
+	return panel;
+}
+
+DREAM_INLINE void ui_pop_panel(void)
+{
+	if (ALWAYS(ui.panel))
+	{
+		ui_panel_t *panel = ui.panel;
+		ui.panel = ui.panel->parent;
+
+		panel->next_free = ui.first_free_panel;
+		ui.first_free_panel = panel;
+	}
+}
+
+DREAM_INLINE ui_panel_t *ui_panel(void)
+{
+	static ui_panel_t dummy_panel = { 0 };
+
+	ui_panel_t *result = &dummy_panel;
+
+	if (ALWAYS(ui.panel))
+	{
+		result = ui.panel;
+	}
+
+	return result;
+}
+
+rect2_t *ui_layout_rect(void)
+{
+	ui_panel_t *panel = ui_panel();
+	return &panel->rect;
+}
+
+void ui_set_layout_direction(ui_cut_side_t side)
+{
+	ui_panel_t *panel = ui_panel();
+	panel->layout_direction = side;
+}
+
+void ui_set_next_rect(rect2_t rect)
+{
+	ui.next_rect = rect;
+}
+
+float ui_divide_space(float item_count)
+{
+	float size = 0.0f;
+
+	if (item_count > 0.0001f)
+	{
+		ui_panel_t *panel = ui_panel();
+
+		switch (panel->layout_direction)
+		{
+			case UI_CUT_LEFT:
+			case UI_CUT_RIGHT:
+			{
+				size = rect2_width(panel->rect) / item_count;
+			} break;
+
+			case UI_CUT_TOP:
+			case UI_CUT_BOTTOM:
+			{
+				size = rect2_height(panel->rect) / item_count;
+			} break;
+		}
+	}
+
+	return size;
+}
 
 typedef struct ui_widget_t
 {
 	ui_id_t id;
 
 	uint64_t last_touched_frame_index;
+
+	float scrollable_height_x;
+	float scrollable_height_y;
+	float scroll_offset_x;
+	float scroll_offset_y;
 
 	float t;
 } ui_widget_t;
@@ -119,7 +214,22 @@ DREAM_INLINE void ui_clear_active(void)
 	ui.active.value = 0;
 }
 
-void ui_begin(float dt)
+DREAM_INLINE bool ui_override_rect(rect2_t *override)
+{
+	bool result = false;
+
+	if (rect2_area(ui.next_rect) > 0.0f)
+	{
+		*override = ui.next_rect;
+		ui.next_rect = (rect2_t){ 0 };
+
+		result = true;
+	}
+
+	return result;
+}
+
+bool ui_begin(float dt)
 {
 	if (!ui.initialized)
 	{
@@ -133,6 +243,9 @@ void ui_begin(float dt)
 		ui.initialized = true;
 
 		ui_style_t *style = &ui.style;
+		style->widget_margin     = 1.0f;
+		style->text_margin       = 1.0f;
+		style->scrollbar_width   = 12.0f;
 		style->text              = make_v4(0.90f, 0.90f, 0.90f, 1.0f);
 		style->window.background = make_v4(0.15f, 0.15f, 0.15f, 1.0f);
 		style->window.title_bar  = make_v4(0.45f, 0.25f, 0.25f, 1.0f);
@@ -160,43 +273,25 @@ void ui_begin(float dt)
 	}
 
 	ui_clear_hot();
+	ui.hovered = false;
 	ui.dt = dt;
 
     int mouse_x, mouse_y;
     get_mouse(&mouse_x, &mouse_y);
 
 	ui.mouse_p = (v2_t){ (float)mouse_x, (float)mouse_y };
+
+	return ui.has_focus;
 }
 
-rect2_t ui_window(string_t label, rect2_t rect)
+void ui_end(void)
 {
-	if (NEVER(!ui.initialized)) return (rect2_t){ 0 };
-
-	rect2_t bar = ui_add_top(&rect, (float)ui.font.ch);
-
-	// TODO: This drawing API is horrible fix it. FIX IT. DO SOMETHING ABOUT IT
-	// TODO: This drawing API is horrible fix it. FIX IT. DO SOMETHING ABOUT IT
-	// TODO: This drawing API is horrible fix it. FIX IT. DO SOMETHING ABOUT IT
-	// TODO: This drawing API is horrible fix it. FIX IT. DO SOMETHING ABOUT IT
+	if (ui_button_pressed(BUTTON_FIRE1|BUTTON_FIRE2))
 	{
-		r_immediate_draw_t *draw = r_immediate_draw_begin(NULL);
-		r_push_rect2_filled(draw, bar, ui.style.window.title_bar);
-		r_immediate_draw_end(draw);
+		ui.has_focus = ui.hovered;
 	}
 
-	{
-		r_immediate_draw_t *draw = r_immediate_draw_begin(&(r_immediate_params_t){ .texture = ui.font.texture, .clip_rect = bar });
-		r_push_text(draw, &ui.font, bar.min, ui.style.text, label);
-		r_immediate_draw_end(draw);
-	}
-
-	{
-		r_immediate_draw_t *draw = r_immediate_draw_begin(NULL);
-		r_push_rect2_filled(draw, rect, ui.style.window.background);
-		r_immediate_draw_end(draw);
-	}
-
-	return rect;
+	ASSERT(ui.panel == NULL);
 }
 
 typedef enum ui_interaction_t
@@ -204,6 +299,7 @@ typedef enum ui_interaction_t
 	UI_PRESSED  = 0x1,
 	UI_HELD     = 0x2,
 	UI_RELEASED = 0x4,
+	UI_FIRED    = 0x8,
 } ui_interaction_t;
 
 DREAM_INLINE uint32_t ui_button_behaviour(ui_id_t id, rect2_t rect)
@@ -218,8 +314,10 @@ DREAM_INLINE uint32_t ui_button_behaviour(ui_id_t id, rect2_t rect)
 		{
 			if (rect2_contains_point(rect, ui.mouse_p))
 			{
-				result |= UI_RELEASED;
+				result |= UI_FIRED;
 			}
+
+			result |= UI_RELEASED;
 
 			ui_clear_active();
 		}
@@ -241,36 +339,216 @@ DREAM_INLINE uint32_t ui_button_behaviour(ui_id_t id, rect2_t rect)
 	return result;
 }
 
-bool ui_button(ui_cut_t cut, string_t label)
+DREAM_INLINE void ui_check_hovered(rect2_t rect)
 {
-	if (NEVER(!ui.initialized)) return false;
+	if (rect2_contains_point(rect, ui.mouse_p))
+	{
+		ui.hovered = true;
+	}
+}
 
+DREAM_INLINE float ui_widget_padding(void)
+{
+	return 2.0f*ui.style.widget_margin + 2.0f*ui.style.text_margin;
+}
+
+void ui_window_begin(string_t label, rect2_t rect)
+{
+	ASSERT(ui.initialized);
+
+	ui_check_hovered(rect);
+
+	rect2_t bar = ui_add_top(&rect, (float)ui.font.ch + 2.0f*ui.style.text_margin);
+	ui_check_hovered(bar);
+
+	{
+		r_immediate_draw_t *draw = r_immediate_draw_begin(NULL);
+		r_push_rect2_filled(draw, bar, ui.style.window.title_bar);
+		r_immediate_draw_end(draw);
+	}
+
+	{
+		r_immediate_draw_t *draw = r_immediate_draw_begin(&(r_immediate_params_t){ .texture = ui.font.texture, .clip_rect = bar });
+		r_push_text(draw, &ui.font, add(bar.min, make_v2(ui.style.text_margin, ui.style.text_margin)), ui.style.text, label);
+		r_immediate_draw_end(draw);
+	}
+
+	{
+		r_immediate_draw_t *draw = r_immediate_draw_begin(NULL);
+		r_push_rect2_filled(draw, rect, ui.style.window.background);
+		r_immediate_draw_end(draw);
+	}
+
+	ui_id_t id = ui_id(label);
+	ui_panel_begin_ex(id, rect, UI_PANEL_SCROLLABLE_VERT);
+}
+
+void ui_window_end(void)
+{
+	ASSERT(ui.initialized);
+	ui_panel_end();
+}
+
+void ui_panel_begin(rect2_t rect)
+{
+	ui_panel_begin_ex(UI_ID_NULL, rect, 0);
+}
+
+void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
+{
+	ASSERT(ui.initialized);
+
+	r_push_view_screenspace_clip_rect(rect);
+
+	rect2_t inner_rect = ui_shrink(&rect, ui.style.widget_margin);
+
+	float offset_y = 0.0f;
+
+	if (flags & UI_PANEL_SCROLLABLE_VERT)
+	{
+		rect2_t scroll_area = ui_cut_right(&rect, ui.style.scrollbar_width);
+		ui_widget_t *widget = ui_get_widget(id);
+		
+		if (widget->scrollable_height_y > 0.0f)
+		{
+			ui_id_t scrollbar_id = ui_child_id(id, S("scrollbar"));
+
+			float scroll_area_height = rect2_height(scroll_area);
+
+			float visible_area_ratio = rect2_height(inner_rect) / widget->scrollable_height_y;
+			float handle_size      = visible_area_ratio*scroll_area_height;
+			float handle_half_size = 0.5f*handle_size;
+
+			float pct = widget->scroll_offset_y / (widget->scrollable_height_y - rect2_height(inner_rect));
+
+			if (ui_is_active(scrollbar_id))
+			{
+				float relative_y = CLAMP((ui.mouse_p.y - ui.mouse_pressed_offset.y) - scroll_area.min.y - handle_half_size, 0.0f, scroll_area_height - handle_size);
+				pct = 1.0f - (relative_y / (scroll_area_height - handle_size));
+				widget->scroll_offset_y = pct*(widget->scrollable_height_y - rect2_height(inner_rect));
+			}
+
+			float height_exclusive = scroll_area_height - handle_size;
+			float handle_offset = pct*height_exclusive;
+
+			rect2_t top    = ui_cut_top(&scroll_area, handle_offset);
+			rect2_t handle = ui_cut_top(&scroll_area, handle_size);
+			rect2_t bot    = scroll_area;
+
+			uint32_t interaction = ui_button_behaviour(scrollbar_id, handle);
+
+			if (interaction & UI_RELEASED)
+				widget->t = 1.0f;
+
+			v4_t color = ui.style.slider.foreground;
+
+			if (ui_is_hot(id))
+				color = ui.style.slider.hot;
+
+			if (ui_is_active(id))
+				color = ui.style.slider.active;
+
+			if (widget->t >= 0.0f)
+			{
+				float rate = 0.5f;
+
+				float t = widget->t;
+				t *= t;
+				t *= t;
+
+				color = v4_lerps(color, ui.style.slider.active, t);
+
+				widget->t -= ui.dt / rate;
+
+				if (widget->t < 0.0f)
+					widget->t = 0.0f;
+			}
+
+			{
+				r_immediate_draw_t *draw = r_immediate_draw_begin(NULL);
+				r_push_rect2_filled(draw, top, ui.style.slider.background);
+				r_push_rect2_filled(draw, handle, color);
+				r_push_rect2_filled(draw, bot, ui.style.slider.background);
+				r_immediate_draw_end(draw);
+			}
+
+			offset_y = widget->scroll_offset_y;
+		}
+	}
+
+	inner_rect = ui_shrink(&rect, ui.style.widget_margin);
+	rect2_t init_rect = inner_rect;
+
+	inner_rect = rect2_add_offset(inner_rect, make_v2(0, offset_y));
+
+	if (flags & UI_PANEL_SCROLLABLE_VERT)
+	{
+		inner_rect.min.y = inner_rect.max.y;
+	}
+
+	ui_panel_t *panel = ui_push_panel(inner_rect);
+	panel->id        = id;
+	panel->flags     = flags;
+	panel->init_rect = init_rect;
+}
+
+void ui_panel_end(void)
+{
+	ASSERT(ui.initialized);
+
+	ui_panel_t  *panel  = ui.panel;
+	ui_widget_t *widget = ui_get_widget(panel->id);
+
+	if (panel->flags & UI_PANEL_SCROLLABLE_VERT)
+	{
+		widget->scrollable_height_y = abs_ss(panel->rect.max.y - panel->rect.min.y);
+	}
+
+	r_pop_view();
+	ui_pop_panel();
+}
+
+bool ui_button(string_t label)
+{
 	bool result = false;
+
+	if (NEVER(!ui.initialized)) 
+		return result;
 
 	ui_id_t          id = ui_id(label);
 	ui_widget_t *widget = ui_get_widget(id);
 
-	float a = 0.0f;
-
-	switch (cut.side)
+	rect2_t rect;
+	if (!ui_override_rect(&rect))
 	{
-		case UI_CUT_LEFT: 
-		case UI_CUT_RIGHT:
-		{
-			a = (float)label.count*ui.font.cw;
-		} break;
+		ui_panel_t *panel = ui_panel();
 
-		case UI_CUT_TOP:
-		case UI_CUT_BOTTOM:
+		float a = ui_widget_padding();
+
+		switch (panel->layout_direction)
 		{
-			a = (float)ui.font.ch;
-		} break;
+			case UI_CUT_LEFT:
+			case UI_CUT_RIGHT:
+			{
+				a += (float)label.count*ui.font.cw;
+			} break;
+
+			case UI_CUT_TOP:
+			case UI_CUT_BOTTOM:
+			{
+				a += (float)ui.font.ch;
+			} break;
+		}
+
+		rect = ui_do_cut((ui_cut_t){ .side = panel->layout_direction, .rect = &panel->rect }, a);
 	}
 
-	rect2_t rect = ui_do_cut(cut, a);
+	rect = ui_shrink(&rect, ui.style.widget_margin);
+
+	rect2_t text_rect = ui_shrink(&rect, ui.style.text_margin);
 
 	uint32_t interaction = ui_button_behaviour(id, rect);
-	result = interaction & UI_RELEASED;
+	result = interaction & UI_FIRED;
 
 	if (result)
 	{
@@ -308,29 +586,38 @@ bool ui_button(ui_cut_t cut, string_t label)
 	}
 
 	{
-		r_immediate_draw_t *draw = r_immediate_draw_begin(&(r_immediate_params_t){ .texture = ui.font.texture, .clip_rect = rect });
-		r_push_text(draw, &ui.font, rect.min, ui.style.text, label);
+		r_immediate_draw_t *draw = r_immediate_draw_begin(&(r_immediate_params_t){ .texture = ui.font.texture, .clip_rect = text_rect });
+		r_push_text(draw, &ui.font, text_rect.min, ui.style.text, label);
 		r_immediate_draw_end(draw);
 	}
 
 	return result;
 }
 
-void ui_slider(rect2_t *layout, string_t label, float *v, float min, float max)
+void ui_slider(string_t label, float *v, float min, float max)
 {
 	if (NEVER(!v)) return;
 
 	ui_id_t          id = ui_id_pointer(v);
 	ui_widget_t *widget = ui_get_widget(id);
 
-	rect2_t outer      = ui_cut_bottom(layout, (float)ui.font.ch);
-	rect2_t label_rect = ui_cut_left(&outer, (float)label.count*ui.font.cw);
+	rect2_t rect;
+	if (!ui_override_rect(&rect))
+	{
+		ui_panel_t *panel = ui_panel();
+		rect = ui_cut_top(&panel->rect, (float)ui.font.ch + ui_widget_padding());
+	}
+
+	rect = ui_shrink(&rect, ui.style.widget_margin);
+
+	rect2_t label_rect = ui_cut_left(&rect, (float)label.count*ui.font.cw);
+	label_rect = ui_shrink(&label_rect, ui.style.text_margin);
 
 	float handle_width = 16.0f;
 	float handle_half_width = 0.5f*handle_width;
 	
-	float width = rect2_width(outer);
-	float relative_x = CLAMP((ui.mouse_p.x - ui.mouse_pressed_offset.x) - outer.min.x - handle_half_width, 0.0f, width - handle_width);
+	float width = rect2_width(rect);
+	float relative_x = CLAMP((ui.mouse_p.x - ui.mouse_pressed_offset.x) - rect.min.x - handle_half_width, 0.0f, width - handle_width);
 
 	float pct = 0.0f;
 
@@ -348,9 +635,9 @@ void ui_slider(rect2_t *layout, string_t label, float *v, float min, float max)
 	float width_exclusive = width - handle_width;
 	float handle_offset = pct*width_exclusive;
 
-	rect2_t left   = ui_cut_left(&outer, handle_offset);
-	rect2_t handle = ui_cut_left(&outer, handle_width);
-	rect2_t right  = outer;
+	rect2_t left   = ui_cut_left(&rect, handle_offset);
+	rect2_t handle = ui_cut_left(&rect, handle_width);
+	rect2_t right  = rect;
 
 	uint32_t interaction = ui_button_behaviour(id, handle);
 
