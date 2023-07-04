@@ -181,6 +181,12 @@ typedef struct ui_style_t
 
 	struct
 	{
+		v4_t empty;
+		v4_t filled;
+	} progress_bar;
+
+	struct
+	{
 		v4_t background;
 		v4_t hot;
 		v4_t active;
@@ -220,7 +226,10 @@ DREAM_API void ui_set_layout_direction(ui_cut_side_t side);
 DREAM_API void ui_set_next_rect(rect2_t rect);
 DREAM_API float ui_divide_space(float item_count);
 
+DREAM_API void ui_label(string_t label);
+DREAM_API void ui_progress_bar(string_t label, float progress);
 DREAM_API bool ui_button(string_t label);
+DREAM_API bool ui_checkbox(string_t label, bool *value);
 DREAM_API void ui_slider(string_t label, float *v, float min, float max);
 
 #endif

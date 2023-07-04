@@ -97,50 +97,210 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
     lightmap_editor_state_t *lm_editor = &g_editor.lightmap_editor;
 	(void)lm_editor;
 
-	waveform_t *test_sound = get_waveform_from_string(S("gamedata/audio/menu_select.wav"));
-
 	r_push_view_screenspace();
 
 	ui_window_begin(S("Lightmap Editor"), rect2_min_dim(make_v2(32.0f, 128.0f), make_v2(512.0f, 512.0f)));
 	{
-		rect2_t *layout = ui_layout_rect();
-
-		ui_panel_begin(ui_cut_top(layout, 18.0f));
+		if (ui_button(S("Bake Lighting")))
 		{
-			rect2_t *sub_layout = ui_layout_rect();
-			ui_set_layout_direction(UI_CUT_LEFT);
-
-			float width = ui_divide_space(5);
-			for (int i = 0; i < 5; i++)
+			if (map->lightmap_state)
 			{
-				ui_set_next_rect(ui_cut_left(sub_layout, width));
-				ui_button(Sf("Butt #%d", i));
+				if (release_bake_state(map->lightmap_state))
+				{
+					map->lightmap_state = NULL;
+				}
+			}
+
+			if (!map->lightmap_state)
+			{
+				// figure out the solid sky color from the fog
+				float absorption = map->fog_absorption;
+				float density    = map->fog_density;
+				float scattering = map->fog_scattering;
+				v3_t sky_color = mul(sun_color, (1.0f / (4.0f*PI32))*scattering*density / (density*(scattering + absorption)));
+
+				if (map->lightmap_state)
+				{
+					release_bake_state(map->lightmap_state);
+				}
+
+				map->lightmap_state = bake_lighting(&(lum_params_t) {
+					.map                 = map,
+					.sun_direction       = make_v3(0.25f, 0.75f, 1),
+					.sun_color           = sun_color,
+					.sky_color           = sky_color,
+
+					.use_dynamic_sun_shadows = true,
+
+					// TODO: Have a macro for optimization level to check instead of DEBUG
+#if DEBUG
+					.ray_count               = 8,
+					.ray_recursion           = 4,
+					.fog_light_sample_count  = 4,
+					.fogmap_scale            = 16,
+#else
+					.ray_count               = 64,
+					.ray_recursion           = 4,
+					.fog_light_sample_count  = 64,
+					.fogmap_scale            = 8,
+#endif
+				});
 			}
 		}
-		ui_panel_end();
 
-		static ui_cut_side_t side = UI_CUT_TOP;
+		if (!map->lightmap_state)
+			ui_label(S("Lightmaps have not been baked!"));
 
-		if (ui_button(S("Next cut direction")))
+		if (map->lightmap_state && map->lightmap_state->finalized)
 		{
-			side = ((int)side + 1) % UI_CUT_COUNT;
+			if (ui_button(S("Clear Lightmaps")))
+			{
+				for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
+				{
+					map_poly_t *poly = &map->polys[poly_index];
+					if (RESOURCE_HANDLE_VALID(poly->lightmap))
+					{
+						render->destroy_texture(poly->lightmap);
+						poly->lightmap = NULL_RESOURCE_HANDLE;
+					}
+				}
+
+				render->destroy_texture(map->fogmap);
+				map->fogmap = NULL_RESOURCE_HANDLE;
+
+				release_bake_state(map->lightmap_state);
+				map->lightmap_state = NULL;
+			}
 		}
-		ui_set_layout_direction(side);
 
-		if (ui_button(S("Test Button")))
+		if (map->lightmap_state)
 		{
-			play_sound(&(play_sound_t){
-				.waveform = test_sound,
-				.volume   = 1.0f,
-			});
-		}
+			lum_bake_state_t *state = map->lightmap_state;
 
-		static float slide_this = 10.0f;
-		ui_slider(Sf("slide this %.02f", slide_this), &slide_this, 5.0f, 25.0f);
+			if (state->finalized)
+			{
+				double time_elapsed = state->final_bake_time;
+				int minutes = (int)floor(time_elapsed / 60.0);
+				int seconds = (int)floor(time_elapsed - 60.0*minutes);
+				int microseconds = (int)floor(1000.0*(time_elapsed - 60.0*minutes - seconds));
 
-		for (int i = 0; i < 64; i++)
-		{
-			ui_button(Sf("Test Button #%d", i));
+				ui_label(Sf("total bake time:  %02u:%02u:%03u", minutes, seconds, microseconds));
+
+				ui_label(Sf("fogmap resolution: %u %u %u", map->fogmap_w, map->fogmap_h, map->fogmap_d));
+
+				ui_checkbox(S("enabled"), &lm_editor->debug_lightmaps);
+				ui_checkbox(S("show direct light rays"), &lm_editor->show_direct_light_rays);
+				ui_checkbox(S("show indirect light rays"), &lm_editor->show_indirect_light_rays);
+				ui_checkbox(S("fullbright rays"), &lm_editor->fullbright_rays);
+				ui_checkbox(S("no ray depth test"), &lm_editor->no_ray_depth_test);
+
+#if 0
+				ui_increment_decrement(strlit("min recursion level"), &lm_editor->min_display_recursion, 0, 16);
+				ui_increment_decrement(strlit("max recursion level"), &lm_editor->max_display_recursion, 0, 16);
+
+				if (lm_editor->selected_poly)
+				{
+					map_poly_t *poly = lm_editor->selected_poly;
+
+					texture_desc_t desc;
+					render->describe_texture(poly->lightmap, &desc);
+
+					ui_label(string_format(temp, "resolution: %u x %u", desc.w, desc.h), 0);
+					if (lm_editor->pixel_selection_active)
+					{
+						ui_label(string_format(temp, "selected pixel region: (%d, %d) (%d, %d)", 
+											   lm_editor->selected_pixels.min.x,
+											   lm_editor->selected_pixels.min.y,
+											   lm_editor->selected_pixels.max.x,
+											   lm_editor->selected_pixels.max.y), 0);
+
+						if (ui_button(strlit("clear selection")).released)
+						{
+							lm_editor->pixel_selection_active = false;
+							lm_editor->selected_pixels = (rect2i_t){ 0 };
+						}
+					}
+					else
+					{
+						ui_spacer(ui_txt(1.0f));
+						ui_spacer(ui_txt(1.0f));
+					}
+
+					ui_box_t *image_viewer = ui_box(strlit("lightmap image"), UI_CLICKABLE|UI_DRAGGABLE|UI_DRAW_BACKGROUND);
+					if (desc.w >= desc.h)
+					{
+						ui_set_size(image_viewer, AXIS2_X, ui_pct(1.0f, 1.0f));
+						ui_set_size(image_viewer, AXIS2_Y, ui_aspect_ratio((float)desc.h / (float)desc.w, 1.0f));
+					}
+					else
+					{
+						ui_set_size(image_viewer, AXIS2_X, ui_aspect_ratio((float)desc.w / (float)desc.h, 1.0f));
+						ui_set_size(image_viewer, AXIS2_Y, ui_pct(1.0f, 1.0f));
+					}
+					image_viewer->texture = poly->lightmap;
+
+					ui_interaction_t interaction = ui_interaction_from_box(image_viewer);
+					if (interaction.hovering || lm_editor->pixel_selection_active)
+					{
+						v2_t rel_press_p = sub(interaction.press_p, image_viewer->rect.min);
+						v2_t rel_mouse_p = sub(interaction.mouse_p, image_viewer->rect.min);
+
+						v2_t rect_dim   = rect2_get_dim(image_viewer->rect);
+						v2_t pixel_size = div(rect_dim, make_v2((float)desc.w, (float)desc.h));
+
+						UI_Parent(image_viewer)
+						{
+							ui_box_t *selection_highlight = ui_box(strlit("selection highlight"), UI_DRAW_OUTLINE);
+							selection_highlight->style.outline_color = ui_gradient_from_rgba(1, 0, 0, 1);
+
+							v2_t selection_start = { rel_press_p.x, rel_press_p.y };
+							v2_t selection_end   = { rel_mouse_p.x, rel_mouse_p.y };
+							
+							rect2i_t pixel_selection = { 
+								.min = {
+									(int)(selection_start.x / pixel_size.x),
+									(int)(selection_start.y / pixel_size.y),
+								},
+								.max = {
+									(int)(selection_end.x / pixel_size.x) + 1,
+									(int)(selection_end.y / pixel_size.y) + 1,
+								},
+							};
+
+							if (pixel_selection.max.y < pixel_selection.min.y)
+								SWAP(int, pixel_selection.max.y, pixel_selection.min.y);
+
+							if (interaction.dragging)
+							{
+								lm_editor->pixel_selection_active = true;
+								lm_editor->selected_pixels = pixel_selection;
+							}
+
+							v2i_t selection_dim = rect2i_get_dim(lm_editor->selected_pixels);
+
+							ui_set_size(selection_highlight, AXIS2_X, ui_pixels((float)selection_dim.x*pixel_size.x, 1.0f));
+							ui_set_size(selection_highlight, AXIS2_Y, ui_pixels((float)selection_dim.y*pixel_size.y, 1.0f));
+
+							selection_highlight->position_offset[AXIS2_X] = (float)lm_editor->selected_pixels.min.x * pixel_size.x;
+							selection_highlight->position_offset[AXIS2_Y] = rect_dim.y - (float)(lm_editor->selected_pixels.min.y + selection_dim.y) * pixel_size.y;
+						}
+					}
+				}
+#endif
+			}
+			else
+			{
+				float progress = bake_progress(map->lightmap_state);
+
+				ui_progress_bar(Sf("bake progress: %u / %u (%.02f%%)", map->lightmap_state->jobs_completed, map->lightmap_state->job_count, 100.0f*progress), progress);
+
+				hires_time_t current_time = os_hires_time();
+				double time_elapsed = os_seconds_elapsed(map->lightmap_state->start_time, current_time);
+				int minutes = (int)floor(time_elapsed / 60.0);
+				int seconds = (int)floor(time_elapsed - 60.0*minutes);
+
+				ui_label(Sf("time elapsed:  %02u:%02u", minutes, seconds));
+			}
 		}
 	}
 	ui_window_end();
