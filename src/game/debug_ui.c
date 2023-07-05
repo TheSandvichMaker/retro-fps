@@ -151,6 +151,7 @@ typedef struct ui_widget_t
 {
 	ui_id_t id;
 
+	bool new;
 	uint64_t last_touched_frame_index;
 
 	float scrollable_height_x;
@@ -158,7 +159,7 @@ typedef struct ui_widget_t
 	float scroll_offset_x;
 	float scroll_offset_y;
 
-	float t;
+	v4_t interp_color;
 } ui_widget_t;
 
 static bulk_t widgets = INIT_BULK_DATA(ui_widget_t);
@@ -172,6 +173,7 @@ DREAM_INLINE ui_widget_t *ui_get_widget(ui_id_t id)
 	{
 		result = bd_add(&widgets);
 		result->id = id;
+		result->new = true;
 		hash_add_object(&widget_index, id.value, result);
 	}
 
@@ -179,6 +181,12 @@ DREAM_INLINE ui_widget_t *ui_get_widget(ui_id_t id)
 
 	result->last_touched_frame_index = ui.frame_index;
 	return result;
+}
+
+DREAM_INLINE bool ui_is_cold(ui_id_t id)
+{
+	return (ui.hot.value != id.value &&
+			ui.active.value != id.value);
 }
 
 DREAM_INLINE bool ui_is_hot(ui_id_t id)
@@ -214,6 +222,11 @@ DREAM_INLINE void ui_clear_active(void)
 	ui.active.value = 0;
 }
 
+DREAM_INLINE float ui_widget_padding(void)
+{
+	return 2.0f*ui.style.widget_margin + 2.0f*ui.style.text_margin;
+}
+
 DREAM_INLINE bool ui_override_rect(rect2_t *override)
 {
 	bool result = false;
@@ -227,6 +240,35 @@ DREAM_INLINE bool ui_override_rect(rect2_t *override)
 	}
 
 	return result;
+}
+
+DREAM_INLINE rect2_t ui_default_label_rect(string_t label)
+{
+	rect2_t rect;
+	if (!ui_override_rect(&rect))
+	{
+		ui_panel_t *panel = ui_panel();
+
+		float a = ui_widget_padding();
+
+		switch (panel->layout_direction)
+		{
+			case UI_CUT_LEFT:
+			case UI_CUT_RIGHT:
+			{
+				a += (float)label.count*ui.font.cw;
+			} break;
+
+			case UI_CUT_TOP:
+			case UI_CUT_BOTTOM:
+			{
+				a += (float)ui.font.ch;
+			} break;
+		}
+
+		rect = ui_do_cut((ui_cut_t){ .side = panel->layout_direction, .rect = &panel->rect }, a);
+	}
+	return rect;
 }
 
 bool ui_begin(float dt)
@@ -243,22 +285,24 @@ bool ui_begin(float dt)
 		ui.initialized = true;
 
 		ui_style_t *style = &ui.style;
-		style->widget_margin       = 1.0f;
-		style->text_margin         = 1.0f;
+		style->animation_rate      = 40.0f;
+		style->widget_margin       = 2.0f;
+		style->text_margin         = 4.0f;
 		style->scrollbar_width     = 12.0f;
 		style->text                = make_v4(0.90f, 0.90f, 0.90f, 1.0f);
 		style->window.background   = make_v4(0.15f, 0.15f, 0.15f, 1.0f);
 		style->window.title_bar    = make_v4(0.45f, 0.25f, 0.25f, 1.0f);
 		style->progress_bar.empty  = make_v4(0.18f, 0.18f, 0.18f, 1.0f);
 		style->progress_bar.filled = make_v4(0.15f, 0.25f, 0.45f, 1.0f);
-		style->button.background   = make_v4(0.25f, 0.25f, 0.25f, 1.0f);
+		style->button.background   = make_v4(0.28f, 0.28f, 0.28f, 1.0f);
 		style->button.hot          = make_v4(0.25f, 0.35f, 0.65f, 1.0f);
 		style->button.active       = make_v4(0.35f, 0.45f, 0.85f, 1.0f);
 		style->button.fired        = make_v4(0.45f, 0.30f, 0.25f, 1.0f);
-		style->slider.background   = make_v4(0.25f, 0.25f, 0.25f, 1.0f);
-		style->slider.foreground   = make_v4(0.25f, 0.35f, 0.65f, 1.0f);
-		style->slider.hot          = make_v4(0.35f, 0.45f, 0.85f, 1.0f);
-		style->slider.active       = make_v4(0.45f, 0.30f, 0.25f, 1.0f);
+		style->slider.handle_width = 32.0f;
+		style->slider.background   = make_v4(0.18f, 0.18f, 0.18f, 1.0f);
+		style->slider.foreground   = make_v4(0.28f, 0.28f, 0.28f, 1.0f);
+		style->slider.hot          = make_v4(0.25f, 0.35f, 0.65f, 1.0f);
+		style->slider.active       = make_v4(0.35f, 0.45f, 0.85f, 1.0f);
 	}
 
 	ui.frame_index += 1;
@@ -266,6 +310,8 @@ bool ui_begin(float dt)
 	for (bd_iter_t it = bd_iter(&widgets); bd_iter_valid(&it); bd_iter_next(&it))
 	{
 		ui_widget_t *widget = it.data;
+
+		widget->new = false;
 
 		if (widget->last_touched_frame_index + 1 < ui.frame_index)
 		{
@@ -354,11 +400,6 @@ DREAM_INLINE void ui_check_hovered(rect2_t rect)
 	}
 }
 
-DREAM_INLINE float ui_widget_padding(void)
-{
-	return 2.0f*ui.style.widget_margin + 2.0f*ui.style.text_margin;
-}
-
 void ui_window_begin(string_t label, rect2_t rect)
 {
 	ASSERT(ui.initialized);
@@ -442,13 +483,11 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 			rect2_t handle = ui_cut_top(&scroll_area, handle_size);
 			rect2_t bot    = scroll_area;
 
-			uint32_t interaction = ui_button_behaviour(scrollbar_id, handle);
-
-			if (interaction & UI_RELEASED)
-				widget->t = 1.0f;
+			ui_button_behaviour(scrollbar_id, handle);
 
 			v4_t color = ui.style.slider.foreground;
 
+#if 0
 			if (ui_is_hot(id))
 				color = ui.style.slider.hot;
 
@@ -470,6 +509,7 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 				if (widget->t < 0.0f)
 					widget->t = 0.0f;
 			}
+#endif
 
 			{
 				r_immediate_draw_t *draw = r_immediate_draw_begin(NULL);
@@ -520,31 +560,7 @@ void ui_label(string_t label)
 	if (NEVER(!ui.initialized)) 
 		return;
 
-	rect2_t rect;
-	if (!ui_override_rect(&rect))
-	{
-		ui_panel_t *panel = ui_panel();
-
-		float a = ui_widget_padding();
-
-		switch (panel->layout_direction)
-		{
-			case UI_CUT_LEFT:
-			case UI_CUT_RIGHT:
-			{
-				a += (float)label.count*ui.font.cw;
-			} break;
-
-			case UI_CUT_TOP:
-			case UI_CUT_BOTTOM:
-			{
-				a += (float)ui.font.ch;
-			} break;
-		}
-
-		rect = ui_do_cut((ui_cut_t){ .side = panel->layout_direction, .rect = &panel->rect }, a);
-	}
-
+	rect2_t rect = ui_default_label_rect(label);
 	rect = ui_shrink(&rect, ui.style.widget_margin);
 
 	rect2_t text_rect = ui_shrink(&rect, ui.style.text_margin);
@@ -561,31 +577,7 @@ void ui_progress_bar(string_t label, float progress)
 	if (NEVER(!ui.initialized)) 
 		return;
 
-	rect2_t rect;
-	if (!ui_override_rect(&rect))
-	{
-		ui_panel_t *panel = ui_panel();
-
-		float a = ui_widget_padding();
-
-		switch (panel->layout_direction)
-		{
-			case UI_CUT_LEFT:
-			case UI_CUT_RIGHT:
-			{
-				a += (float)label.count*ui.font.cw;
-			} break;
-
-			case UI_CUT_TOP:
-			case UI_CUT_BOTTOM:
-			{
-				a += (float)ui.font.ch;
-			} break;
-		}
-
-		rect = ui_do_cut((ui_cut_t){ .side = panel->layout_direction, .rect = &panel->rect }, a);
-	}
-
+	rect2_t rect = ui_default_label_rect(label);
 	rect = ui_shrink(&rect, ui.style.widget_margin);
 
 	rect2_t text_rect = ui_shrink(&rect, ui.style.text_margin);
@@ -611,6 +603,78 @@ void ui_progress_bar(string_t label, float progress)
 	}
 }
 
+DREAM_INLINE float ui_animate_towards(float in_rate, float out_rate, float t, float target)
+{
+	if (t < target)
+	{
+		t += ui.dt / in_rate;
+
+		if (t > target)
+			t = target;
+	}
+	else if (t > target)
+	{
+		t -= ui.dt / out_rate;
+
+		if (t < target)
+			t = target;
+	}
+
+	return t;
+}
+
+DREAM_INLINE v4_t ui_animate_towards_exp4(float rate, v4_t at, v4_t target)
+{
+	float t = rate*ui.dt;
+	v4_t result = v4_lerps(target, at, saturate(t));
+	return result;
+}
+
+typedef enum ui_widget_state_t
+{
+	UI_WIDGET_STATE_COLD,
+	UI_WIDGET_STATE_HOT,
+	UI_WIDGET_STATE_ACTIVE,
+} ui_widget_state_t;
+
+DREAM_INLINE ui_widget_state_t ui_get_widget_state(ui_id_t id)
+{
+	ui_widget_state_t result = UI_WIDGET_STATE_COLD;
+
+	if (ui_is_hot(id))
+		result = UI_WIDGET_STATE_HOT;
+	else if (ui_is_active(id))
+		result = UI_WIDGET_STATE_ACTIVE;
+
+	return result;
+}
+
+DREAM_INLINE v4_t ui_animate_colors(ui_id_t id, ui_widget_state_t state, float rate, v4_t cold, v4_t hot, v4_t active, v4_t fired)
+{
+	(void)fired;
+
+	ui_widget_t *widget = ui_get_widget(id);
+
+	if (widget->new)
+	{
+		widget->interp_color = cold;
+	}
+
+	v4_t target = cold;
+	switch (state)
+	{
+		case UI_WIDGET_STATE_COLD:   target = cold;   break;
+		case UI_WIDGET_STATE_HOT:    target = hot;    break;
+		case UI_WIDGET_STATE_ACTIVE: target = active; break;
+	}
+
+	if (state == UI_WIDGET_STATE_ACTIVE)
+		rate *= 0.5f;
+
+	widget->interp_color = ui_animate_towards_exp4(rate, widget->interp_color, target);
+	return widget->interp_color;
+}
+
 bool ui_button(string_t label)
 {
 	bool result = false;
@@ -618,34 +682,9 @@ bool ui_button(string_t label)
 	if (NEVER(!ui.initialized)) 
 		return result;
 
-	ui_id_t          id = ui_id(label);
-	ui_widget_t *widget = ui_get_widget(id);
+	ui_id_t id = ui_id(label);
 
-	rect2_t rect;
-	if (!ui_override_rect(&rect))
-	{
-		ui_panel_t *panel = ui_panel();
-
-		float a = ui_widget_padding();
-
-		switch (panel->layout_direction)
-		{
-			case UI_CUT_LEFT:
-			case UI_CUT_RIGHT:
-			{
-				a += (float)label.count*ui.font.cw;
-			} break;
-
-			case UI_CUT_TOP:
-			case UI_CUT_BOTTOM:
-			{
-				a += (float)ui.font.ch;
-			} break;
-		}
-
-		rect = ui_do_cut((ui_cut_t){ .side = panel->layout_direction, .rect = &panel->rect }, a);
-	}
-
+	rect2_t rect = ui_default_label_rect(label);
 	rect = ui_shrink(&rect, ui.style.widget_margin);
 
 	rect2_t text_rect = ui_shrink(&rect, ui.style.text_margin);
@@ -653,34 +692,13 @@ bool ui_button(string_t label)
 	uint32_t interaction = ui_button_behaviour(id, rect);
 	result = interaction & UI_FIRED;
 
-	if (result)
-	{
-		widget->t = 1.0f;
-	}
+	ui_widget_state_t state = ui_get_widget_state(id);
 
-	v4_t color = ui.style.button.background;
-
-	if (ui_is_hot(id))
-		color = ui.style.button.hot;
-
-	if (ui_is_active(id))
-		color = ui.style.button.active;
-
-	if (widget->t >= 0.0f)
-	{
-		float rate = 0.5f;
-
-		float t = widget->t;
-		t *= t;
-		t *= t;
-
-		color = v4_lerps(color, ui.style.button.fired, t);
-
-		widget->t -= ui.dt / rate;
-
-		if (widget->t < 0.0f)
-			widget->t = 0.0f;
-	}
+	v4_t color = ui_animate_colors(id, state, ui.style.animation_rate,
+								   ui.style.button.background,
+								   ui.style.button.hot,
+								   ui.style.button.active,
+								   ui.style.button.fired);
 
 	{
 		r_immediate_draw_t *draw = r_immediate_draw_begin(&(r_immediate_params_t){ .clip_rect = rect });
@@ -704,37 +722,12 @@ bool ui_checkbox(string_t label, bool *value)
 	if (NEVER(!ui.initialized)) 
 		return result;
 
-	ui_id_t          id = ui_id(label);
-	ui_widget_t *widget = ui_get_widget(id);
+	ui_id_t id = ui_id(label);
 
-	rect2_t rect;
-	if (!ui_override_rect(&rect))
-	{
-		ui_panel_t *panel = ui_panel();
-
-		float a = ui_widget_padding();
-
-		switch (panel->layout_direction)
-		{
-			case UI_CUT_LEFT:
-			case UI_CUT_RIGHT:
-			{
-				a += (float)label.count*ui.font.cw + ui.font.ch;
-			} break;
-
-			case UI_CUT_TOP:
-			case UI_CUT_BOTTOM:
-			{
-				a += (float)ui.font.ch;
-			} break;
-		}
-
-		rect = ui_do_cut((ui_cut_t){ .side = panel->layout_direction, .rect = &panel->rect }, a);
-	}
-
+	rect2_t rect = ui_default_label_rect(label);
 	rect = ui_shrink(&rect, ui.style.widget_margin);
 
-	rect2_t box_rect = ui_cut_left(&rect, (float)ui.font.ch + ui.style.widget_margin);
+	rect2_t box_rect = ui_cut_left(&rect, rect2_height(rect));
 	rect2_t label_rect = ui_cut_left(&rect, (float)label.count*ui.font.cw);
 	label_rect = ui_shrink(&label_rect, ui.style.text_margin);
 
@@ -744,33 +737,18 @@ bool ui_checkbox(string_t label, bool *value)
 	if (result)
 	{
 		if (value) *value = !*value;
-
-		widget->t = 1.0f;
 	}
 
-	v4_t color = ui.style.button.background;
+	ui_widget_state_t state = ui_get_widget_state(id);
 
-	if (ui_is_hot(id))
-		color = ui.style.button.hot;
+	if (value && *value && state == UI_WIDGET_STATE_COLD)
+		state = UI_WIDGET_STATE_ACTIVE;
 
-	if (ui_is_active(id) || value && *value)
-		color = ui.style.button.active;
-
-	if (widget->t >= 0.0f)
-	{
-		float rate = 0.5f;
-
-		float t = widget->t;
-		t *= t;
-		t *= t;
-
-		color = v4_lerps(color, ui.style.button.fired, t);
-
-		widget->t -= ui.dt / rate;
-
-		if (widget->t < 0.0f)
-			widget->t = 0.0f;
-	}
+	v4_t color = ui_animate_colors(id, state, ui.style.animation_rate,
+								   ui.style.button.background,
+								   ui.style.button.hot,
+								   ui.style.button.active,
+								   ui.style.button.fired);
 
 	{
 		r_immediate_draw_t *draw = r_immediate_draw_begin(NULL);
@@ -791,9 +769,9 @@ void ui_slider(string_t label, float *v, float min, float max)
 {
 	if (NEVER(!v)) return;
 
-	ui_id_t          id = ui_id_pointer(v);
-	ui_widget_t *widget = ui_get_widget(id);
+	ui_id_t id = ui_id_pointer(v);
 
+	// TODO: Handle layout direction properly
 	rect2_t rect;
 	if (!ui_override_rect(&rect))
 	{
@@ -803,10 +781,12 @@ void ui_slider(string_t label, float *v, float min, float max)
 
 	rect = ui_shrink(&rect, ui.style.widget_margin);
 
-	rect2_t label_rect = ui_cut_left(&rect, (float)label.count*ui.font.cw);
+	rect2_t label_rect = ui_cut_left(&rect, (float)label.count*ui.font.cw + 2.0f*ui.style.text_margin);
 	label_rect = ui_shrink(&label_rect, ui.style.text_margin);
 
-	float handle_width = 16.0f;
+	rect2_t slider_body = rect;
+
+	float handle_width = ui.style.slider.handle_width;
 	float handle_half_width = 0.5f*handle_width;
 	
 	float width = rect2_width(rect);
@@ -832,34 +812,15 @@ void ui_slider(string_t label, float *v, float min, float max)
 	rect2_t handle = ui_cut_left(&rect, handle_width);
 	rect2_t right  = rect;
 
-	uint32_t interaction = ui_button_behaviour(id, handle);
+	ui_button_behaviour(id, handle);
 
-	if (interaction & UI_RELEASED)
-		widget->t = 1.0f;
+	ui_widget_state_t state = ui_get_widget_state(id);
 
-	v4_t color = ui.style.slider.foreground;
-
-	if (ui_is_hot(id))
-		color = ui.style.slider.hot;
-
-	if (ui_is_active(id))
-		color = ui.style.slider.active;
-
-	if (widget->t >= 0.0f)
-	{
-		float rate = 0.5f;
-
-		float t = widget->t;
-		t *= t;
-		t *= t;
-
-		color = v4_lerps(color, ui.style.slider.active, t);
-
-		widget->t -= ui.dt / rate;
-
-		if (widget->t < 0.0f)
-			widget->t = 0.0f;
-	}
+	v4_t color = ui_animate_colors(id, state, ui.style.animation_rate,
+								   ui.style.slider.foreground,
+								   ui.style.slider.hot,
+								   ui.style.slider.active,
+								   ui.style.slider.active);
 
 	{
 		r_immediate_draw_t *draw = r_immediate_draw_begin(NULL);
@@ -869,9 +830,14 @@ void ui_slider(string_t label, float *v, float min, float max)
 		r_immediate_draw_end(draw);
 	}
 
+	string_t value_text = Sf("%.03f", *v);
+	float text_width = (float)value_text.count*(float)ui.font.cw;
+	v2_t text_p = { 0.5f*(slider_body.min.x + slider_body.max.x) - 0.5f*text_width, slider_body.min.y + ui.style.text_margin };
+
 	{
-		r_immediate_draw_t *draw = r_immediate_draw_begin(&(r_immediate_params_t){ .texture = ui.font.texture, .clip_rect = label_rect });
+		r_immediate_draw_t *draw = r_immediate_draw_begin(&(r_immediate_params_t){ .texture = ui.font.texture });
 		r_push_text(draw, &ui.font, label_rect.min, ui.style.text, label);
+		r_push_text(draw, &ui.font, text_p, ui.style.text, value_text);
 		r_immediate_draw_end(draw);
 	}
 }

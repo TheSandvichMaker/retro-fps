@@ -3,7 +3,7 @@
 
 typedef struct mixer_id_t
 {
-	uint32_t id;
+	uint64_t id;
 } mixer_id_t;
 
 typedef enum play_sound_flags_t

@@ -793,6 +793,28 @@ DREAM_INLINE float v4_maxval(v4_t v)
     return m;
 }
 
+DREAM_INLINE v4_t v4_add3(v4_t a, v4_t b, v4_t c)
+{
+	v4_t result = {
+		a.x + b.x + c.x,
+		a.y + b.y + c.y,
+		a.z + b.z + c.z,
+		a.w + b.w + c.w,
+	};
+	return result;
+}
+
+DREAM_INLINE v4_t v4_add4(v4_t a, v4_t b, v4_t c, v4_t d)
+{
+	v4_t result = {
+		a.x + b.x + c.x + d.x,
+		a.y + b.y + c.y + d.y,
+		a.z + b.z + c.z + d.z,
+		a.w + b.w + c.w + d.w,
+	};
+	return result;
+}
+
 // m4x4
 
 DREAM_INLINE m4x4_t m4x4_mul(m4x4_t b, m4x4_t a)

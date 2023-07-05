@@ -405,7 +405,7 @@ void game_init(game_io_t *io)
     update_camera_rotation(&g_camera, 0.0f);
 
     {
-		image_t *font_image = get_image(asset_hash_from_string(strlit("gamedata/textures/font.png")));
+		image_t *font_image = get_image_from_string(S("gamedata/textures/font.png"));
         font.w = font_image->w;
         font.h = font_image->h;
         font.cw = 10;
@@ -417,8 +417,8 @@ void game_init(game_io_t *io)
     world->fade_t = 1.0f;
 
 	{
-		test_waveform = get_waveform(asset_hash_from_string(strlit("gamedata/audio/lego durbo.wav")));
-		short_sound   = get_waveform(asset_hash_from_string(strlit("gamedata/audio/menu_select.wav")));
+		test_waveform = get_waveform_from_string(S("gamedata/audio/lego durbo.wav"));
+		short_sound   = get_waveform_from_string(S("gamedata/audio/menu_select.wav"));
 
 		music = play_sound(&(play_sound_t){
 			.waveform     = test_waveform,
@@ -432,31 +432,31 @@ void game_init(game_io_t *io)
 	string_t startup_map = io->startup_map;
 	if (string_empty(startup_map))
 	{
-		startup_map = strlit("test");
+		startup_map = S("test");
 	}
 
-    map_t    *map    = world->map    = load_map(&world->arena, string_format(temp, "gamedata/maps/%.*s.map", strexpand(startup_map)));
+    map_t    *map    = world->map    = load_map(&world->arena, Sf("gamedata/maps/%.*s.map", Sx(startup_map)));
     player_t *player = world->player = m_alloc_struct(&world->arena, player_t);
 
 	if (!map)
-		FATAL_ERROR("Failed to load map %.*s", strexpand(startup_map));
+		FATAL_ERROR("Failed to load map %.*s", Sx(startup_map));
 
 	for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
 	{
 		map_entity_t *e = &map->entities[entity_index];
 
-		if (is_class(map, e, strlit("worldspawn")))
+		if (is_class(map, e, S("worldspawn")))
 		{
-			string_t skytex = value_from_key(map, e, strlit("skytex"));
+			string_t skytex = value_from_key(map, e, S("skytex"));
 			m_scoped(temp)
 			{
 				image_t faces[6] = {
-					load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/posx.jpg", strexpand(skytex)), 4),
-					load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/negx.jpg", strexpand(skytex)), 4),
-					load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/posy.jpg", strexpand(skytex)), 4),
-					load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/negy.jpg", strexpand(skytex)), 4),
-					load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/posz.jpg", strexpand(skytex)), 4),
-					load_image_from_disk(temp, string_format(temp, "gamedata/textures/sky/%.*s/negz.jpg", strexpand(skytex)), 4),
+					load_image_from_disk(temp, Sf("gamedata/textures/sky/%.*s/posx.jpg", Sx(skytex)), 4),
+					load_image_from_disk(temp, Sf("gamedata/textures/sky/%.*s/negx.jpg", Sx(skytex)), 4),
+					load_image_from_disk(temp, Sf("gamedata/textures/sky/%.*s/posy.jpg", Sx(skytex)), 4),
+					load_image_from_disk(temp, Sf("gamedata/textures/sky/%.*s/negy.jpg", Sx(skytex)), 4),
+					load_image_from_disk(temp, Sf("gamedata/textures/sky/%.*s/posz.jpg", Sx(skytex)), 4),
+					load_image_from_disk(temp, Sf("gamedata/textures/sky/%.*s/negz.jpg", Sx(skytex)), 4),
 				};
 
 				skybox = render->upload_texture(&(upload_texture_t){
@@ -480,9 +480,9 @@ void game_init(game_io_t *io)
 				});
 			}
 		}
-		else if (is_class(map, e, strlit("info_player_start")))
+		else if (is_class(map, e, S("info_player_start")))
 		{
-			player->p = v3_from_key(map, e, strlit("origin"));
+			player->p = v3_from_key(map, e, S("origin"));
 			//player->p.z += 10.0f;
 		}
 	}
@@ -585,8 +585,8 @@ void game_tick(game_io_t *io, float dt)
 
     map_entity_t *worldspawn = map->worldspawn;
 
-    v3_t sun_color = v3_normalize(v3_from_key(map, worldspawn, strlit("sun_color")));
-    float sun_brightness = float_from_key(map, worldspawn, strlit("sun_brightness"));
+    v3_t sun_color = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
+    float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
     sun_color = mul(sun_brightness, sun_color);
 
     r_view_t view;

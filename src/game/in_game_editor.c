@@ -101,6 +101,9 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 
 	ui_window_begin(S("Lightmap Editor"), rect2_min_dim(make_v2(32.0f, 128.0f), make_v2(512.0f, 512.0f)));
 	{
+		static float slide_this = 10.0f;
+		ui_slider(S("slide this"), &slide_this, 5.0f, 25.0f);
+
 		if (ui_button(S("Bake Lighting")))
 		{
 			if (map->lightmap_state)

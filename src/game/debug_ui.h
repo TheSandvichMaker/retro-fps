@@ -166,6 +166,8 @@ DREAM_INLINE rect2_t ui_do_cut(ui_cut_t cut, float a)
 
 typedef struct ui_style_t
 {
+	float animation_rate;
+
 	float widget_margin;
 	float   text_margin;
 
@@ -195,6 +197,7 @@ typedef struct ui_style_t
 
 	struct
 	{
+		float handle_width;
 		v4_t background;
 		v4_t foreground;
 		v4_t hot;

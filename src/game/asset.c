@@ -192,7 +192,7 @@ void initialize_asset_system(void)
 {
 	m_scoped(temp)
 	{
-		for (fs_entry_t *entry = fs_scan_directory(temp, strlit("gamedata"), FS_SCAN_RECURSIVE);
+		for (fs_entry_t *entry = fs_scan_directory(temp, S("gamedata"), FS_SCAN_RECURSIVE);
 			 entry;
 			 entry = fs_entry_next(entry))
 		{
@@ -202,13 +202,13 @@ void initialize_asset_system(void)
 			asset_kind_t kind = ASSET_KIND_NONE;
 
 			string_t ext = string_extension(entry->name);
-			if (string_match_nocase(ext, strlit(".png")) ||
-			    string_match_nocase(ext, strlit(".jpg")) ||
-				string_match_nocase(ext, strlit(".tga")))
+			if (string_match_nocase(ext, S(".png")) ||
+			    string_match_nocase(ext, S(".jpg")) ||
+				string_match_nocase(ext, S(".tga")))
 			{
 				kind = ASSET_KIND_IMAGE;
 			}
-			else if (string_match_nocase(ext, strlit(".wav")))
+			else if (string_match_nocase(ext, S(".wav")))
 			{
 				kind = ASSET_KIND_WAVEFORM;
 			}

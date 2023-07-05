@@ -662,13 +662,16 @@ lum_bake_state_t *bake_lighting(const lum_params_t *in_params)
 		thread_context->entropy.state = (uint32_t)(i + 1);
 	}
 
+	state->job_count++;
+	add_job_to_queue(queue, trace_volumetric_lighting_job, state);
+
 	for (size_t brush_index = 0; brush_index < map->brush_count; brush_index++)
 	{
 		map_brush_t *brush = &map->brushes[brush_index];
 
 		for (size_t plane_index = 0; plane_index < brush->plane_poly_count; plane_index++)
 		{
-			lum_job_t *job = &jobs[state->job_count++];
+			lum_job_t *job = &jobs[state->job_count++ - 1]; // goofy, minus 1 because I added the volumetric job first (because it's slower, so better to start early)
 			job->thread_contexts = thread_contexts;
 			job->state           = state;
 			job->brush_index     = (uint32_t)(brush_index);
@@ -677,9 +680,6 @@ lum_bake_state_t *bake_lighting(const lum_params_t *in_params)
 			add_job_to_queue(queue, lum_job, job);
 		}
 	}
-
-	state->job_count++;
-	add_job_to_queue(queue, trace_volumetric_lighting_job, state);
 
 	return state;
 }

@@ -60,6 +60,7 @@ typedef struct string_t
 #define strlit(text) ((string_t) { sizeof(text)-1, (const char *)("" text) })
 #define S(text) strlit(text) // new laziness thing, will it stick?
 #define strexpand(string) (int)(string).count, (string).data
+#define Sx(text) strexpand(text)
 #define strnull (string_t){ 0 }
 
 typedef struct string16_t
