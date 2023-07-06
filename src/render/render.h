@@ -256,18 +256,23 @@ typedef struct r_command_immediate_t
     r_immediate_draw_t draw_call;
 } r_command_immediate_t;
 
-r_immediate_draw_t *r_immediate_draw_begin(const r_immediate_params_t *params);
-uint32_t            r_immediate_vertex    (r_immediate_draw_t *draw_call, const vertex_immediate_t *vertex);
-void                r_immediate_index     (r_immediate_draw_t *draw_call, uint32_t index);
-void                r_immediate_draw_end  (r_immediate_draw_t *draw_call);
+DREAM_API void     r_immediate_topology  (r_primitive_topology_t topology);
+DREAM_API void     r_immediate_blend_mode(r_blend_mode_t blend_mode);
+DREAM_API void     r_immediate_clip_rect (rect2_t clip_rect); // TODO: Why does this exist?
+DREAM_API void     r_immediate_texture   (resource_handle_t texture);
+DREAM_API void     r_immediate_use_depth (bool depth);
+DREAM_API void     r_immediate_depth_bias(float depth_bias);
 
-enum { R_MAX_VIEWS = 32 };
+DREAM_API uint32_t r_immediate_vertex    (const vertex_immediate_t *vertex);
+DREAM_API void     r_immediate_index     (uint32_t index);
+
+DREAM_API void     r_immediate_flush     (void);
+
+enum { R_MAX_VIEWS = 128 };
 typedef unsigned char r_view_index_t;
 
 typedef struct r_list_t
 {
-    r_immediate_draw_t *immediate_draw_call;
-
     r_view_index_t view_count;
     r_view_t views[R_MAX_VIEWS];
 
@@ -277,6 +282,8 @@ typedef struct r_list_t
     size_t command_list_size;
     char *command_list_base;
     char *command_list_at;
+
+    r_immediate_draw_t curr_immediate;
 
     uint32_t max_immediate_icount;
     uint32_t immediate_icount;

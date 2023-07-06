@@ -659,7 +659,6 @@ void game_tick(game_io_t *io, float dt)
         //
 
         r_push_view_screenspace();
-        r_immediate_draw_t *draw_call = r_immediate_draw_begin(NULL);
 
         v2_t center = mul(0.5f, res);
         v2_t dim    = make_v2(4, 4);
@@ -667,10 +666,10 @@ void game_tick(game_io_t *io, float dt)
         rect2_t inner_rect = rect2_center_dim(center, dim);
         rect2_t outer_rect = rect2_add_radius(inner_rect, make_v2(1, 1));
 
-        r_push_rect2_filled(draw_call, outer_rect, make_v4(0, 0, 0, 0.85f));
-        r_push_rect2_filled(draw_call, inner_rect, COLORF_WHITE);
+        r_immediate_rect2_filled(outer_rect, make_v4(0, 0, 0, 0.85f));
+        r_immediate_rect2_filled(inner_rect, COLORF_WHITE);
+		r_immediate_flush();
 
-        r_immediate_draw_end(draw_call);
         r_pop_view();
     }
 
@@ -687,14 +686,13 @@ void game_tick(game_io_t *io, float dt)
         float fade_t = world->fade_t;
 
         r_push_view_screenspace();
-        r_immediate_draw_t *draw_call = r_immediate_draw_begin(NULL);
 
         rect2_t rect = {
             0, 0, (float)res_x, (float)res_y,
         };
-        r_push_rect2_filled(draw_call, rect, make_v4(0, 0, 0, fade_t));
+        r_immediate_rect2_filled(rect, make_v4(0, 0, 0, fade_t));
+		r_immediate_flush();
 
-        r_immediate_draw_end(draw_call);
         r_pop_view();
     }
 
@@ -702,6 +700,8 @@ void game_tick(game_io_t *io, float dt)
     {
         io->exit_requested = true;
     }
+
+	r_immediate_flush();
 }
 
 void game_mix_audio(game_audio_io_t *audio_io)

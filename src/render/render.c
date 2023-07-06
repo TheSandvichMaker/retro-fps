@@ -33,16 +33,31 @@ void r_set_command_list(r_list_t *new_list)
     r_reset_command_list();
 }
 
+DREAM_INLINE void initialize_immediate_draw(r_immediate_draw_t *draw)
+{
+	draw->params.topology   = R_PRIMITIVE_TOPOLOGY_TRIANGELIST;
+	draw->params.blend_mode = R_BLEND_PREMUL_ALPHA;
+	draw->params.clip_rect  = (rect2_t){ 0, 0, 0, 0 };
+	draw->params.texture    = NULL_RESOURCE_HANDLE;
+	draw->params.depth_test = false;
+	draw->params.depth_bias = 0.0f;
+
+	draw->icount  = 0;
+	draw->vcount  = 0;
+	draw->ioffset = g_list->immediate_icount;
+	draw->voffset = g_list->immediate_vcount;
+}
+
 void r_reset_command_list(void)
 {
-    g_list->immediate_draw_call = NULL;
-
     g_list->command_list_at = g_list->command_list_base;
     g_list->view_count    = 0;
     g_list->view_stack_at = 0;
 
     g_list->immediate_icount = 0;
     g_list->immediate_vcount = 0;
+
+	initialize_immediate_draw(&g_list->curr_immediate);
 
     r_view_t default_view;
     r_default_view(&default_view);
@@ -259,30 +274,77 @@ void r_draw_model(m4x4_t transform, resource_handle_t model, resource_handle_t t
     command->lightmap  = lightmap;
 }
 
-r_immediate_draw_t *r_immediate_draw_begin(const r_immediate_params_t *params)
+void r_immediate_flush(void)
 {
-    r_command_immediate_t *command = r_submit_command(R_COMMAND_IMMEDIATE, sizeof(r_command_immediate_t));
+	r_immediate_draw_t *draw = &g_list->curr_immediate;
 
-    if (params)
-        copy_struct(&command->draw_call.params, params);
+	if (draw->icount > 0 ||
+		draw->vcount > 0)
+	{
+		r_command_immediate_t *command = r_submit_command(R_COMMAND_IMMEDIATE, sizeof(r_command_immediate_t));
+		copy_struct(&command->draw_call, draw);
 
-    command->draw_call.ioffset = g_list->immediate_icount;
-    command->draw_call.voffset = g_list->immediate_vcount;
+		if (command->draw_call.params.clip_rect.min.x == 0 &&
+			command->draw_call.params.clip_rect.min.y == 0 &&
+			command->draw_call.params.clip_rect.max.x == 0 &&
+			command->draw_call.params.clip_rect.max.y == 0)
+		{
+			int w, h;
+			render->get_resolution(&w, &h);
 
-    if (command->draw_call.params.clip_rect.min.x == 0 &&
-        command->draw_call.params.clip_rect.min.y == 0 &&
-        command->draw_call.params.clip_rect.max.x == 0 &&
-        command->draw_call.params.clip_rect.max.y == 0)
-    {
-        int w, h;
-        render->get_resolution(&w, &h);
+			command->draw_call.params.clip_rect.max = make_v2((float)w, (float)h);
+		}
 
-        command->draw_call.params.clip_rect.max = make_v2((float)w, (float)h);
-    }
+		initialize_immediate_draw(draw);
+	}
+}
 
-    g_list->immediate_draw_call = &command->draw_call;
+void r_immediate_topology(r_primitive_topology_t topology)
+{
+	r_immediate_flush();
 
-    return &command->draw_call;
+	r_immediate_draw_t *draw = &g_list->curr_immediate;
+	draw->params.topology = topology;
+}
+
+void r_immediate_blend_mode(r_blend_mode_t blend_mode)
+{
+	r_immediate_flush();
+
+	r_immediate_draw_t *draw = &g_list->curr_immediate;
+	draw->params.blend_mode = blend_mode;
+}
+
+void r_immediate_clip_rect (rect2_t clip_rect)
+{
+	r_immediate_flush();
+
+	r_immediate_draw_t *draw = &g_list->curr_immediate;
+	draw->params.clip_rect = clip_rect;
+}
+
+void r_immediate_texture(resource_handle_t texture)
+{
+	r_immediate_flush();
+
+	r_immediate_draw_t *draw = &g_list->curr_immediate;
+	draw->params.texture = texture;
+}
+
+void r_immediate_use_depth(bool depth)
+{
+	r_immediate_flush();
+
+	r_immediate_draw_t *draw = &g_list->curr_immediate;
+	draw->params.depth_test = depth;
+}
+
+void r_immediate_depth_bias(float depth_bias)
+{
+	r_immediate_flush();
+
+	r_immediate_draw_t *draw = &g_list->curr_immediate;
+	draw->params.depth_bias = depth_bias;
 }
 
 void r_end_scene_pass(void)
@@ -290,15 +352,15 @@ void r_end_scene_pass(void)
     r_submit_command(R_COMMAND_END_SCENE_PASS, sizeof(r_command_base_t));
 }
 
-uint32_t r_immediate_vertex(r_immediate_draw_t *draw_call, const vertex_immediate_t *vertex)
+uint32_t r_immediate_vertex(const vertex_immediate_t *vertex)
 {
-    ASSERT(draw_call == g_list->immediate_draw_call);
+	r_immediate_draw_t *draw = &g_list->curr_immediate;
 
     uint32_t result = UINT16_MAX;
 
     if (ALWAYS(g_list->immediate_vcount < g_list->max_immediate_vcount))
     {
-        draw_call->vcount += 1;
+        draw->vcount += 1;
 
         result = (uint32_t)g_list->immediate_vcount++;
         g_list->immediate_vertices[result] = *vertex;
@@ -307,22 +369,14 @@ uint32_t r_immediate_vertex(r_immediate_draw_t *draw_call, const vertex_immediat
     return result;
 }
 
-void r_immediate_index(r_immediate_draw_t *draw_call, uint32_t index)
+void r_immediate_index(uint32_t index)
 {
-    ASSERT(draw_call == g_list->immediate_draw_call);
+	r_immediate_draw_t *draw = &g_list->curr_immediate;
 
     if (ALWAYS(g_list->immediate_icount < g_list->max_immediate_icount))
     {
-        draw_call->icount += 1;
+        draw->icount += 1;
 
         g_list->immediate_indices[g_list->immediate_icount++] = index;
     }
-}
-
-void r_immediate_draw_end(r_immediate_draw_t *draw_call)
-{
-    (void)draw_call;
-    ASSERT(draw_call == g_list->immediate_draw_call);
-
-    g_list->immediate_draw_call = NULL;
 }

@@ -56,9 +56,11 @@ void *stbi_realloc(void *ptr, size_t new_size)
 
 typedef struct asset_slot_t
 {
+	alignas(64) uint32_t state;
+	PAD(60);
+
 	asset_hash_t hash;
 	asset_kind_t kind;
-	uint32_t state;
 
 	STRING_STORAGE(256) path;
 

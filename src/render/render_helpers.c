@@ -1,95 +1,95 @@
 #include "render_helpers.h"
 #include "render.h"
 
-void r_push_line(r_immediate_draw_t *draw_call, v3_t start, v3_t end, v4_t color)
+void r_immediate_line(v3_t start, v3_t end, v4_t color)
 {
     uint32_t color_packed = pack_color(color);
 
-    uint32_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ .pos = start, .col = color_packed });
-    r_immediate_index(draw_call, i0);
-    uint32_t i1 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ .pos = end,   .col = color_packed });
-    r_immediate_index(draw_call, i1);
+    uint32_t i0 = r_immediate_vertex(&(vertex_immediate_t){ .pos = start, .col = color_packed });
+    r_immediate_index(i0);
+    uint32_t i1 = r_immediate_vertex(&(vertex_immediate_t){ .pos = end,   .col = color_packed });
+    r_immediate_index(i1);
 }
 
-void r_push_line_gradient(r_immediate_draw_t *draw_call, v3_t start, v3_t end, v4_t start_color, v4_t end_color)
+void r_immediate_line_gradient(v3_t start, v3_t end, v4_t start_color, v4_t end_color)
 {
-    uint32_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ .pos = start, .col = pack_color(start_color) });
-    r_immediate_index(draw_call, i0);
-    uint32_t i1 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ .pos = end,   .col = pack_color(end_color) });
-    r_immediate_index(draw_call, i1);
+    uint32_t i0 = r_immediate_vertex(&(vertex_immediate_t){ .pos = start, .col = pack_color(start_color) });
+    r_immediate_index(i0);
+    uint32_t i1 = r_immediate_vertex(&(vertex_immediate_t){ .pos = end,   .col = pack_color(end_color) });
+    r_immediate_index(i1);
 }
 
-void r_push_rect2_filled(r_immediate_draw_t *draw_call, rect2_t rect, v4_t color)
+void r_immediate_rect2_filled(rect2_t rect, v4_t color)
 {
     uint32_t color_packed = pack_color(color);
 
-    uint32_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
+    uint32_t i0 = r_immediate_vertex(&(vertex_immediate_t){ 
         .pos = { rect.min.x, rect.min.y, 0.0f }, 
         .tex = { 0, 0 },
         .col = color_packed,
     });
-    uint32_t i1 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
+    uint32_t i1 = r_immediate_vertex(&(vertex_immediate_t){ 
         .pos = { rect.max.x, rect.min.y, 0.0f }, 
         .tex = { 1, 0 },
         .col = color_packed,
     });
-    uint32_t i2 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
+    uint32_t i2 = r_immediate_vertex(&(vertex_immediate_t){ 
         .pos = { rect.max.x, rect.max.y, 0.0f }, 
         .tex = { 1, 1 },
         .col = color_packed,
     });
-    uint32_t i3 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
+    uint32_t i3 = r_immediate_vertex(&(vertex_immediate_t){ 
         .pos = { rect.min.x, rect.max.y, 0.0f }, 
         .tex = { 0, 1 },
         .col = color_packed,
     });
 
     // triangle 1
-    r_immediate_index(draw_call, i0);
-    r_immediate_index(draw_call, i1);
-    r_immediate_index(draw_call, i2);
+    r_immediate_index(i0);
+    r_immediate_index(i1);
+    r_immediate_index(i2);
 
     // triangle 2
-    r_immediate_index(draw_call, i0);
-    r_immediate_index(draw_call, i2);
-    r_immediate_index(draw_call, i3);
+    r_immediate_index(i0);
+    r_immediate_index(i2);
+    r_immediate_index(i3);
 }
 
-void r_push_rect2_filled_gradient(r_immediate_draw_t *draw_call, rect2_t rect, v4_t colors[4])
+void r_immediate_rect2_filled_gradient(rect2_t rect, v4_t colors[4])
 {
-    uint32_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
+    uint32_t i0 = r_immediate_vertex(&(vertex_immediate_t){ 
         .pos = { rect.min.x, rect.min.y, 0.0f }, 
         .tex = { 0, 0 },
         .col = pack_color(colors[0]),
     });
-    uint32_t i1 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
+    uint32_t i1 = r_immediate_vertex(&(vertex_immediate_t){ 
         .pos = { rect.max.x, rect.min.y, 0.0f }, 
         .tex = { 1, 0 },
         .col = pack_color(colors[1]), 
     });
-    uint32_t i2 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
+    uint32_t i2 = r_immediate_vertex(&(vertex_immediate_t){ 
         .pos = { rect.max.x, rect.max.y, 0.0f }, 
         .tex = { 1, 1 },
         .col = pack_color(colors[2]),
     });
-    uint32_t i3 = r_immediate_vertex(draw_call, &(vertex_immediate_t){ 
+    uint32_t i3 = r_immediate_vertex(&(vertex_immediate_t){ 
         .pos = { rect.min.x, rect.max.y, 0.0f }, 
         .tex = { 0, 1 },
         .col = pack_color(colors[3]), 
     });
 
     // triangle 1
-    r_immediate_index(draw_call, i0);
-    r_immediate_index(draw_call, i1);
-    r_immediate_index(draw_call, i2);
+    r_immediate_index(i0);
+    r_immediate_index(i1);
+    r_immediate_index(i2);
 
     // triangle 2
-    r_immediate_index(draw_call, i0);
-    r_immediate_index(draw_call, i2);
-    r_immediate_index(draw_call, i3);
+    r_immediate_index(i0);
+    r_immediate_index(i2);
+    r_immediate_index(i3);
 }
 
-void r_push_arrow_gradient(r_immediate_draw_t *draw_call, v3_t start, v3_t end, v4_t start_color, v4_t end_color)
+void r_immediate_arrow_gradient(v3_t start, v3_t end, v4_t start_color, v4_t end_color)
 {
     float head_size = 1.0f;
 
@@ -120,20 +120,20 @@ void r_push_arrow_gradient(r_immediate_draw_t *draw_call, v3_t start, v3_t end, 
 
         v3_t v0 = add(shaft_end, add(mul(t, head_size*s0), mul(b, head_size*c0)));
         v3_t v1 = add(shaft_end, add(mul(t, head_size*s1), mul(b, head_size*c1)));
-        r_push_line_gradient(draw_call, v0, v1, end_color, end_color);
+        r_immediate_line_gradient(v0, v1, end_color, end_color);
 
-        r_push_line_gradient(draw_call, v0, end, end_color, end_color);
+        r_immediate_line_gradient(v0, end, end_color, end_color);
     }
 
-    r_push_line_gradient(draw_call, start, shaft_end, start_color, end_color);
+    r_immediate_line_gradient(start, shaft_end, start_color, end_color);
 }
 
-void r_push_arrow(r_immediate_draw_t *draw_call, v3_t start, v3_t end, v4_t color)
+void r_immediate_arrow(v3_t start, v3_t end, v4_t color)
 {
-    r_push_arrow_gradient(draw_call, start, end, color, color);
+    r_immediate_arrow_gradient(start, end, color, color);
 }
 
-void r_push_rect3_outline(r_immediate_draw_t *draw_call, rect3_t bounds, v4_t color)
+void r_immediate_rect3_outline(rect3_t bounds, v4_t color)
 {
     v3_t v000 = { bounds.min.x, bounds.min.y, bounds.min.z };
     v3_t v100 = { bounds.max.x, bounds.min.y, bounds.min.z };
@@ -146,27 +146,27 @@ void r_push_rect3_outline(r_immediate_draw_t *draw_call, rect3_t bounds, v4_t co
     v3_t v111 = { bounds.max.x, bounds.max.y, bounds.max.z };
 
     // bottom plane
-    r_push_line(draw_call, v000, v100, color);
-    r_push_line(draw_call, v100, v110, color);
-    r_push_line(draw_call, v110, v010, color);
-    r_push_line(draw_call, v010, v000, color);
+    r_immediate_line(v000, v100, color);
+    r_immediate_line(v100, v110, color);
+    r_immediate_line(v110, v010, color);
+    r_immediate_line(v010, v000, color);
 
     // top plane
-    r_push_line(draw_call, v001, v101, color);
-    r_push_line(draw_call, v101, v111, color);
-    r_push_line(draw_call, v111, v011, color);
-    r_push_line(draw_call, v011, v001, color);
+    r_immediate_line(v001, v101, color);
+    r_immediate_line(v101, v111, color);
+    r_immediate_line(v111, v011, color);
+    r_immediate_line(v011, v001, color);
 
     // "pillars"
-    r_push_line(draw_call, v000, v001, color);
-    r_push_line(draw_call, v100, v101, color);
-    r_push_line(draw_call, v010, v011, color);
-    r_push_line(draw_call, v110, v111, color);
+    r_immediate_line(v000, v001, color);
+    r_immediate_line(v100, v101, color);
+    r_immediate_line(v010, v011, color);
+    r_immediate_line(v110, v111, color);
 }
 
-void r_push_text(r_immediate_draw_t *draw_call, const bitmap_font_t *font, v2_t p, v4_t color, string_t string)
+void r_draw_text(const bitmap_font_t *font, v2_t p, v4_t color, string_t string)
 {
-    ASSERT(RESOURCE_HANDLES_EQUAL(draw_call->params.texture, font->texture));
+	r_immediate_texture(font->texture);
 
     ASSERT(font->w / font->cw == 16);
     ASSERT(font->w % font->cw ==  0);
@@ -209,38 +209,40 @@ void r_push_text(r_immediate_draw_t *draw_call, const bitmap_font_t *font, v2_t 
             float v0 = cy / 16.0f;
             float v1 = v0 + (1.0f / 16.0f);
 
-            uint32_t i0 = r_immediate_vertex(draw_call, &(vertex_immediate_t) {
+            uint32_t i0 = r_immediate_vertex(&(vertex_immediate_t) {
                 .pos = { at.x, at.y, 0.0f }, // TODO: Use Z?
                 .tex = { u0, v1 },
                 .col = color_packed,
             });
 
-            uint32_t i1 = r_immediate_vertex(draw_call, &(vertex_immediate_t) {
+            uint32_t i1 = r_immediate_vertex(&(vertex_immediate_t) {
                 .pos = { at.x + cw, at.y, 0.0f }, // TODO: Use Z?
                 .tex = { u1, v1 },
                 .col = color_packed,
             });
 
-            uint32_t i2 = r_immediate_vertex(draw_call, &(vertex_immediate_t) {
+            uint32_t i2 = r_immediate_vertex(&(vertex_immediate_t) {
                 .pos = { at.x + cw, at.y + ch, 0.0f }, // TODO: Use Z?
                 .tex = { u1, v0 },
                 .col = color_packed,
             });
 
-            uint32_t i3 = r_immediate_vertex(draw_call, &(vertex_immediate_t) {
+            uint32_t i3 = r_immediate_vertex(&(vertex_immediate_t) {
                 .pos = { at.x, at.y + ch, 0.0f }, // TODO: Use Z?
                 .tex = { u0, v0 },
                 .col = color_packed,
             });
 
-            r_immediate_index(draw_call, i0);
-            r_immediate_index(draw_call, i1);
-            r_immediate_index(draw_call, i2);
-            r_immediate_index(draw_call, i0);
-            r_immediate_index(draw_call, i2);
-            r_immediate_index(draw_call, i3);
+            r_immediate_index(i0);
+            r_immediate_index(i1);
+            r_immediate_index(i2);
+            r_immediate_index(i0);
+            r_immediate_index(i2);
+            r_immediate_index(i3);
 
             at.x += cw;
         }
     }
+
+	r_immediate_flush();
 }

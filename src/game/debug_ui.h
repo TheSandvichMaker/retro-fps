@@ -197,7 +197,7 @@ typedef struct ui_style_t
 
 	struct
 	{
-		float handle_width;
+		float handle_ratio;
 		v4_t background;
 		v4_t foreground;
 		v4_t hot;

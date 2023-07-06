@@ -298,7 +298,7 @@ bool ui_begin(float dt)
 		style->button.hot          = make_v4(0.25f, 0.35f, 0.65f, 1.0f);
 		style->button.active       = make_v4(0.35f, 0.45f, 0.85f, 1.0f);
 		style->button.fired        = make_v4(0.45f, 0.30f, 0.25f, 1.0f);
-		style->slider.handle_width = 32.0f;
+		style->slider.handle_ratio = 3.0f;
 		style->slider.background   = make_v4(0.18f, 0.18f, 0.18f, 1.0f);
 		style->slider.foreground   = make_v4(0.28f, 0.28f, 0.28f, 1.0f);
 		style->slider.hot          = make_v4(0.25f, 0.35f, 0.65f, 1.0f);
@@ -409,23 +409,11 @@ void ui_window_begin(string_t label, rect2_t rect)
 	rect2_t bar = ui_add_top(&rect, (float)ui.font.ch + 2.0f*ui.style.text_margin);
 	ui_check_hovered(bar);
 
-	{
-		r_immediate_draw_t *draw = r_immediate_draw_begin(NULL);
-		r_push_rect2_filled(draw, bar, ui.style.window.title_bar);
-		r_immediate_draw_end(draw);
-	}
+	r_immediate_rect2_filled(bar, ui.style.window.title_bar);
+	r_immediate_rect2_filled(rect, ui.style.window.background);
+	r_immediate_flush();
 
-	{
-		r_immediate_draw_t *draw = r_immediate_draw_begin(&(r_immediate_params_t){ .texture = ui.font.texture, .clip_rect = bar });
-		r_push_text(draw, &ui.font, add(bar.min, make_v2(ui.style.text_margin, ui.style.text_margin)), ui.style.text, label);
-		r_immediate_draw_end(draw);
-	}
-
-	{
-		r_immediate_draw_t *draw = r_immediate_draw_begin(NULL);
-		r_push_rect2_filled(draw, rect, ui.style.window.background);
-		r_immediate_draw_end(draw);
-	}
+	r_draw_text(&ui.font, add(bar.min, make_v2(ui.style.text_margin, ui.style.text_margin)), ui.style.text, label);
 
 	ui_id_t id = ui_id(label);
 	ui_panel_begin_ex(id, rect, UI_PANEL_SCROLLABLE_VERT);
@@ -511,13 +499,10 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 			}
 #endif
 
-			{
-				r_immediate_draw_t *draw = r_immediate_draw_begin(NULL);
-				r_push_rect2_filled(draw, top, ui.style.slider.background);
-				r_push_rect2_filled(draw, handle, color);
-				r_push_rect2_filled(draw, bot, ui.style.slider.background);
-				r_immediate_draw_end(draw);
-			}
+			r_immediate_rect2_filled(top, ui.style.slider.background);
+			r_immediate_rect2_filled(handle, color);
+			r_immediate_rect2_filled(bot, ui.style.slider.background);
+			r_immediate_flush();
 
 			offset_y = widget->scroll_offset_y;
 		}
@@ -564,12 +549,7 @@ void ui_label(string_t label)
 	rect = ui_shrink(&rect, ui.style.widget_margin);
 
 	rect2_t text_rect = ui_shrink(&rect, ui.style.text_margin);
-
-	{
-		r_immediate_draw_t *draw = r_immediate_draw_begin(&(r_immediate_params_t){ .texture = ui.font.texture, .clip_rect = text_rect });
-		r_push_text(draw, &ui.font, text_rect.min, ui.style.text, label);
-		r_immediate_draw_end(draw);
-	}
+	r_draw_text(&ui.font, text_rect.min, ui.style.text, label);
 }
 
 void ui_progress_bar(string_t label, float progress)
@@ -589,18 +569,11 @@ void ui_progress_bar(string_t label, float progress)
 	rect2_t filled = ui_cut_left(&rect, progress*width);
 	rect2_t empty  = rect;
 
-	{
-		r_immediate_draw_t *draw = r_immediate_draw_begin(NULL);
-		r_push_rect2_filled(draw, filled, ui.style.progress_bar.filled);
-		r_push_rect2_filled(draw, empty,  ui.style.progress_bar.empty);
-		r_immediate_draw_end(draw);
-	}
+	r_immediate_rect2_filled(filled, ui.style.progress_bar.filled);
+	r_immediate_rect2_filled(empty,  ui.style.progress_bar.empty);
+	r_immediate_flush();
 
-	{
-		r_immediate_draw_t *draw = r_immediate_draw_begin(&(r_immediate_params_t){ .texture = ui.font.texture });
-		r_push_text(draw, &ui.font, text_rect.min, ui.style.text, label);
-		r_immediate_draw_end(draw);
-	}
+	r_draw_text(&ui.font, text_rect.min, ui.style.text, label);
 }
 
 DREAM_INLINE float ui_animate_towards(float in_rate, float out_rate, float t, float target)
@@ -700,17 +673,10 @@ bool ui_button(string_t label)
 								   ui.style.button.active,
 								   ui.style.button.fired);
 
-	{
-		r_immediate_draw_t *draw = r_immediate_draw_begin(&(r_immediate_params_t){ .clip_rect = rect });
-		r_push_rect2_filled(draw, rect, color);
-		r_immediate_draw_end(draw);
-	}
+	r_immediate_rect2_filled(rect, color);
+	r_immediate_flush();
 
-	{
-		r_immediate_draw_t *draw = r_immediate_draw_begin(&(r_immediate_params_t){ .texture = ui.font.texture, .clip_rect = text_rect });
-		r_push_text(draw, &ui.font, text_rect.min, ui.style.text, label);
-		r_immediate_draw_end(draw);
-	}
+	r_draw_text(&ui.font, text_rect.min, ui.style.text, label);
 
 	return result;
 }
@@ -750,17 +716,10 @@ bool ui_checkbox(string_t label, bool *value)
 								   ui.style.button.active,
 								   ui.style.button.fired);
 
-	{
-		r_immediate_draw_t *draw = r_immediate_draw_begin(NULL);
-		r_push_rect2_filled(draw, box_rect, color);
-		r_immediate_draw_end(draw);
-	}
+	r_immediate_rect2_filled(box_rect, color);
+	r_immediate_flush();
 
-	{
-		r_immediate_draw_t *draw = r_immediate_draw_begin(&(r_immediate_params_t){ .texture = ui.font.texture, });
-		r_push_text(draw, &ui.font, label_rect.min, ui.style.text, label);
-		r_immediate_draw_end(draw);
-	}
+	r_draw_text(&ui.font, label_rect.min, ui.style.text, label);
 
 	return result;
 }
@@ -786,7 +745,7 @@ void ui_slider(string_t label, float *v, float min, float max)
 
 	rect2_t slider_body = rect;
 
-	float handle_width = ui.style.slider.handle_width;
+	float handle_width = rect2_height(rect)*ui.style.slider.handle_ratio;
 	float handle_half_width = 0.5f*handle_width;
 	
 	float width = rect2_width(rect);
@@ -822,22 +781,16 @@ void ui_slider(string_t label, float *v, float min, float max)
 								   ui.style.slider.active,
 								   ui.style.slider.active);
 
-	{
-		r_immediate_draw_t *draw = r_immediate_draw_begin(NULL);
-		r_push_rect2_filled(draw, left, ui.style.slider.background);
-		r_push_rect2_filled(draw, handle, color);
-		r_push_rect2_filled(draw, right, ui.style.slider.background);
-		r_immediate_draw_end(draw);
-	}
+	r_immediate_rect2_filled(left, ui.style.slider.background);
+	r_immediate_rect2_filled(handle, color);
+	r_immediate_rect2_filled(right, ui.style.slider.background);
+	r_immediate_flush();
+
+	r_draw_text(&ui.font, label_rect.min, ui.style.text, label);
 
 	string_t value_text = Sf("%.03f", *v);
 	float text_width = (float)value_text.count*(float)ui.font.cw;
 	v2_t text_p = { 0.5f*(slider_body.min.x + slider_body.max.x) - 0.5f*text_width, slider_body.min.y + ui.style.text_margin };
 
-	{
-		r_immediate_draw_t *draw = r_immediate_draw_begin(&(r_immediate_params_t){ .texture = ui.font.texture });
-		r_push_text(draw, &ui.font, label_rect.min, ui.style.text, label);
-		r_push_text(draw, &ui.font, text_p, ui.style.text, value_text);
-		r_immediate_draw_end(draw);
-	}
+	r_draw_text(&ui.font, text_p, ui.style.text, value_text);
 }
