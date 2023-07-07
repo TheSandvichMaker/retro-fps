@@ -72,6 +72,8 @@ static editor_state_t g_editor = {
     .lightmap_editor_enabled = true,
     .lightmap_editor = {
         .window_position = { 32, 32 },
+		.min_display_recursion = 0,
+		.max_display_recursion = 10,
     },
 };
 
@@ -595,13 +597,14 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
     }
 
     ui_pop_parent();
+#endif
 
     if (lm_editor->debug_lightmaps)
     {
         r_command_identifier(strlit("lightmap debug"));
 
 		r_immediate_topology(R_PRIMITIVE_TOPOLOGY_LINELIST);
-		r_immediate_depth_test(!lm_editor->no_ray_depth_test);
+		r_immediate_use_depth(!lm_editor->no_ray_depth_test);
 		r_immediate_depth_bias(0.005f);
 		r_immediate_blend_mode(R_BLEND_ADDITIVE);
 
@@ -654,15 +657,15 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 
             push_poly_wireframe(map, lm_editor->selected_poly, make_v4(0.0f, 0.0f, 0.0f, 0.75f));
 
-            r_push_arrow(plane->lm_origin, add(plane->lm_origin, mul(scale_x, plane->lm_s)), make_v4(0.5f, 0.0f, 0.0f, 1.0f));
-            r_push_arrow(plane->lm_origin, add(plane->lm_origin, mul(scale_y, plane->lm_t)), make_v4(0.0f, 0.5f, 0.0f, 1.0f));
+            r_immediate_arrow(plane->lm_origin, add(plane->lm_origin, mul(scale_x, plane->lm_s)), make_v4(0.5f, 0.0f, 0.0f, 1.0f));
+            r_immediate_arrow(plane->lm_origin, add(plane->lm_origin, mul(scale_y, plane->lm_t)), make_v4(0.0f, 0.5f, 0.0f, 1.0f));
 
             v3_t square_v0 = add(plane->lm_origin, mul(scale_x, plane->lm_s));
             v3_t square_v1 = add(plane->lm_origin, mul(scale_y, plane->lm_t));
             v3_t square_v2 = v3_add3(plane->lm_origin, mul(scale_x, plane->lm_s), mul(scale_y, plane->lm_t));
 
-            r_push_line(square_v0, square_v2, make_v4(0.5f, 0.0f, 0.5f, 1.0f));
-            r_push_line(square_v1, square_v2, make_v4(0.5f, 0.0f, 0.5f, 1.0f));
+            r_immediate_line(square_v0, square_v2, make_v4(0.5f, 0.0f, 0.5f, 1.0f));
+            r_immediate_line(square_v1, square_v2, make_v4(0.5f, 0.0f, 0.5f, 1.0f));
 
             if (lm_editor->pixel_selection_active)
             {
@@ -693,10 +696,10 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
                                         mul(selection_dim_worldspace.x, plane->lm_s), 
                                         mul(selection_dim_worldspace.y, plane->lm_t));
 
-                r_push_line(pixel_v0, pixel_v1, COLORF_RED);
-                r_push_line(pixel_v0, pixel_v2, COLORF_RED);
-                r_push_line(pixel_v2, pixel_v3, COLORF_RED);
-                r_push_line(pixel_v1, pixel_v3, COLORF_RED);
+                r_immediate_line(pixel_v0, pixel_v1, COLORF_RED);
+                r_immediate_line(pixel_v0, pixel_v2, COLORF_RED);
+                r_immediate_line(pixel_v2, pixel_v3, COLORF_RED);
+                r_immediate_line(pixel_v1, pixel_v3, COLORF_RED);
             }
         }
 
@@ -735,7 +738,7 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 
 									if (sample->shadow_ray_t > 0.0f && sample->shadow_ray_t < FLT_MAX)
 									{
-										// r_push_line(vertex->o, add(vertex->o, mul(sample->shadow_ray_t, sample->d)), COLORF_RED);
+										// r_immediate_line(vertex->o, add(vertex->o, mul(sample->shadow_ray_t, sample->d)), COLORF_RED);
 									}
 									else if (sample->shadow_ray_t == FLT_MAX && sample_index < map->light_count)
 									{
@@ -751,15 +754,15 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 #if 0
 										if (vertex == path->first_vertex)
 										{
-											r_push_arrow(point_light->p, vertex->o, 
+											r_immediate_arrow(point_light->p, vertex->o, 
 														 make_v4(color.x, color.y, color.z, 1.0f));
 										}
 #endif
 
 										if (!vertex->next || vertex_index + 2 == (int)path->vertex_count)
 										{
-											r_push_line(vertex->o, point_light->p, 
-														make_v4(color.x, color.y, color.z, 1.0f));
+											r_immediate_line(vertex->o, point_light->p, 
+															 make_v4(color.x, color.y, color.z, 1.0f));
 										}
 									}
 								}
@@ -789,11 +792,11 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 
 									if (vertex == path->first_vertex)
 									{
-										r_push_arrow_gradient(next_vertex->o, vertex->o, end_color, start_color);
+										r_immediate_arrow_gradient(next_vertex->o, vertex->o, end_color, start_color);
 									}
 									else
 									{
-										r_push_line_gradient(vertex->o, next_vertex->o, start_color, end_color);
+										r_immediate_line_gradient(vertex->o, next_vertex->o, start_color, end_color);
 									}
 								}
 							}
@@ -807,7 +810,6 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 
         r_immediate_flush();
     }
-#endif
 }
 
 void update_and_render_in_game_editor(game_io_t *io, world_t *world)

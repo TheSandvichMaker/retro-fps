@@ -653,12 +653,12 @@ lum_bake_state_t *bake_lighting(const lum_params_t *in_params)
 
 	lum_job_t *jobs = m_alloc_array(arena, map->plane_count, lum_job_t);
 
-	size_t thread_count = get_job_queue_thread_count(queue);
-	lum_thread_context_t *thread_contexts = m_alloc_array(arena, thread_count, lum_thread_context_t);
+	state->thread_count = (uint32_t)get_job_queue_thread_count(queue);
+	state->thread_contexts = m_alloc_array(arena, state->thread_count, lum_thread_context_t);
 
-	for (size_t i = 0; i < thread_count; i++)
+	for (size_t i = 0; i < state->thread_count; i++)
 	{
-		lum_thread_context_t *thread_context = &thread_contexts[i];
+		lum_thread_context_t *thread_context = &state->thread_contexts[i];
 		thread_context->entropy.state = (uint32_t)(i + 1);
 	}
 
@@ -672,7 +672,7 @@ lum_bake_state_t *bake_lighting(const lum_params_t *in_params)
 		for (size_t plane_index = 0; plane_index < brush->plane_poly_count; plane_index++)
 		{
 			lum_job_t *job = &jobs[state->job_count++ - 1]; // goofy, minus 1 because I added the volumetric job first (because it's slower, so better to start early)
-			job->thread_contexts = thread_contexts;
+			job->thread_contexts = state->thread_contexts;
 			job->state           = state;
 			job->brush_index     = (uint32_t)(brush_index);
 			job->plane_index     = (uint32_t)(brush->first_plane_poly + plane_index);
