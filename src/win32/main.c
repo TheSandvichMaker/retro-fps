@@ -252,8 +252,8 @@ int wWinMain(HINSTANCE instance,
         int desktop_w = GetSystemMetrics(SM_CXFULLSCREEN);
         int desktop_h = GetSystemMetrics(SM_CYFULLSCREEN);
 
-        int w = 3*desktop_w / 4;
-        int h = 3*desktop_h / 4;
+        int w = 4*desktop_w / 5;
+        int h = 4*desktop_h / 5;
 
         WNDCLASSEXW wclass = 
         {

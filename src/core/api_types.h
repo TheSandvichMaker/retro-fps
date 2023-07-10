@@ -57,11 +57,22 @@ typedef struct string_t
 #define STRING_STORAGE_SIZE(storage) ARRAY_COUNT((storage).data)
 
 #define strinit(text) { sizeof(text)-1, (const char *)("" text) }
+#define Sc(text) { sizeof(text)-1, (const char *)("" text) }
 #define strlit(text) ((string_t) { sizeof(text)-1, (const char *)("" text) })
 #define S(text) strlit(text) // new laziness thing, will it stick?
 #define strexpand(string) (int)(string).count, (string).data
 #define Sx(text) strexpand(text)
 #define strnull (string_t){ 0 }
+
+#define stack_t(type, count) struct { size_t at; type values[count]; }
+#define stack_empty(stack) ((stack).at == 0)
+#define stack_top(stack) (ASSERT(!stack_empty(stack)), \
+                          (stack).values[(stack).at - 1])
+#define stack_push(stack, value) (ASSERT((stack).at < ARRAY_COUNT((stack).values)), \
+                                  (stack).values[(stack).at++] = (value))
+#define stack_pop(stack) (ASSERT(!stack_empty(stack)), \
+                          (stack).values[--(stack).at])
+
 
 typedef struct string16_t
 {

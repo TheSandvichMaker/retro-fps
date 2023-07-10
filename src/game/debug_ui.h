@@ -164,45 +164,49 @@ DREAM_INLINE rect2_t ui_do_cut(ui_cut_t cut, float a)
 	return (rect2_t){ 0 };
 }
 
+typedef enum ui_style_scalar_t
+{
+    UI_SCALAR_ANIMATION_RATE,
+
+    UI_SCALAR_WIDGET_MARGIN,
+    UI_SCALAR_TEXT_MARGIN,
+
+    UI_SCALAR_SCROLLBAR_WIDTH,
+    UI_SCALAR_SLIDER_HANDLE_RATIO,
+
+    UI_SCALAR_COUNT,
+} ui_style_scalar_t;
+
+typedef enum ui_style_color_t
+{
+    UI_COLOR_TEXT,
+    UI_COLOR_TEXT_SHADOW,
+
+    UI_COLOR_WINDOW_BACKGROUND,
+    UI_COLOR_WINDOW_TITLE_BAR,
+
+    UI_COLOR_PROGRESS_BAR_EMPTY,
+    UI_COLOR_PROGRESS_BAR_FILLED,
+
+    UI_COLOR_BUTTON_IDLE,
+    UI_COLOR_BUTTON_HOT,
+    UI_COLOR_BUTTON_ACTIVE,
+    UI_COLOR_BUTTON_FIRED,
+
+    UI_COLOR_SLIDER_BACKGROUND,
+    UI_COLOR_SLIDER_FOREGROUND,
+    UI_COLOR_SLIDER_HOT,
+    UI_COLOR_SLIDER_ACTIVE,
+
+    UI_COLOR_COUNT,
+} ui_style_color_t;
+
+#define UI_STYLE_STACK_COUNT 32
+
 typedef struct ui_style_t
 {
-	float animation_rate;
-
-	float widget_margin;
-	float   text_margin;
-
-	float scrollbar_width;
-
-	v4_t text;
-
-	struct
-	{
-		v4_t background;
-		v4_t title_bar;
-	} window;
-
-	struct
-	{
-		v4_t empty;
-		v4_t filled;
-	} progress_bar;
-
-	struct
-	{
-		v4_t background;
-		v4_t hot;
-		v4_t active;
-		v4_t fired;
-	} button;
-
-	struct
-	{
-		float handle_ratio;
-		v4_t background;
-		v4_t foreground;
-		v4_t hot;
-		v4_t active;
-	} slider;
+    stack_t(float, UI_STYLE_STACK_COUNT) scalars[UI_SCALAR_COUNT];
+    stack_t(v4_t,  UI_STYLE_STACK_COUNT) colors [UI_COLOR_COUNT];
 } ui_style_t;
 
 typedef uint32_t ui_panel_flags_t;
@@ -229,10 +233,19 @@ DREAM_API void ui_set_layout_direction(ui_cut_side_t side);
 DREAM_API void ui_set_next_rect(rect2_t rect);
 DREAM_API float ui_divide_space(float item_count);
 
+DREAM_API float ui_scalar(ui_style_scalar_t scalar);
+DREAM_API void ui_push_scalar(ui_style_scalar_t scalar, float value);
+DREAM_API float ui_pop_scalar(ui_style_scalar_t scalar);
+DREAM_API v4_t ui_color(ui_style_color_t color);
+DREAM_API void ui_push_color(ui_style_color_t color, v4_t value);
+DREAM_API v4_t ui_pop_color(ui_style_color_t color);
+
 DREAM_API void ui_label(string_t label);
 DREAM_API void ui_progress_bar(string_t label, float progress);
 DREAM_API bool ui_button(string_t label);
 DREAM_API bool ui_checkbox(string_t label, bool *value);
+DREAM_API void ui_radio(string_t label, int count, int *value, string_t *labels);
 DREAM_API void ui_slider(string_t label, float *v, float min, float max);
+DREAM_API void ui_slider_int(string_t label, int *v, int min, int max);
 
 #endif

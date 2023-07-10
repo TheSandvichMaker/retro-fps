@@ -284,7 +284,7 @@ int main(int argc, char **argv)
             strlit("_CRT_SECURE_NO_WARNINGS"),
             strlit("UNICODE"),
             ndebug ? strlit("NDEBUG") : strlit("DEBUG"),
-            not_slow ? strlit("DEBUG_FAST") : strlit("DEBUG_SLOW"),
+            not_slow ? strlit("DREAM_FAST") : strlit("DREAM_SLOW"),
         )),
 
         .include_paths = slist_from_array(temp, array_expand(string_t,
@@ -301,6 +301,9 @@ int main(int argc, char **argv)
     build_job_t release_job = base_job;
     release_job.optimization_level = O2;
     release_job.configuration      = strlit("release");
+
+    slist_appends(&base_job   .defines, temp, S("DREAM_UNOPTIMIZED=1"));
+    slist_appends(&release_job.defines, temp, S("DREAM_OPTIMIZED=1"));
 
     if (!release || build_all)
     {

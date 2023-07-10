@@ -127,8 +127,29 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 
 	ui_window_begin(S("Lightmap Editor"), rect2_min_dim(make_v2(32.0f, 32.0f), make_v2(512.0f, 512.0f)));
 	{
-		static float slide_this = 10.0f;
-		ui_slider(S("slide this"), &slide_this, 5.0f, 25.0f);
+        ui_label(S("Bake Quality"));
+
+        static int ray_count = 8;
+        ui_slider_int(S("rays per pixel"), &ray_count, 1, 32);
+
+		static int ray_recursion = 2;
+        ui_slider_int(S("max recursion"), &ray_recursion, 1, 8);
+
+		static int fog_light_sample_count = 4;
+        ui_slider_int(S("fog light sample count"), &fog_light_sample_count, 1, 8);
+
+        static int fogmap_scales[] = {
+            32, 16, 8, 4,
+        };
+
+        static string_t fogmap_scale_labels[] = {
+            Sc("32"), Sc("16"), Sc("8"), Sc("4"),
+        };
+
+		static int fogmap_scale_index = 1;
+        ui_radio(S("fogmap scale"), ARRAY_COUNT(fogmap_scales), &fogmap_scale_index, fogmap_scale_labels);
+
+        int actual_fogmap_scale = fogmap_scales[fogmap_scale_index];
 
 		if (ui_button(S("Bake Lighting")))
 		{
@@ -161,13 +182,11 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 
 					.use_dynamic_sun_shadows = true,
 
-					// TODO: Have a macro for optimization level to check instead of DEBUG
-#if DEBUG
-					.ray_count               = 8,
-					.ray_recursion           = 4,
-					.fog_light_sample_count  = 4,
-					.fogmap_scale            = 16,
-#else
+					.ray_count               = ray_count,
+					.ray_recursion           = ray_recursion,
+					.fog_light_sample_count  = fog_light_sample_count,
+					.fogmap_scale            = actual_fogmap_scale,
+#if 0
 					.ray_count               = 64,
 					.ray_recursion           = 4,
 					.fog_light_sample_count  = 64,
