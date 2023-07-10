@@ -117,6 +117,14 @@ typedef struct d3d_gen_mipmaps_t
     texture_data_t    data;
 } d3d_gen_mipmaps_t;
 
+typedef struct d3d_queries_t
+{
+    ID3D11Query *ts[RENDER_TS_COUNT];
+    ID3D11Query *disjoint;
+} d3d_queries_t;
+
+#define D3D_QUERY_FRAME_COUNT 3
+
 typedef struct d3d_state_t
 {
 	arena_t gen_mipmaps_arena;
@@ -139,6 +147,11 @@ typedef struct d3d_state_t
 
     ID3D11Buffer             *immediate_ibuffer;
     ID3D11Buffer             *immediate_vbuffer;
+
+    d3d_queries_t             queries[D3D_QUERY_FRAME_COUNT];
+    int                       query_frame;
+    int                       query_collect_frame;
+    render_timings_t          timings;
 
     ID3D11SamplerState       *samplers[D3D_SAMPLER_COUNT];
 
@@ -184,6 +197,12 @@ typedef struct d3d_state_t
 } d3d_state_t;
 
 DREAM_API d3d_state_t d3d;
+
+DREAM_INLINE void d3d_timestamp(render_timestamp_t ts)
+{
+    debug_print("Collecting ts: %s\n", render_timestamp_names[ts]);
+	ID3D11DeviceContext_End(d3d.context, (ID3D11Asynchronous *)d3d.queries[d3d.query_frame].ts[ts]);
+}
 
 DREAM_API resource_handle_t upload_texture(const upload_texture_t *params);
 DREAM_API void destroy_texture(resource_handle_t handle);

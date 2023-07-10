@@ -1,4 +1,5 @@
 #include "core/common.h"
+#include "core/arena.h"
 #include "core/bulk_data.h"
 #include "core/hashtable.h"
 #include "core/math.h"
@@ -98,20 +99,17 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 		{
 			case MIX_PLAY_SOUND:
 			{
-				if (command->sound.waveform->frames)
-				{
-					playing_sound_t playing = {
-						.id           = command->id,
-						.waveform     = command->sound.waveform,
-						.volume       = command->sound.volume,
-						.flags        = command->sound.flags,
-						.p            = command->sound.p,
-						.min_distance = command->sound.min_distance,
-					};
+                playing_sound_t playing = {
+                    .id           = command->id,
+                    .waveform     = command->sound.waveform,
+                    .volume       = command->sound.volume,
+                    .flags        = command->sound.flags,
+                    .p            = command->sound.p,
+                    .min_distance = command->sound.min_distance,
+                };
 
-					resource_handle_t handle = bd_add_item(&playing_sounds, &playing);
-					hash_add(&playing_sound_from_id, playing.id.id, handle.value);
-				}
+                resource_handle_t handle = bd_add_item(&playing_sounds, &playing);
+                hash_add(&playing_sound_from_id, playing.id.id, handle.value);
 			} break;
 
 			case MIX_STOP_SOUND:
@@ -172,7 +170,7 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 	// Mix Sounds
 	//
 
-	zero_array(buffer, mix_channel_count*frames_to_mix);
+    float *mix_buffer = m_alloc_array(temp, mix_channel_count*frames_to_mix, float);
 
 	for (bd_iter_t it = bd_iter(&playing_sounds);
 		 bd_iter_valid(&it);
@@ -181,7 +179,10 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 		playing_sound_t *playing  = it.data;
 		waveform_t      *waveform = playing->waveform;
 
-		uint32_t frames_left = waveform->frame_count - playing->at_index;
+        if (!waveform->frames)
+            continue;
+
+		uint32_t frames_left = (uint32_t)waveform->frame_count - playing->at_index;
 
 		uint32_t frames_to_write;
 		if (playing->flags & PLAY_SOUND_LOOPING)
@@ -223,117 +224,120 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 			volume.y *= attenuation*cos_theta2;
 		}
 
-		int16_t *src = waveform->frames + waveform->channel_count*playing->at_index;
-		int16_t *end = waveform->frames + waveform->channel_count*waveform->frame_count;
-		float   *dst = buffer;
+        bool sound_should_stop = false;
 
-		bool sound_should_stop = false;
+        for (size_t channel_index = 0; channel_index < mix_channel_count; channel_index++)
+        {
+            int16_t *start = NULL;
 
-		for (size_t frame_index = 0; frame_index < frames_to_write; frame_index++)
-		{
-			// wrap looping sounds
+            if (waveform->channel_count == 1)
+            {
+                start = waveform_channel(waveform, 0);
+            }
+            else
+            {
+                start = waveform_channel(waveform, channel_index);
+            }
 
-			if (src >= end)
-			{
-				size_t diff = end - src;
-				src = waveform->frames + diff;
-			}
+            if (NEVER(!start))
+                continue;
 
-			//
-			// process fades
-			//
+            start += playing->at_index;
 
-			float volume_mod = 1.0f;
+            int16_t *end = start + waveform->frame_count;
+            int16_t *src = start;
+            float   *dst = mix_buffer + channel_index*frames_to_mix;
 
-			for (fade_t **fade_at = &playing->first_fade;
-			 	 *fade_at;
-			 	 )
-			{
-				fade_t *fade = *fade_at;
+            for (size_t frame_index = 0; frame_index < frames_to_write; frame_index++)
+            {
+                // wrap looping sounds
 
-				if (fade->frame_index < fade->frame_duration)
-				{
-					float t = (float)fade->frame_index / (float)fade->frame_duration;
-					fade->frame_index++;
+                if (src >= end)
+                {
+                    size_t diff = end - src;
+                    src = start + diff;
+                }
 
-					switch (fade->style)
-					{
-						case FADE_STYLE_LINEAR:
-						{
-							// nothing to do
-						} break;
+                //
+                // process fades
+                //
 
-						case FADE_STYLE_SMOOTHSTEP:
-						{
-							t = smoothstep(t);
-						} break;
+                float volume_mod = 1.0f;
 
-						case FADE_STYLE_SMOOTHERSTEP:
-						{
-							t = smootherstep(t);
-						} break;
-					}
+                for (fade_t *fade = playing->first_fade; fade; fade = fade->next)
+                {
+                    size_t fade_frame_index = fade->frame_index + frame_index;
 
-					float fade_value = lerp(fade->start, fade->target, t);
-					
-					if (fade->flags & FADE_TARGET_VOLUME)
-					{
-						volume_mod *= fade_value;
-					}
+                    if (fade_frame_index < fade->frame_duration)
+                    {
+                        float t = (float)fade_frame_index / (float)fade->frame_duration;
 
-					fade_at = &(*fade_at)->next;
-				}
-				else
-				{
-					if (fade->flags & FADE_STOP_SOUND_WHEN_FINISHED)
-					{
-						sound_should_stop = true;
-					}
+                        switch (fade->style)
+                        {
+                            case FADE_STYLE_LINEAR:
+                            {
+                                // nothing to do
+                            } break;
 
-					*fade_at = fade->next;
-					bd_rem_item(&active_fades, fade);
-				}
-			}
+                            case FADE_STYLE_SMOOTHSTEP:
+                            {
+                                t = smoothstep(t);
+                            } break;
 
-			//
-			// mix samples
-			//
+                            case FADE_STYLE_SMOOTHERSTEP:
+                            {
+                                t = smootherstep(t);
+                            } break;
+                        }
 
-			v2_t final_volume = mul(volume, volume_mod);
-			final_volume = max(0.0f, final_volume);
+                        float fade_value = lerp(fade->start, fade->target, t);
+                        
+                        if (fade->flags & FADE_TARGET_VOLUME)
+                        {
+                            volume_mod *= fade_value;
+                        }
+                    }
+                    else
+                    {
+                        if (fade->flags & FADE_STOP_SOUND_WHEN_FINISHED)
+                        {
+                            sound_should_stop = true;
+                        }
+                    }
+                }
 
-			if (playing->flags & PLAY_SOUND_FORCE_MONO)
-			{
-				float final = 0.0f;
-				float mod = 1.0f / (float)waveform->channel_count;
+                //
+                // mix samples
+                //
 
-				for (size_t channel_index = 0; channel_index < waveform->channel_count; channel_index++)
-				{
-					int16_t sample = *src++;
+                v2_t final_volume = mul(volume, volume_mod);
+                final_volume = max(0.0f, final_volume);
 
-					final += mod*((float)sample / (float)INT16_MAX);
-				}
+#if 0
+                if (playing->flags & PLAY_SOUND_FORCE_MONO)
+                {
+                    float final = 0.0f;
+                    float mod = 1.0f / (float)waveform->channel_count;
 
-				for (size_t channel_index = 0; channel_index < mix_channel_count; channel_index++)
-				{
-					*dst++ += limit(final_volume.e[channel_index]*final);
-				}
-			}
-			else
-			{
-				for (size_t channel_index = 0; channel_index < waveform->channel_count; channel_index++)
-				{
-					int16_t sample = *src++;
+                    for (size_t channel_index = 0; channel_index < waveform->channel_count; channel_index++)
+                    {
+                        int16_t sample = *src++;
 
-					*dst++ += limit(final_volume.e[channel_index]*((float)sample / (float)INT16_MAX));
-				}
-			}
+                        final += mod*((float)sample / (float)INT16_MAX);
+                    }
 
-			if (sound_should_stop)
-			{
-				break;
-			}
-		}
+                    for (size_t channel_index = 0; channel_index < mix_channel_count; channel_index++)
+                    {
+                        *dst++ += limit(final_volume.e[channel_index]*final);
+                    }
+                }
+                else
+#endif
+
+                int16_t sample = *src++;
+                *dst++ += final_volume.e[channel_index]*unorm_from_i16(sample);
+            }
+        }
 
 		playing->at_index += frames_to_write;
 
@@ -351,6 +355,70 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 			stop_playing_sound_internal(playing);
 		}
 	}
+
+	for (bd_iter_t it = bd_iter(&active_fades);
+		 bd_iter_valid(&it);
+		 bd_iter_next(&it))
+	{
+        fade_t *fade = it.data;
+
+        playing_sound_t *playing  = fade->playing;
+        waveform_t      *waveform = playing->waveform;
+
+        if (waveform->frames)
+        {
+            if (fade->frame_index + frames_to_mix >= fade->frame_duration)
+            {
+                bd_rem_item(&active_fades, fade);
+
+                bool removed_from_playing = false;
+
+                // TODO: maybe don't linear search
+                for (fade_t **remove_at = &fade->playing->first_fade; *remove_at; remove_at = &(*remove_at)->next)
+                {
+                    if (*remove_at == fade)
+                    {
+                        removed_from_playing = true;
+                        sll_pop(*remove_at);
+                        break;
+                    }
+                }
+
+                ASSERT(removed_from_playing); // sanity test
+            }
+            else
+            {
+                fade->frame_index += frames_to_mix;
+            }
+        }
+    }
+
+    // output
+
+    {
+        float *dst = buffer;
+        if (mix_channel_count == 2)
+        {
+            float *src_l = mix_buffer;
+            float *src_r = mix_buffer + frames_to_mix;
+            for (size_t frame_index = 0; frame_index < frames_to_mix; frame_index++)
+            {
+                *dst++ = limit(*src_l++);
+                *dst++ = limit(*src_r++);
+            }
+        }
+        else
+        {
+            for (size_t frame_index = 0; frame_index < frames_to_mix; frame_index++)
+            {
+                for (size_t channel_index = 0; channel_index < mix_channel_count; channel_index++)
+                {
+                    float *src = mix_buffer + channel_index*frames_to_mix + frame_index;
+                    *dst++ = limit(*src);
+                }
+            }
+        }
+    }
 
 	mixer_frame_index += frames_to_mix;
 }

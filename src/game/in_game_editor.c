@@ -101,7 +101,31 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 
 	r_push_view_screenspace();
 
-	ui_window_begin(S("Lightmap Editor"), rect2_min_dim(make_v2(32.0f, 128.0f), make_v2(512.0f, 512.0f)));
+    int res_x, res_y;
+    render->get_resolution(&res_x, &res_y);
+
+    rect2_t fullscreen_rect = {
+        .min = { 0, 0 },
+        .max = { (float)res_x, (float)res_y },
+    };
+
+    ui_panel_begin(fullscreen_rect);
+    {
+        render_timings_t timings;
+        render->get_timings(&timings);
+
+        float total = 0.0f;
+        for (int i = 1; i < RENDER_TS_COUNT; i++)
+        {
+            ui_label(Sf("%s: %fms", render_timestamp_names[i], 1000.0*timings.dt[i]));
+            total += timings.dt[i];
+        }
+
+        ui_label(Sf("total: %fms", 1000.0*total));
+    }
+    ui_panel_end();
+
+	ui_window_begin(S("Lightmap Editor"), rect2_min_dim(make_v2(32.0f, 32.0f), make_v2(512.0f, 512.0f)));
 	{
 		static float slide_this = 10.0f;
 		ui_slider(S("slide this"), &slide_this, 5.0f, 25.0f);

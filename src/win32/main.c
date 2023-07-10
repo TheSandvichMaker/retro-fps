@@ -114,6 +114,7 @@ LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 typedef struct win32_state_t
 {
     HANDLE wasapi_thread;
+    uint32_t mix_sample_rate;
 } win32_state_t;
 
 static win32_state_t g_win32;
@@ -164,10 +165,12 @@ static DWORD WINAPI wasapi_thread_proc(void *userdata)
     WAVEFORMATEXTENSIBLE mix_format_ex;
 
     copy_memory(&mix_format_ex, mix_format, sizeof(mix_format_ex));
-
+    
     bool is_this_a_floating_point_format = !memcmp(&mix_format_ex.SubFormat, &KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, sizeof(GUID));
     ASSERT(is_this_a_floating_point_format);
     ASSERT(mix_format_ex.Samples.wValidBitsPerSample == 32);
+
+    g_win32.mix_sample_rate = mix_format_ex.Format.nSamplesPerSec;
 
     CoTaskMemFree(mix_format);
 
@@ -206,8 +209,9 @@ static DWORD WINAPI wasapi_thread_proc(void *userdata)
         ASSERT(SUCCEEDED(hr));
 
         game_audio_io_t game_audio_io = {
-            .frames_to_mix = frame_count,
-            .buffer        = buffer,
+            .mix_sample_rate = g_win32.mix_sample_rate,
+            .frames_to_mix   = frame_count,
+            .buffer          = buffer,
         };
 
         game_mix_audio(&game_audio_io);
@@ -243,9 +247,13 @@ int wWinMain(HINSTANCE instance,
     equip_render_api(d3d11_get_api());
 
     // create window
+    //
     {
-        int w = 1920;
-        int h = 1080;
+        int desktop_w = GetSystemMetrics(SM_CXFULLSCREEN);
+        int desktop_h = GetSystemMetrics(SM_CYFULLSCREEN);
+
+        int w = 3*desktop_w / 4;
+        int h = 3*desktop_h / 4;
 
         WNDCLASSEXW wclass = 
         {
@@ -389,6 +397,7 @@ int wWinMain(HINSTANCE instance,
         r_reset_command_list();
 
         game_io_t io = {
+            .mix_sample_rate = g_win32.mix_sample_rate,
             .startup_map = startup_map,
 
             .has_focus = has_focus,

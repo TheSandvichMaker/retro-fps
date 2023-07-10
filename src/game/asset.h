@@ -67,11 +67,29 @@ typedef struct cubemap_t
 typedef struct waveform_t
 {
 	uint32_t channel_count;
-	uint32_t frame_count;
+    uint32_t sample_rate;
+	size_t   frame_count;
 	int16_t *frames;
 } waveform_t;
 
-DREAM_API void initialize_asset_system(void);
+DREAM_INLINE int16_t *waveform_channel(const waveform_t *waveform, size_t index)
+{
+    int16_t *result = NULL;
+
+    if (index < waveform->channel_count)
+    {
+        result = waveform->frames + waveform->frame_count*index;
+    }
+
+    return result;
+}
+
+typedef struct asset_config_t
+{
+    uint32_t mix_sample_rate;
+} asset_config_t;
+
+DREAM_API void initialize_asset_system(const asset_config_t *config);
 DREAM_API void preload_asset(asset_hash_t hash);
 
 DREAM_API image_t    missing_image;
@@ -97,6 +115,11 @@ DREAM_INLINE waveform_t *get_waveform_from_string(string_t string)
 	return get_waveform(asset_hash_from_string(string));
 }
 
+DREAM_INLINE waveform_t *get_waveform_from_string_blocking(string_t string)
+{
+	return get_waveform_blocking(asset_hash_from_string(string));
+}
+
 //
 // raw asset loading
 //
@@ -108,6 +131,8 @@ DREAM_API bool split_image_into_cubemap(const image_t *source, cubemap_t *cubema
 
 #define WAVE_SAMPLE_RATE 44100
 
+DREAM_API waveform_t load_waveform_info_from_memory(string_t file_data);
+DREAM_API waveform_t load_waveform_info_from_disk  (string_t path);
 DREAM_API waveform_t load_waveform_from_memory(arena_t *arena, string_t file_data);
 DREAM_API waveform_t load_waveform_from_disk  (arena_t *arena, string_t path);
 

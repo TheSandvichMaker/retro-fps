@@ -399,7 +399,10 @@ static void view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
 
 void game_init(game_io_t *io)
 {
-	initialize_asset_system();
+	initialize_asset_system(&(asset_config_t){
+        .mix_sample_rate = io->mix_sample_rate,
+    });
+
 	init_game_job_queues();
 
     update_camera_rotation(&g_camera, 0.0f);

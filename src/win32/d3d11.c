@@ -22,6 +22,8 @@
 
 #define SUN_SHADOWMAP_RESOLUTION (1024)
 
+extern _declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
+
 bulk_t d3d_models   = INIT_BULK_DATA_EX(d3d_model_t,   BULK_FLAGS_CONCURRENT);
 bulk_t d3d_textures = INIT_BULK_DATA_EX(d3d_texture_t, BULK_FLAGS_CONCURRENT);
 
@@ -594,6 +596,27 @@ int init_d3d11(void *hwnd_)
         });
     }
 
+    // queries
+    {
+        d3d.query_collect_frame = -1;
+
+        for (int query_frame = 0; query_frame < D3D_QUERY_FRAME_COUNT; query_frame++)
+        {
+            d3d_queries_t *queries = &d3d.queries[query_frame];
+
+            ID3D11Device_CreateQuery(d3d.device, &(D3D11_QUERY_DESC){ D3D11_QUERY_TIMESTAMP_DISJOINT }, &queries->disjoint);
+
+            for (int ts = 0; ts < RENDER_TS_COUNT; ts++)
+            {
+                ID3D11Query **q = &queries->ts[ts];
+                if (FAILED(ID3D11Device_CreateQuery(d3d.device, &(D3D11_QUERY_DESC){ D3D11_QUERY_TIMESTAMP }, q)))
+                {
+                    FATAL_ERROR("What on earth");
+                }
+            }
+        }
+    }
+
     return 0;
 }
 
@@ -847,6 +870,12 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
 {
     uint32_t frame_index = d3d.frame_index;
 
+    debug_print("Querying timestamps for query frame %d\n", d3d.query_frame);
+
+    d3d_queries_t *queries = &d3d.queries[d3d.query_frame];
+    ID3D11DeviceContext_Begin(d3d.context, (ID3D11Asynchronous *)queries->disjoint);
+    d3d_timestamp(RENDER_TS_BEGIN_FRAME);
+
 	AcquireSRWLockExclusive(&d3d.context_lock);
 
     d3d_ensure_swap_chain_size(width, height);
@@ -858,6 +887,8 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
         //
 
         ID3D11DeviceContext_ClearDepthStencilView(d3d.context, d3d.sun_shadowmap.depth_dsv, D3D11_CLEAR_DEPTH, 0.0f, 0);
+
+        d3d_timestamp(RENDER_TS_CLEAR_SHADOWMAP);
 
         // unfortunate
         r_view_t *player_view = &list->views[list->view_stack[2]];
@@ -945,6 +976,8 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
         }
 done_with_sun_shadows:
 
+        d3d_timestamp(RENDER_TS_RENDER_SHADOWMAP);
+
         //
         // Actually Render Scene
         //
@@ -961,6 +994,9 @@ done_with_sun_shadows:
 
         float clear_color[4] = { 0, 0, 0, 1 };
         ID3D11DeviceContext_ClearRenderTargetView(d3d.context, d3d.scene_target.color_rtv, clear_color);
+        ID3D11DeviceContext_ClearDepthStencilView(d3d.context, d3d.scene_target.depth_dsv, D3D11_CLEAR_DEPTH, 0.0f, 0);
+
+        d3d_timestamp(RENDER_TS_CLEAR_MAIN);
 
         for (size_t i = 1; i < list->view_count; i++)
         {
@@ -1022,11 +1058,13 @@ done_with_sun_shadows:
             });
         }
 
-        ID3D11DeviceContext_ClearDepthStencilView(d3d.context, d3d.scene_target.depth_dsv, D3D11_CLEAR_DEPTH, 0.0f, 0);
+        d3d_timestamp(RENDER_TS_RENDER_SKYBOX);
 
         // update immediate index/vertex buffer
         update_buffer(d3d.immediate_ibuffer, list->immediate_indices,  sizeof(list->immediate_indices[0])*list->immediate_icount);
         update_buffer(d3d.immediate_vbuffer, list->immediate_vertices, sizeof(list->immediate_vertices[0])*list->immediate_vcount);
+
+        d3d_timestamp(RENDER_TS_UPLOAD_IMMEDIATE_DATA);
 
         bool resolved_scene = false;
 
@@ -1235,6 +1273,8 @@ done_with_sun_shadows:
                 INVALID_DEFAULT_CASE;
             }
         }
+
+        d3d_timestamp(RENDER_TS_RENDER_MAIN);
     }
 
 	ReleaseSRWLockExclusive(&d3d.context_lock);
@@ -1242,11 +1282,72 @@ done_with_sun_shadows:
     d3d.frame_index++;
 }
 
+DREAM_INLINE void d3d_collect_timestamp_data(void)
+{
+    if (d3d.query_collect_frame < 0)
+    {
+        d3d.query_collect_frame += 1;
+        return;
+    }
+
+    d3d_queries_t *queries = &d3d.queries[d3d.query_collect_frame];
+
+    while (ID3D11DeviceContext_GetData(d3d.context, (ID3D11Asynchronous *)queries->disjoint, NULL, 0, 0) == S_FALSE)
+    {
+        debug_print("Snoozin on da query...\n");
+        Sleep(1);
+    }
+
+    debug_print("Collecting timestamps for collect frame %d\n", d3d.query_collect_frame);
+
+    D3D11_QUERY_DATA_TIMESTAMP_DISJOINT ts_disjoint;
+    if (ID3D11DeviceContext_GetData(d3d.context, (ID3D11Asynchronous *)queries->disjoint, &ts_disjoint, sizeof(ts_disjoint), 0) != S_OK)
+    {
+        debug_print("Couldn't retrieve timestamp disjoint query data\n");
+        return;
+    }
+
+    if (ts_disjoint.Disjoint)
+    {
+        debug_print("Timestamp data is disjoint\n");
+        return;
+    }
+
+    uint64_t timestamp_prev = 0;
+    for (int ts = 0; ts < RENDER_TS_COUNT; ts++)
+    {
+        uint64_t timestamp = timestamp_prev;
+        while (ID3D11DeviceContext_GetData(d3d.context, (ID3D11Asynchronous *)queries->ts[ts], &timestamp, sizeof(timestamp), 0) == S_FALSE)
+        {
+            Sleep(1);
+        }
+
+        if (ts == 0)
+            timestamp_prev = timestamp;
+
+        d3d.timings.dt[ts] = (float)(timestamp - timestamp_prev) / (float)(ts_disjoint.Frequency);
+        timestamp_prev = timestamp;
+    }
+
+    d3d.query_collect_frame = (d3d.query_collect_frame + 1) % D3D_QUERY_FRAME_COUNT;
+}
+
 void d3d11_present()
 {
+    d3d_queries_t *queries = &d3d.queries[d3d.query_frame];
+
 	AcquireSRWLockExclusive(&d3d.context_lock);
+
     HRESULT hr = IDXGISwapChain_Present(d3d.swap_chain, 1, 0);
+
+    d3d_timestamp(RENDER_TS_END_FRAME);
+    ID3D11DeviceContext_End(d3d.context, (ID3D11Asynchronous *)queries->disjoint);
+
+    d3d_collect_timestamp_data();
+
 	ReleaseSRWLockExclusive(&d3d.context_lock);
+
+    d3d.query_frame = (d3d.query_frame + 1) % D3D_QUERY_FRAME_COUNT;
 
     if (hr == DXGI_STATUS_OCCLUDED)
         Sleep(16);
@@ -1663,6 +1764,11 @@ bool describe_texture(resource_handle_t handle, texture_desc_t *result)
 	return texture != d3d.missing_texture;
 }
 
+static void get_timings(render_timings_t *timings)
+{
+    copy_struct(timings, &d3d.timings);
+}
+
 render_api_i *d3d11_get_api()
 {
     static render_api_i api = {
@@ -1677,6 +1783,8 @@ render_api_i *d3d11_get_api()
 
         .upload_model     = upload_model,
         .destroy_model    = destroy_model,
+
+        .get_timings      = get_timings,
     };
     return &api;
 }

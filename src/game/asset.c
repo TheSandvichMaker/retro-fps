@@ -77,6 +77,7 @@ waveform_t missing_waveform;
 static arena_t asset_arena;
 static bulk_t  asset_store = INIT_BULK_DATA(asset_slot_t);
 static hash_t  asset_index;
+static asset_config_t asset_config;
 
 typedef enum asset_job_kind_t
 {
@@ -93,6 +94,13 @@ typedef struct asset_job_t
 	asset_slot_t *asset;
 	arena_t *arena; // TODO: figure it out.
 } asset_job_t;
+
+DREAM_INLINE size_t convert_sample_count(size_t src_sample_rate, size_t dst_sample_rate, size_t sample_count)
+{
+    // TODO: Overflow check
+    size_t result = (sample_count*dst_sample_rate + src_sample_rate - 1) / src_sample_rate;
+    return result;
+}
 
 static void asset_job(job_context_t *context, void *userdata)
 {
@@ -143,12 +151,55 @@ static void asset_job(job_context_t *context, void *userdata)
 
 				case ASSET_KIND_WAVEFORM:
 				{
-					asset->waveform = load_waveform_from_disk(arena, STRING_FROM_STORAGE(asset->path));
+                    waveform_t  src_waveform = load_waveform_from_disk(temp, STRING_FROM_STORAGE(asset->path));
+                    waveform_t *dst_waveform = &asset->waveform;
+
+                    ASSERT(src_waveform.channel_count == asset->waveform.channel_count);
+
+                    if (src_waveform.sample_rate == dst_waveform->sample_rate)
+                    {
+                        // FIXME: FOOLISH CODE FOR DUMB PEOPLE
+                        dst_waveform->frames = m_copy_array(arena, src_waveform.frames, src_waveform.channel_count*src_waveform.frame_count);
+                    }
+                    else
+                    {
+                        uint32_t channel_count   = src_waveform.channel_count;
+                        size_t   src_frame_count = src_waveform.frame_count;
+                        size_t   dst_frame_count = dst_waveform->frame_count;
+
+                        int16_t *dst_frames = m_alloc_array_nozero(arena, channel_count*dst_frame_count, int16_t);
+
+                        for (size_t channel_index = 0; channel_index < channel_count; channel_index++)
+                        {
+                            int16_t *src = waveform_channel(&src_waveform, channel_index);
+                            int16_t *dst = dst_frames + channel_index*dst_frame_count;
+
+                            for (size_t dst_frame_index = 0; dst_frame_index < dst_frame_count; dst_frame_index++)
+                            {
+                                float t = (float)dst_frame_index / (float)dst_frame_count;
+                                float x = t*(float)src_frame_count;
+                                size_t x_i = (size_t)x;
+                                float x_f = (float)(x - (float)x_i);
+
+                                if (x_i >= src_frame_count) 
+                                    x_i = src_frame_count - 1;
+
+                                float s_1 = unorm_from_i16(src[x_i]);
+                                float s_2 = unorm_from_i16(src[x_i + 1]);
+                                float s = lerp(s_1, s_2, x_f);
+
+                                *dst++ = i16_from_unorm(s);
+                            }
+                        }
+
+                        dst_waveform->frames = dst_frames;
+                    }
 				} break;
 
 				default:
 				{
 					loaded_successfully = false;
+                    INVALID_CODE_PATH;
 				} break;
 			}
 
@@ -157,6 +208,8 @@ static void asset_job(job_context_t *context, void *userdata)
 				asset->state = ASSET_STATE_IN_MEMORY;
 			}
 		} break;
+
+        INVALID_DEFAULT_CASE;
 	}
 }
 
@@ -186,12 +239,25 @@ static void preload_asset_info(asset_slot_t *asset)
 			image->gpu = render->reserve_texture();
 		} break;
 
-		// TODO: others
+        case ASSET_KIND_WAVEFORM:
+        {
+            waveform_t waveform = load_waveform_info_from_disk(STRING_FROM_STORAGE(asset->path));
+
+            // we're gonna resample waveforms that don't match:
+            waveform.frame_count = convert_sample_count(waveform.sample_rate, asset_config.mix_sample_rate, waveform.frame_count);
+            waveform.sample_rate = asset_config.mix_sample_rate;
+
+            asset->waveform = waveform;
+        } break;
+        
+        INVALID_DEFAULT_CASE;
 	}
 }
 
-void initialize_asset_system(void)
+void initialize_asset_system(const asset_config_t *config)
 {
+    copy_struct(&asset_config, config);
+
 	m_scoped(temp)
 	{
 		for (fs_entry_t *entry = fs_scan_directory(temp, S("gamedata"), FS_SCAN_RECURSIVE);
@@ -289,10 +355,8 @@ image_t *get_image(asset_hash_t hash)
 	image_t *image = &missing_image;
 
 	asset_slot_t *asset = get_or_load_asset_async(hash, ASSET_KIND_IMAGE);
-	// asset_slot_t *asset = get_or_load_asset_blocking(hash, ASSET_KIND_IMAGE);
 	if (asset)
 	{
-		// Always returns the image. Even if it's not resident. You'd know by seeing if pixels is null.
 		image = &asset->image;
 	}
 
@@ -306,7 +370,6 @@ image_t *get_image_blocking(asset_hash_t hash)
 	asset_slot_t *asset = get_or_load_asset_blocking(hash, ASSET_KIND_IMAGE);
 	if (asset)
 	{
-		// Always returns the image. Even if it's not resident. You'd know by seeing if pixels is null.
 		image = &asset->image;
 	}
 
@@ -317,20 +380,23 @@ waveform_t *get_waveform(asset_hash_t hash)
 {
 	waveform_t *waveform = &missing_waveform;
 
-	asset_slot_t *asset = hash_find_object(&asset_index, hash.value);
-	if (asset && asset->kind == ASSET_KIND_WAVEFORM)
+	asset_slot_t *asset = get_or_load_asset_async(hash, ASSET_KIND_WAVEFORM);
+	if (asset)
 	{
-		if (asset->state == ASSET_STATE_IN_MEMORY)
-		{
-			waveform = &asset->waveform;
-		}
-		else if (asset->state == ASSET_STATE_ON_DISK)
-		{
-			// TODO: asynchronous
-			asset->waveform = load_waveform_from_disk(&asset_arena, STRING_FROM_STORAGE(asset->path));
-			asset->state = ASSET_STATE_IN_MEMORY;
-			waveform = &asset->waveform;
-		}
+		waveform = &asset->waveform;
+	}
+
+	return waveform;
+}
+
+waveform_t *get_waveform_blocking(asset_hash_t hash)
+{
+	waveform_t *waveform = &missing_waveform;
+
+	asset_slot_t *asset = get_or_load_asset_blocking(hash, ASSET_KIND_WAVEFORM);
+	if (asset)
+	{
+		waveform = &asset->waveform;
 	}
 
 	return waveform;
@@ -455,7 +521,7 @@ typedef struct wave_data_chunk_t
 	int16_t  data[];
 } wave_data_chunk_t;
 
-waveform_t load_waveform_from_memory(arena_t *arena, string_t file)
+waveform_t load_waveform_info_from_memory(string_t file)
 {
 	waveform_t result = {0};
 
@@ -480,8 +546,63 @@ waveform_t load_waveform_from_memory(arena_t *arena, string_t file)
 	if (fmt_chunk->audio_format != 1)
 		goto bail; // unexpected format (only want uncompressed PCM)
 
-	if (fmt_chunk->sample_rate != WAVE_SAMPLE_RATE)
-		goto bail; // unexpected sample rate (I don't want to do sample rate conversion)
+	if (fmt_chunk->bits_per_sample != 16)
+		goto bail; // unexpected bits per sample (I may later allow other bit depths)
+
+	wave_data_chunk_t *data_chunk = (wave_data_chunk_t *)(fmt_chunk + 1);
+
+	if (data_chunk->chunk_id != RIFF_ID("data"))
+		goto bail; // unexpected chunk
+
+	uint32_t sample_count = data_chunk->chunk_size / 2;
+
+	result.channel_count = fmt_chunk->channel_count;
+    result.frame_count   = sample_count / result.channel_count;
+    result.sample_rate   = fmt_chunk->sample_rate;
+
+bail:
+	return result;
+}
+
+waveform_t load_waveform_info_from_disk(string_t path)
+{
+    waveform_t result = {0};
+
+    m_scoped(temp)
+    {
+		string_t file = fs_read_entire_file(temp, path);
+		result = load_waveform_info_from_memory(file);
+    }
+
+    return result;
+}
+
+waveform_t load_waveform_from_memory(arena_t *arena, string_t file)
+{
+    // TODO: Deduplicate with load_waveform_info
+
+	waveform_t result = {0};
+
+	if (file.count < sizeof(wave_riff_chunk_t) + sizeof(wave_fmt_chunk_t) + sizeof(wave_data_chunk_t))
+		goto bail; // implausible file size
+
+	char *base = (char *)file.data;
+
+	wave_riff_chunk_t *riff_chunk = (wave_riff_chunk_t *)base;
+
+	if (riff_chunk->chunk_id != RIFF_ID("RIFF"))
+		goto bail; // unexpected chunk
+
+	if (riff_chunk->format != RIFF_ID("WAVE"))
+		goto bail; // wrong format
+
+	wave_fmt_chunk_t *fmt_chunk = (wave_fmt_chunk_t *)(riff_chunk + 1);
+
+	if (fmt_chunk->chunk_id != RIFF_ID("fmt "))
+		goto bail; // unexpected chunk
+
+	if (fmt_chunk->audio_format != 1)
+		goto bail; // unexpected format (only want uncompressed PCM)
 
 	if (fmt_chunk->bits_per_sample != 16)
 		goto bail; // unexpected bits per sample (I may later allow other bit depths)
@@ -494,11 +615,45 @@ waveform_t load_waveform_from_memory(arena_t *arena, string_t file)
 	uint32_t sample_count = data_chunk->chunk_size / 2;
 
 	result.channel_count = fmt_chunk->channel_count;
+    result.sample_rate   = fmt_chunk->sample_rate;
 	result.frame_count   = sample_count / result.channel_count;
-	result.frames        = m_copy(arena, data_chunk->data, data_chunk->chunk_size);
+
+    if (result.channel_count == 1)
+    {
+        result.frames = m_copy(arena, data_chunk->data, data_chunk->chunk_size);
+    }
+    else if (result.channel_count == 2)
+    {
+        result.frames = m_alloc_nozero(arena, data_chunk->chunk_size, 16);
+
+        int16_t *dst_l = waveform_channel(&result, 0);
+        int16_t *dst_r = waveform_channel(&result, 1);
+
+        int16_t *src = data_chunk->data;
+        for (size_t frame_index = 0; frame_index < result.frame_count; frame_index++)
+        {
+            *dst_l++ = *src++;
+            *dst_r++ = *src++;
+        }
+    }
+    else
+    {
+        ASSERT(result.channel_count > 2);
+
+        result.frames = m_alloc_nozero(arena, data_chunk->chunk_size, 16);
+
+        int16_t *src = data_chunk->data;
+        for (size_t frame_index = 0; frame_index < result.frame_count; frame_index++)
+        {
+            for (size_t channel_index = 0; channel_index < result.channel_count; channel_index++)
+            {
+                int16_t *dst = waveform_channel(&result, channel_index);
+                dst[frame_index] = *src++;
+            }
+        }
+    }
 
 bail:
-
 	return result;
 }
 
@@ -506,7 +661,8 @@ waveform_t load_waveform_from_disk(arena_t *arena, string_t path)
 {
 	waveform_t result = {0};
 
-	m_scoped(temp)
+    // uh oh
+	// m_scoped(temp)
 	{
 		string_t file = fs_read_entire_file(temp, path);
 		result = load_waveform_from_memory(arena, file);

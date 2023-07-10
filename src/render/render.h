@@ -145,6 +145,39 @@ typedef struct upload_model_t
 
 enum { MISSING_TEXTURE_SIZE = 64 };
 
+#define render_timestamp_t(_)                                   \
+    _(RENDER_TS_BEGIN_FRAME, "begin frame")                     \
+    _(RENDER_TS_CLEAR_SHADOWMAP, "clear shadowmap")             \
+    _(RENDER_TS_RENDER_SHADOWMAP, "render shadowmap")           \
+    _(RENDER_TS_CLEAR_MAIN, "clear main")                       \
+    _(RENDER_TS_RENDER_SKYBOX, "render skybox")                 \
+    _(RENDER_TS_UPLOAD_IMMEDIATE_DATA, "upload immediate data") \
+    _(RENDER_TS_RENDER_MAIN, "render main")                     \
+    _(RENDER_TS_END_FRAME, "end frame")                         \
+    _(RENDER_TS_COUNT, "RENDER_TS_COUNT")                       \
+
+#define DEFINE_ENUM(e, ...) e,
+
+typedef enum render_timestamp_t
+{
+    render_timestamp_t(DEFINE_ENUM)
+} render_timestamp_t;
+
+#define DEFINE_NAME(e, name) [e] = name,
+
+static const char *render_timestamp_names[] = {
+    render_timestamp_t(DEFINE_NAME)
+};
+
+#undef DEFINE_ENUM
+#undef DEFINE_NAME
+#undef render_timestamp_t
+
+typedef struct render_timings_t
+{
+    float dt[RENDER_TS_COUNT];
+} render_timings_t;
+
 typedef struct render_api_i
 {
     void (*get_resolution)(int *w, int *h);
@@ -162,6 +195,8 @@ typedef struct render_api_i
 
     resource_handle_t (*upload_model)(const upload_model_t *params);
     void (*destroy_model)(resource_handle_t model);
+
+    void (*get_timings)(render_timings_t *timings);
 } render_api_i;
 
 void equip_render_api(render_api_i *api);

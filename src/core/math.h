@@ -143,6 +143,30 @@ inline float fabsf(float x) { return abs_ss(x); }
 
 // float
 
+DREAM_INLINE float lanczos(float x, float a)
+{
+    float result = 0.0f;
+
+    if (fabsf(x) < 0.0001f)
+        result = 1.0f;
+    else if (-a <= x && x < a)
+        result = (a*sinf(PI32*x)*sinf((PI32*x) / a)) / (PI32*PI32*x*x);
+
+    return result;
+}
+
+DREAM_INLINE float unorm_from_i16(int16_t s)
+{
+    return (float)s / (float)INT16_MAX;
+}
+
+DREAM_INLINE int16_t i16_from_unorm(float s)
+{
+    if (s < -1.0f) s = -1.0f;
+    if (s >  1.0f) s =  1.0f;
+    return (int16_t)(s*(float)INT16_MAX);
+}
+
 DREAM_INLINE float flt_add(float l, float r) { return l + r; }
 DREAM_INLINE float flt_sub(float l, float r) { return l - r; }
 DREAM_INLINE float flt_mul(float l, float r) { return l * r; }

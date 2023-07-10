@@ -10,6 +10,8 @@ typedef struct map_brush_t map_brush_t;
 typedef struct game_io_t
 {
     // in
+    uint32_t mix_sample_rate;
+
     string_t startup_map;
 
     bool has_focus;
@@ -23,6 +25,7 @@ typedef struct game_io_t
 
 typedef struct game_audio_io_t
 {
+    uint32_t mix_sample_rate;
     size_t frames_to_mix;
     float *buffer;
 } game_audio_io_t;
