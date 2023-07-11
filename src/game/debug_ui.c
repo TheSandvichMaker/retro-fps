@@ -634,10 +634,10 @@ DREAM_INLINE ui_widget_state_t ui_get_widget_state(ui_id_t id)
 {
 	ui_widget_state_t result = UI_WIDGET_STATE_COLD;
 
-	if (ui_is_hot(id))
-		result = UI_WIDGET_STATE_HOT;
-	else if (ui_is_active(id))
+	if (ui_is_active(id))
 		result = UI_WIDGET_STATE_ACTIVE;
+    else if (ui_is_hot(id))
+		result = UI_WIDGET_STATE_HOT;
 
 	return result;
 }

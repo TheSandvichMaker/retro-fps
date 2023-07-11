@@ -1219,6 +1219,8 @@ done_with_sun_shadows:
 
                     if (ALWAYS(!resolved_scene))
                     {
+                        d3d_timestamp(RENDER_TS_SCENE);
+
                         resolved_scene = true;
 
                         d3d_texture_t *fogmap = d3d_get_texture_or(view->fogmap, NULL);
@@ -1251,8 +1253,12 @@ done_with_sun_shadows:
                             .viewport      = viewport,
                         });
 
+                        d3d_timestamp(RENDER_TS_MSAA_RESOLVE);
+
                         // Generate mipmaps for bloom
                         ID3D11DeviceContext_GenerateMips(d3d.context, d3d.post_target.color_srv);
+
+                        d3d_timestamp(RENDER_TS_BLOOM);
 
                         //
                         // Post processing, resolve HDR
@@ -1266,6 +1272,8 @@ done_with_sun_shadows:
                             .viewport      = viewport,
                         });
 
+                        d3d_timestamp(RENDER_TS_POST_PASS);
+
                         current_render_target = &d3d.backbuffer;
                     }
                 } break;
@@ -1274,7 +1282,7 @@ done_with_sun_shadows:
             }
         }
 
-        d3d_timestamp(RENDER_TS_RENDER_MAIN);
+        d3d_timestamp(RENDER_TS_UI);
     }
 
 	ReleaseSRWLockExclusive(&d3d.context_lock);

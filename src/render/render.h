@@ -152,7 +152,11 @@ enum { MISSING_TEXTURE_SIZE = 64 };
     _(RENDER_TS_CLEAR_MAIN, "clear main")                       \
     _(RENDER_TS_RENDER_SKYBOX, "render skybox")                 \
     _(RENDER_TS_UPLOAD_IMMEDIATE_DATA, "upload immediate data") \
-    _(RENDER_TS_RENDER_MAIN, "render main")                     \
+    _(RENDER_TS_SCENE, "render scene")                          \
+    _(RENDER_TS_MSAA_RESOLVE, "msaa resolve")                   \
+    _(RENDER_TS_BLOOM, "bloom")                                 \
+    _(RENDER_TS_POST_PASS, "post-pass")                         \
+    _(RENDER_TS_UI, "ui")                                       \
     _(RENDER_TS_END_FRAME, "end frame")                         \
     _(RENDER_TS_COUNT, "RENDER_TS_COUNT")                       \
 

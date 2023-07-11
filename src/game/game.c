@@ -299,13 +299,6 @@ void player_movement(map_t *map, player_t *player, float dt)
 
             rect3_t bounds = rect3_add(player_bounds, brush->bounds);
 
-#if 0
-            diag_add_box(&(diag_box_t){
-                .bounds = brush->bounds,
-                .color  = (brush == player->support ? (v3_t){ 0, 1, 0 } : (v3_t){ 1, 0, 0 }),
-            });
-#endif
-
             float hit_t = ray_intersect_rect3(r_o, r_d, bounds);
             if (hit_t > t_min && hit_t <= closest_hit_t)
             {

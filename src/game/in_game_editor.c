@@ -110,11 +110,11 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
         {
             ui_label(S("Bake Quality"));
 
-            static int bake_preset = 0;
-            static int ray_count = 2;
-            static int ray_recursion = 2;
-            static int fog_light_sample_count = 1;
-            static int fogmap_scale_index = 0;
+            static int bake_preset              = 0;
+            static int ray_count                = 2;
+            static int ray_recursion            = 2;
+            static int fog_light_sample_count   = 2;
+            static int fogmap_scale_index       = 1;
             static bool use_dynamic_sun_shadows = true;
 
             static string_t preset_labels[] = { Sc("Crappy"), Sc("Acceptable"), Sc("Excessive") };
@@ -270,7 +270,6 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 				ui_slider_int(S("min recursion level"), &lm_editor->min_display_recursion, 0, 16);
 				ui_slider_int(S("max recursion level"), &lm_editor->max_display_recursion, 0, 16);
 
-#if 0
 				if (lm_editor->selected_poly)
 				{
 					map_poly_t *poly = lm_editor->selected_poly;
@@ -278,16 +277,18 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 					texture_desc_t desc;
 					render->describe_texture(poly->lightmap, &desc);
 
-					ui_label(string_format(temp, "resolution: %u x %u", desc.w, desc.h), 0);
+                    ui_push_scalar(UI_SCALAR_TEXT_ALIGN_X, 0.0f);
+
+					ui_label(Sf("resolution: %u x %u", desc.w, desc.h));
 					if (lm_editor->pixel_selection_active)
 					{
-						ui_label(string_format(temp, "selected pixel region: (%d, %d) (%d, %d)", 
-											   lm_editor->selected_pixels.min.x,
-											   lm_editor->selected_pixels.min.y,
-											   lm_editor->selected_pixels.max.x,
-											   lm_editor->selected_pixels.max.y), 0);
+                        ui_label(Sf("selected pixel region: (%d, %d) (%d, %d)", 
+                                    lm_editor->selected_pixels.min.x,
+                                    lm_editor->selected_pixels.min.y,
+                                    lm_editor->selected_pixels.max.x,
+                                    lm_editor->selected_pixels.max.y));
 
-						if (ui_button(S("clear selection")).released)
+						if (ui_button(S("clear selection")))
 						{
 							lm_editor->pixel_selection_active = false;
 							lm_editor->selected_pixels = (rect2i_t){ 0 };
@@ -295,10 +296,14 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 					}
 					else
 					{
-						ui_spacer(ui_txt(1.0f));
-						ui_spacer(ui_txt(1.0f));
+                        // TODO: add spacers
+                        ui_label(S(""));
+                        ui_label(S(""));
 					}
 
+                    ui_pop_scalar(UI_SCALAR_TEXT_ALIGN_X);
+
+#if 0
 					ui_box_t *image_viewer = ui_box(S("lightmap image"), UI_CLICKABLE|UI_DRAGGABLE|UI_DRAW_BACKGROUND);
 					if (desc.w >= desc.h)
 					{
@@ -311,7 +316,15 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 						ui_set_size(image_viewer, AXIS2_Y, ui_pct(1.0f, 1.0f));
 					}
 					image_viewer->texture = poly->lightmap;
+#else
+                    rect2_t *layout = ui_layout_rect();
+                    rect2_t image_rect = ui_cut_top(layout, (float)desc.h);
 
+                    r_immediate_texture(poly->lightmap);
+                    r_immediate_rect2_filled(image_rect, make_v4(1, 1, 1, 1));
+#endif
+
+#if 0
 					ui_interaction_t interaction = ui_interaction_from_box(image_viewer);
 					if (interaction.hovering || lm_editor->pixel_selection_active)
 					{
@@ -358,8 +371,8 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 							selection_highlight->position_offset[AXIS2_Y] = rect_dim.y - (float)(lm_editor->selected_pixels.min.y + selection_dim.y) * pixel_size.y;
 						}
 					}
-				}
 #endif
+				}
 			}
 			else
 			{
@@ -612,18 +625,17 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 {
     rect2_t bar = ui_cut_top(g_editor.fullscreen_layout, 32.0f);
 
-    bool mouse_hover = rect2_contains_point(bar, ui.mouse_p);
+    rect2_t collision_bar = bar;
+    collision_bar.min.y -= 32.0f;
+
+    bool mouse_hover = rect2_contains_point(collision_bar, ui.mouse_p);
     g_editor.bar_openness = ui_animate_towards(g_editor.bar_openness, mouse_hover ? 1.0f : 0.0f);
 
     if (g_editor.bar_openness > 0.0001f)
     {
-        v2_t dim = rect2_dim(bar);
-        dim.y *= g_editor.bar_openness;
+        float height = rect2_height(bar);
 
-        bar = (rect2_t){
-            .max = bar.max,
-            .min = sub(bar.max, dim),
-        };
+        bar = rect2_add_offset(bar, make_v2(0.0f, (1.0f - g_editor.bar_openness)*height));
 
         r_immediate_rect2_filled(bar, ui_color(UI_COLOR_WINDOW_BACKGROUND));
         r_immediate_flush();
