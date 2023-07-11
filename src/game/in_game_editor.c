@@ -104,7 +104,7 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
     lightmap_editor_state_t *lm_editor = &g_editor.lightmap_editor;
 	(void)lm_editor;
 
-	ui_window_begin(S("Lightmap Editor"), rect2_from_min_dim(make_v2(32.0f, 32.0f), make_v2(512.0f, 512.0f)));
+	UI_WINDOW(S("Lightmap Editor"), rect2_from_min_dim(make_v2(32.0f, 32.0f), make_v2(512.0f, 512.0f)))
 	{
         if (!map->lightmap_state || !map->lightmap_state->finalized)
         {
@@ -374,7 +374,6 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 			}
 		}
 	}
-	ui_window_end();
 
     if (lm_editor->debug_lightmaps)
     {
@@ -591,21 +590,20 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 
 DREAM_INLINE void fullscreen_show_timings(void)
 {
-    ui_push_scalar(UI_SCALAR_TEXT_ALIGN_X, 0.5f);
-
-    render_timings_t timings;
-    render->get_timings(&timings);
-
-    float total = 0.0f;
-    for (int i = 1; i < RENDER_TS_COUNT; i++)
+    UI_SCALAR(UI_SCALAR_TEXT_ALIGN_X, 0.5f)
     {
-        ui_label(Sf("%s: %.02fms", render_timestamp_names[i], 1000.0*timings.dt[i]));
-        total += timings.dt[i];
+        render_timings_t timings;
+        render->get_timings(&timings);
+
+        float total = 0.0f;
+        for (int i = 1; i < RENDER_TS_COUNT; i++)
+        {
+            ui_label(Sf("%s: %.02fms", render_timestamp_names[i], 1000.0*timings.dt[i]));
+            total += timings.dt[i];
+        }
+
+        ui_label(Sf("total: %.02fms", 1000.0*total));
     }
-
-    ui_label(Sf("total: %.02fms", 1000.0*total));
-
-    ui_pop_scalar(UI_SCALAR_TEXT_ALIGN_X);
 }
 
 DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
@@ -635,54 +633,53 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
         r_immediate_flush();
 
         rect2_t inner_bar = ui_shrink(&bar, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
-        ui_panel_begin(inner_bar);
-
-        typedef struct menu_t
+        UI_PANEL(inner_bar)
         {
-            string_t name;
-            bool *toggle;
-        } menu_t;
-
-        menu_t menus[] = {
+            typedef struct menu_t
             {
-                .name = S("Timings (F1)"),
-                .toggle = &g_editor.show_timings,
-            },
+                string_t name;
+                bool *toggle;
+            } menu_t;
+
+            menu_t menus[] = {
+                {
+                    .name = S("Timings (F1)"),
+                    .toggle = &g_editor.show_timings,
+                },
+                {
+                    .name = S("Lightmap Editor (F2)"),
+                    .toggle = &g_editor.lightmap_editor_enabled,
+                },
+            };
+
+            ui_set_next_rect(ui_cut_left(&bar, ui_label_width(S("Menus:  "))));
+            ui_label(S("Menus:"));
+
+            for (size_t i = 0; i < ARRAY_COUNT(menus); i++)
             {
-                .name = S("Lightmap Editor (F2)"),
-                .toggle = &g_editor.lightmap_editor_enabled,
-            },
-        };
+                menu_t *menu = &menus[i];
+                
+                float width = ui_label_width(menu->name);
 
-        ui_set_next_rect(ui_cut_left(&bar, ui_label_width(S("Menus:  "))));
-        ui_label(S("Menus:"));
+                bool active = *menu->toggle;
 
-        for (size_t i = 0; i < ARRAY_COUNT(menus); i++)
-        {
-            menu_t *menu = &menus[i];
-            
-            float width = ui_label_width(menu->name);
+                if (active)
+                {
+                    ui_push_color(UI_COLOR_BUTTON_IDLE, ui_color(UI_COLOR_BUTTON_ACTIVE));
+                }
 
-            bool active = *menu->toggle;
+                ui_set_next_rect(ui_cut_left(&bar, width));
+                if (ui_button(menu->name))
+                {
+                    *menu->toggle = !*menu->toggle;
+                }
 
-            if (active)
-            {
-                ui_push_color(UI_COLOR_BUTTON_IDLE, ui_color(UI_COLOR_BUTTON_ACTIVE));
-            }
-
-            ui_set_next_rect(ui_cut_left(&bar, width));
-            if (ui_button(menu->name))
-            {
-                *menu->toggle = !*menu->toggle;
-            }
-
-            if (active)
-            {
-                ui_pop_color(UI_COLOR_BUTTON_IDLE);
+                if (active)
+                {
+                    ui_pop_color(UI_COLOR_BUTTON_IDLE);
+                }
             }
         }
-
-        ui_panel_end();
     }
 }
 
@@ -702,9 +699,8 @@ void update_and_render_in_game_editor(game_io_t *io, world_t *world)
         .max = { (float)res_x, (float)res_y },
     };
 
-    ui_push_scalar(UI_SCALAR_WIDGET_MARGIN, 0.0f);
-    ui_panel_begin(fullscreen_rect);
-    ui_pop_scalar(UI_SCALAR_WIDGET_MARGIN);
+    UI_SCALAR(UI_SCALAR_WIDGET_MARGIN, 0.0f)
+    UI_PANEL(fullscreen_rect)
     {
         g_editor.fullscreen_layout = ui_layout_rect();
 
@@ -714,7 +710,6 @@ void update_and_render_in_game_editor(game_io_t *io, world_t *world)
             fullscreen_show_timings();
 
     }
-    ui_panel_end();
 
     if (g_editor.lightmap_editor_enabled)
         update_and_render_lightmap_editor(io, world);

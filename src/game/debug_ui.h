@@ -227,9 +227,13 @@ DREAM_API void ui_end(void);
 DREAM_API void ui_window_begin(string_t label, rect2_t size);
 DREAM_API void ui_window_end(void);
 
+#define UI_WINDOW(label, size) DeferLoop(ui_window_begin(label, size), ui_window_end())
+
 DREAM_API void ui_panel_begin(rect2_t size);
 DREAM_API void ui_panel_begin_ex(ui_id_t id, rect2_t size, ui_panel_flags_t flags);
 DREAM_API void ui_panel_end(void);
+
+#define UI_PANEL(size) DeferLoop(ui_panel_begin(size), ui_panel_end())
 
 DREAM_API rect2_t *ui_layout_rect(void);
 DREAM_API void ui_set_layout_direction(ui_cut_side_t side);
@@ -242,6 +246,9 @@ DREAM_API float ui_pop_scalar(ui_style_scalar_t scalar);
 DREAM_API v4_t ui_color(ui_style_color_t color);
 DREAM_API void ui_push_color(ui_style_color_t color, v4_t value);
 DREAM_API v4_t ui_pop_color(ui_style_color_t color);
+
+#define UI_SCALAR(scalar, value) DeferLoop(ui_push_scalar(scalar, value), ui_pop_scalar(scalar))
+#define UI_COLOR(color, value) DeferLoop(ui_push_color(color, value), ui_pop_color(color))
 
 DREAM_API void ui_label(string_t label);
 DREAM_API float ui_label_width(string_t label);
