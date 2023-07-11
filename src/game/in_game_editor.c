@@ -127,80 +127,127 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 
 	ui_window_begin(S("Lightmap Editor"), rect2_min_dim(make_v2(32.0f, 32.0f), make_v2(512.0f, 512.0f)));
 	{
-        ui_label(S("Bake Quality"));
+        if (!map->lightmap_state || !map->lightmap_state->finalized)
+        {
+            ui_label(S("Bake Quality"));
 
-        static int ray_count = 8;
-        ui_slider_int(S("rays per pixel"), &ray_count, 1, 32);
+            static int bake_preset = 0;
+            static int ray_count = 2;
+            static int ray_recursion = 2;
+            static int fog_light_sample_count = 1;
+            static int fogmap_scale_index = 0;
 
-		static int ray_recursion = 2;
-        ui_slider_int(S("max recursion"), &ray_recursion, 1, 8);
+            static string_t preset_labels[] = { Sc("Crappy"), Sc("Acceptable"), Sc("Excessive") };
+            if (ui_radio(S("preset"), &bake_preset, ARRAY_COUNT(preset_labels), preset_labels))
+            {
+                switch (bake_preset)
+                {
+                    case 0:
+                    {
+                        ray_count              = 2;
+                        ray_recursion          = 2;
+                        fog_light_sample_count = 2;
+                        fogmap_scale_index     = 1;
+                    } break;
 
-		static int fog_light_sample_count = 4;
-        ui_slider_int(S("fog light sample count"), &fog_light_sample_count, 1, 8);
+                    case 1:
+                    {
+                        ray_count              = 8;
+                        ray_recursion          = 3;
+                        fog_light_sample_count = 4;
+                        fogmap_scale_index     = 1;
+                    } break;
 
-        static int fogmap_scales[] = {
-            32, 16, 8, 4,
-        };
+                    case 2:
+                    {
+                        ray_count              = 16;
+                        ray_recursion          = 4;
+                        fog_light_sample_count = 8;
+                        fogmap_scale_index     = 2;
+                    } break;
+                }
+            }
 
-        static string_t fogmap_scale_labels[] = {
-            Sc("32"), Sc("16"), Sc("8"), Sc("4"),
-        };
+            ui_slider_int(S("rays per pixel"), &ray_count, 1, 32);
+            ui_slider_int(S("max recursion"), &ray_recursion, 1, 8);
+            ui_slider_int(S("fog light sample count"), &fog_light_sample_count, 1, 8);
 
-		static int fogmap_scale_index = 1;
-        ui_radio(S("fogmap scale"), ARRAY_COUNT(fogmap_scales), &fogmap_scale_index, fogmap_scale_labels);
+            static int fogmap_scales[] = {
+                32, 16, 8, 4,
+            };
 
-        int actual_fogmap_scale = fogmap_scales[fogmap_scale_index];
+            static string_t fogmap_scale_labels[] = {
+                Sc("32"), Sc("16"), Sc("8"), Sc("4"),
+            };
 
-		if (ui_button(S("Bake Lighting")))
-		{
-			if (map->lightmap_state)
-			{
-				if (release_bake_state(map->lightmap_state))
-				{
-					map->lightmap_state = NULL;
-				}
-			}
+            ui_radio(S("fogmap scale"), &fogmap_scale_index, ARRAY_COUNT(fogmap_scales), fogmap_scale_labels);
 
-			if (!map->lightmap_state)
-			{
-				// figure out the solid sky color from the fog
-				float absorption = map->fog_absorption;
-				float density    = map->fog_density;
-				float scattering = map->fog_scattering;
-				v3_t sky_color = mul(sun_color, (1.0f / (4.0f*PI32))*scattering*density / (density*(scattering + absorption)));
+            int actual_fogmap_scale = fogmap_scales[fogmap_scale_index];
 
-				if (map->lightmap_state)
-				{
-					release_bake_state(map->lightmap_state);
-				}
+            if (!map->lightmap_state)
+            {
+                if (ui_button(S("Bake Lighting")))
+                {
+                    // figure out the solid sky color from the fog
+                    float absorption = map->fog_absorption;
+                    float density    = map->fog_density;
+                    float scattering = map->fog_scattering;
+                    v3_t sky_color = mul(sun_color, (1.0f / (4.0f*PI32))*scattering*density / (density*(scattering + absorption)));
 
-				map->lightmap_state = bake_lighting(&(lum_params_t) {
-					.map                 = map,
-					.sun_direction       = make_v3(0.25f, 0.75f, 1),
-					.sun_color           = sun_color,
-					.sky_color           = sky_color,
+                    if (map->lightmap_state)
+                    {
+                        release_bake_state(map->lightmap_state);
+                    }
 
-					.use_dynamic_sun_shadows = true,
+                    map->lightmap_state = bake_lighting(&(lum_params_t) {
+                        .map                 = map,
+                        .sun_direction       = make_v3(0.25f, 0.75f, 1),
+                        .sun_color           = sun_color,
+                        .sky_color           = sky_color,
 
-					.ray_count               = ray_count,
-					.ray_recursion           = ray_recursion,
-					.fog_light_sample_count  = fog_light_sample_count,
-					.fogmap_scale            = actual_fogmap_scale,
-#if 0
-					.ray_count               = 64,
-					.ray_recursion           = 4,
-					.fog_light_sample_count  = 64,
-					.fogmap_scale            = 8,
-#endif
-				});
-			}
-		}
+                        .use_dynamic_sun_shadows = true,
 
-		if (!map->lightmap_state)
-			ui_label(S("Lightmaps have not been baked!"));
+                        .ray_count               = ray_count,
+                        .ray_recursion           = ray_recursion,
+                        .fog_light_sample_count  = fog_light_sample_count,
+                        .fogmap_scale            = actual_fogmap_scale,
+                    });
+                }
+            }
+            else if (ui_button(S("Cancel")))
+            {
+                bake_cancel(map->lightmap_state);
+
+                for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
+                {
+                    map_poly_t *poly = &map->polys[poly_index];
+                    if (RESOURCE_HANDLE_VALID(poly->lightmap))
+                    {
+                        render->destroy_texture(poly->lightmap);
+                        poly->lightmap = NULL_RESOURCE_HANDLE;
+                    }
+                }
+
+                render->destroy_texture(map->fogmap);
+                map->fogmap = NULL_RESOURCE_HANDLE;
+
+                map->lightmap_state = NULL;
+            }
+        }
 
 		if (map->lightmap_state && map->lightmap_state->finalized)
 		{
+			lum_bake_state_t *state = map->lightmap_state;
+
+            double time_elapsed = state->final_bake_time;
+            int minutes = (int)floor(time_elapsed / 60.0);
+            int seconds = (int)floor(time_elapsed - 60.0*minutes);
+            int microseconds = (int)floor(1000.0*(time_elapsed - 60.0*minutes - seconds));
+
+            ui_label(Sf("total bake time:  %02u:%02u:%03u", minutes, seconds, microseconds));
+
+            ui_label(Sf("fogmap resolution: %u %u %u", map->fogmap_w, map->fogmap_h, map->fogmap_d));
+
 			if (ui_button(S("Clear Lightmaps")))
 			{
 				for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
@@ -227,14 +274,8 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 
 			if (state->finalized)
 			{
-				double time_elapsed = state->final_bake_time;
-				int minutes = (int)floor(time_elapsed / 60.0);
-				int seconds = (int)floor(time_elapsed - 60.0*minutes);
-				int microseconds = (int)floor(1000.0*(time_elapsed - 60.0*minutes - seconds));
-
-				ui_label(Sf("total bake time:  %02u:%02u:%03u", minutes, seconds, microseconds));
-
-				ui_label(Sf("fogmap resolution: %u %u %u", map->fogmap_w, map->fogmap_h, map->fogmap_d));
+				ui_label(S(""));
+				ui_label(S("Lightmap Debugger"));
 
 				ui_checkbox(S("enabled"), &lm_editor->debug_lightmaps);
 				ui_checkbox(S("show direct light rays"), &lm_editor->show_direct_light_rays);
@@ -242,10 +283,10 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 				ui_checkbox(S("fullbright rays"), &lm_editor->fullbright_rays);
 				ui_checkbox(S("no ray depth test"), &lm_editor->no_ray_depth_test);
 
-#if 0
-				ui_increment_decrement(strlit("min recursion level"), &lm_editor->min_display_recursion, 0, 16);
-				ui_increment_decrement(strlit("max recursion level"), &lm_editor->max_display_recursion, 0, 16);
+				ui_slider_int(S("min recursion level"), &lm_editor->min_display_recursion, 0, 16);
+				ui_slider_int(S("max recursion level"), &lm_editor->max_display_recursion, 0, 16);
 
+#if 0
 				if (lm_editor->selected_poly)
 				{
 					map_poly_t *poly = lm_editor->selected_poly;
@@ -338,16 +379,16 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 			}
 			else
 			{
-				float progress = bake_progress(map->lightmap_state);
+                float progress = bake_progress(map->lightmap_state);
 
-				ui_progress_bar(Sf("bake progress: %u / %u (%.02f%%)", map->lightmap_state->jobs_completed, map->lightmap_state->job_count, 100.0f*progress), progress);
+                ui_progress_bar(Sf("bake progress: %u / %u (%.02f%%)", map->lightmap_state->jobs_completed, map->lightmap_state->job_count, 100.0f*progress), progress);
 
-				hires_time_t current_time = os_hires_time();
-				double time_elapsed = os_seconds_elapsed(map->lightmap_state->start_time, current_time);
-				int minutes = (int)floor(time_elapsed / 60.0);
-				int seconds = (int)floor(time_elapsed - 60.0*minutes);
+                hires_time_t current_time = os_hires_time();
+                double time_elapsed = os_seconds_elapsed(map->lightmap_state->start_time, current_time);
+                int minutes = (int)floor(time_elapsed / 60.0);
+                int seconds = (int)floor(time_elapsed - 60.0*minutes);
 
-				ui_label(Sf("time elapsed:  %02u:%02u", minutes, seconds));
+                ui_label(Sf("time elapsed:  %02u:%02u", minutes, seconds));
 			}
 		}
 	}

@@ -527,30 +527,6 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 
 			v4_t color = ui_color(UI_COLOR_SLIDER_FOREGROUND);
 
-#if 0
-			if (ui_is_hot(id))
-				color = ui_color(UI_COLOR_SLIDER_HOT);
-
-			if (ui_is_active(id))
-				color = ui_color(UI_COLOR_SLIDER_ACTIVE);
-
-			if (widget->t >= 0.0f)
-			{
-				float rate = 0.5f;
-
-				float t = widget->t;
-				t *= t;
-				t *= t;
-
-				color = v4_lerps(color, ui_color(UI_COLOR_SLIDER_ACTIVE, t));
-
-				widget->t -= ui.dt / rate;
-
-				if (widget->t < 0.0f)
-					widget->t = 0.0f;
-			}
-#endif
-
 			r_immediate_rect2_filled(top, ui_color(UI_COLOR_SLIDER_BACKGROUND));
 			r_immediate_rect2_filled(handle, color);
 			r_immediate_rect2_filled(bot, ui_color(UI_COLOR_SLIDER_BACKGROUND));
@@ -779,8 +755,10 @@ bool ui_checkbox(string_t label, bool *value)
 	return result;
 }
 
-void ui_radio(string_t label, int count, int *value, string_t *labels)
+bool ui_radio(string_t label, int *value, int count, string_t *labels)
 {
+    bool result = false;
+
 	rect2_t rect;
 	if (!ui_override_rect(&rect))
 	{
@@ -788,10 +766,8 @@ void ui_radio(string_t label, int count, int *value, string_t *labels)
 		rect = ui_cut_top(&panel->rect, (float)ui.font.ch + ui_widget_padding());
 	}
 
-	// rect = ui_shrink(&rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
-
-	rect2_t label_rect = ui_cut_left(&rect, (float)label.count*ui.font.cw + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN));
-	label_rect = ui_shrink(&label_rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
+	rect2_t label_rect = ui_cut_left(&rect, (float)label.count*ui.font.cw + ui_widget_padding());
+	label_rect = ui_shrink(&label_rect, 0.5f*ui_widget_padding());
 
     {
         float size = rect2_width(rect) / (float)count;
@@ -806,7 +782,10 @@ void ui_radio(string_t label, int count, int *value, string_t *labels)
                 ui_push_color(UI_COLOR_BUTTON_IDLE, ui_color(UI_COLOR_BUTTON_ACTIVE));
             }
 
-            if (ui_button(labels[i]))
+            bool pressed = ui_button(labels[i]);
+            result |= pressed;
+
+            if (pressed)
             {
                 *value = i;
             }
@@ -819,6 +798,8 @@ void ui_radio(string_t label, int count, int *value, string_t *labels)
     }
 
 	ui_text(label_rect.min, label);
+
+    return result;
 }
 
 void ui_slider(string_t label, float *v, float min, float max)

@@ -244,7 +244,7 @@ DREAM_API void ui_label(string_t label);
 DREAM_API void ui_progress_bar(string_t label, float progress);
 DREAM_API bool ui_button(string_t label);
 DREAM_API bool ui_checkbox(string_t label, bool *value);
-DREAM_API void ui_radio(string_t label, int count, int *value, string_t *labels);
+DREAM_API bool ui_radio(string_t label, int *value, int count, string_t *labels);
 DREAM_API void ui_slider(string_t label, float *v, float min, float max);
 DREAM_API void ui_slider_int(string_t label, int *v, int min, int max);
 

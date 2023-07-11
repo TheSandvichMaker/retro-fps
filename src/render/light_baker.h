@@ -99,7 +99,9 @@ typedef struct lum_job_t
 
 typedef struct lum_bake_state_t
 {
+    alignas(64)
 	volatile uint32_t jobs_completed; PAD(60);
+    volatile uint32_t cancel; PAD(60);
 	uint32_t          job_count;
 	uint32_t          thread_count;
 
@@ -123,6 +125,7 @@ typedef struct lum_bake_state_t
 
 DREAM_API lum_bake_state_t *bake_lighting     (const lum_params_t *params);
 DREAM_API bool              bake_finalize     (lum_bake_state_t *state); // returns true if the bake completed successfully, can be called as much as you want until it returns true
+DREAM_API void              bake_cancel       (lum_bake_state_t *state); // will force all remaining jobs to skip and will release the bake state once they all exit
 DREAM_API bool              release_bake_state(lum_bake_state_t *state);
 
 DREAM_INLINE bool bake_jobs_completed(lum_bake_state_t *state)
