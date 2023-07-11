@@ -77,6 +77,7 @@ typedef enum ui_style_color_t
 
     UI_COLOR_WINDOW_BACKGROUND,
     UI_COLOR_WINDOW_TITLE_BAR,
+    UI_COLOR_WINDOW_CLOSE_BUTTON,
 
     UI_COLOR_PROGRESS_BAR_EMPTY,
     UI_COLOR_PROGRESS_BAR_FILLED,
@@ -104,10 +105,10 @@ typedef enum ui_panel_flags_enum_t
 DREAM_API bool ui_begin(float dt);
 DREAM_API void ui_end(void);
 
-DREAM_API void ui_window_begin(string_t label, rect2_t size);
+DREAM_API void ui_window_begin(string_t label, rect2_t size, bool *open);
 DREAM_API void ui_window_end(void);
 
-#define UI_WINDOW(label, size) DeferLoop(ui_window_begin(label, size), ui_window_end())
+#define UI_WINDOW(label, size, open) DeferLoop(ui_window_begin(label, size, open), ui_window_end())
 
 DREAM_API void ui_panel_begin(rect2_t size);
 DREAM_API void ui_panel_begin_ex(ui_id_t id, rect2_t size, ui_panel_flags_t flags);
@@ -289,13 +290,14 @@ typedef struct ui_t
 	bool hovered;
 
 	ui_id_t hot;
+	ui_id_t next_hot;
 	ui_id_t active;
 
 	ui_style_t style;
 
 	v2_t mouse_p;
 	v2_t mouse_pressed_p;
-	v2_t mouse_pressed_offset;
+	v2_t drag_anchor;
 
 	ui_panel_t *panel;
 	ui_panel_t *first_free_panel;
@@ -318,10 +320,11 @@ DREAM_API void ui_clear_active(void);
 typedef struct ui_widget_t
 {
 	ui_id_t id;
-
 	bool new;
+
 	uint64_t last_touched_frame_index;
 
+    rect2_t rect;
 	float scrollable_height_x;
 	float scrollable_height_y;
 	float scroll_offset_x;

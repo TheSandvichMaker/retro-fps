@@ -182,6 +182,11 @@ void ui_set_hot(ui_id_t id)
 	}
 }
 
+void ui_set_next_hot(ui_id_t id)
+{
+    ui.next_hot = id;
+}
+
 void ui_set_active(ui_id_t id)
 {
 	ui.active = id;
@@ -270,6 +275,7 @@ bool ui_begin(float dt)
 		ui_push_color (UI_COLOR_TEXT_SHADOW          , make_v4(0.00f, 0.00f, 0.00f, 0.75f));
 		ui_push_color (UI_COLOR_WINDOW_BACKGROUND    , make_v4(0.15f, 0.15f, 0.15f, 1.0f));
 		ui_push_color (UI_COLOR_WINDOW_TITLE_BAR     , make_v4(0.45f, 0.25f, 0.25f, 1.0f));
+		ui_push_color (UI_COLOR_WINDOW_CLOSE_BUTTON  , make_v4(0.35f, 0.15f, 0.15f, 1.0f));
 		ui_push_color (UI_COLOR_PROGRESS_BAR_EMPTY   , make_v4(0.18f, 0.18f, 0.18f, 1.0f));
 		ui_push_color (UI_COLOR_PROGRESS_BAR_FILLED  , make_v4(0.15f, 0.25f, 0.45f, 1.0f));
 		ui_push_color (UI_COLOR_BUTTON_IDLE          , make_v4(0.28f, 0.28f, 0.28f, 1.0f));
@@ -297,7 +303,11 @@ bool ui_begin(float dt)
 		}
 	}
 
-	ui_clear_hot();
+    if (!ui.active.value)
+        ui.hot = ui.next_hot;
+
+	ui.next_hot = UI_ID_NULL;
+
 	ui.hovered = false;
 	ui.dt = dt;
 
@@ -354,15 +364,15 @@ DREAM_INLINE uint32_t ui_button_behaviour(ui_id_t id, rect2_t rect)
 	}
 	else if (rect2_contains_point(hit_rect, ui.mouse_p))
 	{
-		ui_set_hot(id);
+        ui_set_next_hot(id);
 	}
 
 	if (ui_is_hot(id) &&
 		ui_button_pressed(BUTTON_FIRE1))
 	{
 		result |= UI_PRESSED;
-		ui.mouse_pressed_p      = ui.mouse_p;
-		ui.mouse_pressed_offset = sub(ui.mouse_p, rect2_center(rect));
+		ui.mouse_pressed_p = ui.mouse_p;
+		ui.drag_anchor     = sub(ui.mouse_p, rect2_center(rect));
 		ui_set_active(id);
 	}
 
@@ -418,31 +428,65 @@ DREAM_INLINE v2_t ui_text_align_p(rect2_t rect, string_t text)
     return result;
 }
 
-void ui_window_begin(string_t label, rect2_t rect)
+void ui_window_begin(string_t label, rect2_t rect, bool *open)
 {
 	ASSERT(ui.initialized);
 
+    ui_id_t      id     = ui_id(label);
+    ui_widget_t *widget = ui_get_widget(id);
+
+    if (widget->new)
+    {
+        widget->rect = rect;
+    }
+
+    rect = widget->rect;
 	ui_check_hovered(rect);
 
 	rect2_t bar = ui_add_top(&rect, (float)ui.font.ch + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN));
 	ui_check_hovered(bar);
 
+    rect2_t both = rect2_union(bar, rect);
+    uint32_t interaction = ui_button_behaviour(id, both);
+
+    if (interaction & UI_PRESSED)
+    {
+        ui.drag_anchor = sub(rect.min, ui.mouse_p);
+    }
+
+    if (ui_is_active(id))
+    {
+        widget->rect = rect2_reposition_min(widget->rect, add(ui.mouse_p, ui.drag_anchor));
+    }
+
     // NOTE: the panel will push a very similar view right away but we need it for the rendering here
-	r_push_view_screenspace_clip_rect(rect2_union(rect, bar));
+	r_push_view_screenspace_clip_rect(both);
 
 	r_immediate_rect2_filled(bar, ui_color(UI_COLOR_WINDOW_TITLE_BAR));
 	r_immediate_rect2_filled(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND));
 	r_immediate_flush();
 
-	ui_text(add(bar.min, make_v2(ui_scalar(UI_SCALAR_TEXT_MARGIN), ui_scalar(UI_SCALAR_TEXT_MARGIN))), label);
+    if (open)
+    {
+        ui_set_next_rect(ui_cut_right(&bar, ui_label_width(S("Close"))));
 
-	ui_id_t id = ui_id(label);
-	ui_panel_begin_ex(id, rect, UI_PANEL_SCROLLABLE_VERT);
+        UI_SCALAR(UI_SCALAR_WIDGET_MARGIN, 0.0f)
+        UI_COLOR(UI_COLOR_BUTTON_IDLE, ui_color(UI_COLOR_WINDOW_CLOSE_BUTTON))
+        if (ui_button(S("Close")))
+        {
+            *open = false;
+        }
+    }
+
+    ui_id_t panel_id = ui_child_id(id, S("panel"));
+	ui_text(add(bar.min, make_v2(ui_scalar(UI_SCALAR_TEXT_MARGIN), ui_scalar(UI_SCALAR_TEXT_MARGIN))), label);
+	ui_panel_begin_ex(panel_id, rect, UI_PANEL_SCROLLABLE_VERT);
 }
 
 void ui_window_end(void)
 {
 	ASSERT(ui.initialized);
+
     r_pop_view();
 	ui_panel_end();
 }
@@ -481,7 +525,7 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 
 			if (ui_is_active(scrollbar_id))
 			{
-				float relative_y = CLAMP((ui.mouse_p.y - ui.mouse_pressed_offset.y) - scroll_area.min.y - handle_half_size, 0.0f, scroll_area_height - handle_size);
+				float relative_y = CLAMP((ui.mouse_p.y - ui.drag_anchor.y) - scroll_area.min.y - handle_half_size, 0.0f, scroll_area_height - handle_size);
 				pct = 1.0f - (relative_y / (scroll_area_height - handle_size));
 				widget->scroll_offset_y = pct*(widget->scrollable_height_y - rect2_height(inner_rect));
 			}
@@ -576,7 +620,7 @@ void ui_progress_bar(string_t label, float progress)
 	r_immediate_rect2_filled(empty,  ui_color(UI_COLOR_PROGRESS_BAR_EMPTY));
 	r_immediate_flush();
 
-	ui_text(text_rect.min, label);
+	ui_text(ui_text_align_p(text_rect, label), label);
 }
 
 typedef enum ui_widget_state_t
@@ -774,7 +818,7 @@ void ui_slider(string_t label, float *v, float min, float max)
 	float handle_half_width = 0.5f*handle_width;
 	
 	float width = rect2_width(rect);
-	float relative_x = CLAMP((ui.mouse_p.x - ui.mouse_pressed_offset.x) - rect.min.x - handle_half_width, 0.0f, width - handle_width);
+	float relative_x = CLAMP((ui.mouse_p.x - ui.drag_anchor.x) - rect.min.x - handle_half_width, 0.0f, width - handle_width);
 
 	float pct = 0.0f;
 
@@ -844,7 +888,7 @@ void ui_slider_int(string_t label, int *v, int min, int max)
 	float handle_half_width = 0.5f*handle_width;
 	
 	float width = rect2_width(rect);
-	float relative_x = CLAMP((ui.mouse_p.x - ui.mouse_pressed_offset.x) - rect.min.x - handle_half_width, 0.0f, width - handle_width);
+	float relative_x = CLAMP((ui.mouse_p.x - ui.drag_anchor.x) - rect.min.x - handle_half_width, 0.0f, width - handle_width);
 
 	float pct = 0.0f;
 

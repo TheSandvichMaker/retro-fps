@@ -104,7 +104,7 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
     lightmap_editor_state_t *lm_editor = &g_editor.lightmap_editor;
 	(void)lm_editor;
 
-	UI_WINDOW(S("Lightmap Editor"), rect2_from_min_dim(make_v2(32.0f, 32.0f), make_v2(512.0f, 512.0f)))
+	UI_WINDOW(S("Lightmap Editor"), rect2_from_min_dim(make_v2(32.0f, 32.0f), make_v2(512.0f, 512.0f)), &g_editor.lightmap_editor_enabled)
 	{
         if (!map->lightmap_state || !map->lightmap_state->finalized)
         {
@@ -226,9 +226,11 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
             int seconds = (int)floor(time_elapsed - 60.0*minutes);
             int microseconds = (int)floor(1000.0*(time_elapsed - 60.0*minutes - seconds));
 
-            ui_label(Sf("total bake time:  %02u:%02u:%03u", minutes, seconds, microseconds));
-
-            ui_label(Sf("fogmap resolution: %u %u %u", map->fogmap_w, map->fogmap_h, map->fogmap_d));
+            UI_SCALAR(UI_SCALAR_TEXT_ALIGN_X, 0.0f)
+            {
+                ui_label(Sf("total bake time:  %02u:%02u:%03u", minutes, seconds, microseconds));
+                ui_label(Sf("fogmap resolution: %u %u %u", map->fogmap_w, map->fogmap_h, map->fogmap_d));
+            }
 
 			if (ui_button(S("Clear Lightmaps")))
 			{

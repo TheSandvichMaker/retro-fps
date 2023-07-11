@@ -1246,6 +1246,12 @@ DREAM_INLINE float rect2_area(rect2_t rect)
 	return w*h;
 }
 
+DREAM_INLINE rect2_t rect2_reposition_min(rect2_t rect, v2_t p)
+{
+    v2_t dim = rect2_dim(rect);
+    return rect2_from_min_dim(p, dim);
+}
+
 //
 // rect3
 //
