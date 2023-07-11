@@ -9,51 +9,7 @@
 #include "game/asset.h"
 #include "game/debug_ui.h"
 
-typedef struct ui_panel_t
-{
-	union
-	{
-		struct ui_panel_t *parent;
-		struct ui_panel_t *next_free;
-	};
-	ui_id_t          id;
-	ui_cut_side_t    layout_direction;
-	ui_panel_flags_t flags;
-	rect2_t          init_rect;
-	rect2_t          rect;
-} ui_panel_t;
-
-typedef struct ui_t
-{
-	bool initialized;
-
-	arena_t arena;
-
-	uint64_t frame_index;
-
-	float dt;
-
-	bool has_focus;
-	bool hovered;
-
-	ui_id_t hot;
-	ui_id_t active;
-
-	ui_style_t style;
-
-	v2_t mouse_p;
-	v2_t mouse_pressed_p;
-	v2_t mouse_pressed_offset;
-
-	ui_panel_t *panel;
-	ui_panel_t *first_free_panel;
-
-	rect2_t next_rect;
-
-	bitmap_font_t font;
-} ui_t;
-
-static ui_t ui;
+ui_t ui;
 
 float ui_scalar(ui_style_scalar_t scalar)
 {
@@ -177,25 +133,10 @@ float ui_divide_space(float item_count)
 	return size;
 }
 
-typedef struct ui_widget_t
-{
-	ui_id_t id;
-
-	bool new;
-	uint64_t last_touched_frame_index;
-
-	float scrollable_height_x;
-	float scrollable_height_y;
-	float scroll_offset_x;
-	float scroll_offset_y;
-
-	v4_t interp_color;
-} ui_widget_t;
-
 static bulk_t widgets = INIT_BULK_DATA(ui_widget_t);
 static hash_t widget_index;
 
-DREAM_INLINE ui_widget_t *ui_get_widget(ui_id_t id)
+ui_widget_t *ui_get_widget(ui_id_t id)
 {
 	ui_widget_t *result = hash_find_object(&widget_index, id.value);
 
@@ -213,23 +154,23 @@ DREAM_INLINE ui_widget_t *ui_get_widget(ui_id_t id)
 	return result;
 }
 
-DREAM_INLINE bool ui_is_cold(ui_id_t id)
+bool ui_is_cold(ui_id_t id)
 {
 	return (ui.hot.value != id.value &&
 			ui.active.value != id.value);
 }
 
-DREAM_INLINE bool ui_is_hot(ui_id_t id)
+bool ui_is_hot(ui_id_t id)
 {
 	return ui.hot.value == id.value;
 }
 
-DREAM_INLINE bool ui_is_active(ui_id_t id)
+bool ui_is_active(ui_id_t id)
 {
 	return ui.active.value == id.value;
 }
 
-DREAM_INLINE void ui_set_hot(ui_id_t id)
+void ui_set_hot(ui_id_t id)
 {
 	if (!ui.active.value)
 	{
@@ -237,27 +178,27 @@ DREAM_INLINE void ui_set_hot(ui_id_t id)
 	}
 }
 
-DREAM_INLINE void ui_set_active(ui_id_t id)
+void ui_set_active(ui_id_t id)
 {
 	ui.active = id;
 }
 
-DREAM_INLINE void ui_clear_hot(void)
+void ui_clear_hot(void)
 {
 	ui.hot.value = 0;
 }
 
-DREAM_INLINE void ui_clear_active(void)
+void ui_clear_active(void)
 {
 	ui.active.value = 0;
 }
 
-DREAM_INLINE float ui_widget_padding(void)
+float ui_widget_padding(void)
 {
 	return 2.0f*ui_scalar(UI_SCALAR_WIDGET_MARGIN) + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN);
 }
 
-DREAM_INLINE bool ui_override_rect(rect2_t *override)
+bool ui_override_rect(rect2_t *override)
 {
 	bool result = false;
 
@@ -272,7 +213,7 @@ DREAM_INLINE bool ui_override_rect(rect2_t *override)
 	return result;
 }
 
-DREAM_INLINE rect2_t ui_default_label_rect(string_t label)
+rect2_t ui_default_label_rect(string_t label)
 {
 	rect2_t rect;
 	if (!ui_override_rect(&rect))
@@ -317,6 +258,8 @@ bool ui_begin(float dt)
         ui_push_scalar(UI_SCALAR_ANIMATION_RATE      , 40.0f);
 		ui_push_scalar(UI_SCALAR_WIDGET_MARGIN       , 2.0f);
 		ui_push_scalar(UI_SCALAR_TEXT_MARGIN         , 4.0f);
+		ui_push_scalar(UI_SCALAR_TEXT_ALIGN_X        , 0.5f);
+		ui_push_scalar(UI_SCALAR_TEXT_ALIGN_Y        , 0.5f);
 		ui_push_scalar(UI_SCALAR_SCROLLBAR_WIDTH     , 12.0f);
         ui_push_scalar(UI_SCALAR_SLIDER_HANDLE_RATIO , 3.0f);
 		ui_push_color (UI_COLOR_TEXT                 , make_v4(0.90f, 0.90f, 0.90f, 1.0f));
@@ -452,6 +395,25 @@ DREAM_INLINE v2_t ui_text_center_p(rect2_t rect, string_t text)
     return result;
 }
 
+DREAM_INLINE v2_t ui_text_align_p(rect2_t rect, string_t text)
+{
+    float align_x = ui_scalar(UI_SCALAR_TEXT_ALIGN_X);
+    float align_y = ui_scalar(UI_SCALAR_TEXT_ALIGN_Y);
+
+    float text_width  = (float)text.count*(float)ui.font.cw;
+    float text_height = (float)ui.font.ch;
+
+    float rect_width  = rect2_width(rect);
+    float rect_height = rect2_height(rect);
+
+    v2_t result = {
+        .x = rect.min.x + align_x*rect_width  - align_x*text_width,
+        .y = rect.min.y + align_y*rect_height - align_y*text_height,
+    };
+
+    return result;
+}
+
 void ui_window_begin(string_t label, rect2_t rect)
 {
 	ASSERT(ui.initialized);
@@ -460,6 +422,9 @@ void ui_window_begin(string_t label, rect2_t rect)
 
 	rect2_t bar = ui_add_top(&rect, (float)ui.font.ch + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN));
 	ui_check_hovered(bar);
+
+    // NOTE: the panel will push a very similar view right away but we need it for the rendering here
+	r_push_view_screenspace_clip_rect(rect2_union(rect, bar));
 
 	r_immediate_rect2_filled(bar, ui_color(UI_COLOR_WINDOW_TITLE_BAR));
 	r_immediate_rect2_filled(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND));
@@ -474,6 +439,7 @@ void ui_window_begin(string_t label, rect2_t rect)
 void ui_window_end(void)
 {
 	ASSERT(ui.initialized);
+    r_pop_view();
 	ui_panel_end();
 }
 
@@ -577,7 +543,12 @@ void ui_label(string_t label)
 	rect = ui_shrink(&rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
 	rect2_t text_rect = ui_shrink(&rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
-	ui_text(text_rect.min, label);
+	ui_text(ui_text_align_p(text_rect, label), label);
+}
+
+float ui_label_width(string_t label)
+{
+    return (float)label.count*(float)ui.font.cw + ui_widget_padding();
 }
 
 void ui_progress_bar(string_t label, float progress)
@@ -602,33 +573,6 @@ void ui_progress_bar(string_t label, float progress)
 	r_immediate_flush();
 
 	ui_text(text_rect.min, label);
-}
-
-DREAM_INLINE float ui_animate_towards(float in_rate, float out_rate, float t, float target)
-{
-	if (t < target)
-	{
-		t += ui.dt / in_rate;
-
-		if (t > target)
-			t = target;
-	}
-	else if (t > target)
-	{
-		t -= ui.dt / out_rate;
-
-		if (t < target)
-			t = target;
-	}
-
-	return t;
-}
-
-DREAM_INLINE v4_t ui_animate_towards_exp4(float rate, v4_t at, v4_t target)
-{
-	float t = rate*ui.dt;
-	v4_t result = v4_lerps(target, at, saturate(t));
-	return result;
 }
 
 typedef enum ui_widget_state_t
@@ -672,7 +616,7 @@ DREAM_INLINE v4_t ui_animate_colors(ui_id_t id, ui_widget_state_t state, float r
 	if (state == UI_WIDGET_STATE_ACTIVE)
 		rate *= 0.5f;
 
-	widget->interp_color = ui_animate_towards_exp4(rate, widget->interp_color, target);
+	widget->interp_color = ui_animate_towards_exp4(widget->interp_color, target);
 	return widget->interp_color;
 }
 
@@ -773,8 +717,6 @@ bool ui_radio(string_t label, int *value, int count, string_t *labels)
         float size = rect2_width(rect) / (float)count;
         for (int i = 0; i < count; i++)
         {
-            ui_set_next_rect(ui_cut_left(&rect, size));
-
             bool selected = *value == i;
 
             if (selected)
@@ -782,6 +724,7 @@ bool ui_radio(string_t label, int *value, int count, string_t *labels)
                 ui_push_color(UI_COLOR_BUTTON_IDLE, ui_color(UI_COLOR_BUTTON_ACTIVE));
             }
 
+            ui_set_next_rect(ui_cut_left(&rect, size));
             bool pressed = ui_button(labels[i]);
             result |= pressed;
 

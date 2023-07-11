@@ -171,6 +171,9 @@ typedef enum ui_style_scalar_t
     UI_SCALAR_WIDGET_MARGIN,
     UI_SCALAR_TEXT_MARGIN,
 
+    UI_SCALAR_TEXT_ALIGN_X,
+    UI_SCALAR_TEXT_ALIGN_Y,
+
     UI_SCALAR_SCROLLBAR_WIDTH,
     UI_SCALAR_SLIDER_HANDLE_RATIO,
 
@@ -241,11 +244,107 @@ DREAM_API void ui_push_color(ui_style_color_t color, v4_t value);
 DREAM_API v4_t ui_pop_color(ui_style_color_t color);
 
 DREAM_API void ui_label(string_t label);
+DREAM_API float ui_label_width(string_t label);
 DREAM_API void ui_progress_bar(string_t label, float progress);
 DREAM_API bool ui_button(string_t label);
 DREAM_API bool ui_checkbox(string_t label, bool *value);
 DREAM_API bool ui_radio(string_t label, int *value, int count, string_t *labels);
 DREAM_API void ui_slider(string_t label, float *v, float min, float max);
 DREAM_API void ui_slider_int(string_t label, int *v, int min, int max);
+
+//
+// "Internal"
+//
+
+typedef struct ui_panel_t
+{
+	union
+	{
+		struct ui_panel_t *parent;
+		struct ui_panel_t *next_free;
+	};
+	ui_id_t          id;
+	ui_cut_side_t    layout_direction;
+	ui_panel_flags_t flags;
+	rect2_t          init_rect;
+	rect2_t          rect;
+} ui_panel_t;
+
+typedef struct ui_t
+{
+	bool initialized;
+
+	arena_t arena;
+
+	uint64_t frame_index;
+
+	float dt;
+
+	bool has_focus;
+	bool hovered;
+
+	ui_id_t hot;
+	ui_id_t active;
+
+	ui_style_t style;
+
+	v2_t mouse_p;
+	v2_t mouse_pressed_p;
+	v2_t mouse_pressed_offset;
+
+	ui_panel_t *panel;
+	ui_panel_t *first_free_panel;
+
+	rect2_t next_rect;
+
+	bitmap_font_t font;
+} ui_t;
+
+DREAM_API ui_t ui;
+
+typedef struct ui_widget_t
+{
+	ui_id_t id;
+
+	bool new;
+	uint64_t last_touched_frame_index;
+
+	float scrollable_height_x;
+	float scrollable_height_y;
+	float scroll_offset_x;
+	float scroll_offset_y;
+
+	v4_t interp_color;
+} ui_widget_t;
+
+DREAM_API ui_widget_t *ui_get_widget(ui_id_t id);
+DREAM_API bool ui_is_cold(ui_id_t id);
+DREAM_API bool ui_is_hot(ui_id_t id);
+DREAM_API bool ui_is_active(ui_id_t id);
+DREAM_API void ui_set_hot(ui_id_t id);
+DREAM_API void ui_set_active(ui_id_t id);
+DREAM_API void ui_clear_hot(void);
+DREAM_API void ui_clear_active(void);
+DREAM_API float ui_widget_padding(void);
+DREAM_API bool ui_override_rect(rect2_t *override);
+DREAM_API rect2_t ui_default_label_rect(string_t label);
+
+DREAM_INLINE float ui_animate_towards(float at, float target)
+{
+    float rate = ui_scalar(UI_SCALAR_ANIMATION_RATE);
+
+	float t = rate*ui.dt;
+	float result = lerp(target, at, saturate(t));
+	return result;
+}
+
+DREAM_INLINE v4_t ui_animate_towards_exp4(v4_t at, v4_t target)
+{
+    float rate = ui_scalar(UI_SCALAR_ANIMATION_RATE);
+
+	float t = rate*ui.dt;
+	v4_t result = v4_lerps(target, at, saturate(t));
+	return result;
+}
 
 #endif

@@ -1128,7 +1128,7 @@ DREAM_INLINE v2i_t rect2i_get_dim(rect2i_t rect)
 // rect2
 //
 
-DREAM_INLINE rect2_t rect2_min_dim(v2_t min, v2_t dim)
+DREAM_INLINE rect2_t rect2_from_min_dim(v2_t min, v2_t dim)
 {
     rect2_t result = {
         .min = min,
@@ -1168,6 +1168,15 @@ DREAM_INLINE bool rect2_contains_point(rect2_t rect, v2_t point)
 {
     return (point.x >= rect.min.x && point.x < rect.max.x &&
             point.y >= rect.min.y && point.y < rect.max.y);
+}
+
+DREAM_INLINE rect2_t rect2_union(rect2_t a, rect2_t b)
+{
+    rect2_t result = {
+        .min = min(a.min, b.min),
+        .max = max(a.max, b.max),
+    };
+    return result;
 }
 
 DREAM_INLINE rect2_t rect2_intersect(rect2_t a, rect2_t b)
@@ -1211,7 +1220,7 @@ DREAM_INLINE v2_t rect2_center(rect2_t rect)
 	return mul(0.5f, add(rect.min, rect.max));
 }
 
-DREAM_INLINE v2_t rect2_get_dim(rect2_t rect)
+DREAM_INLINE v2_t rect2_dim(rect2_t rect)
 {
     v2_t result = {
         rect.max.x - rect.min.x,
