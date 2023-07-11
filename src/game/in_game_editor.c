@@ -41,6 +41,8 @@ static void push_brush_wireframe(map_t *map, map_brush_t *brush, v4_t color)
 
 typedef struct lightmap_editor_state_t
 {
+    float window_openness;
+
     v2_t window_position;
 
     bool debug_lightmaps;
@@ -102,9 +104,16 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 	(void)camera;
 
     lightmap_editor_state_t *lm_editor = &g_editor.lightmap_editor;
-	(void)lm_editor;
 
-	UI_WINDOW(S("Lightmap Editor"), rect2_from_min_dim(make_v2(32.0f, 32.0f), make_v2(512.0f, 512.0f)), &g_editor.lightmap_editor_enabled)
+    lm_editor->window_openness = ui_animate_towards(lm_editor->window_openness, 
+                                                    g_editor.lightmap_editor_enabled ? 1.0f : 0.0f);
+
+    float height = 512.0f*lm_editor->window_openness;
+
+    if (height < 0.1f)
+        return;
+
+	UI_WINDOW(S("Lightmap Editor"), rect2_from_min_dim(make_v2(32.0f, 32.0f), make_v2(512.0f, height)), &g_editor.lightmap_editor_enabled)
 	{
         if (!map->lightmap_state || !map->lightmap_state->finalized)
         {
@@ -303,26 +312,20 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 
                     ui_pop_scalar(UI_SCALAR_TEXT_ALIGN_X);
 
-#if 0
-					ui_box_t *image_viewer = ui_box(S("lightmap image"), UI_CLICKABLE|UI_DRAGGABLE|UI_DRAW_BACKGROUND);
-					if (desc.w >= desc.h)
-					{
-						ui_set_size(image_viewer, AXIS2_X, ui_pct(1.0f, 1.0f));
-						ui_set_size(image_viewer, AXIS2_Y, ui_aspect_ratio((float)desc.h / (float)desc.w, 1.0f));
-					}
-					else
-					{
-						ui_set_size(image_viewer, AXIS2_X, ui_aspect_ratio((float)desc.w / (float)desc.h, 1.0f));
-						ui_set_size(image_viewer, AXIS2_Y, ui_pct(1.0f, 1.0f));
-					}
-					image_viewer->texture = poly->lightmap;
-#else
-                    rect2_t *layout = ui_layout_rect();
-                    rect2_t image_rect = ui_cut_top(layout, (float)desc.h);
+                    float aspect = (float)desc.h / (float)desc.w;
 
-                    r_immediate_texture(poly->lightmap);
-                    r_immediate_rect2_filled(image_rect, make_v4(1, 1, 1, 1));
-#endif
+                    rect2_t *layout = ui_layout_rect();
+
+                    float width = rect2_width(*layout);
+
+                    rect2_t image_rect = ui_cut_top(layout, width*aspect);
+
+                    UI_PANEL(image_rect)
+                    {
+                        r_immediate_texture(poly->lightmap);
+                        r_immediate_rect2_filled(image_rect, make_v4(1, 1, 1, 1));
+                        r_immediate_flush();
+                    }
 
 #if 0
 					ui_interaction_t interaction = ui_interaction_from_box(image_viewer);
@@ -719,6 +722,5 @@ void update_and_render_in_game_editor(game_io_t *io, world_t *world)
 
     ui_panel_end();
 
-    if (g_editor.lightmap_editor_enabled)
-        update_and_render_lightmap_editor(io, world);
+    update_and_render_lightmap_editor(io, world);
 }

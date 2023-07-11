@@ -440,8 +440,10 @@ void ui_window_begin(string_t label, rect2_t rect, bool *open)
         widget->rect = rect;
     }
 
-    rect = widget->rect;
-	ui_check_hovered(rect);
+    v2_t dim = rect2_dim(rect);
+
+    rect = rect2_from_min_dim(widget->rect.min, dim);// goofy 
+    ui_check_hovered(rect);
 
 	rect2_t bar = ui_add_top(&rect, (float)ui.font.ch + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN));
 	ui_check_hovered(bar);

@@ -479,7 +479,6 @@ void game_init(game_io_t *io)
 		else if (is_class(map, e, S("info_player_start")))
 		{
 			player->p = v3_from_key(map, e, S("origin"));
-			//player->p.z += 10.0f;
 		}
 	}
 
@@ -609,19 +608,19 @@ void game_tick(game_io_t *io, float dt)
     // render map geometry
     //
 
-#if 0
+#if 1
     for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
     {
+        map_entity_t *entity = &map->entities[entity_index];
+
         if (is_class(map, entity, strlit("point_light")))
         {
-            r_immediate_draw_t *draw_call = r_immediate_draw_begin(&(r_immediate_draw_t){
-                .topology   = R_PRIMITIVE_TOPOLOGY_LINELIST,
-                .depth_test = true,
-            });
+            r_immediate_topology(R_PRIMITIVE_TOPOLOGY_LINELIST);
+            r_immediate_use_depth(true);
 
-            r_push_rect3_outline(draw_call, rect3_center_radius(v3_from_key(entity, strlit("origin")), make_v3(8, 8, 8)), COLORF_YELLOW);
+            r_immediate_rect3_outline(rect3_center_radius(v3_from_key(map, entity, strlit("origin")), make_v3(8, 8, 8)), COLORF_YELLOW);
 
-            r_immediate_draw_end(draw_call);
+            r_immediate_flush();
         }
     }
 #endif
