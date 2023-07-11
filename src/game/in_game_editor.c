@@ -610,14 +610,8 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 {
     rect2_t bar = ui_cut_top(g_editor.fullscreen_layout, 32.0f);
 
-    if (rect2_contains_point(bar, ui.mouse_p))
-    {
-        g_editor.bar_openness = ui_animate_towards(g_editor.bar_openness, 1.0f);
-    }
-    else
-    {
-        g_editor.bar_openness = ui_animate_towards(g_editor.bar_openness, 0.0f);
-    }
+    bool mouse_hover = rect2_contains_point(bar, ui.mouse_p);
+    g_editor.bar_openness = ui_animate_towards(g_editor.bar_openness, mouse_hover ? 1.0f : 0.0f);
 
     if (g_editor.bar_openness > 0.0001f)
     {
@@ -700,16 +694,16 @@ void update_and_render_in_game_editor(game_io_t *io, world_t *world)
     };
 
     UI_SCALAR(UI_SCALAR_WIDGET_MARGIN, 0.0f)
-    UI_PANEL(fullscreen_rect)
-    {
-        g_editor.fullscreen_layout = ui_layout_rect();
+    ui_panel_begin(fullscreen_rect);
 
-        fullscreen_update_and_render_top_editor_bar();
+    g_editor.fullscreen_layout = ui_layout_rect();
 
-        if (g_editor.show_timings)
-            fullscreen_show_timings();
+    fullscreen_update_and_render_top_editor_bar();
 
-    }
+    if (g_editor.show_timings)
+        fullscreen_show_timings();
+
+    ui_panel_end();
 
     if (g_editor.lightmap_editor_enabled)
         update_and_render_lightmap_editor(io, world);

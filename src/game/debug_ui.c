@@ -85,6 +85,10 @@ DREAM_INLINE ui_panel_t *ui_panel(void)
 	{
 		result = ui.panel;
 	}
+    else
+    {
+        zero_struct(result);
+    }
 
 	return result;
 }
