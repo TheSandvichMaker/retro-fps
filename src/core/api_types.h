@@ -72,7 +72,10 @@ typedef struct string_t
                                   (stack).values[(stack).at++] = (value))
 #define stack_pop(stack) (ASSERT(!stack_empty(stack)), \
                           (stack).values[--(stack).at])
-
+#define stack_count(stack) ((stack).at)
+#define stack_unordered_remove(stack, index) (ASSERT(!stack_empty(stack)), \
+											  ASSERT(index < (stack).at), \
+											  (stack).values[index] = (stack).values[--(stack).at])
 
 typedef struct string16_t
 {

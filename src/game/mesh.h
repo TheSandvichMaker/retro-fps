@@ -34,6 +34,20 @@ typedef struct ch_debug_step_t
 	ch_debug_triangle_t * last_triangle;
 } ch_debug_step_t;
 
+typedef struct ch_diagnostic_result_t
+{
+	bool degenerate_hull;
+	int  uncontained_point_count;
+	int  degenerate_triangle_count;
+	int  duplicate_triangle_count;
+	int  no_area_triangle_count;
+
+	bool *point_fully_contained;
+	bool *triangle_is_degenerate;
+	bool *triangle_is_duplicate;
+	bool *triangle_has_no_area;
+} ch_diagnostic_result_t;
+
 typedef struct ch_debug_t
 {
 	arena_t arena;
@@ -44,6 +58,8 @@ typedef struct ch_debug_t
 	size_t           step_count;
 	ch_debug_step_t *first_step;
 	ch_debug_step_t * last_step;
+
+	ch_diagnostic_result_t *diagnostics;
 } ch_debug_t;
 
 DREAM_API ch_debug_step_t *ch_add_debug_step(ch_debug_t *debug);
@@ -63,5 +79,6 @@ typedef struct triangle_mesh_t
 
 DREAM_API triangle_mesh_t calculate_convex_hull      (arena_t *arena, size_t count, v3_t *points);
 DREAM_API triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *points, ch_debug_t *debug);
+DREAM_API void convex_hull_do_extended_diagnostics   (triangle_mesh_t *mesh, ch_debug_t *debug);
 
 #endif

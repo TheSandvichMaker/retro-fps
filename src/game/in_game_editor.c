@@ -65,6 +65,8 @@ typedef struct lightmap_editor_state_t
 
 typedef struct ch_test_panel_t
 {
+	bool initialized;
+
 	int random_seed;
 	int point_count;
 	bool automatically_recalculate_hull;
@@ -80,6 +82,13 @@ typedef struct ch_test_panel_t
 	bool   show_triangles;
 	int    current_step_index;
 	int    test_tetrahedron_index;
+
+	bool   brute_force_test;
+	int    brute_force_min_point_count;
+	int    brute_force_max_point_count;
+	int    brute_force_iterations_per_point_count;
+	float  brute_force_triggered_success_timer;
+	float  brute_force_triggered_error_timer;
 } ch_test_panel_t;
 
 typedef struct editor_state_t
@@ -97,12 +106,13 @@ typedef struct editor_state_t
 } editor_state_t;
 
 static editor_state_t g_editor = {
-    .show_timings            = false,
-    .lightmap_editor_enabled = false,
+    .show_timings = false,
+
     .lightmap_editor = {
 		.min_display_recursion = 0,
 		.max_display_recursion = 10,
     },
+
 	.ch_test = {
 		.automatically_recalculate_hull = true,
 		.random_seed            = 1,
@@ -113,8 +123,47 @@ static editor_state_t g_editor = {
 		.show_processed_edge    = true,
 		.test_tetrahedron_index = -1,
 		.current_step_index     = 9999,
+
+		.brute_force_min_point_count            = 4,
+		.brute_force_max_point_count            = 256,
+		.brute_force_iterations_per_point_count = 4096,
 	},
 };
+
+static void generate_new_random_convex_hull(size_t point_count, random_series_t *r)
+{
+	ch_test_panel_t *ch_test = &g_editor.ch_test;
+
+	triangle_mesh_t *mesh  = &ch_test->mesh;
+	ch_debug_t      *debug = &ch_test->debug;
+
+	m_scoped(temp)
+	{
+		v3_t *random_points = m_alloc_array_nozero(temp, point_count, v3_t);
+
+		for (size_t i = 0; i < point_count; i++)
+		{
+			random_points[i] = add(make_v3(512.0f, 512.0f, 512.0f), mul(128.0f, random_in_unit_cube(r)));
+		}
+
+		bool at_final_step = false;
+		if (debug->step_count > 0 &&
+			ch_test->current_step_index == (int)debug->step_count - 1)
+		{
+			at_final_step = true;
+		}
+
+		m_reset(&ch_test->mesh_arena);
+
+		*mesh = calculate_convex_hull_debug(&ch_test->mesh_arena, point_count, random_points, debug);
+		convex_hull_do_extended_diagnostics(mesh, debug);
+
+		if (at_final_step)
+		{
+			ch_test->current_step_index = (int)debug->step_count - 1;
+		}
+	}
+}
 
 static void update_and_render_convex_hull_test_panel(void)
 {
@@ -126,60 +175,31 @@ static void update_and_render_convex_hull_test_panel(void)
 	triangle_mesh_t *mesh  = &ch_test->mesh;
 	ch_debug_t      *debug = &ch_test->debug;
 
-	bool degenerate_hull           = false;
-	int  degenerate_triangle_count = 0;
+	bool degenerate_hull = false;
 
-	bool *point_fully_contained  = m_alloc_array_nozero(temp, debug->initial_points_count, bool);
-	bool *triangle_is_degenerate = m_alloc_array_nozero(temp, mesh->triangle_count, bool);
+	int uncontained_point_count   = 0;
+	int degenerate_triangle_count = 0;
+	int duplicate_triangle_count  = 0;
+	int no_area_triangle_count    = 0;
 
-	for (size_t i = 0; i < debug->initial_points_count; i++)
+	bool *point_fully_contained  = NULL;
+	bool *triangle_is_degenerate = NULL;
+	bool *triangle_is_duplicate  = NULL;
+	bool *triangle_has_no_area   = NULL;
+
+	if (debug->diagnostics)
 	{
-		point_fully_contained[i] = true;
-	}
+		ch_diagnostic_result_t *diagnostics = debug->diagnostics;
 
-	if (debug->initial_points_count > 0 && mesh->triangle_count > 0)
-	{
-		for (size_t triangle_index = 0; triangle_index < mesh->triangle_count; triangle_index++)
-		{
-			triangle_t t = mesh->triangles[triangle_index];
-
-			bool degenerate_triangle = false;
-
-			float area = triangle_area_sq(t.a, t.b, t.c);
-			if (area < 0.00001f)
-			{
-				degenerate_triangle = true;
-			}
-
-			if (!degenerate_triangle)
-			{
-				for (size_t point_index = 0; point_index < debug->initial_points_count; point_index++)
-				{
-					v3_t p = debug->initial_points[point_index];
-
-					if (!v3_equal_exact(p, t.a) &&
-						!v3_equal_exact(p, t.b) &&
-						!v3_equal_exact(p, t.c))
-					{
-						float volume = tetrahedron_signed_volume(t.a, t.b, t.c, p);
-
-						if (volume > 0.0f)
-						{
-							degenerate_triangle = true;
-							point_fully_contained[point_index] = false;
-						}
-					}
-				}
-			}
-
-			if (degenerate_triangle)
-			{
-				degenerate_triangle_count += 1;
-				degenerate_hull = true;
-			}
-
-			triangle_is_degenerate[triangle_index] = degenerate_triangle;
-		}
+		degenerate_hull           = diagnostics->degenerate_hull;
+		uncontained_point_count   = diagnostics->uncontained_point_count;
+		degenerate_triangle_count = diagnostics->degenerate_triangle_count;
+		duplicate_triangle_count  = diagnostics->duplicate_triangle_count; 
+		no_area_triangle_count    = diagnostics->no_area_triangle_count;
+		point_fully_contained     = diagnostics->point_fully_contained;
+		triangle_is_degenerate    = diagnostics->triangle_is_degenerate;
+		triangle_is_duplicate     = diagnostics->triangle_is_duplicate;
+		triangle_has_no_area      = diagnostics->triangle_has_no_area;
 	}
 
 	if (debug->step_count > 0)
@@ -228,17 +248,43 @@ static void update_and_render_convex_hull_test_panel(void)
 					if (ch_test->show_new_triangle && triangle->added_this_step) show = true;
 					if (!show) continue;
 
+					if (triangle_is_degenerate[triangle_index]) 
+						continue;
+
 					v3_t a = triangle->t.a;
 					v3_t b = triangle->t.b;
 					v3_t c = triangle->t.c;
 
-					v4_t color = make_v4(0.7f, 0.9f, 0.5f, 1.0f);
+					v4_t color = make_v4(0.7f, 0.9f, 0.5f, 0.9f);
 
 					if (triangle->added_this_step)
-						color = make_v4(1.0f, 1.0f, 0.5f, 1.0f);
+						color = make_v4(1.0f, 1.0f, 0.5f, 0.9f);
 
-					if (triangle_is_degenerate[triangle_index])
-						color = make_v4(1.0f, 0.25f, 0.0f, 1.0f);
+					r_immediate_line(a, b, color);
+					r_immediate_line(a, c, color);
+					r_immediate_line(b, c, color);
+				}
+
+				triangle_index = 0;
+
+				for (ch_debug_triangle_t *triangle = step->first_triangle;
+					 triangle;
+					 triangle = triangle->next, triangle_index++)
+				{
+					bool show = false;
+
+					if (ch_test->show_triangles)                                 show = true;
+					if (ch_test->show_new_triangle && triangle->added_this_step) show = true;
+					if (!show) continue;
+
+					if (!triangle_is_degenerate[triangle_index])
+						continue;
+
+					v3_t a = triangle->t.a;
+					v3_t b = triangle->t.b;
+					v3_t c = triangle->t.c;
+
+					v4_t color = color = make_v4(1.0f, 0.25f, 0.0f, 0.9f);
 
 					r_immediate_line(a, b, color);
 					r_immediate_line(a, c, color);
@@ -271,44 +317,19 @@ static void update_and_render_convex_hull_test_panel(void)
 	UI_WINDOW(S("Convex Hull Debug"), rect2_from_min_dim(make_v2(64.0f, 64.0f), make_v2(512.0f, 512.0f)), &g_editor.ch_test_panel_enabled)
 	{
 		bool changed = false;
-		changed |= ui_slider_int(S("Random Seed"), &ch_test->random_seed, 1, 32);
-		changed |= ui_slider_int(S("Point Count"), &ch_test->point_count, 8, 48);
+		changed |= ui_slider_int(S("Random Seed"), &ch_test->random_seed, 1, 128);
+		changed |= ui_slider_int(S("Point Count"), &ch_test->point_count, 8, 256);
 
 		ui_checkbox(S("Automatically Recalculate Hull"), &ch_test->automatically_recalculate_hull);
 
 		bool should_recalculate = ui_button(S("Calculate Random Convex Hull"));
-		if (ch_test->automatically_recalculate_hull && changed)                   should_recalculate = true;
-		if (ch_test->automatically_recalculate_hull && mesh->triangle_count == 0) should_recalculate = true;
+		if (ch_test->automatically_recalculate_hull && changed)               should_recalculate = true;
+		if (ch_test->automatically_recalculate_hull && !ch_test->initialized) should_recalculate = true;
 
 		if (should_recalculate)
 		{
-			m_scoped(temp)
-			{
-				size_t random_points_count = (size_t)ch_test->point_count;
-				v3_t  *random_points       = m_alloc_array_nozero(temp, random_points_count, v3_t);
-
-				random_series_t r = { (uint32_t)ch_test->random_seed };
-
-				for (size_t i = 0; i < random_points_count; i++)
-				{
-					random_points[i] = add(make_v3(512.0f, 512.0f, 512.0f), mul(128.0f, random_in_unit_cube(&r)));
-				}
-
-				bool at_final_step = false;
-				if (debug->step_count > 0 &&
-					ch_test->current_step_index == (int)debug->step_count - 1)
-				{
-					at_final_step = true;
-				}
-
-				m_reset_and_decommit(&ch_test->mesh_arena);
-				*mesh = calculate_convex_hull_debug(&ch_test->mesh_arena, random_points_count, random_points, debug);
-
-				if (at_final_step)
-				{
-					ch_test->current_step_index = (int)debug->step_count - 1;
-				}
-			}
+			random_series_t r = { (uint32_t)ch_test->random_seed };
+			generate_new_random_convex_hull((size_t)ch_test->point_count, &r);
 		}
 
 		if (mesh->triangle_count > 0)
@@ -322,6 +343,57 @@ static void update_and_render_convex_hull_test_panel(void)
 			}
 		}
 
+		ui_label(S("Brute Force Tester"));
+		ui_slider_int(S("Min Points"), &ch_test->brute_force_min_point_count, 4, 256);
+		ui_slider_int(S("Max Points"), &ch_test->brute_force_max_point_count, 4, 256);
+		ui_slider_int(S("Iterations Per Count"), &ch_test->brute_force_iterations_per_point_count, 1, 4096);
+
+		if (ui_button(S("Run Brute Force Test")))
+		{
+			random_series_t r = { (uint32_t)ch_test->random_seed };
+
+			ch_test->brute_force_triggered_success_timer = 0.0f;
+			ch_test->brute_force_triggered_error_timer   = 0.0f;
+
+			for (int point_count = ch_test->brute_force_min_point_count;
+				 point_count <= ch_test->brute_force_max_point_count;
+				 point_count++)
+			{
+				generate_new_random_convex_hull((size_t)point_count, &r);
+
+				if (ALWAYS(debug->diagnostics))
+				{
+					ch_diagnostic_result_t *diagnostics = debug->diagnostics;
+					if (diagnostics->degenerate_hull)
+					{
+						ch_test->brute_force_triggered_error_timer = 10.0f;
+						break;
+					}
+				}
+			}
+
+			if (ch_test->brute_force_triggered_error_timer <= 0.0f)
+			{
+				ch_test->brute_force_triggered_success_timer = 5.0f;
+			}
+		}
+
+		if (ch_test->brute_force_triggered_success_timer > 0.0f)
+		{
+			UI_COLOR(UI_COLOR_TEXT, make_v4(0.5f, 1.0f, 0.2f, 1.0f))
+			ui_label(S("Brute force test passed."));
+
+			ch_test->brute_force_triggered_success_timer -= ui.dt;
+		}
+
+		if (ch_test->brute_force_triggered_error_timer > 0.0f)
+		{
+			UI_COLOR(UI_COLOR_TEXT, COLORF_RED)
+			ui_label(S("BRUTE FORCE TEST FOUND A DEGENERATE HULL!?!?!"));
+
+			ch_test->brute_force_triggered_error_timer -= ui.dt;
+		}
+
 		if (degenerate_hull)
 		{
 			UI_COLOR(UI_COLOR_TEXT, COLORF_RED)
@@ -332,6 +404,28 @@ static void update_and_render_convex_hull_test_panel(void)
 				ui_label(S("THE FIRST TRIANGLE IS DEGENERATE, THAT'S NO GOOD"));
 			}
 			ui_label(Sf("Degenerate Triangle Count: %d", degenerate_triangle_count));
+		}
+
+		if (duplicate_triangle_count > 0)
+		{
+			UI_COLOR(UI_COLOR_TEXT, COLORF_ORANGE)
+			ui_label(Sf("There are %d duplicate triangles!", duplicate_triangle_count));
+			if (triangle_is_degenerate[0])
+			{
+				UI_COLOR(UI_COLOR_TEXT, COLORF_ORANGE)
+				ui_label(S("The first triangle is duplicate, if that matters"));
+			}
+		}
+
+		if (no_area_triangle_count > 0)
+		{
+			UI_COLOR(UI_COLOR_TEXT, COLORF_ORANGE)
+			ui_label(Sf("There are %d triangles with (nearly) 0 area!", no_area_triangle_count));
+			if (triangle_is_degenerate[0])
+			{
+				UI_COLOR(UI_COLOR_TEXT, COLORF_ORANGE)
+				ui_label(S("The first triangle has no area, which seems bad"));
+			}
 		}
 
 		if (debug->step_count > 0)
@@ -385,6 +479,8 @@ static void update_and_render_convex_hull_test_panel(void)
 			}
 		}
 	}
+
+	ch_test->initialized = true;
 }
 
 static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
