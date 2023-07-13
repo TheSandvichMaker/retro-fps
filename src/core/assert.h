@@ -1,6 +1,8 @@
 #ifndef ASSERT_H
 #define ASSERT_H
 
+#include "core/api_types.h"
+
 #define ASSERT(expr) ((expr) ? true : (fatal_error(__LINE__, strlit(__FILE__), "Assertion failed: " #expr), false))
 #define ASSERT_MSG(expr, msg, ...) ((expr) ? true : (fatal_error(__LINE__, strlit(__FILE__), msg, ##__VA_ARGS__), false))
 

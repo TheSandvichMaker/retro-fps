@@ -22,6 +22,7 @@ typedef struct sb_t
 #define sb_init(arena, type) sb__alloc(arena, 8, sizeof(type))
 #define sb_add(sb) (sb__ensure_space((void **)&(sb), 1, sizeof(*sb)), &sb[sb__header(sb)->count++])
 #define sb_push(sb, item) (sb__ensure_space((void **)&(sb), 1, sizeof(*sb)), sb[sb__header(sb)->count++] = item)
+#define sb_pop(sb) (ASSERT(sb && sb__header(sb)->count > 0), sb[--sb__header(sb)->count])
 #define sb_arena(sb) (sb ? sb__header(sb)->arena : NULL)
 #define sb_count(sb) (sb ? sb__header(sb)->count : 0)
 #define sb_capacity(sb) (sb ? sb__header(sb)->capacity : 0)

@@ -18,5 +18,6 @@
 #include "stretchy_buffer.h"
 #include "hashtable.h"
 #include "thread.h"
+#include "random.h"
 
 #endif /* CORE_H */

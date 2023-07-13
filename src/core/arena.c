@@ -24,7 +24,7 @@ void *m_alloc_nozero(arena_t *arena, size_t size, size_t align)
         arena->owns_memory = true;
     }
 
-    if (ALWAYS(m_size_remaining_for_align(arena, align) >= size))
+    if (size > 0 && ALWAYS(m_size_remaining_for_align(arena, align) >= size))
     {
         char *result = align_address(arena->at, align);
         if (result + size > arena->committed)

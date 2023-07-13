@@ -206,6 +206,7 @@ DREAM_INLINE float smootherstep(float x)
 #define COLORF_WHITE   make_v4(1, 1, 1, 1)
 #define COLORF_BLACK   make_v4(0, 0, 0, 1)
 #define COLORF_RED     make_v4(1, 0, 0, 1)
+#define COLORF_ORANGE  make_v4(1, 0.5f, 0, 1)
 #define COLORF_GREEN   make_v4(0, 1, 0, 1)
 #define COLORF_BLUE    make_v4(0, 0, 1, 1)
 #define COLORF_MAGENTA make_v4(1, 0, 1, 1)
@@ -669,6 +670,11 @@ static bool v3_equal(v3_t a, v3_t b, float margin)
 	return (flt_equal(a.x, b.x, margin) &&
 			flt_equal(a.y, b.y, margin) &&
 			flt_equal(a.z, b.z, margin));
+}
+
+static bool v3_equal_exact(v3_t a, v3_t b)
+{
+	return a.x == b.x && a.y == b.y && a.z == b.z;
 }
 
 // v4_t
@@ -1364,6 +1370,36 @@ DREAM_INLINE void plane_from_points(v3_t a, v3_t b, v3_t c, plane_t *p)
 {
     p->n = normalize(cross(sub(c, a), sub(b, a)));
     p->d = dot(p->n, a);
+}
+
+DREAM_INLINE float triangle_area(v3_t a, v3_t b, v3_t c)
+{
+	v3_t ab = sub(b, a);
+	v3_t ac = sub(c, a);
+	v3_t perp = cross(ab, ac);
+
+	float area = 0.5f*vlen(perp);
+	return area;
+}
+
+DREAM_INLINE float triangle_area_sq(v3_t a, v3_t b, v3_t c)
+{
+	v3_t ab = sub(b, a);
+	v3_t ac = sub(c, a);
+	v3_t perp = cross(ab, ac);
+
+	float area = 0.5f*vlensq(perp);
+	return area;
+}
+
+DREAM_INLINE float tetrahedron_signed_volume(v3_t a, v3_t b, v3_t c, v3_t d)
+{
+	v3_t ad = sub(d, a);
+	v3_t ab = sub(b, a);
+	v3_t ac = sub(c, a);
+
+	float volume = (1.0f / 6.0f)*dot(ad, cross(ab, ac));
+	return volume;
 }
 
 // Steam hardware survey says SSE2 availability is 100%

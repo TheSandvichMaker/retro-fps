@@ -110,6 +110,11 @@ void ui_set_next_rect(rect2_t rect)
 	ui.next_rect = rect;
 }
 
+void ui_set_next_id(ui_id_t id)
+{
+	ui.next_id = id;
+}
+
 float ui_divide_space(float item_count)
 {
 	float size = 0.0f;
@@ -811,7 +816,9 @@ void ui_slider(string_t label, float *v, float min, float max)
 
 	rect = ui_shrink(&rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
-	rect2_t label_rect = ui_cut_left(&rect, (float)label.count*ui.font.cw + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN));
+	float w = rect2_width(rect);
+
+	rect2_t label_rect = ui_cut_left(&rect, 0.5f*w); // (float)label.count*ui.font.cw + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN));
 	label_rect = ui_shrink(&label_rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
 
 	rect2_t slider_body = rect;
@@ -865,9 +872,11 @@ void ui_slider(string_t label, float *v, float min, float max)
 	ui_text(text_p, value_text);
 }
 
-void ui_slider_int(string_t label, int *v, int min, int max)
+bool ui_slider_int(string_t label, int *v, int min, int max)
 {
-	if (NEVER(!v)) return;
+	if (NEVER(!v)) return false;
+
+	int init_value = *v;
 
 	ui_id_t id = ui_id_pointer(v);
 
@@ -879,10 +888,31 @@ void ui_slider_int(string_t label, int *v, int min, int max)
 		rect = ui_cut_top(&panel->rect, (float)ui.font.ch + ui_widget_padding());
 	}
 
+	float w = rect2_width(rect);
+
+	rect2_t label_rect = ui_cut_left(&rect, 0.5f*w); // (float)label.count*ui.font.cw + ui_widget_padding());
+	label_rect = ui_shrink(&label_rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN) + ui_scalar(UI_SCALAR_TEXT_MARGIN));
+
+	rect2_t sub_rect = ui_cut_left (&rect, (float)ui.font.cw + ui_widget_padding());
+	rect2_t add_rect = ui_cut_right(&rect, (float)ui.font.cw + ui_widget_padding());
+
 	rect = ui_shrink(&rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
-	rect2_t label_rect = ui_cut_left(&rect, (float)label.count*ui.font.cw + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN));
-	label_rect = ui_shrink(&label_rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
+	ui_id_t sub_id = ui_child_id(id, S("sub"));
+	ui_set_next_id  (sub_id);
+	ui_set_next_rect(sub_rect);
+	if (ui_button(S("-")))
+	{
+		if (*v > min) *v = *v - 1;
+	}
+
+	ui_id_t add_id = ui_child_id(id, S("add"));
+	ui_set_next_id  (add_id);
+	ui_set_next_rect(add_rect);
+	if (ui_button(S("+")))
+	{
+		if (*v < max) *v = *v + 1;
+	}
 
 	rect2_t slider_body = rect;
 
@@ -933,4 +963,6 @@ void ui_slider_int(string_t label, int *v, int min, int max)
 
 	v2_t text_p = ui_text_center_p(slider_body, value_text);
 	ui_text(text_p, value_text);
+
+	return *v != init_value;
 }

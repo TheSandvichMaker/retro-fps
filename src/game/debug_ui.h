@@ -11,40 +11,6 @@ typedef struct ui_id_t
 
 #define UI_ID_NULL (ui_id_t){0}
 
-DREAM_INLINE ui_id_t ui_child_id(ui_id_t parent, string_t string)
-{
-	uint64_t hash = string_hash_with_seed(string, parent.value);
-
-	if (hash == 0)
-		hash = ~(uint64_t)0;
-
-	ui_id_t result = {
-		.value = hash,
-	};
-	return result;
-}
-
-DREAM_INLINE ui_id_t ui_id(string_t string)
-{
-	uint64_t hash = string_hash(string);
-
-	if (hash == 0)
-		hash = ~(uint64_t)0;
-
-	ui_id_t result = {
-		.value = hash,
-	};
-	return result;
-}
-
-DREAM_INLINE ui_id_t ui_id_pointer(void *pointer)
-{
-	ui_id_t result = {
-		.value = (uintptr_t)pointer,
-	};
-	return result;
-}
-
 typedef enum ui_cut_side_t
 {
 	UI_CUT_LEFT,
@@ -121,6 +87,8 @@ DREAM_API void ui_set_layout_direction(ui_cut_side_t side);
 DREAM_API void ui_set_next_rect(rect2_t rect);
 DREAM_API float ui_divide_space(float item_count);
 
+DREAM_API void ui_set_next_id(ui_id_t id);
+
 DREAM_API float ui_scalar(ui_style_scalar_t scalar);
 DREAM_API void ui_push_scalar(ui_style_scalar_t scalar, float value);
 DREAM_API float ui_pop_scalar(ui_style_scalar_t scalar);
@@ -138,7 +106,7 @@ DREAM_API bool ui_button(string_t label);
 DREAM_API bool ui_checkbox(string_t label, bool *value);
 DREAM_API bool ui_radio(string_t label, int *value, int count, string_t *labels);
 DREAM_API void ui_slider(string_t label, float *v, float min, float max);
-DREAM_API void ui_slider_int(string_t label, int *v, int min, int max);
+DREAM_API bool ui_slider_int(string_t label, int *v, int min, int max);
 
 //
 // "Internal"
@@ -302,6 +270,7 @@ typedef struct ui_t
 	ui_panel_t *panel;
 	ui_panel_t *first_free_panel;
 
+	ui_id_t next_id;
 	rect2_t next_rect;
 
 	bitmap_font_t font;
@@ -354,6 +323,41 @@ DREAM_INLINE v4_t ui_animate_towards_exp4(v4_t at, v4_t target)
 
 	float t = rate*ui.dt;
 	v4_t result = v4_lerps(target, at, saturate(t));
+	return result;
+}
+
+DREAM_INLINE ui_id_t ui_child_id(ui_id_t parent, string_t string)
+{
+	ui_id_t result = {0};
+
+	if (ui.next_id.value)
+	{
+		result = ui.next_id;
+		ui.next_id.value = 0;
+	}
+	else
+	{
+		uint64_t hash = string_hash_with_seed(string, parent.value);
+
+		if (hash == 0)
+			hash = ~(uint64_t)0;
+
+		result.value = hash;
+	}
+
+	return result;
+}
+
+DREAM_INLINE ui_id_t ui_id(string_t string)
+{
+	return ui_child_id(UI_ID_NULL, string);
+}
+
+DREAM_INLINE ui_id_t ui_id_pointer(void *pointer)
+{
+	ui_id_t result = {
+		.value = (uintptr_t)pointer,
+	};
 	return result;
 }
 

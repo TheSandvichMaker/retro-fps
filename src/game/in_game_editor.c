@@ -12,6 +12,7 @@
 #include "intersect.h"
 #include "asset.h"
 #include "audio.h"
+#include "mesh.h"
 
 static void push_poly_wireframe(map_t *map, map_poly_t *poly, v4_t color)
 {
@@ -43,8 +44,6 @@ typedef struct lightmap_editor_state_t
 {
     float window_openness;
 
-    v2_t window_position;
-
     bool debug_lightmaps;
 
     map_brush_t *selected_brush;
@@ -64,25 +63,329 @@ typedef struct lightmap_editor_state_t
     int max_display_recursion;
 } lightmap_editor_state_t;
 
+typedef struct ch_test_panel_t
+{
+	int random_seed;
+	int point_count;
+	bool automatically_recalculate_hull;
+
+	arena_t         mesh_arena;
+	triangle_mesh_t mesh;
+	ch_debug_t      debug;
+
+	bool   show_points;
+	bool   show_processed_edge;
+	bool   show_non_processed_edges;
+	bool   show_new_triangle;
+	bool   show_triangles;
+	int    current_step_index;
+	int    test_tetrahedron_index;
+} ch_test_panel_t;
+
 typedef struct editor_state_t
 {
     rect2_t *fullscreen_layout;
     float bar_openness;
 
     bool show_timings;
+
     bool lightmap_editor_enabled;
     lightmap_editor_state_t lightmap_editor;
+
+	bool ch_test_panel_enabled;
+	ch_test_panel_t ch_test;
 } editor_state_t;
 
 static editor_state_t g_editor = {
     .show_timings            = false,
     .lightmap_editor_enabled = false,
     .lightmap_editor = {
-        .window_position = { 32, 32 },
 		.min_display_recursion = 0,
 		.max_display_recursion = 10,
     },
+	.ch_test = {
+		.automatically_recalculate_hull = true,
+		.random_seed            = 1,
+		.point_count            = 12,
+		.show_points            = true,
+		.show_new_triangle      = true,
+		.show_triangles         = true,
+		.show_processed_edge    = true,
+		.test_tetrahedron_index = -1,
+		.current_step_index     = 9999,
+	},
 };
+
+static void update_and_render_convex_hull_test_panel(void)
+{
+	if (!g_editor.ch_test_panel_enabled)
+		return;
+
+	ch_test_panel_t *ch_test = &g_editor.ch_test;
+
+	triangle_mesh_t *mesh  = &ch_test->mesh;
+	ch_debug_t      *debug = &ch_test->debug;
+
+	bool degenerate_hull           = false;
+	int  degenerate_triangle_count = 0;
+
+	bool *point_fully_contained  = m_alloc_array_nozero(temp, debug->initial_points_count, bool);
+	bool *triangle_is_degenerate = m_alloc_array_nozero(temp, mesh->triangle_count, bool);
+
+	for (size_t i = 0; i < debug->initial_points_count; i++)
+	{
+		point_fully_contained[i] = true;
+	}
+
+	if (debug->initial_points_count > 0 && mesh->triangle_count > 0)
+	{
+		for (size_t triangle_index = 0; triangle_index < mesh->triangle_count; triangle_index++)
+		{
+			triangle_t t = mesh->triangles[triangle_index];
+
+			bool degenerate_triangle = false;
+
+			float area = triangle_area_sq(t.a, t.b, t.c);
+			if (area < 0.00001f)
+			{
+				degenerate_triangle = true;
+			}
+
+			if (!degenerate_triangle)
+			{
+				for (size_t point_index = 0; point_index < debug->initial_points_count; point_index++)
+				{
+					v3_t p = debug->initial_points[point_index];
+
+					if (!v3_equal_exact(p, t.a) &&
+						!v3_equal_exact(p, t.b) &&
+						!v3_equal_exact(p, t.c))
+					{
+						float volume = tetrahedron_signed_volume(t.a, t.b, t.c, p);
+
+						if (volume > 0.0f)
+						{
+							degenerate_triangle = true;
+							point_fully_contained[point_index] = false;
+						}
+					}
+				}
+			}
+
+			if (degenerate_triangle)
+			{
+				degenerate_triangle_count += 1;
+				degenerate_hull = true;
+			}
+
+			triangle_is_degenerate[triangle_index] = degenerate_triangle;
+		}
+	}
+
+	if (debug->step_count > 0)
+	{
+		if (ch_test->show_points)
+		{
+			r_immediate_topology(R_PRIMITIVE_TOPOLOGY_LINELIST);
+			r_immediate_use_depth(false);
+
+			for (size_t i = 0; i < debug->initial_points_count; i++)
+			{
+				v3_t p = debug->initial_points[i];
+
+				v4_t color = ((int)i == ch_test->test_tetrahedron_index ? COLORF_ORANGE : COLORF_RED);
+
+				if (point_fully_contained[i])
+				{
+					color.xyz = mul(color.xyz, 0.5f);
+				}
+
+				r_immediate_rect3_outline(rect3_center_radius(p, make_v3(1, 1, 1)), color);
+			}
+
+			r_immediate_flush();
+		}
+
+		r_immediate_topology (R_PRIMITIVE_TOPOLOGY_LINELIST);
+		r_immediate_use_depth(false);
+
+		int step_index = 0;
+		for (ch_debug_step_t *step = ch_test->debug.first_step;
+			 step;
+			 step = step->next)
+		{
+			if (step_index == ch_test->current_step_index)
+			{
+				size_t triangle_index = 0;
+
+				for (ch_debug_triangle_t *triangle = step->first_triangle;
+					 triangle;
+					 triangle = triangle->next, triangle_index++)
+				{
+					bool show = false;
+
+					if (ch_test->show_triangles)                                 show = true;
+					if (ch_test->show_new_triangle && triangle->added_this_step) show = true;
+					if (!show) continue;
+
+					v3_t a = triangle->t.a;
+					v3_t b = triangle->t.b;
+					v3_t c = triangle->t.c;
+
+					v4_t color = make_v4(0.7f, 0.9f, 0.5f, 1.0f);
+
+					if (triangle->added_this_step)
+						color = make_v4(1.0f, 1.0f, 0.5f, 1.0f);
+
+					if (triangle_is_degenerate[triangle_index])
+						color = make_v4(1.0f, 0.25f, 0.0f, 1.0f);
+
+					r_immediate_line(a, b, color);
+					r_immediate_line(a, c, color);
+					r_immediate_line(b, c, color);
+				}
+
+				for (ch_debug_edge_t *edge = step->first_edge;
+					 edge;
+					 edge = edge->next)
+				{
+					bool show = false;
+
+					if (ch_test->show_processed_edge      &&  edge->processed_this_step) show = true;
+					if (ch_test->show_non_processed_edges && !edge->processed_this_step) show = true;
+					if (!show) continue;
+
+					v3_t a = edge->e.a;
+					v3_t b = edge->e.b;
+
+					r_immediate_line(a, b, (edge->processed_this_step ? COLORF_WHITE : COLORF_BLUE));
+				}
+			}
+
+			step_index++;
+		}
+
+		r_immediate_flush();
+	}
+
+	UI_WINDOW(S("Convex Hull Debug"), rect2_from_min_dim(make_v2(64.0f, 64.0f), make_v2(512.0f, 512.0f)), &g_editor.ch_test_panel_enabled)
+	{
+		bool changed = false;
+		changed |= ui_slider_int(S("Random Seed"), &ch_test->random_seed, 1, 32);
+		changed |= ui_slider_int(S("Point Count"), &ch_test->point_count, 8, 48);
+
+		ui_checkbox(S("Automatically Recalculate Hull"), &ch_test->automatically_recalculate_hull);
+
+		bool should_recalculate = ui_button(S("Calculate Random Convex Hull"));
+		if (ch_test->automatically_recalculate_hull && changed)                   should_recalculate = true;
+		if (ch_test->automatically_recalculate_hull && mesh->triangle_count == 0) should_recalculate = true;
+
+		if (should_recalculate)
+		{
+			m_scoped(temp)
+			{
+				size_t random_points_count = (size_t)ch_test->point_count;
+				v3_t  *random_points       = m_alloc_array_nozero(temp, random_points_count, v3_t);
+
+				random_series_t r = { (uint32_t)ch_test->random_seed };
+
+				for (size_t i = 0; i < random_points_count; i++)
+				{
+					random_points[i] = add(make_v3(512.0f, 512.0f, 512.0f), mul(128.0f, random_in_unit_cube(&r)));
+				}
+
+				bool at_final_step = false;
+				if (debug->step_count > 0 &&
+					ch_test->current_step_index == (int)debug->step_count - 1)
+				{
+					at_final_step = true;
+				}
+
+				m_reset_and_decommit(&ch_test->mesh_arena);
+				*mesh = calculate_convex_hull_debug(&ch_test->mesh_arena, random_points_count, random_points, debug);
+
+				if (at_final_step)
+				{
+					ch_test->current_step_index = (int)debug->step_count - 1;
+				}
+			}
+		}
+
+		if (mesh->triangle_count > 0)
+		{
+			if (ui_button(S("Delete Convex Hull Data")))
+			{
+				m_release(&ch_test->mesh_arena);
+				m_release(&ch_test->debug.arena);
+				zero_struct(mesh);
+				zero_struct(debug);
+			}
+		}
+
+		if (degenerate_hull)
+		{
+			UI_COLOR(UI_COLOR_TEXT, COLORF_RED)
+			ui_label(S("!! DEGENERATE CONVEX HULL !!"));
+			if (triangle_is_degenerate[0])
+			{
+				UI_COLOR(UI_COLOR_TEXT, COLORF_RED)
+				ui_label(S("THE FIRST TRIANGLE IS DEGENERATE, THAT'S NO GOOD"));
+			}
+			ui_label(Sf("Degenerate Triangle Count: %d", degenerate_triangle_count));
+		}
+
+		if (debug->step_count > 0)
+		{
+			ui_checkbox(S("Show initial points"), &ch_test->show_points);
+			ui_checkbox(S("Show processed edge"), &ch_test->show_processed_edge);
+			ui_checkbox(S("Show non-processed edges"), &ch_test->show_non_processed_edges);
+			ui_checkbox(S("Show new triangle"), &ch_test->show_new_triangle);
+			ui_checkbox(S("Show all triangles"), &ch_test->show_triangles);
+			ui_slider_int(S("Step"), &ch_test->current_step_index, 0, (int)(ch_test->debug.step_count - 1));
+
+			if (ch_test->current_step_index > (int)ch_test->debug.step_count - 1)
+			    ch_test->current_step_index = (int)ch_test->debug.step_count - 1;
+
+			int step_index = 0;
+			ch_debug_step_t *step = debug->first_step;
+			for (;
+				 step;
+				 step = step->next)
+			{
+				if (step_index == ch_test->current_step_index)
+				{
+					break;
+				}
+				step_index++;
+			}
+
+			if (ALWAYS(step))
+			{
+				ui_label(Sf("edge count: %zu", step->edge_count));
+				ui_label(Sf("triangle count: %zu", step->triangle_count));
+
+				ui_slider_int(S("Test Tetrahedron Index"), &ch_test->test_tetrahedron_index, -1, (int)(debug->initial_points_count) - 1);
+
+				if (ch_test->test_tetrahedron_index > (int)debug->initial_points_count - 1)
+				    ch_test->test_tetrahedron_index = (int)debug->initial_points_count - 1;
+
+				if (ch_test->test_tetrahedron_index >= 0)
+				{
+					triangle_t t = step->first_triangle->t;
+					ASSERT(step->first_triangle->added_this_step);
+
+					v3_t p = debug->initial_points[ch_test->test_tetrahedron_index];
+
+					float volume = tetrahedron_signed_volume(t.a, t.b, t.c, p);
+					ui_label(Sf("Tetrahedron Volume: %f", volume));
+
+					float area = triangle_area_sq(t.a, t.b, p);
+					ui_label(Sf("Squared Triangle Area: %f", area));
+				}
+			}
+		}
+	}
+}
 
 static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
 {
@@ -661,6 +964,10 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
                     .name = S("Lightmap Editor (F2)"),
                     .toggle = &g_editor.lightmap_editor_enabled,
                 },
+                {
+                    .name = S("Convex Hull Tester (F3)"),
+                    .toggle = &g_editor.ch_test_panel_enabled,
+                },
             };
 
             ui_set_next_rect(ui_cut_left(&bar, ui_label_width(S("Menus:  "))));
@@ -702,6 +1009,9 @@ void update_and_render_in_game_editor(game_io_t *io, world_t *world)
     if (ui_button_pressed(BUTTON_F2))
         g_editor.lightmap_editor_enabled = !g_editor.lightmap_editor_enabled;
 
+    if (ui_button_pressed(BUTTON_F3))
+        g_editor.ch_test_panel_enabled = !g_editor.ch_test_panel_enabled;
+
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);
 
@@ -723,4 +1033,5 @@ void update_and_render_in_game_editor(game_io_t *io, world_t *world)
     ui_panel_end();
 
     update_and_render_lightmap_editor(io, world);
+	update_and_render_convex_hull_test_panel();
 }

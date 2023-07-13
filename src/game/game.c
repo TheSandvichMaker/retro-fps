@@ -1,6 +1,7 @@
 #include <stdlib.h>
 
 #include "core/core.h"
+#include "core/random.h"
 
 #include "game.h"
 #include "map.h"
@@ -12,6 +13,7 @@
 #include "audio.h"
 #include "in_game_editor.h"
 #include "job_queues.h"
+#include "mesh.h"
 
 #include "render/light_baker.h"
 #include "render/render.h"
@@ -33,6 +35,8 @@ static size_t map_vertex_count;
 static v3_t map_vertices[MAX_VERTICES];
 
 static mixer_id_t music;
+
+static triangle_mesh_t test_convex_hull;
 
 v3_t forward_vector_from_pitch_yaw(float pitch, float yaw)
 {
@@ -604,32 +608,58 @@ void game_tick(game_io_t *io, float dt)
 
     r_push_view(&view);
 
-    //
-    // render map geometry
-    //
-
-#if 1
-    for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
-    {
-        map_entity_t *entity = &map->entities[entity_index];
-
-        if (is_class(map, entity, strlit("point_light")))
-        {
-            r_immediate_topology(R_PRIMITIVE_TOPOLOGY_LINELIST);
-            r_immediate_use_depth(true);
-
-            r_immediate_rect3_outline(rect3_center_radius(v3_from_key(map, entity, strlit("origin")), make_v3(8, 8, 8)), COLORF_YELLOW);
-
-            r_immediate_flush();
-        }
-    }
-#endif
+	//
+	// render map
+	//
 
     for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
     {
         map_poly_t *poly = &map->polys[poly_index];
         r_draw_model(m4x4_identity, poly->mesh, poly->texture, poly->lightmap);
     }
+
+	//
+	// render test convex hull
+	//
+
+	r_immediate_topology(R_PRIMITIVE_TOPOLOGY_LINELIST);
+	r_immediate_use_depth(true);
+
+    for (size_t triangle_index = 0; triangle_index < test_convex_hull.triangle_count; triangle_index++)
+    {
+		triangle_t t = test_convex_hull.triangles[triangle_index];
+
+		r_immediate_line(t.a, t.b, COLORF_WHITE);
+		r_immediate_line(t.a, t.c, COLORF_WHITE);
+		r_immediate_line(t.b, t.c, COLORF_WHITE);
+	}
+
+	r_immediate_flush();
+
+    //
+    // render map point lights
+    //
+
+#if 1
+	r_immediate_topology(R_PRIMITIVE_TOPOLOGY_LINELIST);
+	r_immediate_use_depth(true);
+
+    for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
+    {
+        map_entity_t *entity = &map->entities[entity_index];
+
+        if (is_class(map, entity, strlit("point_light")))
+        {
+            r_immediate_rect3_outline(rect3_center_radius(v3_from_key(map, entity, strlit("origin")), make_v3(8, 8, 8)), COLORF_YELLOW);
+        }
+    }
+
+	r_immediate_flush();
+#endif
+
+	//
+	// make random moving thing to show dynamic shadows and volumetric fog
+	//
 
     static float timer = 0.0f;
     timer += 1.0f / 60.0f;

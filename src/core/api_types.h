@@ -191,6 +191,16 @@ typedef union rect3_t
     };
 } rect3_t;
 
+typedef struct edge_t
+{
+	v3_t a, b;
+} edge_t;
+
+typedef struct triangle_t
+{
+	v3_t a, b, c;
+} triangle_t;
+
 typedef struct plane_t
 {
     v3_t n;

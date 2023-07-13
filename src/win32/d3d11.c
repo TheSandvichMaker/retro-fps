@@ -128,6 +128,7 @@ int init_d3d11(void *hwnd_)
         ID3D11Texture2D_Release(backbuffer);
     }
 
+#if 0
     // disable alt+enter keybind
     {
         IDXGIFactory *factory;
@@ -135,6 +136,7 @@ int init_d3d11(void *hwnd_)
         IDXGIFactory_MakeWindowAssociation(factory, hwnd, DXGI_MWA_NO_ALT_ENTER);
         IDXGIFactory_Release(factory);
     }
+#endif
 
     // create input layouts
 
@@ -1346,7 +1348,7 @@ void d3d11_present()
 
 	AcquireSRWLockExclusive(&d3d.context_lock);
 
-    HRESULT hr = IDXGISwapChain_Present(d3d.swap_chain, 1, 0);
+    HRESULT hr = IDXGISwapChain_Present(d3d.swap_chain, 0, 0);
 
     d3d_timestamp(RENDER_TS_END_FRAME);
     ID3D11DeviceContext_End(d3d.context, (ID3D11Asynchronous *)queries->disjoint);
