@@ -19,9 +19,10 @@ struct VS_INPUT_POS
 
 struct VS_INPUT_IMMEDIATE
 {
-    float3 pos : POSITION;
-    float2 uv  : TEXCOORD;
-    uint   col : COLOR;
+    float3 pos    : POSITION;
+    float2 uv     : TEXCOORD;
+    uint   col    : COLOR;
+	float3 normal : NORMAL;
 };
 
 struct VS_INPUT_BRUSH
@@ -99,6 +100,10 @@ void camera_ray(float2 uv, out float3 position, out float3 direction)
         view_matrix[2][2],
     };
 
+    position = -(view_matrix[0][3]*camera_x +
+                 view_matrix[1][3]*camera_y +
+                 view_matrix[2][3]*camera_z);
+
     float2 nds = 2*uv - 1;
     nds.y = -nds.y;
 
@@ -108,10 +113,6 @@ void camera_ray(float2 uv, out float3 position, out float3 direction)
     direction = normalize(nds.x*camera_x*film_half_w +
                           nds.y*camera_y*film_half_h -
                           camera_z);
-
-    position = -(view_matrix[0][3]*camera_x +
-                 view_matrix[1][3]*camera_y +
-                 view_matrix[2][3]*camera_z);
 }
 
 float4 pyramid_blur(Texture2D tex, sampler samp, float2 uv)

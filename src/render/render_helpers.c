@@ -164,6 +164,38 @@ void r_immediate_rect3_outline(rect3_t bounds, v4_t color)
     r_immediate_line(v110, v111, color);
 }
 
+void r_immediate_triangle(triangle_t t, v4_t color)
+{
+    uint32_t color_packed = pack_color(color);
+
+	v3_t ab = normalize(sub(t.b, t.a));
+	v3_t ac = normalize(sub(t.c, t.a));
+
+	v3_t normal = normalize(cross(ab, ac));
+
+    uint32_t i0 = r_immediate_vertex(&(vertex_immediate_t){ 
+        .pos    = t.a,
+        .col    = color_packed,
+		.normal = normal,
+    });
+
+    uint32_t i1 = r_immediate_vertex(&(vertex_immediate_t){ 
+        .pos    = t.b,
+        .col    = color_packed,
+		.normal = normal,
+    });
+
+    uint32_t i2 = r_immediate_vertex(&(vertex_immediate_t){ 
+        .pos    = t.c,
+        .col    = color_packed,
+		.normal = normal,
+    });
+
+	r_immediate_index(i0);
+	r_immediate_index(i1);
+	r_immediate_index(i2);
+}
+
 void r_draw_text(const bitmap_font_t *font, v2_t p, v4_t color, string_t string)
 {
 	r_immediate_texture(font->texture);

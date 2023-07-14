@@ -35,6 +35,7 @@ void r_set_command_list(r_list_t *new_list)
 
 DREAM_INLINE void initialize_immediate_draw(r_immediate_draw_t *draw)
 {
+	draw->params.shader     = R_SHADER_FLAT;
 	draw->params.topology   = R_PRIMITIVE_TOPOLOGY_TRIANGELIST;
 	draw->params.blend_mode = R_BLEND_PREMUL_ALPHA;
 	draw->params.clip_rect  = (rect2_t){ 0, 0, 0, 0 };
@@ -295,13 +296,48 @@ void r_immediate_flush(void)
 			command->draw_call.params.clip_rect.max = make_v2((float)w, (float)h);
 		}
 
+	}
+
+	initialize_immediate_draw(draw);
+}
+
+// TODO: Weirdly subtle and annoying function?
+DREAM_INLINE void r_immediate_flush_pending(void)
+{
+	r_immediate_draw_t *draw = &g_list->curr_immediate;
+
+	if (draw->icount > 0 ||
+		draw->vcount > 0)
+	{
+		r_command_immediate_t *command = r_submit_command(R_COMMAND_IMMEDIATE, sizeof(r_command_immediate_t));
+		copy_struct(&command->draw_call, draw);
+
+		if (command->draw_call.params.clip_rect.min.x == 0 &&
+			command->draw_call.params.clip_rect.min.y == 0 &&
+			command->draw_call.params.clip_rect.max.x == 0 &&
+			command->draw_call.params.clip_rect.max.y == 0)
+		{
+			int w, h;
+			render->get_resolution(&w, &h);
+
+			command->draw_call.params.clip_rect.max = make_v2((float)w, (float)h);
+		}
+
 		initialize_immediate_draw(draw);
 	}
 }
 
+void r_immediate_shader(r_immediate_shader_t shader)
+{
+	r_immediate_flush_pending();
+
+	r_immediate_draw_t *draw = &g_list->curr_immediate;
+	draw->params.shader = shader;
+}
+
 void r_immediate_topology(r_primitive_topology_t topology)
 {
-	r_immediate_flush();
+	r_immediate_flush_pending();
 
 	r_immediate_draw_t *draw = &g_list->curr_immediate;
 	draw->params.topology = topology;
@@ -309,7 +345,7 @@ void r_immediate_topology(r_primitive_topology_t topology)
 
 void r_immediate_blend_mode(r_blend_mode_t blend_mode)
 {
-	r_immediate_flush();
+	r_immediate_flush_pending();
 
 	r_immediate_draw_t *draw = &g_list->curr_immediate;
 	draw->params.blend_mode = blend_mode;
@@ -317,7 +353,7 @@ void r_immediate_blend_mode(r_blend_mode_t blend_mode)
 
 void r_immediate_clip_rect (rect2_t clip_rect)
 {
-	r_immediate_flush();
+	r_immediate_flush_pending();
 
 	r_immediate_draw_t *draw = &g_list->curr_immediate;
 	draw->params.clip_rect = clip_rect;
@@ -325,7 +361,7 @@ void r_immediate_clip_rect (rect2_t clip_rect)
 
 void r_immediate_texture(resource_handle_t texture)
 {
-	r_immediate_flush();
+	r_immediate_flush_pending();
 
 	r_immediate_draw_t *draw = &g_list->curr_immediate;
 	draw->params.texture = texture;
@@ -333,7 +369,7 @@ void r_immediate_texture(resource_handle_t texture)
 
 void r_immediate_use_depth(bool depth)
 {
-	r_immediate_flush();
+	r_immediate_flush_pending();
 
 	r_immediate_draw_t *draw = &g_list->curr_immediate;
 	draw->params.depth_test = depth;
@@ -341,7 +377,7 @@ void r_immediate_use_depth(bool depth)
 
 void r_immediate_depth_bias(float depth_bias)
 {
-	r_immediate_flush();
+	r_immediate_flush_pending();
 
 	r_immediate_draw_t *draw = &g_list->curr_immediate;
 	draw->params.depth_bias = depth_bias;

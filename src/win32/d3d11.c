@@ -142,14 +142,17 @@ int init_d3d11(void *hwnd_)
 
     m_scoped(temp)
     {
+		// TODO: use tighter packing for all this (normals especially)
+
         D3D11_INPUT_ELEMENT_DESC layout_pos[] = {
             { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,     0, offsetof(vertex_pos_t, pos), D3D11_INPUT_PER_VERTEX_DATA, 0 },
         };
 
         D3D11_INPUT_ELEMENT_DESC layout_immediate[] = {
-            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,     0, offsetof(vertex_immediate_t, pos), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-            { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,        0, offsetof(vertex_immediate_t, tex), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-            { "COLOR",    0, DXGI_FORMAT_R32_UINT,            0, offsetof(vertex_immediate_t, col), D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,     0, offsetof(vertex_immediate_t, pos),    D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,        0, offsetof(vertex_immediate_t, tex),    D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "COLOR",    0, DXGI_FORMAT_R32_UINT,            0, offsetof(vertex_immediate_t, col),    D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT,     0, offsetof(vertex_immediate_t, normal), D3D11_INPUT_PER_VERTEX_DATA, 0 },
         };
 
         D3D11_INPUT_ELEMENT_DESC layout_brush[] = {
@@ -194,14 +197,18 @@ int init_d3d11(void *hwnd_)
         d3d.world_ps = compile_ps(hlsl_file, hlsl, "ps");
     }
 
-    m_scoped(temp)
-    {
-        string_t hlsl_file = strlit("gamedata/shaders/immediate.hlsl");
-        string_t hlsl = fs_read_entire_file(temp, hlsl_file);
+	static struct { r_immediate_shader_t shader; string_t path; } immediate_shaders[] = {
+		{ .shader = R_SHADER_FLAT,           .path = Sc("gamedata/shaders/immediate.hlsl")                },
+		{ .shader = R_SHADER_DEBUG_LIGHTING, .path = Sc("gamedata/shaders/immediate_debug_lighting.hlsl") },
+	};
 
-        d3d.immediate_vs = compile_vs(hlsl_file, hlsl, "vs");
-        d3d.immediate_ps = compile_ps(hlsl_file, hlsl, "ps");
-    }
+	for_array(i, immediate_shaders) m_scoped(temp)
+	{
+		string_t path = immediate_shaders[i].path;
+		string_t file = fs_read_entire_file(temp, path);
+		d3d.immediate_shaders[immediate_shaders[i].shader].vs = compile_vs(path, file, "vs");
+		d3d.immediate_shaders[immediate_shaders[i].shader].ps = compile_ps(path, file, "ps");
+	}
 
     m_scoped(temp)
     {
@@ -872,8 +879,6 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
 {
     uint32_t frame_index = d3d.frame_index;
 
-    debug_print("Querying timestamps for query frame %d\n", d3d.query_frame);
-
     d3d_queries_t *queries = &d3d.queries[d3d.query_frame];
     ID3D11DeviceContext_Begin(d3d.context, (ID3D11Asynchronous *)queries->disjoint);
     d3d_timestamp(RENDER_TS_BEGIN_FRAME);
@@ -1188,8 +1193,8 @@ done_with_sun_shadows:
 
                         .model = &immediate_model,
 
-                        .vs = d3d.immediate_vs,
-                        .ps = d3d.immediate_ps,
+                        .vs = d3d.immediate_shaders[draw_call->params.shader].vs,
+                        .ps = d3d.immediate_shaders[draw_call->params.shader].ps,
 
                         .blend_mode   = draw_call->params.blend_mode,
                         .index_format = DXGI_FORMAT_R32_UINT,
@@ -1307,8 +1312,6 @@ DREAM_INLINE void d3d_collect_timestamp_data(void)
         debug_print("Snoozin on da query...\n");
         Sleep(1);
     }
-
-    debug_print("Collecting timestamps for collect frame %d\n", d3d.query_collect_frame);
 
     D3D11_QUERY_DATA_TIMESTAMP_DISJOINT ts_disjoint;
     if (ID3D11DeviceContext_GetData(d3d.context, (ID3D11Asynchronous *)queries->disjoint, &ts_disjoint, sizeof(ts_disjoint), 0) != S_OK)

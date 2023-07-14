@@ -78,4 +78,6 @@ uintptr_t align_forward(uintptr_t address, uintptr_t align);
 uintptr_t align_backward(uintptr_t address, uintptr_t align);
 void *align_address(void *address, uintptr_t align);
 
+#define for_array(it, arr) for (size_t it = 0; it < ARRAY_COUNT(arr); it++)
+
 #endif /* COMMON_H */

@@ -3,14 +3,15 @@
 
 #include "core/api_types.h"
 
-void r_immediate_line                 (v3_t start, v3_t end, v4_t color);
-void r_immediate_line_gradient        (v3_t start, v3_t end, v4_t start_color, v4_t end_color);
-void r_immediate_arrow                (v3_t start, v3_t end, v4_t color);
-void r_immediate_arrow_gradient       (v3_t start, v3_t end, v4_t start_color, v4_t end_color);
-void r_immediate_rect2_filled         (rect2_t rect, v4_t color);
-void r_immediate_rect2_filled_gradient(rect2_t rect, v4_t colors[4]);
-void r_immediate_rect3_outline        (rect3_t bounds, v4_t color);
+DREAM_API void r_immediate_line                 (v3_t start, v3_t end, v4_t color);
+DREAM_API void r_immediate_line_gradient        (v3_t start, v3_t end, v4_t start_color, v4_t end_color);
+DREAM_API void r_immediate_arrow                (v3_t start, v3_t end, v4_t color);
+DREAM_API void r_immediate_arrow_gradient       (v3_t start, v3_t end, v4_t start_color, v4_t end_color);
+DREAM_API void r_immediate_rect2_filled         (rect2_t rect, v4_t color);
+DREAM_API void r_immediate_rect2_filled_gradient(rect2_t rect, v4_t colors[4]);
+DREAM_API void r_immediate_rect3_outline        (rect3_t bounds, v4_t color);
+DREAM_API void r_immediate_triangle             (triangle_t triangle, v4_t color);
 
-void r_draw_text(const struct bitmap_font_t *font, v2_t p, v4_t color, string_t string);
+DREAM_API void r_draw_text(const struct bitmap_font_t *font, v2_t p, v4_t color, string_t string);
 
 #endif /* RENDER_HELPERS_H */

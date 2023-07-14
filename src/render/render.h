@@ -121,6 +121,7 @@ typedef struct vertex_immediate_t
     v3_t pos;
     v2_t tex;
     uint32_t col;
+	v3_t normal;
 } vertex_immediate_t;
 
 typedef struct vertex_brush_t
@@ -265,8 +266,16 @@ typedef struct r_command_model_t
     resource_handle_t lightmap;
 } r_command_model_t;
 
+typedef enum r_immediate_shader_t
+{
+	R_SHADER_FLAT,
+	R_SHADER_DEBUG_LIGHTING,
+	R_SHADER_COUNT,
+} r_immediate_shader_t;
+
 typedef struct r_immediate_params_t
 {
+	r_immediate_shader_t shader;
     r_primitive_topology_t topology;
     r_blend_mode_t blend_mode;
 
@@ -295,6 +304,7 @@ typedef struct r_command_immediate_t
     r_immediate_draw_t draw_call;
 } r_command_immediate_t;
 
+DREAM_API void     r_immediate_shader    (r_immediate_shader_t shader);
 DREAM_API void     r_immediate_topology  (r_primitive_topology_t topology);
 DREAM_API void     r_immediate_blend_mode(r_blend_mode_t blend_mode);
 DREAM_API void     r_immediate_clip_rect (rect2_t clip_rect); // TODO: Why does this exist?

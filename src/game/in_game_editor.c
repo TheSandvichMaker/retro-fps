@@ -148,7 +148,7 @@ static void generate_new_random_convex_hull(size_t point_count, random_series_t 
 
 		bool at_final_step = false;
 		if (debug->step_count > 0 &&
-			ch_test->current_step_index == (int)debug->step_count - 1)
+			ch_test->current_step_index >= (int)debug->step_count)
 		{
 			at_final_step = true;
 		}
@@ -160,7 +160,7 @@ static void generate_new_random_convex_hull(size_t point_count, random_series_t 
 
 		if (at_final_step)
 		{
-			ch_test->current_step_index = (int)debug->step_count - 1;
+			ch_test->current_step_index = (int)debug->step_count;
 		}
 	}
 }
@@ -217,7 +217,7 @@ static void update_and_render_convex_hull_test_panel(void)
 
 				if (point_fully_contained[i])
 				{
-					color.xyz = mul(color.xyz, 0.5f);
+					color.xyz = mul(color.xyz, 0.75f);
 				}
 
 				r_immediate_rect3_outline(rect3_center_radius(p, make_v3(1, 1, 1)), color);
@@ -226,16 +226,89 @@ static void update_and_render_convex_hull_test_panel(void)
 			r_immediate_flush();
 		}
 
-		r_immediate_topology (R_PRIMITIVE_TOPOLOGY_LINELIST);
-		r_immediate_use_depth(false);
+		//
+
+		r_immediate_topology (R_PRIMITIVE_TOPOLOGY_TRIANGELIST);
+		r_immediate_shader   (R_SHADER_DEBUG_LIGHTING);
+		r_immediate_use_depth(true);
+
+		float triangle_alpha = 0.6f;
 
 		int step_index = 0;
 		for (ch_debug_step_t *step = ch_test->debug.first_step;
 			 step;
 			 step = step->next)
 		{
-			if (step_index == ch_test->current_step_index)
+			if (step_index == MIN(ch_test->current_step_index, (int)debug->step_count - 1))
 			{
+				bool final_step = (ch_test->current_step_index = (int)debug->step_count);
+
+				size_t triangle_index = 0;
+
+				for (ch_debug_triangle_t *triangle = step->first_triangle;
+					 triangle;
+					 triangle = triangle->next, triangle_index++)
+				{
+					bool show = false;
+
+					if (ch_test->show_triangles)                                 show = true;
+					if (ch_test->show_new_triangle && triangle->added_this_step) show = true;
+					if (!show) continue;
+
+					if (triangle_is_degenerate[triangle_index]) 
+						continue;
+
+					v4_t color = make_v4(0.7f, 0.9f, 0.5f, triangle_alpha);
+
+					if (!final_step && ch_test->show_new_triangle && triangle->added_this_step)
+						color = make_v4(1.0f, 1.0f, 0.5f, triangle_alpha);
+
+					r_immediate_triangle(triangle->t, color);
+				}
+
+				triangle_index = 0;
+
+				for (ch_debug_triangle_t *triangle = step->first_triangle;
+					 triangle;
+					 triangle = triangle->next, triangle_index++)
+				{
+					bool show = false;
+
+					if (ch_test->show_triangles)                                 show = true;
+					if (ch_test->show_new_triangle && triangle->added_this_step) show = true;
+					if (!show) continue;
+
+					if (!triangle_is_degenerate[triangle_index])
+						continue;
+
+					v4_t color = color = make_v4(1.0f, 0.25f, 0.0f, triangle_alpha);
+
+					r_immediate_triangle(triangle->t, color);
+				}
+			}
+
+			step_index++;
+		}
+
+		r_immediate_flush();
+
+		//
+
+		r_immediate_topology (R_PRIMITIVE_TOPOLOGY_LINELIST);
+		r_immediate_shader   (R_SHADER_FLAT);
+		r_immediate_use_depth(true);
+
+		float line_alpha = 0.6f;
+
+		step_index = 0;
+		for (ch_debug_step_t *step = ch_test->debug.first_step;
+			 step;
+			 step = step->next)
+		{
+			if (step_index == MIN(ch_test->current_step_index, (int)debug->step_count - 1))
+			{
+				bool final_step = (ch_test->current_step_index = (int)debug->step_count);
+
 				size_t triangle_index = 0;
 
 				for (ch_debug_triangle_t *triangle = step->first_triangle;
@@ -255,10 +328,10 @@ static void update_and_render_convex_hull_test_panel(void)
 					v3_t b = triangle->t.b;
 					v3_t c = triangle->t.c;
 
-					v4_t color = make_v4(0.7f, 0.9f, 0.5f, 0.9f);
+					v4_t color = make_v4(0.7f, 0.9f, 0.5f, line_alpha);
 
-					if (triangle->added_this_step)
-						color = make_v4(1.0f, 1.0f, 0.5f, 0.9f);
+					if (!final_step && ch_test->show_new_triangle && triangle->added_this_step)
+						color = make_v4(1.0f, 1.0f, 0.5f, line_alpha);
 
 					r_immediate_line(a, b, color);
 					r_immediate_line(a, c, color);
@@ -284,27 +357,30 @@ static void update_and_render_convex_hull_test_panel(void)
 					v3_t b = triangle->t.b;
 					v3_t c = triangle->t.c;
 
-					v4_t color = color = make_v4(1.0f, 0.25f, 0.0f, 0.9f);
+					v4_t color = color = make_v4(1.0f, 0.25f, 0.0f, line_alpha);
 
 					r_immediate_line(a, b, color);
 					r_immediate_line(a, c, color);
 					r_immediate_line(b, c, color);
 				}
 
-				for (ch_debug_edge_t *edge = step->first_edge;
-					 edge;
-					 edge = edge->next)
+				if (!final_step)
 				{
-					bool show = false;
+					for (ch_debug_edge_t *edge = step->first_edge;
+						 edge;
+						 edge = edge->next)
+					{
+						bool show = false;
 
-					if (ch_test->show_processed_edge      &&  edge->processed_this_step) show = true;
-					if (ch_test->show_non_processed_edges && !edge->processed_this_step) show = true;
-					if (!show) continue;
+						if (ch_test->show_processed_edge      &&  edge->processed_this_step) show = true;
+						if (ch_test->show_non_processed_edges && !edge->processed_this_step) show = true;
+						if (!show) continue;
 
-					v3_t a = edge->e.a;
-					v3_t b = edge->e.b;
+						v3_t a = edge->e.a;
+						v3_t b = edge->e.b;
 
-					r_immediate_line(a, b, (edge->processed_this_step ? COLORF_WHITE : COLORF_BLUE));
+						r_immediate_line(a, b, (edge->processed_this_step ? COLORF_WHITE : COLORF_BLUE));
+					}
 				}
 			}
 
@@ -435,10 +511,10 @@ static void update_and_render_convex_hull_test_panel(void)
 			ui_checkbox(S("Show non-processed edges"), &ch_test->show_non_processed_edges);
 			ui_checkbox(S("Show new triangle"), &ch_test->show_new_triangle);
 			ui_checkbox(S("Show all triangles"), &ch_test->show_triangles);
-			ui_slider_int(S("Step"), &ch_test->current_step_index, 0, (int)(ch_test->debug.step_count - 1));
+			ui_slider_int(S("Step"), &ch_test->current_step_index, 0, (int)(ch_test->debug.step_count));
 
-			if (ch_test->current_step_index > (int)ch_test->debug.step_count - 1)
-			    ch_test->current_step_index = (int)ch_test->debug.step_count - 1;
+			if (ch_test->current_step_index > (int)ch_test->debug.step_count)
+			    ch_test->current_step_index = (int)ch_test->debug.step_count;
 
 			int step_index = 0;
 			ch_debug_step_t *step = debug->first_step;
@@ -446,7 +522,7 @@ static void update_and_render_convex_hull_test_panel(void)
 				 step;
 				 step = step->next)
 			{
-				if (step_index == ch_test->current_step_index)
+				if (step_index == MIN(ch_test->current_step_index, (int)debug->step_count - 1))
 				{
 					break;
 				}

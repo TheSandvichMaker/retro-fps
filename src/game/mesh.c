@@ -170,34 +170,31 @@ triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *
 			v3_t       q = triangle_vertex_with_all_points_to_the_left(e, count, points);
 			triangle_t t = (triangle_t){e.a, e.b, q};
 
-			if (triangle_area_sq(t.a, t.b, t.c) > 0.0001f)
+			if (debug)
 			{
-				if (debug)
+				ch_debug_step_t *step = ch_add_debug_step(debug);
+
+				for (size_t i = 0; i < sb_count(H); i++)
 				{
-					ch_debug_step_t *step = ch_add_debug_step(debug);
-
-					for (size_t i = 0; i < sb_count(H); i++)
-					{
-						ch_add_debug_triangle(step, H[i], false);
-					}
-					ch_add_debug_triangle(step, t, true);
-
-					ch_add_debug_edge(step, e, true);
-					for (size_t i = 0; i < sb_count(Q); i++)
-					{
-						ch_add_debug_edge(step, Q[i], false);
-					}
+					ch_add_debug_triangle(step, H[i], false);
 				}
+				ch_add_debug_triangle(step, t, true);
 
-				sb_push(H, t);
-
-				sb_push(Q, ((edge_t){t.c, t.b}));
-				sb_push(Q, ((edge_t){t.a, t.c}));
-
-				sb_push(processed, e);
-
-				step_index++;
+				ch_add_debug_edge(step, e, true);
+				for (size_t i = 0; i < sb_count(Q); i++)
+				{
+					ch_add_debug_edge(step, Q[i], false);
+				}
 			}
+
+			sb_push(H, t);
+
+			sb_push(Q, ((edge_t){t.c, t.b}));
+			sb_push(Q, ((edge_t){t.a, t.c}));
+
+			sb_push(processed, e);
+
+			step_index++;
 		}
 
 		result.triangle_count = sb_count(H);
@@ -209,6 +206,9 @@ triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *
 
 DREAM_API void convex_hull_do_extended_diagnostics(triangle_mesh_t *mesh, ch_debug_t *debug)
 {
+	if (NEVER(!mesh))  return;
+	if (NEVER(!debug)) return;
+
 	if (ALWAYS(!debug->diagnostics))
 	{
 		ch_diagnostic_result_t *diagnostics = m_alloc_struct(&debug->arena, ch_diagnostic_result_t);

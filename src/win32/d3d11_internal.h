@@ -125,6 +125,12 @@ typedef struct d3d_queries_t
 
 #define D3D_QUERY_FRAME_COUNT 3
 
+typedef struct d3d_shader_pair_t
+{
+	ID3D11VertexShader *vs;
+	ID3D11PixelShader  *ps;
+} d3d_shader_pair_t;
+
 typedef struct d3d_state_t
 {
 	arena_t gen_mipmaps_arena;
@@ -182,13 +188,13 @@ typedef struct d3d_state_t
     ID3D11VertexShader       *shadowmap_vs;
     ID3D11VertexShader       *world_vs;
     ID3D11PixelShader        *world_ps;
-    ID3D11VertexShader       *immediate_vs;
-    ID3D11PixelShader        *immediate_ps;
     ID3D11VertexShader       *skybox_vs;
     ID3D11PixelShader        *skybox_ps;
     ID3D11VertexShader       *postprocess_vs;
     ID3D11PixelShader        *msaa_resolve_ps;
     ID3D11PixelShader        *hdr_resolve_ps;
+
+	d3d_shader_pair_t         immediate_shaders[R_SHADER_COUNT];
 
     ID3D11Texture3D          *fog_map;
     ID3D11ShaderResourceView *fog_map_srv;
@@ -200,7 +206,6 @@ DREAM_API d3d_state_t d3d;
 
 DREAM_INLINE void d3d_timestamp(render_timestamp_t ts)
 {
-    debug_print("Collecting ts: %s\n", render_timestamp_names[ts]);
 	ID3D11DeviceContext_End(d3d.context, (ID3D11Asynchronous *)d3d.queries[d3d.query_frame].ts[ts]);
 }
 
