@@ -8,7 +8,7 @@
 //
 //
 
-static void slist_appends_nocopy(string_list_t *list, arena_t *arena, string_t string)
+void slist_appends_nocopy(string_list_t *list, arena_t *arena, string_t string)
 {
     string_node_t *node = m_alloc_struct(arena, string_node_t);
     node->string = string;
@@ -16,7 +16,7 @@ static void slist_appends_nocopy(string_list_t *list, arena_t *arena, string_t s
     dll_push_back(list->first, list->last, node);
 }
 
-static void slist_prepends_nocopy(string_list_t *list, arena_t *arena, string_t string)
+void slist_prepends_nocopy(string_list_t *list, arena_t *arena, string_t string)
 {
     string_node_t *node = m_alloc_struct(arena, string_node_t);
     node->string = string;
@@ -24,7 +24,7 @@ static void slist_prepends_nocopy(string_list_t *list, arena_t *arena, string_t 
     dll_push_front(list->first, list->last, node);
 }
 
-static void slist_interleaves_nocopy(string_list_t *list, arena_t *arena, string_t string)
+void slist_interleaves_nocopy(string_list_t *list, arena_t *arena, string_t string)
 {
     for (string_node_t *insert_after = list->first, *next; insert_after->next; insert_after = next)
     {

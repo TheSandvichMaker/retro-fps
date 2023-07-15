@@ -55,7 +55,7 @@ typedef struct hull_debug_t
 	size_t initial_points_count;
 	v3_t  *initial_points;
 
-	size_t           step_count;
+	size_t             step_count;
 	hull_debug_step_t *first_step;
 	hull_debug_step_t *last_step;
 

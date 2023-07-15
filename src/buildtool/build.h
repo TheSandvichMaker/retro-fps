@@ -42,14 +42,21 @@ typedef enum backend_compiler_t
     BACKEND_CLANG,
 } backend_compiler_t;
 
-typedef struct build_job_t
+typedef struct build_params_t
 {
     bool no_cache;
     bool no_std_lib;
-    bool single_translation_unit;
-    bool address_sanitizer;
 
     backend_compiler_t backend;
+    string_t configuration;
+} build_params_t;
+
+typedef struct compile_params_t
+{
+    bool     single_translation_unit;
+	string_t stub_name;
+
+    bool address_sanitizer;
 
     bool warnings_are_errors;
     warning_level_t warning_level;
@@ -57,19 +64,30 @@ typedef struct build_job_t
 
     optimization_level_t optimization_level;
 
-    string_t output_exe;
-    string_t configuration;
-	string_t run_dir;
-	bool copy_executables_to_run;
-
     string_list_t defines;
     string_list_t forced_includes;
     string_list_t include_paths;
     string_list_t ignored_files;
     string_list_t ignored_directories;
+    string_t      additional_flags;
+} compile_params_t;
+
+typedef struct link_params_t
+{
+    string_t output_exe;
+	string_t run_dir;
+	bool copy_executables_to_run;
+
     string_list_t libraries;
     string_t      additional_flags;
-} build_job_t;
+} link_params_t;
+
+typedef struct all_params_t
+{
+	build_params_t   build;
+	compile_params_t compile;
+	link_params_t    link;
+} all_params_t;
 
 typedef enum source_file_flags_t
 {
@@ -98,26 +116,57 @@ typedef struct source_files_t
     source_file_t *last;
 } source_files_t;
 
-typedef enum build_result_t
+typedef enum build_error_t
 {
-    BUILD_SUCCESS,
-    BUILD_OTHER_FAILURE,
-    BUILD_COMPILATION_ERROR,
-    BUILD_LINKER_ERROR,
-} build_result_t;
+    BUILD_ERROR_NONE,
+    BUILD_ERROR_OTHER_FAILURE,
+    BUILD_ERROR_COMPILATION,
+    BUILD_ERROR_LINKER,
+} build_error_t;
 
 typedef struct build_context_t
 {
     arena_t *arena;
 
-    build_job_t *job;
+    const build_params_t *params;
 
     string_t build_dir;
 } build_context_t;
 
-void gather_source_files(arena_t *arena, string_t directory, build_job_t *job, source_files_t *source);
+typedef struct object_t
+{
+	struct object_t *next;
+	struct object_t *prev;
+	string_t name;
+} object_t;
+
+typedef struct object_collection_t
+{
+	object_t *first;
+	object_t *last;
+} object_collection_t;
+
+typedef enum compile_error_t
+{
+	COMPILE_ERROR_NONE,
+	COMPILE_ERROR_OTHER_FAILURE,
+} compile_error_t;
+
+typedef enum link_error_t
+{
+	LINK_ERROR_NONE,
+	LINK_ERROR_OTHER_FAILURE,
+} link_error_t;
+
+void gather_source_files(arena_t *arena, string_t directory, const compile_params_t *compile, source_files_t *source);
 source_file_t *generate_file(build_context_t *context, string_t path, string_t contents);
-build_result_t build_files(source_files_t files, build_job_t *job);
-build_result_t build_directory(string_t directory, build_job_t *job);
+
+compile_error_t compile_files    (source_files_t files, const build_params_t *build, const compile_params_t *compile, object_collection_t *objects);
+compile_error_t compile_directory(string_t directory,   const build_params_t *build, const compile_params_t *compile, object_collection_t *objects);
+
+link_error_t link_executable(const object_collection_t *objects, const build_params_t *build, const link_params_t *link);
+
+build_error_t build_files    (source_files_t files, const all_params_t *params);
+build_error_t build_directory(string_t directory,   const all_params_t *params);
 
 #endif /* BUILD_H */

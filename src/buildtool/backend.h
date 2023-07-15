@@ -4,7 +4,8 @@
 typedef struct backend_i
 {
 	char *name;
-    build_result_t (*build)(build_context_t *context, const source_files_t *files, const build_job_t *job);
+    compile_error_t (*compile)(build_context_t *context, const compile_params_t *params, const source_files_t *files, object_collection_t *objects);
+    link_error_t (*link)(build_context_t *context, const link_params_t *params, const object_collection_t *objects);
 } backend_i;
 
 #endif /* BACKEND_H */

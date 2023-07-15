@@ -96,7 +96,7 @@ static string_t args_next(cmd_args_t *args)
     }
     else
     {
-        args_error(args, strlit("expected another argument"));
+        args_error(args, S("expected another argument"));
         return strnull;
     }
 }
@@ -110,7 +110,7 @@ static int args_parse_int(cmd_args_t *args)
 
     if (end == arg.data)
     {
-        args_error(args, strlit("argument must be an integer"));
+        args_error(args, S("argument must be an integer"));
     }
 
     return result;
@@ -125,7 +125,7 @@ static float args_parse_float(cmd_args_t *args)
 
     if (end == arg.data)
     {
-        args_error(args, strlit("argument must be an integer"));
+        args_error(args, S("argument must be an integer"));
     }
 
     return result;
@@ -207,11 +207,11 @@ int main(int argc, char **argv)
             string_t compiler = args_next(args);
             if (!args->error)
             {
-                if (string_match(compiler, strlit("msvc")))
+                if (string_match(compiler, S("msvc")))
                 {
                     backend = BACKEND_MSVC;
                 }
-                else if (string_match(compiler, strlit("clang")))
+                else if (string_match(compiler, S("clang")))
                 {
                     backend = BACKEND_CLANG;
                 }
@@ -245,101 +245,183 @@ int main(int argc, char **argv)
     printf("=================================================\n");
     printf("\n");
 
-    build_result_t result = BUILD_SUCCESS;
+#if 0
+	string_t source_directory = S("src");
 
-    build_job_t base_job = {
-        .no_std_lib              = false,
+	bool build_failed = false;
 
-        .no_cache                = true, // incremental compilation is kaput
-        .single_translation_unit = stub,
+	object_collection_t objects = {0};
 
-        .backend                 = backend,
+	for (fs_entry_t *entry = fs_scan_directory(temp, source_directory);
+		 entry;
+		 entry = fs_entry_next(entry))
+	{
+		if (string_match_nocase(entry->name, S("buildtool")))
+			continue;
 
-        .address_sanitizer       = asan,
+		compile_params_t params = {
+			.single_translation_unit = true,
 
-        .warnings_are_errors     = true,
-        .warning_level           = W4,
-        .optimization_level      = O0,
+			.address_sanitizer       = asan,
 
-        .output_exe              = strlit("retro"),
-        .configuration           = strlit("debug"),
-		.run_dir                 = strlit("run"),
-		.copy_executables_to_run = true,
+			.warnings_are_errors     = true,
+			.warning_level           = W4,
+			.optimization_level      = O0,
 
-        .libraries = slist_from_array(temp, array_expand(string_t, 
-            strlit("user32"),
-            strlit("dxguid"),
-            strlit("d3d11"),
-            strlit("dxgi"),
-            strlit("d3dcompiler"),
-            strlit("gdi32"),
-            strlit("user32"),
-            strlit("ole32"),
-            strlit("ksuser"),
-			strlit("shell32"),
-			strlit("Synchronization")
-        )),
+			.configuration           = S("debug"),
 
-        .defines = slist_from_array(temp, array_expand(string_t,
-            strlit("_CRT_SECURE_NO_WARNINGS"),
-            strlit("UNICODE"),
-            ndebug ? strlit("NDEBUG") : strlit("DEBUG"),
-            not_slow ? strlit("DREAM_FAST") : strlit("DREAM_SLOW"),
-        )),
+			.defines = slist_from_array(temp, array_expand(string_t,
+				S("_CRT_SECURE_NO_WARNINGS"),
+				S("UNICODE"),
+				ndebug   ? S("NDEBUG")     : S("DEBUG"),
+				not_slow ? S("DREAM_FAST") : S("DREAM_SLOW"),
+			)),
 
-        .include_paths = slist_from_array(temp, array_expand(string_t,
-            strlit("src"),
-            strlit("external/include")
-        )),
+			.include_paths = slist_from_array(temp, array_expand(string_t,
+				S("src"),
+				S("external/include")
+			)),
 
-        .ignored_directories = slist_from_array(temp, array_expand(string_t,
-            strlit("buildtool"),
-            strlit("DONTBUILD")
-        )),
-    };
+			.backend = backend,
+		};
 
-    build_job_t release_job = base_job;
-    release_job.optimization_level = O2;
-    release_job.configuration      = strlit("release");
+		compile_error_t error = compile_directory(entry->path, &params, &objects);
 
-    slist_appends(&base_job   .defines, temp, S("DREAM_UNOPTIMIZED=1"));
-    slist_appends(&release_job.defines, temp, S("DREAM_OPTIMIZED=1"));
+		if (error)
+		{
+			fprintf(stderr, "Compilation failed! TODO: More information\n");
+
+			build_failed = true;
+			break;
+		}
+	}
+
+	if (!build_failed)
+	{
+		link_params_t params = {
+			.configuration           = S("debug"),
+			.run_dir                 = S("run"),
+			.copy_executables_to_run = true,
+
+			.libraries = slist_from_array(temp, array_expand(string_t, 
+				S("user32"),
+				S("dxguid"),
+				S("d3d11"),
+				S("dxgi"),
+				S("d3dcompiler"),
+				S("gdi32"),
+				S("user32"),
+				S("ole32"),
+				S("ksuser"),
+				S("shell32"),
+				S("Synchronization")
+			)),
+		};
+
+		link_error_t error = link_executable(&objects, &params);
+
+		if (error)
+		{
+			fprintf(stderr, "Linking failed! TODO: More information\n");
+
+			build_failed = true;
+			break;
+		}
+	}
+#else
+    build_error_t error = BUILD_ERROR_NONE;
+
+	all_params_t base_params = {
+		.build = {
+			.no_cache                = true, // incremental compilation is kaput
+
+			.configuration           = S("debug"),
+			.backend                 = backend,
+		},
+
+		.compile = {
+			.single_translation_unit = stub,
+			.stub_name               = S("dream"),
+
+			.address_sanitizer       = asan,
+
+			.warnings_are_errors     = true,
+			.warning_level           = W4,
+
+			.optimization_level      = O0,
+
+			.defines = slist_from_array(temp, array_expand(string_t,
+				S("_CRT_SECURE_NO_WARNINGS"),
+				S("UNICODE"),
+				ndebug ? S("NDEBUG") : S("DEBUG"),
+				not_slow ? S("DREAM_FAST") : S("DREAM_SLOW"),
+			)),
+
+			.include_paths = slist_from_array(temp, array_expand(string_t,
+				S("src"),
+				S("external/include")
+			)),
+
+			.ignored_directories = slist_from_array(temp, array_expand(string_t,
+				S("buildtool"),
+				S("DONTBUILD")
+			)),
+		},
+
+		.link = {
+			.output_exe              = S("retro"),
+			.run_dir                 = S("run"),
+			.copy_executables_to_run = true,
+
+			.libraries = slist_from_array(temp, array_expand(string_t, 
+				S("user32"),
+				S("dxguid"),
+				S("d3d11"),
+				S("dxgi"),
+				S("d3dcompiler"),
+				S("gdi32"),
+				S("user32"),
+				S("ole32"),
+				S("ksuser"),
+				S("shell32"),
+				S("Synchronization")
+			)),
+		},
+	};
+
+    all_params_t release_params = base_params;
+    release_params.build.configuration = S("release");
+    release_params.compile.optimization_level = O2;
+
+    slist_appends(&base_params   .compile.defines, temp, S("DREAM_UNOPTIMIZED=1"));
+    slist_appends(&release_params.compile.defines, temp, S("DREAM_OPTIMIZED=1"));
 
     if (!release || build_all)
     {
-        result |= build_directory(strlit("src"), &base_job);
+        error |= build_directory(S("src"), &base_params);
 
-        switch (result)
+        switch (error)
         {
-            case BUILD_SUCCESS:           fprintf(stderr, "Build successful\n"); break;
-            case BUILD_OTHER_FAILURE:     fprintf(stderr, "Build failed for other reasons! Oh no!\n"); break;
-            case BUILD_COMPILATION_ERROR: fprintf(stderr, "Build failed with compilation errors\n"); break;
-            case BUILD_LINKER_ERROR:      fprintf(stderr, "Build failed with linker errors\n"); break;
+            case BUILD_ERROR_NONE:          fprintf(stderr, "Build successful\n"); break;
+            case BUILD_ERROR_OTHER_FAILURE: fprintf(stderr, "Build failed for other reasons! Oh no!\n"); break;
+            case BUILD_ERROR_COMPILATION:   fprintf(stderr, "Build failed with compilation errors\n"); break;
+            case BUILD_ERROR_LINKER:        fprintf(stderr, "Build failed with linker errors\n"); break;
         }
     }
 
-    if ((release || build_all) && result == BUILD_SUCCESS)
+    if ((release || build_all) && !error)
     {
-        result |= build_directory(strlit("src"), &release_job);
+        error |= build_directory(S("src"), &release_params);
 
-        switch (result)
+        switch (error)
         {
-            case BUILD_SUCCESS:           fprintf(stderr, "Build successful\n"); break;
-            case BUILD_OTHER_FAILURE:     fprintf(stderr, "Build failed for other reasons! Oh no!\n"); break;
-            case BUILD_COMPILATION_ERROR: fprintf(stderr, "Build failed with compilation errors\n"); break;
-            case BUILD_LINKER_ERROR:      fprintf(stderr, "Build failed with linker errors\n"); break;
+            case BUILD_ERROR_NONE:          fprintf(stderr, "Build successful\n"); break;
+            case BUILD_ERROR_OTHER_FAILURE: fprintf(stderr, "Build failed for other reasons! Oh no!\n"); break;
+            case BUILD_ERROR_COMPILATION:   fprintf(stderr, "Build failed with compilation errors\n"); break;
+            case BUILD_ERROR_LINKER:        fprintf(stderr, "Build failed with linker errors\n"); break;
         }
     }
-
-    // ==========================================================================================================================
-    // asset processing
-
-    if (result == BUILD_SUCCESS)
-    {
-        // build_maps(strlit("assets/maps"), strlit("run/gamedata/maps"));
-    }
-
-	// copy_assets();
+#endif
 
     // ==========================================================================================================================
 
