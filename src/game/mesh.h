@@ -3,38 +3,38 @@
 
 #include "core/api_types.h"
 
-typedef struct ch_debug_edge_t
+typedef struct hull_debug_edge_t
 {
-	struct ch_debug_edge_t *next;
+	struct hull_debug_edge_t *next;
 	edge_t e;
 	bool processed_this_step;
-} ch_debug_edge_t;
+} hull_debug_edge_t;
 
-typedef struct ch_debug_triangle_t
+typedef struct hull_debug_triangle_t
 {
-	struct ch_debug_triangle_t *next;
+	struct hull_debug_triangle_t *next;
 	triangle_t t;
 	bool added_this_step;
-} ch_debug_triangle_t;
+} hull_debug_triangle_t;
 
-typedef struct ch_debug_t ch_debug_t;
+typedef struct hull_debug_t hull_debug_t;
 
-typedef struct ch_debug_step_t
+typedef struct hull_debug_step_t
 {
-	struct ch_debug_step_t *next;
+	struct hull_debug_step_t *next;
 
-	ch_debug_t          *debug; // goofy back-reference
+	hull_debug_t         *debug; // goofy back-reference
 
 	size_t               edge_count;
-	ch_debug_edge_t     *first_edge;
-	ch_debug_edge_t     * last_edge;
+	hull_debug_edge_t    *first_edge;
+	hull_debug_edge_t    *last_edge;
 
-	size_t               triangle_count;
-	ch_debug_triangle_t *first_triangle;
-	ch_debug_triangle_t * last_triangle;
-} ch_debug_step_t;
+	size_t                triangle_count;
+	hull_debug_triangle_t *first_triangle;
+	hull_debug_triangle_t *last_triangle;
+} hull_debug_step_t;
 
-typedef struct ch_diagnostic_result_t
+typedef struct hull_diagnostic_result_t
 {
 	bool degenerate_hull;
 	int  uncontained_point_count;
@@ -46,9 +46,9 @@ typedef struct ch_diagnostic_result_t
 	bool *triangle_is_degenerate;
 	int  *duplicate_triangle_index;
 	bool *triangle_has_no_area;
-} ch_diagnostic_result_t;
+} hull_diagnostic_result_t;
 
-typedef struct ch_debug_t
+typedef struct hull_debug_t
 {
 	arena_t arena;
 
@@ -56,15 +56,15 @@ typedef struct ch_debug_t
 	v3_t  *initial_points;
 
 	size_t           step_count;
-	ch_debug_step_t *first_step;
-	ch_debug_step_t * last_step;
+	hull_debug_step_t *first_step;
+	hull_debug_step_t *last_step;
 
-	ch_diagnostic_result_t *diagnostics;
-} ch_debug_t;
+	hull_diagnostic_result_t *diagnostics;
+} hull_debug_t;
 
-DREAM_API ch_debug_step_t *ch_add_debug_step(ch_debug_t *debug);
-DREAM_API void ch_add_debug_edge(ch_debug_step_t *step, edge_t e, bool processed_this_step);
-DREAM_API void ch_add_debug_triangle(ch_debug_step_t *step, triangle_t t, bool added_this_step);
+DREAM_API hull_debug_step_t *hull_add_debug_step(hull_debug_t *debug);
+DREAM_API void hull_add_debug_edge(hull_debug_step_t *step, edge_t e, bool processed_this_step);
+DREAM_API void hull_add_debug_triangle(hull_debug_step_t *step, triangle_t t, bool added_this_step);
 
 typedef struct triangle_mesh_t
 {
@@ -78,7 +78,7 @@ typedef struct triangle_mesh_t
 } triangle_mesh_t;
 
 DREAM_API triangle_mesh_t calculate_convex_hull      (arena_t *arena, size_t count, v3_t *points);
-DREAM_API triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *points, ch_debug_t *debug);
-DREAM_API void convex_hull_do_extended_diagnostics   (triangle_mesh_t *mesh, ch_debug_t *debug);
+DREAM_API triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *points, hull_debug_t *debug);
+DREAM_API void convex_hull_do_extended_diagnostics   (triangle_mesh_t *mesh, hull_debug_t *debug);
 
 #endif

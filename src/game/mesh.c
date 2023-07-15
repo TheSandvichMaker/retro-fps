@@ -10,11 +10,11 @@
 // https://www.cs.jhu.edu/~misha/Spring16/09.pdf
 //
 
-ch_debug_step_t *ch_add_debug_step(ch_debug_t *debug)
+hull_debug_step_t *hull_add_debug_step(hull_debug_t *debug)
 {
 	debug->step_count++;
 
-	ch_debug_step_t *result = m_alloc_struct(&debug->arena, ch_debug_step_t);
+	hull_debug_step_t *result = m_alloc_struct(&debug->arena, hull_debug_step_t);
 	sll_push_back(debug->first_step, debug->last_step, result);
 
 	result->debug = debug;
@@ -22,9 +22,9 @@ ch_debug_step_t *ch_add_debug_step(ch_debug_t *debug)
 	return result;
 }
 
-void ch_add_debug_edge(ch_debug_step_t *step, edge_t e, bool processed_this_step)
+void hull_add_debug_edge(hull_debug_step_t *step, edge_t e, bool processed_this_step)
 {
-	ch_debug_edge_t *debug_edge = m_alloc_struct(&step->debug->arena, ch_debug_edge_t);
+	hull_debug_edge_t *debug_edge = m_alloc_struct(&step->debug->arena, hull_debug_edge_t);
 	debug_edge->e = e;
 	debug_edge->processed_this_step = processed_this_step;
 
@@ -32,9 +32,9 @@ void ch_add_debug_edge(ch_debug_step_t *step, edge_t e, bool processed_this_step
 	sll_push_back(step->first_edge, step->last_edge, debug_edge);
 }
 
-void ch_add_debug_triangle(ch_debug_step_t *step, triangle_t t, bool added_this_step)
+void hull_add_debug_triangle(hull_debug_step_t *step, triangle_t t, bool added_this_step)
 {
-	ch_debug_triangle_t *debug_triangle = m_alloc_struct(&step->debug->arena, ch_debug_triangle_t);
+	hull_debug_triangle_t *debug_triangle = m_alloc_struct(&step->debug->arena, hull_debug_triangle_t);
 	debug_triangle->t = t;
 	debug_triangle->added_this_step = added_this_step;
 
@@ -110,7 +110,58 @@ triangle_mesh_t calculate_convex_hull(arena_t *arena, size_t count, v3_t *points
 	return calculate_convex_hull_debug(arena, count, points, NULL);
 }
 
-DREAM_INLINE bool triangle_in_set(stretchy_buffer(triangle_t) H, triangle_t t)
+DREAM_INLINE bool triangles_share_all_points(triangle_t t, triangle_t t2)
+{
+	bool result = false;
+
+	// This is also very goofy. If triangles used indices I'd just sort the indices.
+	stack_t(v3_t, 3) verts = {0};
+	stack_push(verts, t.a);
+	stack_push(verts, t.b);
+	stack_push(verts, t.c);
+
+	bool a_equal = false;
+	for (size_t i = 0; i < stack_count(verts); i++)
+	{
+		if (v3_equal_exact(t2.a, verts.values[i]))
+		{
+			a_equal = true;
+			stack_unordered_remove(verts, i);
+			break;
+		}
+	}
+
+	bool b_equal = false;
+	for (size_t i = 0; i < stack_count(verts); i++)
+	{
+		if (v3_equal_exact(t2.b, verts.values[i]))
+		{
+			b_equal = true;
+			stack_unordered_remove(verts, i);
+			break;
+		}
+	}
+
+	bool c_equal = false;
+	for (size_t i = 0; i < stack_count(verts); i++)
+	{
+		if (v3_equal_exact(t2.c, verts.values[i]))
+		{
+			c_equal = true;
+			stack_unordered_remove(verts, i);
+			break;
+		}
+	}
+
+	if (a_equal && b_equal && c_equal)
+	{
+		result = true;
+	}
+
+	return result;
+}
+
+DREAM_INLINE bool triangle_in_set(const stretchy_buffer(triangle_t) H, triangle_t t)
 {
 	// TODO: Fix this N^2 bull
 
@@ -119,55 +170,17 @@ DREAM_INLINE bool triangle_in_set(stretchy_buffer(triangle_t) H, triangle_t t)
 	for (int64_t triangle_index = (int64_t)sb_count(H) - 1; triangle_index >= 0; triangle_index--)
 	{
 		triangle_t t2 = H[triangle_index];
-
-		stack_t(v3_t, 3) verts = {0};
-		stack_push(verts, t.a);
-		stack_push(verts, t.b);
-		stack_push(verts, t.c);
-
-		bool a_equal = false;
-		for (size_t i = 0; i < stack_count(verts); i++)
-		{
-			if (v3_equal_exact(t2.a, verts.values[i]))
-			{
-				a_equal = true;
-				stack_unordered_remove(verts, i);
-				break;
-			}
-		}
-
-		bool b_equal = false;
-		for (size_t i = 0; i < stack_count(verts); i++)
-		{
-			if (v3_equal_exact(t2.b, verts.values[i]))
-			{
-				b_equal = true;
-				stack_unordered_remove(verts, i);
-				break;
-			}
-		}
-
-		bool c_equal = false;
-		for (size_t i = 0; i < stack_count(verts); i++)
-		{
-			if (v3_equal_exact(t2.c, verts.values[i]))
-			{
-				c_equal = true;
-				stack_unordered_remove(verts, i);
-				break;
-			}
-		}
-
-		if (a_equal && b_equal && c_equal)
+		if (triangles_share_all_points(t, t2))
 		{
 			result = true;
+			break;
 		}
 	}
 
 	return result;
 }
 
-DREAM_INLINE bool edge_in_set(stretchy_buffer(edge_t) Q, edge_t e)
+DREAM_INLINE bool edge_in_set(const stretchy_buffer(edge_t) Q, edge_t e)
 {
 	// TODO: Fix this N^2 bull
 
@@ -188,10 +201,15 @@ DREAM_INLINE bool edge_in_set(stretchy_buffer(edge_t) Q, edge_t e)
 	return result;
 }
 
-triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *points, ch_debug_t *debug)
+triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *points, hull_debug_t *debug)
 {
+	// TODO: Add temp arena pool to avoid conflicts like this
 	ASSERT(arena != temp);
 	ASSERT(count > 3);
+
+	// TODO FIXME: A lot of horrible O(N^2) stuff happening here to check if things are in a set
+	// TODO FIXME: A lot of horrible O(N^2) stuff happening here to check if things are in a set
+	// TODO FIXME: A lot of horrible O(N^2) stuff happening here to check if things are in a set
 
 	if (debug)
 	{
@@ -214,7 +232,7 @@ triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *
 
 		sb_push(Q, find_edge_on_hull(count, points));
 
-		stretchy_buffer(edge_t) processed = NULL; // IDIOCY
+		stretchy_buffer(edge_t) processed = NULL;
 
 		size_t step_index = 0;
 		while (sb_count(Q) > 0)
@@ -229,18 +247,18 @@ triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *
 
 			if (debug)
 			{
-				ch_debug_step_t *step = ch_add_debug_step(debug);
+				hull_debug_step_t *step = hull_add_debug_step(debug);
 
 				for (size_t i = 0; i < sb_count(H); i++)
 				{
-					ch_add_debug_triangle(step, H[i], false);
+					hull_add_debug_triangle(step, H[i], false);
 				}
-				ch_add_debug_triangle(step, t, true);
+				hull_add_debug_triangle(step, t, true);
 
-				ch_add_debug_edge(step, e, true);
+				hull_add_debug_edge(step, e, true);
 				for (size_t i = 0; i < sb_count(Q); i++)
 				{
-					ch_add_debug_edge(step, Q[i], false);
+					hull_add_debug_edge(step, Q[i], false);
 				}
 			}
 
@@ -264,14 +282,14 @@ triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *
 	return result;
 }
 
-DREAM_API void convex_hull_do_extended_diagnostics(triangle_mesh_t *mesh, ch_debug_t *debug)
+DREAM_API void convex_hull_do_extended_diagnostics(triangle_mesh_t *mesh, hull_debug_t *debug)
 {
 	if (NEVER(!mesh))  return;
 	if (NEVER(!debug)) return;
 
 	if (ALWAYS(!debug->diagnostics))
 	{
-		ch_diagnostic_result_t *diagnostics = m_alloc_struct(&debug->arena, ch_diagnostic_result_t);
+		hull_diagnostic_result_t *diagnostics = m_alloc_struct(&debug->arena, hull_diagnostic_result_t);
 		debug->diagnostics = diagnostics;
 
 		bool degenerate_hull           = false;
@@ -348,45 +366,7 @@ DREAM_API void convex_hull_do_extended_diagnostics(triangle_mesh_t *mesh, ch_deb
 
 						triangle_t t2 = mesh->triangles[test_triangle_index];
 
-						stack_t(v3_t, 3) verts = {0};
-						stack_push(verts, t.a);
-						stack_push(verts, t.b);
-						stack_push(verts, t.c);
-
-						bool a_equal = false;
-						for (size_t i = 0; i < stack_count(verts); i++)
-						{
-							if (v3_equal_exact(t2.a, verts.values[i]))
-							{
-								a_equal = true;
-								stack_unordered_remove(verts, i);
-								break;
-							}
-						}
-
-						bool b_equal = false;
-						for (size_t i = 0; i < stack_count(verts); i++)
-						{
-							if (v3_equal_exact(t2.b, verts.values[i]))
-							{
-								b_equal = true;
-								stack_unordered_remove(verts, i);
-								break;
-							}
-						}
-
-						bool c_equal = false;
-						for (size_t i = 0; i < stack_count(verts); i++)
-						{
-							if (v3_equal_exact(t2.c, verts.values[i]))
-							{
-								c_equal = true;
-								stack_unordered_remove(verts, i);
-								break;
-							}
-						}
-
-						if (a_equal && b_equal && c_equal)
+						if (triangles_share_all_points(t, t2))
 						{
 							duplicate_triangle_index[triangle_index]      = (int)test_triangle_index;
 							duplicate_triangle_index[test_triangle_index] = (int)triangle_index;

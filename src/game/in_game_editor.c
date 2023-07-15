@@ -63,7 +63,7 @@ typedef struct lightmap_editor_state_t
     int max_display_recursion;
 } lightmap_editor_state_t;
 
-typedef struct ch_test_panel_t
+typedef struct hull_test_panel_t
 {
 	bool initialized;
 
@@ -73,7 +73,7 @@ typedef struct ch_test_panel_t
 
 	arena_t         mesh_arena;
 	triangle_mesh_t mesh;
-	ch_debug_t      debug;
+	hull_debug_t    debug;
 
 	bool   show_points;
 	bool   show_processed_edge;
@@ -91,7 +91,7 @@ typedef struct ch_test_panel_t
 	int    brute_force_iterations_per_point_count;
 	float  brute_force_triggered_success_timer;
 	float  brute_force_triggered_error_timer;
-} ch_test_panel_t;
+} hull_test_panel_t;
 
 typedef struct editor_state_t
 {
@@ -103,8 +103,8 @@ typedef struct editor_state_t
     bool lightmap_editor_enabled;
     lightmap_editor_state_t lightmap_editor;
 
-	bool ch_test_panel_enabled;
-	ch_test_panel_t ch_test;
+	bool hull_test_panel_enabled;
+	hull_test_panel_t hull_test;
 } editor_state_t;
 
 static editor_state_t g_editor = {
@@ -115,7 +115,7 @@ static editor_state_t g_editor = {
 		.max_display_recursion = 10,
     },
 
-	.ch_test = {
+	.hull_test = {
 		.automatically_recalculate_hull = true,
 		.random_seed              = 1,
 		.point_count              = 12,
@@ -136,10 +136,10 @@ static editor_state_t g_editor = {
 
 static void generate_new_random_convex_hull(size_t point_count, random_series_t *r)
 {
-	ch_test_panel_t *ch_test = &g_editor.ch_test;
+	hull_test_panel_t *hull_test = &g_editor.hull_test;
 
-	triangle_mesh_t *mesh  = &ch_test->mesh;
-	ch_debug_t      *debug = &ch_test->debug;
+	triangle_mesh_t *mesh  = &hull_test->mesh;
+	hull_debug_t    *debug = &hull_test->debug;
 
 	m_scoped(temp)
 	{
@@ -152,28 +152,28 @@ static void generate_new_random_convex_hull(size_t point_count, random_series_t 
 
 		bool at_final_step = false;
 		if (debug->step_count > 0 &&
-			ch_test->current_step_index >= (int)debug->step_count)
+			hull_test->current_step_index >= (int)debug->step_count)
 		{
 			at_final_step = true;
 		}
 
-		m_reset(&ch_test->mesh_arena);
+		m_reset(&hull_test->mesh_arena);
 
-		*mesh = calculate_convex_hull_debug(&ch_test->mesh_arena, point_count, random_points, debug);
+		*mesh = calculate_convex_hull_debug(&hull_test->mesh_arena, point_count, random_points, debug);
 		convex_hull_do_extended_diagnostics(mesh, debug);
 
 		if (at_final_step)
 		{
-			ch_test->current_step_index = (int)debug->step_count;
+			hull_test->current_step_index = (int)debug->step_count;
 		}
 	}
 }
 
-static void ch_render_debug_triangles(ch_debug_step_t *step, bool final_step, bool render_degenerate, bool render_wireframe)
+static void hull_render_debug_triangles(hull_debug_step_t *step, bool final_step, bool render_degenerate, bool render_wireframe)
 {
-	ch_test_panel_t        *ch_test = &g_editor.ch_test;
-	ch_debug_t             *debug   = &ch_test->debug;
-	ch_diagnostic_result_t *diag    = debug->diagnostics;
+	hull_test_panel_t        *hull_test = &g_editor.hull_test;
+	hull_debug_t             *debug   = &hull_test->debug;
+	hull_diagnostic_result_t *diag    = debug->diagnostics;
 
 	m_scoped(temp)
 	{
@@ -183,14 +183,14 @@ static void ch_render_debug_triangles(ch_debug_step_t *step, bool final_step, bo
 		v4_t new_triangle_color = render_degenerate ? make_v4(1.0f, 0.65f, 0.0f, alpha) : make_v4(1.0f, 1.0f, 0.5f, alpha);
 
 		int triangle_index = 0;
-		for (ch_debug_triangle_t *triangle = step->first_triangle;
+		for (hull_debug_triangle_t *triangle = step->first_triangle;
 			 triangle;
 			 triangle = triangle->next, triangle_index++)
 		{
 			bool show = false;
 
-			if (ch_test->show_triangles)                                 show = true;
-			if (ch_test->show_new_triangle && triangle->added_this_step) show = true;
+			if (hull_test->show_triangles)                                 show = true;
+			if (hull_test->show_new_triangle && triangle->added_this_step) show = true;
 			if (!show) continue;
 
 			if (diag->triangle_is_degenerate[triangle_index] != render_degenerate) 
@@ -202,10 +202,10 @@ static void ch_render_debug_triangles(ch_debug_step_t *step, bool final_step, bo
 
 			v4_t color = base_color;
 
-			if (!final_step && ch_test->show_new_triangle && triangle->added_this_step)
+			if (!final_step && hull_test->show_new_triangle && triangle->added_this_step)
 				color = new_triangle_color;
 
-			if (ch_test->show_duplicate_triangles &&
+			if (hull_test->show_duplicate_triangles &&
 				diag->duplicate_triangle_index[triangle_index] != -1 
 				&& diag->duplicate_triangle_index[triangle_index] < triangle_index)
 			{
@@ -234,13 +234,13 @@ static void ch_render_debug_triangles(ch_debug_step_t *step, bool final_step, bo
 
 static void update_and_render_convex_hull_test_panel(void)
 {
-	if (!g_editor.ch_test_panel_enabled)
+	if (!g_editor.hull_test_panel_enabled)
 		return;
 
-	ch_test_panel_t *ch_test = &g_editor.ch_test;
+	hull_test_panel_t *hull_test = &g_editor.hull_test;
 
-	triangle_mesh_t *mesh  = &ch_test->mesh;
-	ch_debug_t      *debug = &ch_test->debug;
+	triangle_mesh_t *mesh  = &hull_test->mesh;
+	hull_debug_t    *debug = &hull_test->debug;
 
 	bool degenerate_hull = false;
 
@@ -256,7 +256,7 @@ static void update_and_render_convex_hull_test_panel(void)
 
 	if (debug->diagnostics)
 	{
-		ch_diagnostic_result_t *diagnostics = debug->diagnostics;
+		hull_diagnostic_result_t *diagnostics = debug->diagnostics;
 
 		degenerate_hull           = diagnostics->degenerate_hull;
 		uncontained_point_count   = diagnostics->uncontained_point_count;
@@ -271,7 +271,7 @@ static void update_and_render_convex_hull_test_panel(void)
 
 	if (debug->step_count > 0)
 	{
-		if (ch_test->show_points)
+		if (hull_test->show_points)
 		{
 			r_immediate_topology(R_TOPOLOGY_LINELIST);
 			r_immediate_use_depth(false);
@@ -280,7 +280,7 @@ static void update_and_render_convex_hull_test_panel(void)
 			{
 				v3_t p = debug->initial_points[i];
 
-				v4_t color = ((int)i == ch_test->test_tetrahedron_index ? COLORF_ORANGE : COLORF_RED);
+				v4_t color = ((int)i == hull_test->test_tetrahedron_index ? COLORF_ORANGE : COLORF_RED);
 
 				if (point_fully_contained[i])
 				{
@@ -301,16 +301,16 @@ static void update_and_render_convex_hull_test_panel(void)
 		r_immediate_cull_mode(R_CULL_BACK);
 
 		int step_index = 0;
-		for (ch_debug_step_t *step = ch_test->debug.first_step;
+		for (hull_debug_step_t *step = hull_test->debug.first_step;
 			 step;
 			 step = step->next)
 		{
-			if (step_index == MIN(ch_test->current_step_index, (int)debug->step_count - 1))
+			if (step_index == MIN(hull_test->current_step_index, (int)debug->step_count - 1))
 			{
-				bool final_step = (ch_test->current_step_index == (int)debug->step_count);
+				bool final_step = (hull_test->current_step_index == (int)debug->step_count);
 
-				ch_render_debug_triangles(step, final_step, false, false);
-				ch_render_debug_triangles(step, final_step, true, false);
+				hull_render_debug_triangles(step, final_step, false, false);
+				hull_render_debug_triangles(step, final_step, true, false);
 			}
 
 			step_index++;
@@ -325,30 +325,30 @@ static void update_and_render_convex_hull_test_panel(void)
 		r_immediate_use_depth(true);
 
 		step_index = 0;
-		for (ch_debug_step_t *step = ch_test->debug.first_step;
+		for (hull_debug_step_t *step = hull_test->debug.first_step;
 			 step;
 			 step = step->next)
 		{
-			if (step_index == MIN(ch_test->current_step_index, (int)debug->step_count - 1))
+			if (step_index == MIN(hull_test->current_step_index, (int)debug->step_count - 1))
 			{
-				bool final_step = (ch_test->current_step_index == (int)debug->step_count);
+				bool final_step = (hull_test->current_step_index == (int)debug->step_count);
 
-				if (ch_test->show_wireframe)
+				if (hull_test->show_wireframe)
 				{
-					ch_render_debug_triangles(step, final_step, false, true);
-					ch_render_debug_triangles(step, final_step, true, true);
+					hull_render_debug_triangles(step, final_step, false, true);
+					hull_render_debug_triangles(step, final_step, true, true);
 				}
 
 				if (!final_step)
 				{
-					for (ch_debug_edge_t *edge = step->first_edge;
+					for (hull_debug_edge_t *edge = step->first_edge;
 						 edge;
 						 edge = edge->next)
 					{
 						bool show = false;
 
-						if (ch_test->show_processed_edge      &&  edge->processed_this_step) show = true;
-						if (ch_test->show_non_processed_edges && !edge->processed_this_step) show = true;
+						if (hull_test->show_processed_edge      &&  edge->processed_this_step) show = true;
+						if (hull_test->show_non_processed_edges && !edge->processed_this_step) show = true;
 						if (!show) continue;
 
 						v3_t a = edge->e.a;
@@ -365,84 +365,84 @@ static void update_and_render_convex_hull_test_panel(void)
 		r_immediate_flush();
 	}
 
-	UI_WINDOW(S("Convex Hull Debug"), rect2_from_min_dim(make_v2(64.0f, 64.0f), make_v2(512.0f, 512.0f)), &g_editor.ch_test_panel_enabled)
+	UI_WINDOW(S("Convex Hull Debug"), rect2_from_min_dim(make_v2(64.0f, 64.0f), make_v2(512.0f, 512.0f)), &g_editor.hull_test_panel_enabled)
 	{
 		bool changed = false;
-		changed |= ui_slider_int(S("Random Seed"), &ch_test->random_seed, 1, 128);
-		changed |= ui_slider_int(S("Point Count"), &ch_test->point_count, 8, 256);
+		changed |= ui_slider_int(S("Random Seed"), &hull_test->random_seed, 1, 128);
+		changed |= ui_slider_int(S("Point Count"), &hull_test->point_count, 8, 256);
 
-		ui_checkbox(S("Automatically Recalculate Hull"), &ch_test->automatically_recalculate_hull);
+		ui_checkbox(S("Automatically Recalculate Hull"), &hull_test->automatically_recalculate_hull);
 
 		bool should_recalculate = ui_button(S("Calculate Random Convex Hull"));
-		if (ch_test->automatically_recalculate_hull && changed)               should_recalculate = true;
-		if (ch_test->automatically_recalculate_hull && !ch_test->initialized) should_recalculate = true;
+		if (hull_test->automatically_recalculate_hull && changed)               should_recalculate = true;
+		if (hull_test->automatically_recalculate_hull && !hull_test->initialized) should_recalculate = true;
 
 		if (should_recalculate)
 		{
-			random_series_t r = { (uint32_t)ch_test->random_seed };
-			generate_new_random_convex_hull((size_t)ch_test->point_count, &r);
+			random_series_t r = { (uint32_t)hull_test->random_seed };
+			generate_new_random_convex_hull((size_t)hull_test->point_count, &r);
 		}
 
 		if (mesh->triangle_count > 0)
 		{
 			if (ui_button(S("Delete Convex Hull Data")))
 			{
-				m_release(&ch_test->mesh_arena);
-				m_release(&ch_test->debug.arena);
+				m_release(&hull_test->mesh_arena);
+				m_release(&hull_test->debug.arena);
 				zero_struct(mesh);
 				zero_struct(debug);
 			}
 		}
 
 		ui_label(S("Brute Force Tester"));
-		ui_slider_int(S("Min Points"), &ch_test->brute_force_min_point_count, 4, 256);
-		ui_slider_int(S("Max Points"), &ch_test->brute_force_max_point_count, 4, 256);
-		ui_slider_int(S("Iterations Per Count"), &ch_test->brute_force_iterations_per_point_count, 1, 4096);
+		ui_slider_int(S("Min Points"), &hull_test->brute_force_min_point_count, 4, 256);
+		ui_slider_int(S("Max Points"), &hull_test->brute_force_max_point_count, 4, 256);
+		ui_slider_int(S("Iterations Per Count"), &hull_test->brute_force_iterations_per_point_count, 1, 4096);
 
 		if (ui_button(S("Run Brute Force Test")))
 		{
-			random_series_t r = { (uint32_t)ch_test->random_seed };
+			random_series_t r = { (uint32_t)hull_test->random_seed };
 
-			ch_test->brute_force_triggered_success_timer = 0.0f;
-			ch_test->brute_force_triggered_error_timer   = 0.0f;
+			hull_test->brute_force_triggered_success_timer = 0.0f;
+			hull_test->brute_force_triggered_error_timer   = 0.0f;
 
-			for (int point_count = ch_test->brute_force_min_point_count;
-				 point_count <= ch_test->brute_force_max_point_count;
+			for (int point_count = hull_test->brute_force_min_point_count;
+				 point_count <= hull_test->brute_force_max_point_count;
 				 point_count++)
 			{
 				generate_new_random_convex_hull((size_t)point_count, &r);
 
 				if (ALWAYS(debug->diagnostics))
 				{
-					ch_diagnostic_result_t *diagnostics = debug->diagnostics;
+					hull_diagnostic_result_t *diagnostics = debug->diagnostics;
 					if (diagnostics->degenerate_hull)
 					{
-						ch_test->brute_force_triggered_error_timer = 10.0f;
+						hull_test->brute_force_triggered_error_timer = 10.0f;
 						break;
 					}
 				}
 			}
 
-			if (ch_test->brute_force_triggered_error_timer <= 0.0f)
+			if (hull_test->brute_force_triggered_error_timer <= 0.0f)
 			{
-				ch_test->brute_force_triggered_success_timer = 5.0f;
+				hull_test->brute_force_triggered_success_timer = 5.0f;
 			}
 		}
 
-		if (ch_test->brute_force_triggered_success_timer > 0.0f)
+		if (hull_test->brute_force_triggered_success_timer > 0.0f)
 		{
 			UI_COLOR(UI_COLOR_TEXT, make_v4(0.5f, 1.0f, 0.2f, 1.0f))
 			ui_label(S("Brute force test passed."));
 
-			ch_test->brute_force_triggered_success_timer -= ui.dt;
+			hull_test->brute_force_triggered_success_timer -= ui.dt;
 		}
 
-		if (ch_test->brute_force_triggered_error_timer > 0.0f)
+		if (hull_test->brute_force_triggered_error_timer > 0.0f)
 		{
 			UI_COLOR(UI_COLOR_TEXT, COLORF_RED)
 			ui_label(S("BRUTE FORCE TEST FOUND A DEGENERATE HULL!?!?!"));
 
-			ch_test->brute_force_triggered_error_timer -= ui.dt;
+			hull_test->brute_force_triggered_error_timer -= ui.dt;
 		}
 
 		if (degenerate_hull)
@@ -476,25 +476,25 @@ static void update_and_render_convex_hull_test_panel(void)
 
 		if (debug->step_count > 0)
 		{
-			ui_checkbox(S("Show initial points"), &ch_test->show_points);
-			ui_checkbox(S("Show processed edge"), &ch_test->show_processed_edge);
-			ui_checkbox(S("Show non-processed edges"), &ch_test->show_non_processed_edges);
-			ui_checkbox(S("Show new triangle"), &ch_test->show_new_triangle);
-			ui_checkbox(S("Show all triangles"), &ch_test->show_triangles);
-			ui_checkbox(S("Show duplicate triangles"), &ch_test->show_duplicate_triangles);
-			ui_checkbox(S("Show wireframe"), &ch_test->show_wireframe);
-			ui_slider_int(S("Step"), &ch_test->current_step_index, 0, (int)(ch_test->debug.step_count));
+			ui_checkbox(S("Show initial points"), &hull_test->show_points);
+			ui_checkbox(S("Show processed edge"), &hull_test->show_processed_edge);
+			ui_checkbox(S("Show non-processed edges"), &hull_test->show_non_processed_edges);
+			ui_checkbox(S("Show new triangle"), &hull_test->show_new_triangle);
+			ui_checkbox(S("Show all triangles"), &hull_test->show_triangles);
+			ui_checkbox(S("Show duplicate triangles"), &hull_test->show_duplicate_triangles);
+			ui_checkbox(S("Show wireframe"), &hull_test->show_wireframe);
+			ui_slider_int(S("Step"), &hull_test->current_step_index, 0, (int)(hull_test->debug.step_count));
 
-			if (ch_test->current_step_index > (int)ch_test->debug.step_count)
-			    ch_test->current_step_index = (int)ch_test->debug.step_count;
+			if (hull_test->current_step_index > (int)hull_test->debug.step_count)
+			    hull_test->current_step_index = (int)hull_test->debug.step_count;
 
 			int step_index = 0;
-			ch_debug_step_t *step = debug->first_step;
+			hull_debug_step_t *step = debug->first_step;
 			for (;
 				 step;
 				 step = step->next)
 			{
-				if (step_index == MIN(ch_test->current_step_index, (int)debug->step_count - 1))
+				if (step_index == MIN(hull_test->current_step_index, (int)debug->step_count - 1))
 				{
 					break;
 				}
@@ -506,17 +506,17 @@ static void update_and_render_convex_hull_test_panel(void)
 				ui_label(Sf("edge count: %zu", step->edge_count));
 				ui_label(Sf("triangle count: %zu", step->triangle_count));
 
-				ui_slider_int(S("Test Tetrahedron Index"), &ch_test->test_tetrahedron_index, -1, (int)(debug->initial_points_count) - 1);
+				ui_slider_int(S("Test Tetrahedron Index"), &hull_test->test_tetrahedron_index, -1, (int)(debug->initial_points_count) - 1);
 
-				if (ch_test->test_tetrahedron_index > (int)debug->initial_points_count - 1)
-				    ch_test->test_tetrahedron_index = (int)debug->initial_points_count - 1;
+				if (hull_test->test_tetrahedron_index > (int)debug->initial_points_count - 1)
+				    hull_test->test_tetrahedron_index = (int)debug->initial_points_count - 1;
 
-				if (ch_test->test_tetrahedron_index >= 0)
+				if (hull_test->test_tetrahedron_index >= 0)
 				{
 					triangle_t t = step->first_triangle->t;
 					ASSERT(step->first_triangle->added_this_step);
 
-					v3_t p = debug->initial_points[ch_test->test_tetrahedron_index];
+					v3_t p = debug->initial_points[hull_test->test_tetrahedron_index];
 
 					float volume = tetrahedron_signed_volume(t.a, t.b, t.c, p);
 					ui_label(Sf("Tetrahedron Volume: %f", volume));
@@ -528,7 +528,7 @@ static void update_and_render_convex_hull_test_panel(void)
 		}
 	}
 
-	ch_test->initialized = true;
+	hull_test->initialized = true;
 }
 
 static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
@@ -1110,7 +1110,7 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
                 },
                 {
                     .name = S("Convex Hull Tester (F3)"),
-                    .toggle = &g_editor.ch_test_panel_enabled,
+                    .toggle = &g_editor.hull_test_panel_enabled,
                 },
             };
 
@@ -1154,7 +1154,7 @@ void update_and_render_in_game_editor(game_io_t *io, world_t *world)
         g_editor.lightmap_editor_enabled = !g_editor.lightmap_editor_enabled;
 
     if (ui_button_pressed(BUTTON_F3))
-        g_editor.ch_test_panel_enabled = !g_editor.ch_test_panel_enabled;
+        g_editor.hull_test_panel_enabled = !g_editor.hull_test_panel_enabled;
 
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);
