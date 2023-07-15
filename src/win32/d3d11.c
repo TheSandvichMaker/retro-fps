@@ -35,6 +35,7 @@ int init_d3d11(void *hwnd_)
 
     HRESULT hr = S_OK;
 
+	ID3D11Device *device;
     {
         UINT flags = 0;
 #if defined(DEBUG_RENDERER)
@@ -57,12 +58,12 @@ int init_d3d11(void *hwnd_)
         for (size_t i = 0; i < ARRAY_COUNT(driver_types); i++)
         {
             D3D_DRIVER_TYPE driver = driver_types[i];
-            hr = D3D11CreateDevice(NULL, driver, NULL, flags, levels, ARRAY_COUNT(levels), D3D11_SDK_VERSION, &d3d.device, &picked_level, &d3d.context);
+            hr = D3D11CreateDevice(NULL, driver, NULL, flags, levels, ARRAY_COUNT(levels), D3D11_SDK_VERSION, &device, &picked_level, &d3d.context);
 
             if (hr == E_INVALIDARG)
             {
                 // DirectX 11.0 platforms will not recognize D3D_FEATURE_LEVEL_11_1 so we need to retry without it.
-                hr = D3D11CreateDevice(NULL, driver, NULL, flags, levels + 1, ARRAY_COUNT(levels) - 1, D3D11_SDK_VERSION, &d3d.device, &picked_level, &d3d.context);
+                hr = D3D11CreateDevice(NULL, driver, NULL, flags, levels + 1, ARRAY_COUNT(levels) - 1, D3D11_SDK_VERSION, &device, &picked_level, &d3d.context);
             }
 
             if (SUCCEEDED(hr))
@@ -72,8 +73,19 @@ int init_d3d11(void *hwnd_)
         }
     }
 
-    if (!d3d.device)   return -1;
+    if (!device)   return -1;
     if (!d3d.context)  return -1;
+
+	ID3D11Device1 *device1;
+	if (SUCCEEDED(ID3D11Device_QueryInterface(device, &IID_ID3D11Device1, &device1)))
+	{
+		D3D_SAFE_RELEASE(device);
+		d3d.device = device1;
+	}
+	else
+	{
+		FATAL_ERROR("Failed to query D3D11Device1 interface");
+	}
 
 #if defined(DEBUG_RENDERER)
     {
@@ -368,37 +380,40 @@ int init_d3d11(void *hwnd_)
     // create rasterizer state
 
     {
-        D3D11_RASTERIZER_DESC desc = {
+        D3D11_RASTERIZER_DESC1 desc = {
+			.FrontCounterClockwise = true,
             .FillMode              = D3D11_FILL_SOLID,
             .CullMode              = D3D11_CULL_BACK,
             .ScissorEnable         = TRUE,
             .AntialiasedLineEnable = TRUE,
         };
-        ID3D11Device_CreateRasterizerState(d3d.device, &desc, &d3d.rs);
+        ID3D11Device1_CreateRasterizerState1(d3d.device, &desc, &d3d.rs);
     }
 
     // cull front rasterizer
 
     {
-        D3D11_RASTERIZER_DESC desc = {
+        D3D11_RASTERIZER_DESC1 desc = {
+			.FrontCounterClockwise = true,
             .FillMode              = D3D11_FILL_SOLID,
             .CullMode              = D3D11_CULL_FRONT,
             .ScissorEnable         = TRUE,
             .AntialiasedLineEnable = TRUE,
         };
-        ID3D11Device_CreateRasterizerState(d3d.device, &desc, &d3d.rs_cull_front);
+        ID3D11Device1_CreateRasterizerState1(d3d.device, &desc, &d3d.rs_cull_front);
     }
 
     // create no-cull rasterizer state
 
     {
-        D3D11_RASTERIZER_DESC desc = {
+        D3D11_RASTERIZER_DESC1 desc = {
+			.FrontCounterClockwise = true,
             .FillMode              = D3D11_FILL_SOLID,
             .CullMode              = D3D11_CULL_NONE,
             .ScissorEnable         = TRUE,
             .AntialiasedLineEnable = TRUE,
         };
-        ID3D11Device_CreateRasterizerState(d3d.device, &desc, &d3d.rs_no_cull);
+        ID3D11Device1_CreateRasterizerState1(d3d.device, &desc, &d3d.rs_no_cull);
     }
 
     // create depth & stencil
@@ -409,7 +424,7 @@ int init_d3d11(void *hwnd_)
             .DepthWriteMask   = D3D11_DEPTH_WRITE_MASK_ALL,
             .DepthFunc        = D3D11_COMPARISON_GREATER,
         };
-        ID3D11Device_CreateDepthStencilState(d3d.device, &desc, &d3d.dss);
+        ID3D11Device1_CreateDepthStencilState(d3d.device, &desc, &d3d.dss);
     }
 
     // create no-depth test depth & stencil
@@ -644,15 +659,15 @@ void render_model(const render_pass_t *pass)
     // set rasterizer state
     ID3D11DeviceContext_RSSetViewports(d3d.context, 1, &pass->viewport);
 
-    ID3D11RasterizerState *rs = d3d.rs_no_cull;
+    ID3D11RasterizerState1 *rs = d3d.rs_no_cull;
 
     switch (pass->cull)
     {
-        case D3D_CULL_BACK:  rs = d3d.rs; break;
-        case D3D_CULL_FRONT: rs = d3d.rs_cull_front; break;
+        case R_CULL_BACK:  rs = d3d.rs; break;
+        case R_CULL_FRONT: rs = d3d.rs_cull_front; break;
     }
 
-    ID3D11DeviceContext_RSSetState(d3d.context, rs);
+    ID3D11DeviceContext_RSSetState(d3d.context, (ID3D11RasterizerState *)rs);
 
 	D3D11_RECT scissor_rect = pass->scissor_rect;
 	if (scissor_rect.bottom < scissor_rect.top) scissor_rect.bottom = scissor_rect.top;
@@ -725,7 +740,7 @@ void d3d_do_post_pass(const d3d_post_pass_t *pass)
 
     // set rasterizer state
     ID3D11DeviceContext_RSSetViewports(d3d.context, 1, &pass->viewport);
-    ID3D11DeviceContext_RSSetState(d3d.context, d3d.rs_no_cull);
+    ID3D11DeviceContext_RSSetState(d3d.context, (ID3D11RasterizerState *)d3d.rs_no_cull);
     ID3D11DeviceContext_RSSetScissorRects(d3d.context, 1, (&(D3D11_RECT){ 0, 0, d3d.current_width, d3d.current_height }));
 
     // set pixel shader
@@ -959,7 +974,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                             .cbuffers      = (ID3D11Buffer *[]) { d3d.ubuffer },
 
                             .depth         = D3D_DEPTH_TEST_GREATER,
-                            .cull          = D3D_CULL_BACK,
+                            .cull          = R_CULL_BACK,
                             .viewport      = sun_viewport,
                             .scissor       = true,
                             .scissor_rect  = (D3D11_RECT){ 0, 0, SUN_SHADOWMAP_RESOLUTION, SUN_SHADOWMAP_RESOLUTION },
@@ -1059,7 +1074,7 @@ done_with_sun_shadows:
                 .srvs          = (ID3D11ShaderResourceView *[]) { texture->srv, },
 
                 .depth         = D3D_DEPTH_TEST_NONE,
-                .cull          = D3D_CULL_NONE,
+                .cull          = R_CULL_NONE,
                 .sample_linear = true,
                 .viewport      = viewport,
             });
@@ -1133,7 +1148,7 @@ done_with_sun_shadows:
                             .srvs          = (ID3D11ShaderResourceView *[]) { texture->srv, lightmap->srv, d3d.sun_shadowmap.depth_srv, },
 
                             .depth         = D3D_DEPTH_TEST_GREATER,
-                            .cull          = D3D_CULL_BACK,
+                            .cull          = R_CULL_BACK,
                             .sample_linear = false,
                             .viewport      = viewport,
                         });
@@ -1166,10 +1181,11 @@ done_with_sun_shadows:
                     D3D11_PRIMITIVE_TOPOLOGY topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
                     switch (draw_call->params.topology)
                     {
-                        case R_PRIMITIVE_TOPOLOGY_TRIANGELIST: topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST; break;
-                        case R_PRIMITIVE_TOPOLOGY_LINELIST:    topology = D3D11_PRIMITIVE_TOPOLOGY_LINELIST; break;
-                        case R_PRIMITIVE_TOPOLOGY_LINESTRIP:   topology = D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP; break;
-                        case R_PRIMITIVE_TOPOLOGY_POINTLIST:   topology = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST; break;
+                        case R_TOPOLOGY_TRIANGLELIST:  topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST; break;
+                        case R_TOPOLOGY_TRIANGLESTRIP: topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP; break;
+                        case R_TOPOLOGY_LINELIST:      topology = D3D11_PRIMITIVE_TOPOLOGY_LINELIST; break;
+                        case R_TOPOLOGY_LINESTRIP:     topology = D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP; break;
+                        case R_TOPOLOGY_POINTLIST:     topology = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST; break;
                         INVALID_DEFAULT_CASE;
                     }
 
@@ -1208,7 +1224,7 @@ done_with_sun_shadows:
                         .srvs          = (ID3D11ShaderResourceView *[]) { texture->srv },
 
                         .depth    = draw_call->params.depth_test ? D3D_DEPTH_TEST_GREATER : D3D_DEPTH_TEST_NONE,
-                        .cull     = D3D_CULL_NONE,
+                        .cull     = draw_call->params.cull_mode,
                         .viewport = viewport,
                         .scissor  = true,
                         .scissor_rect = {
@@ -1648,11 +1664,11 @@ resource_handle_t upload_model(const upload_model_t *params)
         {
             switch (params->topology)
             {
-                case R_PRIMITIVE_TOPOLOGY_TRIANGELIST:  resource->primitive_topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;  break;
-                case R_PRIMITIVE_TOPOLOGY_TRIANGESTRIP: resource->primitive_topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP; break;
-                case R_PRIMITIVE_TOPOLOGY_LINELIST:     resource->primitive_topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST;      break;
-                case R_PRIMITIVE_TOPOLOGY_LINESTRIP:    resource->primitive_topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;     break;
-                case R_PRIMITIVE_TOPOLOGY_POINTLIST:    resource->primitive_topology = D3D_PRIMITIVE_TOPOLOGY_POINTLIST;     break;
+                case R_TOPOLOGY_TRIANGLELIST:  resource->primitive_topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;  break;
+                case R_TOPOLOGY_TRIANGLESTRIP: resource->primitive_topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP; break;
+                case R_TOPOLOGY_LINELIST:      resource->primitive_topology = D3D11_PRIMITIVE_TOPOLOGY_LINELIST;      break;
+                case R_TOPOLOGY_LINESTRIP:     resource->primitive_topology = D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP;     break;
+                case R_TOPOLOGY_POINTLIST:     resource->primitive_topology = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST;     break;
                 INVALID_DEFAULT_CASE;
             }
 

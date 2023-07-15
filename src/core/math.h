@@ -1392,6 +1392,15 @@ DREAM_INLINE float triangle_area_sq(v3_t a, v3_t b, v3_t c)
 	return area;
 }
 
+DREAM_INLINE v3_t triangle_normal(v3_t a, v3_t b, v3_t c)
+{
+	v3_t ab = normalize(sub(b, a));
+	v3_t ac = normalize(sub(c, a));
+
+	v3_t normal = normalize(cross(ab, ac));
+	return normal;
+}
+
 DREAM_INLINE float tetrahedron_signed_volume(v3_t a, v3_t b, v3_t c, v3_t d)
 {
 	v3_t ad = sub(d, a);

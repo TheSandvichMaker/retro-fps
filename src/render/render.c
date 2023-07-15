@@ -36,8 +36,9 @@ void r_set_command_list(r_list_t *new_list)
 DREAM_INLINE void initialize_immediate_draw(r_immediate_draw_t *draw)
 {
 	draw->params.shader     = R_SHADER_FLAT;
-	draw->params.topology   = R_PRIMITIVE_TOPOLOGY_TRIANGELIST;
+	draw->params.topology   = R_TOPOLOGY_TRIANGLELIST;
 	draw->params.blend_mode = R_BLEND_PREMUL_ALPHA;
+	draw->params.cull_mode  = R_CULL_NONE;
 	draw->params.clip_rect  = (rect2_t){ 0, 0, 0, 0 };
 	draw->params.texture    = NULL_RESOURCE_HANDLE;
 	draw->params.depth_test = false;
@@ -335,7 +336,7 @@ void r_immediate_shader(r_immediate_shader_t shader)
 	draw->params.shader = shader;
 }
 
-void r_immediate_topology(r_primitive_topology_t topology)
+void r_immediate_topology(r_topology_t topology)
 {
 	r_immediate_flush_pending();
 
@@ -351,7 +352,15 @@ void r_immediate_blend_mode(r_blend_mode_t blend_mode)
 	draw->params.blend_mode = blend_mode;
 }
 
-void r_immediate_clip_rect (rect2_t clip_rect)
+void r_immediate_cull_mode(r_cull_mode_t cull_mode)
+{
+	r_immediate_flush_pending();
+
+	r_immediate_draw_t *draw = &g_list->curr_immediate;
+	draw->params.cull_mode = cull_mode;
+}
+
+void r_immediate_clip_rect(rect2_t clip_rect)
 {
 	r_immediate_flush_pending();
 

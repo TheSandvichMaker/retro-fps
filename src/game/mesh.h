@@ -44,7 +44,7 @@ typedef struct ch_diagnostic_result_t
 
 	bool *point_fully_contained;
 	bool *triangle_is_degenerate;
-	bool *triangle_is_duplicate;
+	int  *duplicate_triangle_index;
 	bool *triangle_has_no_area;
 } ch_diagnostic_result_t;
 

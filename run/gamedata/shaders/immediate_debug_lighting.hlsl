@@ -56,8 +56,11 @@ float4 ps(PS_INPUT IN) : SV_TARGET
 						view_matrix[1][3]*camera_y +
 						view_matrix[2][3]*camera_z);
 
-	float lighting = saturate(dot(normalize(camera_p - IN.pos_world), normalize(IN.normal_world)));
+	float3 light_d = normalize(camera_p - IN.pos_world);
+	float lighting = saturate(dot(light_d, normalize(IN.normal_world)));
 
-    float4 result = IN.col*tex*lighting;
+    float4 result = IN.col*tex;
+	result.rgb   *= lighting;
+
     return result;
 }

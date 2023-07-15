@@ -174,7 +174,7 @@ static void diag_draw_children(diag_node_t *parent, const bitmap_font_t *font)
 
 void diag_draw_all(const bitmap_font_t *font)
 {
-    r_immediate_topology(R_PRIMITIVE_TOPOLOGY_LINELIST);
+    r_immediate_topology(R_TOPOLOGY_LINELIST);
     r_immediate_depth_test(true);
     for (hash_iter_t it = hash_iter(&g_diag_state.hash); hash_iter_next(&it);)
     {

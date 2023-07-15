@@ -80,6 +80,8 @@ typedef struct ch_test_panel_t
 	bool   show_non_processed_edges;
 	bool   show_new_triangle;
 	bool   show_triangles;
+	bool   show_duplicate_triangles;
+	bool   show_wireframe;
 	int    current_step_index;
 	int    test_tetrahedron_index;
 
@@ -115,14 +117,16 @@ static editor_state_t g_editor = {
 
 	.ch_test = {
 		.automatically_recalculate_hull = true,
-		.random_seed            = 1,
-		.point_count            = 12,
-		.show_points            = true,
-		.show_new_triangle      = true,
-		.show_triangles         = true,
-		.show_processed_edge    = true,
-		.test_tetrahedron_index = -1,
-		.current_step_index     = 9999,
+		.random_seed              = 1,
+		.point_count              = 12,
+		.show_points              = true,
+		.show_processed_edge      = true,
+		.show_new_triangle        = true,
+		.show_triangles           = true,
+		.show_duplicate_triangles = true,
+		.show_wireframe           = true,
+		.test_tetrahedron_index   = -1,
+		.current_step_index       = 9999,
 
 		.brute_force_min_point_count            = 4,
 		.brute_force_max_point_count            = 256,
@@ -165,6 +169,69 @@ static void generate_new_random_convex_hull(size_t point_count, random_series_t 
 	}
 }
 
+static void ch_render_debug_triangles(ch_debug_step_t *step, bool final_step, bool render_degenerate, bool render_wireframe)
+{
+	ch_test_panel_t        *ch_test = &g_editor.ch_test;
+	ch_debug_t             *debug   = &ch_test->debug;
+	ch_diagnostic_result_t *diag    = debug->diagnostics;
+
+	m_scoped(temp)
+	{
+		float alpha = 0.6f;
+
+		v4_t base_color         = render_degenerate ? make_v4(1.0f, 0.25f, 0.0f, alpha) : make_v4(0.7f, 0.9f, 0.5f, alpha);
+		v4_t new_triangle_color = render_degenerate ? make_v4(1.0f, 0.65f, 0.0f, alpha) : make_v4(1.0f, 1.0f, 0.5f, alpha);
+
+		int triangle_index = 0;
+		for (ch_debug_triangle_t *triangle = step->first_triangle;
+			 triangle;
+			 triangle = triangle->next, triangle_index++)
+		{
+			bool show = false;
+
+			if (ch_test->show_triangles)                                 show = true;
+			if (ch_test->show_new_triangle && triangle->added_this_step) show = true;
+			if (!show) continue;
+
+			if (diag->triangle_is_degenerate[triangle_index] != render_degenerate) 
+				continue;
+
+			v3_t a = triangle->t.a;
+			v3_t b = triangle->t.b;
+			v3_t c = triangle->t.c;
+
+			v4_t color = base_color;
+
+			if (!final_step && ch_test->show_new_triangle && triangle->added_this_step)
+				color = new_triangle_color;
+
+			if (ch_test->show_duplicate_triangles &&
+				diag->duplicate_triangle_index[triangle_index] != -1 
+				&& diag->duplicate_triangle_index[triangle_index] < triangle_index)
+			{
+				v3_t normal = triangle_normal(a, b, c);
+				v3_t displacement = mul(normal, 4.0f);
+				a = add(a, displacement);
+				b = add(b, displacement);
+				c = add(c, displacement);
+				color = v4_lerps(color, make_v4(1.0f, 0.5f, 0.0f, render_wireframe ? 0.6f : 0.1f), 0.5f);
+			}
+
+			if (render_wireframe)
+			{
+				r_immediate_line(a, b, color);
+				r_immediate_line(a, c, color);
+				r_immediate_line(b, c, color);
+			}
+			else
+			{
+				triangle_t t = { a, b, c };
+				r_immediate_triangle(t, color);
+			}
+		}
+	}
+}
+
 static void update_and_render_convex_hull_test_panel(void)
 {
 	if (!g_editor.ch_test_panel_enabled)
@@ -182,10 +249,10 @@ static void update_and_render_convex_hull_test_panel(void)
 	int duplicate_triangle_count  = 0;
 	int no_area_triangle_count    = 0;
 
-	bool *point_fully_contained  = NULL;
-	bool *triangle_is_degenerate = NULL;
-	bool *triangle_is_duplicate  = NULL;
-	bool *triangle_has_no_area   = NULL;
+	bool *point_fully_contained    = NULL;
+	bool *triangle_is_degenerate   = NULL;
+	int  *duplicate_triangle_index = NULL;
+	bool *triangle_has_no_area     = NULL;
 
 	if (debug->diagnostics)
 	{
@@ -198,7 +265,7 @@ static void update_and_render_convex_hull_test_panel(void)
 		no_area_triangle_count    = diagnostics->no_area_triangle_count;
 		point_fully_contained     = diagnostics->point_fully_contained;
 		triangle_is_degenerate    = diagnostics->triangle_is_degenerate;
-		triangle_is_duplicate     = diagnostics->triangle_is_duplicate;
+		duplicate_triangle_index  = diagnostics->duplicate_triangle_index;
 		triangle_has_no_area      = diagnostics->triangle_has_no_area;
 	}
 
@@ -206,7 +273,7 @@ static void update_and_render_convex_hull_test_panel(void)
 	{
 		if (ch_test->show_points)
 		{
-			r_immediate_topology(R_PRIMITIVE_TOPOLOGY_LINELIST);
+			r_immediate_topology(R_TOPOLOGY_LINELIST);
 			r_immediate_use_depth(false);
 
 			for (size_t i = 0; i < debug->initial_points_count; i++)
@@ -228,11 +295,10 @@ static void update_and_render_convex_hull_test_panel(void)
 
 		//
 
-		r_immediate_topology (R_PRIMITIVE_TOPOLOGY_TRIANGELIST);
+		r_immediate_topology (R_TOPOLOGY_TRIANGLELIST);
 		r_immediate_shader   (R_SHADER_DEBUG_LIGHTING);
 		r_immediate_use_depth(true);
-
-		float triangle_alpha = 0.6f;
+		r_immediate_cull_mode(R_CULL_BACK);
 
 		int step_index = 0;
 		for (ch_debug_step_t *step = ch_test->debug.first_step;
@@ -241,50 +307,10 @@ static void update_and_render_convex_hull_test_panel(void)
 		{
 			if (step_index == MIN(ch_test->current_step_index, (int)debug->step_count - 1))
 			{
-				bool final_step = (ch_test->current_step_index = (int)debug->step_count);
+				bool final_step = (ch_test->current_step_index == (int)debug->step_count);
 
-				size_t triangle_index = 0;
-
-				for (ch_debug_triangle_t *triangle = step->first_triangle;
-					 triangle;
-					 triangle = triangle->next, triangle_index++)
-				{
-					bool show = false;
-
-					if (ch_test->show_triangles)                                 show = true;
-					if (ch_test->show_new_triangle && triangle->added_this_step) show = true;
-					if (!show) continue;
-
-					if (triangle_is_degenerate[triangle_index]) 
-						continue;
-
-					v4_t color = make_v4(0.7f, 0.9f, 0.5f, triangle_alpha);
-
-					if (!final_step && ch_test->show_new_triangle && triangle->added_this_step)
-						color = make_v4(1.0f, 1.0f, 0.5f, triangle_alpha);
-
-					r_immediate_triangle(triangle->t, color);
-				}
-
-				triangle_index = 0;
-
-				for (ch_debug_triangle_t *triangle = step->first_triangle;
-					 triangle;
-					 triangle = triangle->next, triangle_index++)
-				{
-					bool show = false;
-
-					if (ch_test->show_triangles)                                 show = true;
-					if (ch_test->show_new_triangle && triangle->added_this_step) show = true;
-					if (!show) continue;
-
-					if (!triangle_is_degenerate[triangle_index])
-						continue;
-
-					v4_t color = color = make_v4(1.0f, 0.25f, 0.0f, triangle_alpha);
-
-					r_immediate_triangle(triangle->t, color);
-				}
+				ch_render_debug_triangles(step, final_step, false, false);
+				ch_render_debug_triangles(step, final_step, true, false);
 			}
 
 			step_index++;
@@ -294,11 +320,9 @@ static void update_and_render_convex_hull_test_panel(void)
 
 		//
 
-		r_immediate_topology (R_PRIMITIVE_TOPOLOGY_LINELIST);
+		r_immediate_topology (R_TOPOLOGY_LINELIST);
 		r_immediate_shader   (R_SHADER_FLAT);
 		r_immediate_use_depth(true);
-
-		float line_alpha = 0.6f;
 
 		step_index = 0;
 		for (ch_debug_step_t *step = ch_test->debug.first_step;
@@ -307,61 +331,12 @@ static void update_and_render_convex_hull_test_panel(void)
 		{
 			if (step_index == MIN(ch_test->current_step_index, (int)debug->step_count - 1))
 			{
-				bool final_step = (ch_test->current_step_index = (int)debug->step_count);
+				bool final_step = (ch_test->current_step_index == (int)debug->step_count);
 
-				size_t triangle_index = 0;
-
-				for (ch_debug_triangle_t *triangle = step->first_triangle;
-					 triangle;
-					 triangle = triangle->next, triangle_index++)
+				if (ch_test->show_wireframe)
 				{
-					bool show = false;
-
-					if (ch_test->show_triangles)                                 show = true;
-					if (ch_test->show_new_triangle && triangle->added_this_step) show = true;
-					if (!show) continue;
-
-					if (triangle_is_degenerate[triangle_index]) 
-						continue;
-
-					v3_t a = triangle->t.a;
-					v3_t b = triangle->t.b;
-					v3_t c = triangle->t.c;
-
-					v4_t color = make_v4(0.7f, 0.9f, 0.5f, line_alpha);
-
-					if (!final_step && ch_test->show_new_triangle && triangle->added_this_step)
-						color = make_v4(1.0f, 1.0f, 0.5f, line_alpha);
-
-					r_immediate_line(a, b, color);
-					r_immediate_line(a, c, color);
-					r_immediate_line(b, c, color);
-				}
-
-				triangle_index = 0;
-
-				for (ch_debug_triangle_t *triangle = step->first_triangle;
-					 triangle;
-					 triangle = triangle->next, triangle_index++)
-				{
-					bool show = false;
-
-					if (ch_test->show_triangles)                                 show = true;
-					if (ch_test->show_new_triangle && triangle->added_this_step) show = true;
-					if (!show) continue;
-
-					if (!triangle_is_degenerate[triangle_index])
-						continue;
-
-					v3_t a = triangle->t.a;
-					v3_t b = triangle->t.b;
-					v3_t c = triangle->t.c;
-
-					v4_t color = color = make_v4(1.0f, 0.25f, 0.0f, line_alpha);
-
-					r_immediate_line(a, b, color);
-					r_immediate_line(a, c, color);
-					r_immediate_line(b, c, color);
+					ch_render_debug_triangles(step, final_step, false, true);
+					ch_render_debug_triangles(step, final_step, true, true);
 				}
 
 				if (!final_step)
@@ -486,11 +461,6 @@ static void update_and_render_convex_hull_test_panel(void)
 		{
 			UI_COLOR(UI_COLOR_TEXT, COLORF_ORANGE)
 			ui_label(Sf("There are %d duplicate triangles!", duplicate_triangle_count));
-			if (triangle_is_degenerate[0])
-			{
-				UI_COLOR(UI_COLOR_TEXT, COLORF_ORANGE)
-				ui_label(S("The first triangle is duplicate, if that matters"));
-			}
 		}
 
 		if (no_area_triangle_count > 0)
@@ -511,6 +481,8 @@ static void update_and_render_convex_hull_test_panel(void)
 			ui_checkbox(S("Show non-processed edges"), &ch_test->show_non_processed_edges);
 			ui_checkbox(S("Show new triangle"), &ch_test->show_new_triangle);
 			ui_checkbox(S("Show all triangles"), &ch_test->show_triangles);
+			ui_checkbox(S("Show duplicate triangles"), &ch_test->show_duplicate_triangles);
+			ui_checkbox(S("Show wireframe"), &ch_test->show_wireframe);
 			ui_slider_int(S("Step"), &ch_test->current_step_index, 0, (int)(ch_test->debug.step_count));
 
 			if (ch_test->current_step_index > (int)ch_test->debug.step_count)
@@ -872,7 +844,7 @@ static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
     {
         r_command_identifier(S("lightmap debug"));
 
-		r_immediate_topology(R_PRIMITIVE_TOPOLOGY_LINELIST);
+		r_immediate_topology(R_TOPOLOGY_LINELIST);
 		r_immediate_use_depth(!lm_editor->no_ray_depth_test);
 		//r_immediate_depth_bias(0.005f);
 		r_immediate_blend_mode(R_BLEND_ADDITIVE);

@@ -168,10 +168,7 @@ void r_immediate_triangle(triangle_t t, v4_t color)
 {
     uint32_t color_packed = pack_color(color);
 
-	v3_t ab = normalize(sub(t.b, t.a));
-	v3_t ac = normalize(sub(t.c, t.a));
-
-	v3_t normal = normalize(cross(ab, ac));
+	v3_t normal = triangle_normal(t.a, t.b, t.c);
 
     uint32_t i0 = r_immediate_vertex(&(vertex_immediate_t){ 
         .pos    = t.a,

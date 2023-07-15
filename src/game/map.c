@@ -906,9 +906,10 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
                 size_t triangle_offset = 0;
                 for (uint16_t i = 1; i < triangulated_vertex_count - 1; i++)
                 {
+					// NOTE: The convention is for triangles to be wound CCW
                     triangulated_indices[triangle_offset++] = 0;
-                    triangulated_indices[triangle_offset++] = i;
                     triangulated_indices[triangle_offset++] = i + 1;
+                    triangulated_indices[triangle_offset++] = i;
                 }
 
                 poly->first_index  = sb_count(map_indices);

@@ -147,7 +147,7 @@ typedef struct d3d_state_t
 
     int current_width, current_height;
 
-    ID3D11Device             *device;
+    ID3D11Device1            *device;
     ID3D11DeviceContext      *context;
     IDXGISwapChain1          *swap_chain;
 
@@ -163,9 +163,9 @@ typedef struct d3d_state_t
 
     ID3D11BlendState         *bs;
     ID3D11BlendState         *bs_additive;
-    ID3D11RasterizerState    *rs;
-    ID3D11RasterizerState    *rs_cull_front;
-    ID3D11RasterizerState    *rs_no_cull;
+    ID3D11RasterizerState1   *rs;
+    ID3D11RasterizerState1   *rs_cull_front;
+    ID3D11RasterizerState1   *rs_no_cull;
     ID3D11DepthStencilState  *dss;
     ID3D11DepthStencilState  *dss_no_depth;
     ID3D11DepthStencilState  *dss_dont_write_depth;
@@ -224,13 +224,6 @@ DREAM_API void set_model_buffers(d3d_model_t *model, DXGI_FORMAT index_format);
 
 DREAM_API void get_resolution(int *w, int *h);
 
-typedef enum d3d_cull_mode_t
-{
-    D3D_CULL_NONE,
-    D3D_CULL_BACK,
-    D3D_CULL_FRONT,
-} d3d_cull_mode_t;
-
 typedef enum d3d_depth_test_t
 {
     D3D_DEPTH_TEST_GREATER,
@@ -262,7 +255,7 @@ typedef struct d3d_render_pass_t
     uint32_t voffset;
 
     d3d_depth_test_t depth;
-    d3d_cull_mode_t cull;
+    r_cull_mode_t    cull;
     bool sample_linear;
     bool scissor;
 

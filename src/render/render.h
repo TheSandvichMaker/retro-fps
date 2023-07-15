@@ -100,14 +100,22 @@ typedef enum r_blend_mode_t
     R_BLEND_ADDITIVE,
 } r_blend_mode_t;
 
-typedef enum r_primitive_topology_t
+typedef enum r_topology_t
 {
-    R_PRIMITIVE_TOPOLOGY_TRIANGELIST, // default
-    R_PRIMITIVE_TOPOLOGY_TRIANGESTRIP,
-    R_PRIMITIVE_TOPOLOGY_LINELIST,
-    R_PRIMITIVE_TOPOLOGY_LINESTRIP,
-    R_PRIMITIVE_TOPOLOGY_POINTLIST,
-} r_primitive_topology_t;
+    R_TOPOLOGY_TRIANGLELIST, // default
+    R_TOPOLOGY_TRIANGLESTRIP,
+    R_TOPOLOGY_LINELIST,
+    R_TOPOLOGY_LINESTRIP,
+    R_TOPOLOGY_POINTLIST,
+} r_topology_t;
+
+typedef enum r_cull_mode_t
+{
+	R_CULL_NONE,
+	R_CULL_BACK,
+	R_CULL_FRONT,
+	R_CULL_COUNT,
+} r_cull_mode_t;
 
 extern uint32_t vertex_format_size[VERTEX_FORMAT_COUNT];
 
@@ -134,7 +142,7 @@ typedef struct vertex_brush_t
 
 typedef struct upload_model_t
 {
-    r_primitive_topology_t topology;
+    r_topology_t topology;
 
     vertex_format_t vertex_format;
     uint32_t vertex_count;
@@ -276,8 +284,9 @@ typedef enum r_immediate_shader_t
 typedef struct r_immediate_params_t
 {
 	r_immediate_shader_t shader;
-    r_primitive_topology_t topology;
+    r_topology_t   topology;
     r_blend_mode_t blend_mode;
+	r_cull_mode_t  cull_mode;
 
     rect2_t clip_rect;
 
@@ -305,8 +314,9 @@ typedef struct r_command_immediate_t
 } r_command_immediate_t;
 
 DREAM_API void     r_immediate_shader    (r_immediate_shader_t shader);
-DREAM_API void     r_immediate_topology  (r_primitive_topology_t topology);
+DREAM_API void     r_immediate_topology  (r_topology_t topology);
 DREAM_API void     r_immediate_blend_mode(r_blend_mode_t blend_mode);
+DREAM_API void     r_immediate_cull_mode (r_cull_mode_t cull_mode);
 DREAM_API void     r_immediate_clip_rect (rect2_t clip_rect); // TODO: Why does this exist?
 DREAM_API void     r_immediate_texture   (resource_handle_t texture);
 DREAM_API void     r_immediate_use_depth (bool depth);

@@ -21,7 +21,7 @@
 // if the convention is that headers include api_types.h, then I guess this is the place
 // to be.
 
-#define DeferLoop(begin, end) for (int PASTE(_i_, __LINE__) = (begin, 0); !PASTE(_i_, __LINE__); PASTE(_i_, __LINE__) += (end, 1))
+#define DEFER_LOOP(begin, end) for (int PASTE(_i_, __LINE__) = (begin, 0); !PASTE(_i_, __LINE__); PASTE(_i_, __LINE__) += (end, 1))
 
 #define IGNORED(x) (void)(x)
 #define MIN(a, b) ((a) < (b) ? (a) : (b))

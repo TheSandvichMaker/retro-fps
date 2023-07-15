@@ -110,6 +110,84 @@ triangle_mesh_t calculate_convex_hull(arena_t *arena, size_t count, v3_t *points
 	return calculate_convex_hull_debug(arena, count, points, NULL);
 }
 
+DREAM_INLINE bool triangle_in_set(stretchy_buffer(triangle_t) H, triangle_t t)
+{
+	// TODO: Fix this N^2 bull
+
+	bool result = false;
+
+	for (int64_t triangle_index = (int64_t)sb_count(H) - 1; triangle_index >= 0; triangle_index--)
+	{
+		triangle_t t2 = H[triangle_index];
+
+		stack_t(v3_t, 3) verts = {0};
+		stack_push(verts, t.a);
+		stack_push(verts, t.b);
+		stack_push(verts, t.c);
+
+		bool a_equal = false;
+		for (size_t i = 0; i < stack_count(verts); i++)
+		{
+			if (v3_equal_exact(t2.a, verts.values[i]))
+			{
+				a_equal = true;
+				stack_unordered_remove(verts, i);
+				break;
+			}
+		}
+
+		bool b_equal = false;
+		for (size_t i = 0; i < stack_count(verts); i++)
+		{
+			if (v3_equal_exact(t2.b, verts.values[i]))
+			{
+				b_equal = true;
+				stack_unordered_remove(verts, i);
+				break;
+			}
+		}
+
+		bool c_equal = false;
+		for (size_t i = 0; i < stack_count(verts); i++)
+		{
+			if (v3_equal_exact(t2.c, verts.values[i]))
+			{
+				c_equal = true;
+				stack_unordered_remove(verts, i);
+				break;
+			}
+		}
+
+		if (a_equal && b_equal && c_equal)
+		{
+			result = true;
+		}
+	}
+
+	return result;
+}
+
+DREAM_INLINE bool edge_in_set(stretchy_buffer(edge_t) Q, edge_t e)
+{
+	// TODO: Fix this N^2 bull
+
+	bool result = false;
+
+	for (int64_t i = (int64_t)sb_count(Q) - 1; i >= 0; i--)
+	{
+		edge_t e_prime = Q[i];
+
+		if ((v3_equal_exact(e.a, e_prime.a) && v3_equal_exact(e.b, e_prime.b)) ||
+			(v3_equal_exact(e.a, e_prime.b) && v3_equal_exact(e.b, e_prime.a)))
+		{
+			result = true;
+			break;
+		}
+	}
+
+	return result;
+}
+
 triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *points, ch_debug_t *debug)
 {
 	ASSERT(arena != temp);
@@ -143,28 +221,7 @@ triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *
 		{
 			edge_t e = sb_pop(Q);
 
-			bool is_processed = false;
-
-			if (step_index == 8)
-			{
-				int y = 0;
-				(void)y;
-			}
-
-			// MORONICITY
-			for (int64_t i = (int64_t)sb_count(processed) - 1; i >= 0; i--)
-			{
-				edge_t e_prime = processed[i];
-
-				if ((v3_equal_exact(e.a, e_prime.a) && v3_equal_exact(e.b, e_prime.b)) ||
-					(v3_equal_exact(e.a, e_prime.b) && v3_equal_exact(e.b, e_prime.a)))
-				{
-					is_processed = true;
-					break;
-				}
-			}
-
-			if (is_processed)
+			if (edge_in_set(processed, e))
 				continue;
 
 			v3_t       q = triangle_vertex_with_all_points_to_the_left(e, count, points);
@@ -187,10 +244,13 @@ triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *
 				}
 			}
 
-			sb_push(H, t);
+			if (!triangle_in_set(H, t)) sb_push(H, t);
 
-			sb_push(Q, ((edge_t){t.c, t.b}));
-			sb_push(Q, ((edge_t){t.a, t.c}));
+			edge_t e1 = { t.c, t.b };
+			edge_t e2 = { t.a, t.c };
+
+			if (!edge_in_set(Q, e1)) sb_push(Q, e1);
+			if (!edge_in_set(Q, e2)) sb_push(Q, e2);
 
 			sb_push(processed, e);
 
@@ -219,14 +279,19 @@ DREAM_API void convex_hull_do_extended_diagnostics(triangle_mesh_t *mesh, ch_deb
 		int  duplicate_triangle_count  = 0;
 		int  no_area_triangle_count    = 0;
 
-		bool *point_fully_contained  = m_alloc_array_nozero(&debug->arena, debug->initial_points_count, bool);
-		bool *triangle_is_degenerate = m_alloc_array_nozero(&debug->arena, mesh->triangle_count, bool);
-		bool *triangle_is_duplicate  = m_alloc_array       (&debug->arena, mesh->triangle_count, bool);
-		bool *triangle_has_no_area   = m_alloc_array       (&debug->arena, mesh->triangle_count, bool);
+		bool *point_fully_contained    = m_alloc_array_nozero(&debug->arena, debug->initial_points_count, bool);
+		bool *triangle_is_degenerate   = m_alloc_array_nozero(&debug->arena, mesh->triangle_count, bool);
+		int  *duplicate_triangle_index = m_alloc_array_nozero(&debug->arena, mesh->triangle_count, int);
+		bool *triangle_has_no_area     = m_alloc_array       (&debug->arena, mesh->triangle_count, bool);
 
 		for (size_t i = 0; i < debug->initial_points_count; i++)
 		{
 			point_fully_contained[i] = true;
+		}
+
+		for (size_t i = 0; i < mesh->triangle_count; i++)
+		{
+			duplicate_triangle_index[i] = -1;
 		}
 
 		if (debug->initial_points_count > 0 && mesh->triangle_count > 0)
@@ -274,7 +339,7 @@ DREAM_API void convex_hull_do_extended_diagnostics(triangle_mesh_t *mesh, ch_deb
 
 				triangle_is_degenerate[triangle_index] = degenerate_triangle;
 
-				if (!triangle_is_duplicate[triangle_index])
+				if (duplicate_triangle_index[triangle_index] == -1)
 				{
 					for (size_t test_triangle_index = 0; test_triangle_index < mesh->triangle_count; test_triangle_index++)
 					{
@@ -323,8 +388,9 @@ DREAM_API void convex_hull_do_extended_diagnostics(triangle_mesh_t *mesh, ch_deb
 
 						if (a_equal && b_equal && c_equal)
 						{
-							triangle_is_duplicate[triangle_index]      = true;
-							triangle_is_duplicate[test_triangle_index] = true;
+							duplicate_triangle_index[triangle_index]      = (int)test_triangle_index;
+							duplicate_triangle_index[test_triangle_index] = (int)triangle_index;
+							duplicate_triangle_count += 1;
 						}
 					}
 				}
@@ -347,7 +413,7 @@ DREAM_API void convex_hull_do_extended_diagnostics(triangle_mesh_t *mesh, ch_deb
 		diagnostics->no_area_triangle_count    = no_area_triangle_count;
 		diagnostics->point_fully_contained     = point_fully_contained;
 		diagnostics->triangle_is_degenerate    = triangle_is_degenerate;
-		diagnostics->triangle_is_duplicate     = triangle_is_duplicate;
+		diagnostics->duplicate_triangle_index  = duplicate_triangle_index;
 		diagnostics->triangle_has_no_area      = triangle_has_no_area;
 	}
 }

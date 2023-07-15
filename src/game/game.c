@@ -622,7 +622,7 @@ void game_tick(game_io_t *io, float dt)
 	// render test convex hull
 	//
 
-	r_immediate_topology(R_PRIMITIVE_TOPOLOGY_LINELIST);
+	r_immediate_topology(R_TOPOLOGY_LINELIST);
 	r_immediate_use_depth(true);
 
     for (size_t triangle_index = 0; triangle_index < test_convex_hull.triangle_count; triangle_index++)
@@ -641,7 +641,7 @@ void game_tick(game_io_t *io, float dt)
     //
 
 #if 1
-	r_immediate_topology(R_PRIMITIVE_TOPOLOGY_LINELIST);
+	r_immediate_topology(R_TOPOLOGY_LINELIST);
 	r_immediate_use_depth(true);
 
     for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
