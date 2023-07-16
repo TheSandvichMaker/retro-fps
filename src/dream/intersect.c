@@ -4,9 +4,10 @@
 //
 //
 
-#include "intersect.h"
 #include "core/math.h"
-#include "game/map.h"
+
+#include "dream/intersect.h"
+#include "dream/map.h"
 
 //
 //

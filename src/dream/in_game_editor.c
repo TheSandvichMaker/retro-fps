@@ -1,18 +1,16 @@
 #include "core/core.h"
 
-#include "render/render.h"
-#include "render/render_helpers.h"
-#include "render/light_baker.h"
-
-#include "in_game_editor.h"
-#include "game.h"
-#include "map.h"
-// #include "ui.h"
-#include "debug_ui.h"
-#include "intersect.h"
-#include "asset.h"
-#include "audio.h"
-#include "mesh.h"
+#include "dream/render.h"
+#include "dream/render_helpers.h"
+#include "dream/light_baker.h"
+#include "dream/in_game_editor.h"
+#include "dream/game.h"
+#include "dream/map.h"
+#include "dream/debug_ui.h"
+#include "dream/intersect.h"
+#include "dream/asset.h"
+#include "dream/audio.h"
+#include "dream/mesh.h"
 
 static void push_poly_wireframe(map_t *map, map_poly_t *poly, v4_t color)
 {
@@ -531,10 +529,8 @@ static void update_and_render_convex_hull_test_panel(void)
 	hull_test->initialized = true;
 }
 
-static void update_and_render_lightmap_editor(game_io_t *io, world_t *world)
+static void update_and_render_lightmap_editor(void)
 {
-	(void)io;
-
     player_t *player = world->player;
     map_t    *map    = world->map;
 
@@ -1145,7 +1141,7 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
     }
 }
 
-void update_and_render_in_game_editor(game_io_t *io, world_t *world)
+void update_and_render_in_game_editor(void)
 {
     if (ui_button_pressed(BUTTON_F1))
         g_editor.show_timings = !g_editor.show_timings;
@@ -1176,6 +1172,6 @@ void update_and_render_in_game_editor(game_io_t *io, world_t *world)
 
     ui_panel_end();
 
-    update_and_render_lightmap_editor(io, world);
+    update_and_render_lightmap_editor();
 	update_and_render_convex_hull_test_panel();
 }

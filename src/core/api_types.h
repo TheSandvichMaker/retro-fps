@@ -8,11 +8,16 @@
 #include <stdarg.h>
 #include <setjmp.h>
 #include <stdalign.h>
+#include <stdlib.h>
 
 #ifdef SINGLE_TRANSLATION_UNIT_BUILD
-#define DREAM_API static
+#define DREAM_API    extern 
+#define DREAM_MODULE extern 
+#define DREAM_LOCAL  static 
 #else
-#define DREAM_API extern
+#define DREAM_API    extern 
+#define DREAM_MODULE extern 
+#define DREAM_LOCAL  extern 
 #endif
 
 #define DREAM_INLINE static inline

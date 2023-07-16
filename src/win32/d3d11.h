@@ -2,7 +2,8 @@
 #define WIN32_D3D11_H
 
 #include "core/core.h"
-#include "render/render.h" // hm
+
+#include "dream/render.h" // hm
 
 int init_d3d11(void *hwnd);
 void d3d11_draw_list(r_list_t *list, int width, int height);

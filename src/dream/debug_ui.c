@@ -2,12 +2,11 @@
 #include "core/arena.h"
 #include "core/math.h"
 
-#include "render/render.h"
-#include "render/render_helpers.h"
-
-#include "game/input.h"
-#include "game/asset.h"
-#include "game/debug_ui.h"
+#include "dream/render.h"
+#include "dream/render_helpers.h"
+#include "dream/input.h"
+#include "dream/asset.h"
+#include "dream/debug_ui.h"
 
 ui_t ui;
 

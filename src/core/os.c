@@ -1,5 +1,3 @@
-#include "core.h"
-
 #pragma warning(push, 0)
 
 #define WIN32_LEAN_AND_MEAN
@@ -10,6 +8,8 @@
 #include <stdio.h>
 
 #pragma warning(pop)
+
+#include "core.h"
 
 static arena_t api_arena;
 static bool cursor_locked;

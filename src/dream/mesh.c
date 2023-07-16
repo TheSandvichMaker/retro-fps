@@ -3,7 +3,7 @@
 #include "core/arena.h"
 #include "core/stretchy_buffer.h"
 
-#include "game/mesh.h"
+#include "dream/mesh.h"
 
 //
 // gift-wrapping convex hull
@@ -227,6 +227,11 @@ triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *
 
 	m_scoped(temp)
 	{
+		// TODO: Pre-allocate upper bound as given by Euler's formula
+		// V = N
+		// E = 3N - 6
+		// F = 2N - 4
+		// V - E + F = 2
 		stretchy_buffer(edge_t)     Q = NULL;
 		stretchy_buffer(triangle_t) H = NULL;
 

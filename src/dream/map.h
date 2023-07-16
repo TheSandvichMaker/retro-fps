@@ -2,8 +2,9 @@
 #define MAP_H
 
 #include "core/core.h"
-#include "render/render.h"
-#include "game/asset.h"
+
+#include "dream/render.h"
+#include "dream/asset.h"
 
 #if DEBUG
 #define LIGHTMAP_SCALE 8

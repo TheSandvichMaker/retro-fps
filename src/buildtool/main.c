@@ -245,183 +245,194 @@ int main(int argc, char **argv)
     printf("=================================================\n");
     printf("\n");
 
-#if 0
-	string_t source_directory = S("src");
-
-	bool build_failed = false;
-
-	object_collection_t objects = {0};
-
-	for (fs_entry_t *entry = fs_scan_directory(temp, source_directory);
-		 entry;
-		 entry = fs_entry_next(entry))
+	if (stub)
 	{
-		if (string_match_nocase(entry->name, S("buildtool")))
-			continue;
+		string_t source_directory = S("src");
 
-		compile_params_t params = {
-			.single_translation_unit = true,
+		bool build_failed = false;
 
-			.address_sanitizer       = asan,
+		object_collection_t objects = {0};
 
-			.warnings_are_errors     = true,
-			.warning_level           = W4,
-			.optimization_level      = O0,
+		build_params_t build = {
+			.no_cache      = true, // incremental compilation is kaput
 
-			.configuration           = S("debug"),
-
-			.defines = slist_from_array(temp, array_expand(string_t,
-				S("_CRT_SECURE_NO_WARNINGS"),
-				S("UNICODE"),
-				ndebug   ? S("NDEBUG")     : S("DEBUG"),
-				not_slow ? S("DREAM_FAST") : S("DREAM_SLOW"),
-			)),
-
-			.include_paths = slist_from_array(temp, array_expand(string_t,
-				S("src"),
-				S("external/include")
-			)),
-
-			.backend = backend,
+			.configuration = S("debug"),
+			.backend       = backend,
 		};
 
-		compile_error_t error = compile_directory(entry->path, &params, &objects);
-
-		if (error)
+		for (fs_entry_t *entry = fs_scan_directory(temp, source_directory, 0);
+			 entry;
+			 entry = fs_entry_next(entry))
 		{
-			fprintf(stderr, "Compilation failed! TODO: More information\n");
+			if (string_match_nocase(entry->name, S("buildtool")))
+				continue;
 
-			build_failed = true;
-			break;
+			compile_params_t compile = {
+				.single_translation_unit = true,
+				.stub_name               = entry->name,
+
+				.address_sanitizer       = asan,
+
+				.warnings_are_errors     = true,
+				.warning_level           = W4,
+
+				.optimization_level      = O0,
+
+				.defines = slist_from_array(temp, array_expand(string_t,
+					S("_CRT_SECURE_NO_WARNINGS"),
+					S("UNICODE"),
+					ndebug   ? S("NDEBUG")     : S("DEBUG"),
+					not_slow ? S("DREAM_FAST") : S("DREAM_SLOW"),
+				)),
+
+				.include_paths = slist_from_array(temp, array_expand(string_t,
+					S("src"),
+					S("external/include")
+				)),
+
+				.ignored_directories = slist_from_array(temp, array_expand(string_t,
+					S("buildtool"),
+					S("DONTBUILD")
+				)),
+			};
+
+			compile_error_t error = compile_directory(entry->path, &build, &compile, &objects);
+
+			if (error)
+			{
+				fprintf(stderr, "Compilation failed! TODO: More information\n");
+
+				build_failed = true;
+				break;
+			}
+		}
+
+		if (!build_failed)
+		{
+			link_params_t link = {
+				.output_exe              = S("retro"),
+				.run_dir                 = S("run"),
+				.copy_executables_to_run = true,
+
+				.libraries = slist_from_array(temp, array_expand(string_t, 
+					S("user32"),
+					S("dxguid"),
+					S("d3d11"),
+					S("dxgi"),
+					S("d3dcompiler"),
+					S("gdi32"),
+					S("user32"),
+					S("ole32"),
+					S("ksuser"),
+					S("shell32"),
+					S("Synchronization")
+				)),
+			};
+
+			link_error_t error = link_executable(&objects, &build, &link);
+
+			if (error)
+			{
+				fprintf(stderr, "Linking failed! TODO: More information\n");
+				build_failed = true;
+			}
 		}
 	}
-
-	if (!build_failed)
+	else
 	{
-		link_params_t params = {
-			.configuration           = S("debug"),
-			.run_dir                 = S("run"),
-			.copy_executables_to_run = true,
+		build_error_t error = BUILD_ERROR_NONE;
 
-			.libraries = slist_from_array(temp, array_expand(string_t, 
-				S("user32"),
-				S("dxguid"),
-				S("d3d11"),
-				S("dxgi"),
-				S("d3dcompiler"),
-				S("gdi32"),
-				S("user32"),
-				S("ole32"),
-				S("ksuser"),
-				S("shell32"),
-				S("Synchronization")
-			)),
+		all_params_t base_params = {
+			.build = {
+				.no_cache                = true, // incremental compilation is kaput
+
+				.configuration           = S("debug"),
+				.backend                 = backend,
+			},
+
+			.compile = {
+				.single_translation_unit = stub,
+				.stub_name               = S("dream"),
+
+				.address_sanitizer       = asan,
+
+				.warnings_are_errors     = true,
+				.warning_level           = W4,
+
+				.optimization_level      = O0,
+
+				.defines = slist_from_array(temp, array_expand(string_t,
+					S("_CRT_SECURE_NO_WARNINGS"),
+					S("UNICODE"),
+					ndebug ? S("NDEBUG") : S("DEBUG"),
+					not_slow ? S("DREAM_FAST") : S("DREAM_SLOW"),
+				)),
+
+				.include_paths = slist_from_array(temp, array_expand(string_t,
+					S("src"),
+					S("external/include")
+				)),
+
+				.ignored_directories = slist_from_array(temp, array_expand(string_t,
+					S("buildtool"),
+					S("DONTBUILD")
+				)),
+			},
+
+			.link = {
+				.output_exe              = S("retro"),
+				.run_dir                 = S("run"),
+				.copy_executables_to_run = true,
+
+				.libraries = slist_from_array(temp, array_expand(string_t, 
+					S("user32"),
+					S("dxguid"),
+					S("d3d11"),
+					S("dxgi"),
+					S("d3dcompiler"),
+					S("gdi32"),
+					S("user32"),
+					S("ole32"),
+					S("ksuser"),
+					S("shell32"),
+					S("Synchronization")
+				)),
+			},
 		};
 
-		link_error_t error = link_executable(&objects, &params);
+		all_params_t release_params = base_params;
+		release_params.build.configuration = S("release");
+		release_params.compile.optimization_level = O2;
 
-		if (error)
+		slist_appends(&base_params   .compile.defines, temp, S("DREAM_UNOPTIMIZED=1"));
+		slist_appends(&release_params.compile.defines, temp, S("DREAM_OPTIMIZED=1"));
+
+		if (!release || build_all)
 		{
-			fprintf(stderr, "Linking failed! TODO: More information\n");
+			error |= build_directory(S("src"), &base_params);
 
-			build_failed = true;
-			break;
+			switch (error)
+			{
+				case BUILD_ERROR_NONE:          fprintf(stderr, "Build successful\n"); break;
+				case BUILD_ERROR_OTHER_FAILURE: fprintf(stderr, "Build failed for other reasons! Oh no!\n"); break;
+				case BUILD_ERROR_COMPILATION:   fprintf(stderr, "Build failed with compilation errors\n"); break;
+				case BUILD_ERROR_LINKER:        fprintf(stderr, "Build failed with linker errors\n"); break;
+			}
+		}
+
+		if ((release || build_all) && !error)
+		{
+			error |= build_directory(S("src"), &release_params);
+
+			switch (error)
+			{
+				case BUILD_ERROR_NONE:          fprintf(stderr, "Build successful\n"); break;
+				case BUILD_ERROR_OTHER_FAILURE: fprintf(stderr, "Build failed for other reasons! Oh no!\n"); break;
+				case BUILD_ERROR_COMPILATION:   fprintf(stderr, "Build failed with compilation errors\n"); break;
+				case BUILD_ERROR_LINKER:        fprintf(stderr, "Build failed with linker errors\n"); break;
+			}
 		}
 	}
-#else
-    build_error_t error = BUILD_ERROR_NONE;
-
-	all_params_t base_params = {
-		.build = {
-			.no_cache                = true, // incremental compilation is kaput
-
-			.configuration           = S("debug"),
-			.backend                 = backend,
-		},
-
-		.compile = {
-			.single_translation_unit = stub,
-			.stub_name               = S("dream"),
-
-			.address_sanitizer       = asan,
-
-			.warnings_are_errors     = true,
-			.warning_level           = W4,
-
-			.optimization_level      = O0,
-
-			.defines = slist_from_array(temp, array_expand(string_t,
-				S("_CRT_SECURE_NO_WARNINGS"),
-				S("UNICODE"),
-				ndebug ? S("NDEBUG") : S("DEBUG"),
-				not_slow ? S("DREAM_FAST") : S("DREAM_SLOW"),
-			)),
-
-			.include_paths = slist_from_array(temp, array_expand(string_t,
-				S("src"),
-				S("external/include")
-			)),
-
-			.ignored_directories = slist_from_array(temp, array_expand(string_t,
-				S("buildtool"),
-				S("DONTBUILD")
-			)),
-		},
-
-		.link = {
-			.output_exe              = S("retro"),
-			.run_dir                 = S("run"),
-			.copy_executables_to_run = true,
-
-			.libraries = slist_from_array(temp, array_expand(string_t, 
-				S("user32"),
-				S("dxguid"),
-				S("d3d11"),
-				S("dxgi"),
-				S("d3dcompiler"),
-				S("gdi32"),
-				S("user32"),
-				S("ole32"),
-				S("ksuser"),
-				S("shell32"),
-				S("Synchronization")
-			)),
-		},
-	};
-
-    all_params_t release_params = base_params;
-    release_params.build.configuration = S("release");
-    release_params.compile.optimization_level = O2;
-
-    slist_appends(&base_params   .compile.defines, temp, S("DREAM_UNOPTIMIZED=1"));
-    slist_appends(&release_params.compile.defines, temp, S("DREAM_OPTIMIZED=1"));
-
-    if (!release || build_all)
-    {
-        error |= build_directory(S("src"), &base_params);
-
-        switch (error)
-        {
-            case BUILD_ERROR_NONE:          fprintf(stderr, "Build successful\n"); break;
-            case BUILD_ERROR_OTHER_FAILURE: fprintf(stderr, "Build failed for other reasons! Oh no!\n"); break;
-            case BUILD_ERROR_COMPILATION:   fprintf(stderr, "Build failed with compilation errors\n"); break;
-            case BUILD_ERROR_LINKER:        fprintf(stderr, "Build failed with linker errors\n"); break;
-        }
-    }
-
-    if ((release || build_all) && !error)
-    {
-        error |= build_directory(S("src"), &release_params);
-
-        switch (error)
-        {
-            case BUILD_ERROR_NONE:          fprintf(stderr, "Build successful\n"); break;
-            case BUILD_ERROR_OTHER_FAILURE: fprintf(stderr, "Build failed for other reasons! Oh no!\n"); break;
-            case BUILD_ERROR_COMPILATION:   fprintf(stderr, "Build failed with compilation errors\n"); break;
-            case BUILD_ERROR_LINKER:        fprintf(stderr, "Build failed with linker errors\n"); break;
-        }
-    }
-#endif
 
     // ==========================================================================================================================
 

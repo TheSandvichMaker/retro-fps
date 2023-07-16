@@ -5,14 +5,14 @@
 //
 //
 
-#include "map.h"
-#include "asset.h"
-#include "render/render.h"
 #include "core/subset_iter.h"
 #include "core/bulk_data.h"
 #include "core/sort.h"
 #include "core/hashtable.h"
-#include "render/diagram.h"
+
+#include "dream/map.h"
+#include "dream/asset.h"
+#include "dream/render.h"
 
 //
 // .map parser

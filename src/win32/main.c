@@ -18,7 +18,7 @@
 #include "core/core.h"
 
 #include "d3d11.h"
-#include "game/game.h"
+#include "dream/game.h"
 
 static arena_t win32_arena;
 
@@ -396,7 +396,7 @@ int wWinMain(HINSTANCE instance,
 
         r_reset_command_list();
 
-        game_io_t io = {
+        game_io_t frame_io = {
             .mix_sample_rate = g_win32.mix_sample_rate,
             .startup_map = startup_map,
 
@@ -404,17 +404,17 @@ int wWinMain(HINSTANCE instance,
             .input_state = &input,
         };
 
-        game_tick(&io, 1.0f/60.0f);
+        game_tick(&frame_io, 1.0f/60.0f);
 
-        if (io.cursor_locked != cursor_locked)
+        if (frame_io.cursor_locked != cursor_locked)
         {
-            lock_cursor(io.cursor_locked);
+            lock_cursor(frame_io.cursor_locked);
         }
 
         d3d11_draw_list(&r_list, width, height);
         d3d11_present();
 
-        if (io.exit_requested)
+        if (frame_io.exit_requested)
         {
             running = false;
         }

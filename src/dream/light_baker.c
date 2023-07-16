@@ -1,15 +1,15 @@
 #include <stdlib.h>
 
-#include "light_baker.h"
-#include "render.h"
-#include "diagram.h"
-#include "game/map.h"
-#include "game/asset.h"
-#include "game/intersect.h"
-#include "game/job_queues.h"
 #include "core/core.h"
 #include "core/random.h"
 #include "core/thread.h"
+
+#include "dream/map.h"
+#include "dream/asset.h"
+#include "dream/intersect.h"
+#include "dream/job_queues.h"
+#include "dream/light_baker.h"
+#include "dream/render.h"
 
 v3_t map_to_cosine_weighted_hemisphere(v2_t sample)
 {

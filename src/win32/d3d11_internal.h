@@ -3,8 +3,8 @@
 
 #include "core/api_types.h"
 #include "core/thread.h"
-#include "render/render.h"
-#include "game/asset.h"
+#include "dream/render.h"
+#include "dream/asset.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

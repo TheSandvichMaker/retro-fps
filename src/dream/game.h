@@ -84,4 +84,7 @@ typedef struct world_t
 v3_t player_view_origin(player_t *player);
 v3_t player_view_direction(player_t *player);
 
+DREAM_API world_t *world;
+DREAM_API game_io_t *io;
+
 #endif /* RETRO_H */

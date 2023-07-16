@@ -167,7 +167,7 @@ static compile_error_t msvc_compile(build_context_t *context, const compile_para
 					string_t base_name = string_strip_extension(file->name);
 
 					object_t *obj = m_alloc_struct(context->arena, object_t);
-					obj->name      = string_format(context->arena, "%.*s.obj", Sx(base_name));
+					obj->name = string_format(context->arena, "%.*s.obj", Sx(base_name));
 					dll_push_back(objects->first, objects->last, obj);
 				}
 			}

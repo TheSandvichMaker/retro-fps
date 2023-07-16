@@ -1,3 +1,6 @@
+#ifndef DREAM_AUDIO_H
+#define DREAM_AUDIO_H
+
 #include "core/api_types.h"
 #include "core/atomics.h"
 
@@ -196,3 +199,5 @@ DREAM_INLINE void set_sound_position(mixer_id_t id, v3_t p)
 }
 
 DREAM_API void mix_samples(uint32_t frames_to_mix, float *buffer);
+
+#endif

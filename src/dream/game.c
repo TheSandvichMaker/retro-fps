@@ -3,30 +3,28 @@
 #include "core/core.h"
 #include "core/random.h"
 
-#include "game.h"
-#include "map.h"
-#include "input.h"
-#include "asset.h"
-#include "intersect.h"
-// #include "ui.h"
-#include "debug_ui.h"
-#include "audio.h"
-#include "in_game_editor.h"
-#include "job_queues.h"
-#include "mesh.h"
-
-#include "render/light_baker.h"
-#include "render/render.h"
-#include "render/render_helpers.h"
-#include "render/diagram.h"
+#include "dream/game.h"
+#include "dream/map.h"
+#include "dream/input.h"
+#include "dream/asset.h"
+#include "dream/intersect.h"
+#include "dream/debug_ui.h"
+#include "dream/audio.h"
+#include "dream/in_game_editor.h"
+#include "dream/job_queues.h"
+#include "dream/mesh.h"
+#include "dream/light_baker.h"
+#include "dream/render.h"
+#include "dream/render_helpers.h"
 
 static bool initialized = false;
 
 static bool g_cursor_locked;
 
-static world_t *world;
+world_t *world;
+game_io_t *io;
 static resource_handle_t skybox;
-static bitmap_font_t font;
+static bitmap_font_t debug_font;
 static waveform_t *test_waveform;
 static waveform_t *short_sound;
 
@@ -394,7 +392,7 @@ static void view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
     view->projection = make_perspective_matrix(camera->vfov, aspect, 1.0f);
 }
 
-void game_init(game_io_t *io)
+void game_init(void)
 {
 	initialize_asset_system(&(asset_config_t){
         .mix_sample_rate = io->mix_sample_rate,
@@ -406,11 +404,11 @@ void game_init(game_io_t *io)
 
     {
 		image_t *font_image = get_image_from_string(S("gamedata/textures/font.png"));
-        font.w = font_image->w;
-        font.h = font_image->h;
-        font.cw = 10;
-        font.ch = 12;
-        font.texture = font_image->gpu;
+        debug_font.w = font_image->w;
+        debug_font.h = font_image->h;
+        debug_font.cw = 10;
+        debug_font.ch = 12;
+        debug_font.texture = font_image->gpu;
     }
 
     world = m_bootstrap(world_t, arena);
@@ -489,11 +487,13 @@ void game_init(game_io_t *io)
     initialized = true;
 }
 
-void game_tick(game_io_t *io, float dt)
+void game_tick(game_io_t *in_io, float dt)
 {
+	io = in_io;
+
     if (!initialized)
     {
-        game_init(io);
+        game_init();
     }
 
     update_input_state(io->input_state);
@@ -505,32 +505,6 @@ void game_tick(game_io_t *io, float dt)
     render->get_resolution(&res_x, &res_y);
 
     v2_t res = make_v2((float)res_x, (float)res_y);
-
-#if 0
-    ui_style_t ui_style = {
-        .text_color = make_v4(0.9f, 0.9f, 0.9f, 1.0f),
-
-        .outline_color = ui_gradient_from_rgba(0.35f, 0.35f, 0.65f, 1.0f),
-
-        .background_color = ui_gradient_vertical(
-            make_v4(0.15f, 0.15f, 0.15f, 1.0f),
-            make_v4(0.05f, 0.05f, 0.05f, 1.0f)
-        ),
-
-        .background_color_hot = ui_gradient_vertical(
-            make_v4(0.20f, 0.22f, 0.30f, 1.0f),
-            make_v4(0.15f, 0.18f, 0.27f, 1.0f)
-        ),
-
-        .background_color_active = ui_gradient_vertical(
-            make_v4(0.05f, 0.05f, 0.05f, 1.0f),
-            make_v4(0.15f, 0.15f, 0.15f, 1.0f) 
-        ),
-    };
-
-    bool ui_focused = ui_begin(&font, &ui_style);
-
-#endif
 
 	bool ui_focused = ui_begin(dt);
 
@@ -698,7 +672,7 @@ void game_tick(game_io_t *io, float dt)
         r_pop_view();
     }
 
-    update_and_render_in_game_editor(io, world);
+    update_and_render_in_game_editor();
 
     ui_end();
 

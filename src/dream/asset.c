@@ -20,9 +20,8 @@ static void *stbi_realloc(void *ptr, size_t new_size);
 #include "core/bulk_data.h"
 #include "core/hashtable.h"
 
-#include "game/job_queues.h"
-
-#include "render/render.h"
+#include "dream/job_queues.h"
+#include "dream/render.h"
 
 //
 // stbi support
