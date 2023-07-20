@@ -155,7 +155,7 @@ DREAM_INLINE channel_matrix_t spatialize_channel_matrix(playing_sound_t *playing
 		result.m[i][A_CHANNEL_RIGHT] = attenuation*cos_theta2;
 	}
 
-	float flatten = max(0.0f, m - distance_sq) / m;
+	float flatten = smoothstep(max(0.0f, m - distance) / m);
 	result = lerp_channel_matrix(&result, matrix, flatten);
 
 	return result;
