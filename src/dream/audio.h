@@ -11,6 +11,14 @@ typedef enum audio_channel_t
 	A_CHANNEL_COUNT,
 } audio_channel_t;
 
+typedef enum sound_category_t
+{
+	SOUND_CATEGORY_EFFECTS,
+	SOUND_CATEGORY_MUSIC,
+	SOUND_CATEGORY_UI,
+	SOUND_CATEGORY_COUNT,
+} sound_category_t;
+
 typedef enum mixer_id_type_t
 {
 	MIXER_ID_TYPE_NONE,
@@ -78,6 +86,8 @@ typedef enum mix_command_kind_t
 	MIX_SOUND_POSITION,
 	MIX_FADE,
 	MIX_SET_PLAYING_SOUND_FLAGS,
+	MIX_SET_CATEGORY_VOLUME,
+	MIX_COMMAND_KIND_COUNT,
 } mix_command_kind_t;
 
 typedef struct mix_command_play_sound_t
@@ -104,10 +114,12 @@ typedef struct mix_command_sound_position_t
 
 typedef struct mix_command_fade_t
 {
-	float        start;
-	float        target;
 	uint32_t     flags;
 	fade_style_t style;
+
+	float        start;
+	float        target;
+
 	uint32_t     duration;
 } mix_command_fade_t;
 
@@ -116,6 +128,12 @@ typedef struct mix_command_set_playing_sound_flags_t
 	uint32_t unset_flags; // unset_flags are applied first, so you can overwrite the flags by setting it to ~0
 	uint32_t set_flags;
 } mix_command_set_playing_sound_flags_t;
+
+typedef struct mix_command_set_category_volume_t
+{
+	sound_category_t category;
+	float            volume;
+} mix_command_set_category_volume_t;
 
 typedef struct mix_command_t
 {
@@ -129,14 +147,19 @@ typedef struct mix_command_t
 		mix_command_sound_position_t          sound_p;
 		mix_command_fade_t                    fade;
 		mix_command_set_playing_sound_flags_t set_playing_sound_flags;
+		// mix_command_set_category_volume_t     set_category_volume;
 	};
 } mix_command_t;
 
 #define MIXER_COMMAND_BUFFER_SIZE 4096
 
-DREAM_API uint32_t g_mixer_next_playing_sound_id;
-DREAM_API uint32_t g_mixer_command_read_index;
-DREAM_API uint32_t g_mixer_command_write_index;
+// TODO: Not sure whether it's a good idea to expose the mix category volumes directly,
+// but I don't know what there's much harm in updating them from the main thread while
+// the mixer thread reads them.
+DREAM_API float         g_mix_category_volumes[SOUND_CATEGORY_COUNT];
+DREAM_API uint32_t      g_mixer_next_playing_sound_id;
+DREAM_API uint32_t      g_mixer_command_read_index;
+DREAM_API uint32_t      g_mixer_command_write_index;
 DREAM_API mix_command_t g_mixer_commands[MIXER_COMMAND_BUFFER_SIZE];
 
 typedef struct play_sound_t
@@ -150,6 +173,11 @@ typedef struct play_sound_t
 
 DREAM_INLINE mix_command_t *push_mix_command(const mix_command_t *command)
 {
+	// We should never be in a situation where we overwrite unprocessed mixer commands,
+	// but it's not catastrophic.
+	ASSERT(((g_mixer_command_write_index + 1) % MIXER_COMMAND_BUFFER_SIZE) != 
+		   ( g_mixer_command_read_index       % MIXER_COMMAND_BUFFER_SIZE));
+
 	uint32_t command_index = g_mixer_command_write_index;
 	copy_struct(&g_mixer_commands[command_index % MIXER_COMMAND_BUFFER_SIZE], command);
 
@@ -161,9 +189,6 @@ DREAM_INLINE mix_command_t *push_mix_command(const mix_command_t *command)
 
 DREAM_INLINE mixer_id_t play_sound(const play_sound_t *params)
 {
-	if (g_mixer_next_playing_sound_id == 0)
-		g_mixer_next_playing_sound_id = 1;
-
 	mixer_id_t id = make_mixer_id(MIXER_ID_TYPE_PLAYING_SOUND, g_mixer_next_playing_sound_id++);
 
 	mix_command_t command = {

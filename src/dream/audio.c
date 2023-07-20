@@ -9,10 +9,15 @@
 
 #define MIXER_FLUSH_DENORMALS 1
 
-uint32_t g_mixer_next_playing_sound_id;
-uint32_t g_mixer_command_read_index;
-uint32_t g_mixer_command_write_index;
-mix_command_t g_mixer_commands[MIXER_COMMAND_BUFFER_SIZE];
+//
+//
+//
+
+alignas(64) float         g_mix_category_volumes[SOUND_CATEGORY_COUNT];
+alignas(64) uint32_t      g_mixer_next_playing_sound_id;
+alignas(64) uint32_t      g_mixer_command_read_index;
+alignas(64) uint32_t      g_mixer_command_write_index;
+alignas(64) mix_command_t g_mixer_commands[MIXER_COMMAND_BUFFER_SIZE];
 
 //
 //
@@ -23,27 +28,34 @@ typedef struct channel_matrix_t
 	float m[A_CHANNEL_COUNT][A_CHANNEL_COUNT]; // [src][dst]
 } channel_matrix_t;
 
-DREAM_INLINE void init_channel_matrix_identity(channel_matrix_t *matrix)
+DREAM_INLINE channel_matrix_t channel_matrix_identity(void)
 {
-	zero_struct(matrix);
+	channel_matrix_t result = {0};
+
 	for (size_t i = 0; i < A_CHANNEL_COUNT; i++)
 	{
-		matrix->m[i][i] = 1.0f;
+		result.m[i][i] = 1.0f;
 	}
+
+	return result;
 }
 
-DREAM_INLINE void init_channel_matrix_mono(channel_matrix_t *matrix, float value)
+DREAM_INLINE channel_matrix_t channel_matrix_mono(float value)
 {
+	channel_matrix_t result = {0};
+
 	for (size_t i = 0; i < A_CHANNEL_COUNT; i++)
 	{
 		for (size_t j = 0; j < A_CHANNEL_COUNT; j++)
 		{
-			matrix->m[i][j] = value;
+			result.m[i][j] = value;
 		}
 	}
+
+	return result;
 }
 
-DREAM_INLINE channel_matrix_t lerp_channel_matrix(const channel_matrix_t *a, const channel_matrix_t *b, float t)
+DREAM_INLINE channel_matrix_t lerp_channel_matrix(channel_matrix_t a, channel_matrix_t b, float t)
 {
 	channel_matrix_t result;
 
@@ -51,7 +63,7 @@ DREAM_INLINE channel_matrix_t lerp_channel_matrix(const channel_matrix_t *a, con
 	{
 		for (size_t j = 0; j < A_CHANNEL_COUNT; j++)
 		{
-			result.m[i][j] = lerp(a->m[i][j], b->m[i][j], t);
+			result.m[i][j] = lerp(a.m[i][j], b.m[i][j], t);
 		}
 	}
 
@@ -123,7 +135,7 @@ static void stop_playing_sound_internal(playing_sound_t *playing)
 	hash_rem(&playing_sound_from_id, playing->id.value);
 }
 
-DREAM_INLINE channel_matrix_t spatialize_channel_matrix(playing_sound_t *playing, const channel_matrix_t *matrix)
+DREAM_INLINE channel_matrix_t spatialize_channel_matrix(playing_sound_t *playing, channel_matrix_t in_matrix)
 {
 	waveform_t *waveform = playing->waveform;
 
@@ -155,8 +167,8 @@ DREAM_INLINE channel_matrix_t spatialize_channel_matrix(playing_sound_t *playing
 		result.m[i][A_CHANNEL_RIGHT] = attenuation*cos_theta2;
 	}
 
-	float flatten = smoothstep(max(0.0f, m - distance) / m);
-	result = lerp_channel_matrix(&result, matrix, flatten);
+	float flatten = 0.2f*m / (0.2f*m + distance_sq);
+	result = lerp_channel_matrix(result, in_matrix, flatten);
 
 	return result;
 }
@@ -165,7 +177,10 @@ static bool mixer_initialized;
 
 static void mixer_init(void)
 {
-	/* this is where I would initialize things - if I had any */
+	for (size_t i = 0; i < ARRAY_COUNT(g_mix_category_volumes); i++)
+	{
+		g_mix_category_volumes[i] = 1.0f;
+	}
 
 	mixer_initialized = true;
 }
@@ -287,6 +302,20 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 					playing->flags |=  command->set_playing_sound_flags.set_flags;
 				}
 			} break;
+
+#if 0
+			case MIX_SET_CATEGORY_VOLUME:
+			{
+				mix_command_set_category_volume_t *x = &command->set_category_volume;
+
+				if (ALWAYS(x->category >= 0 && x->category < SOUND_CATEGORY_COUNT))
+				{
+					mix_category_volumes[x->category] = x->volume;
+				}
+			} break;
+#endif
+
+			INVALID_DEFAULT_CASE;
 		}
 	}
 
@@ -324,32 +353,23 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 
 		if (playing->flags & PLAY_SOUND_FORCE_MONO)
 		{
-			init_channel_matrix_mono(&channel_matrix, 0.707f);
+			channel_matrix = channel_matrix_mono(0.707f);
 		}
 		else
 		{
-			init_channel_matrix_identity(&channel_matrix);
+			channel_matrix = channel_matrix_identity();
 		}
 
 		if (playing->flags & PLAY_SOUND_SPATIAL)
 		{
-			channel_matrix = spatialize_channel_matrix(playing, &channel_matrix);
+			channel_matrix = spatialize_channel_matrix(playing, channel_matrix);
 		}
 
         bool sound_should_stop = false;
 
 		for (size_t src_channel_index = 0; src_channel_index < waveform->channel_count; src_channel_index++)
 		{
-			int16_t *start = NULL;
-
-			if (waveform->channel_count == 1)
-			{
-				start = waveform_channel(waveform, 0);
-			}
-			else
-			{
-				start = waveform_channel(waveform, src_channel_index);
-			}
+			int16_t *start = waveform_channel(waveform, src_channel_index);
 
 			if (NEVER(!start))
 				continue;
