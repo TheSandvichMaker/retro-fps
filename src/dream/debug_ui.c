@@ -432,21 +432,13 @@ DREAM_INLINE v2_t ui_text_align_p(rect2_t rect, string_t text)
     return result;
 }
 
-void ui_window_begin(string_t label, rect2_t rect, bool *open)
+void ui_window_begin(ui_window_t *window)
 {
 	ASSERT(ui.initialized);
 
-    ui_id_t      id     = ui_id(label);
-    ui_widget_t *widget = ui_get_widget(id);
+	ui_id_t id = window->id = ui_id_pointer(&window);
 
-    if (widget->new)
-    {
-        widget->rect = rect;
-    }
-
-    v2_t dim = rect2_dim(rect);
-
-    rect = rect2_from_min_dim(widget->rect.min, dim);// goofy 
+	rect2_t rect = window->rect;
     ui_check_hovered(rect);
 
 	rect2_t bar = ui_add_top(&rect, (float)ui.font.ch + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN));
@@ -462,7 +454,7 @@ void ui_window_begin(string_t label, rect2_t rect, bool *open)
 
     if (ui_is_active(id))
     {
-        widget->rect = rect2_reposition_min(widget->rect, add(ui.mouse_p, ui.drag_anchor));
+        window->rect = rect2_reposition_min(window->rect, add(ui.mouse_p, ui.drag_anchor));
     }
 
     // NOTE: the panel will push a very similar view right away but we need it for the rendering here
@@ -472,26 +464,31 @@ void ui_window_begin(string_t label, rect2_t rect, bool *open)
 	r_immediate_rect2_filled(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND));
 	r_immediate_flush();
 
-    if (open)
-    {
-        ui_set_next_rect(ui_cut_right(&bar, ui_label_width(S("Close"))));
+	ui_set_next_rect(ui_cut_right(&bar, ui_label_width(S("Close"))));
 
-        UI_SCALAR(UI_SCALAR_WIDGET_MARGIN, 0.0f)
-        UI_COLOR(UI_COLOR_BUTTON_IDLE, ui_color(UI_COLOR_WINDOW_CLOSE_BUTTON))
-        if (ui_button(S("Close")))
-        {
-            *open = false;
-        }
-    }
+	window->open = true;
+
+	// TODO: Have parent IDs propagate automatically?
+	ui_id_t close_id = ui_child_id(id, S("close"));
+	ui_set_next_id(close_id);
+
+	UI_SCALAR(UI_SCALAR_WIDGET_MARGIN, 0.0f)
+	UI_COLOR(UI_COLOR_BUTTON_IDLE, ui_color(UI_COLOR_WINDOW_CLOSE_BUTTON))
+	if (ui_button(S("Close")))
+	{
+		window->open = false;
+	}
 
     ui_id_t panel_id = ui_child_id(id, S("panel"));
-	ui_text(add(bar.min, make_v2(ui_scalar(UI_SCALAR_TEXT_MARGIN), ui_scalar(UI_SCALAR_TEXT_MARGIN))), label);
+	ui_text(add(bar.min, make_v2(ui_scalar(UI_SCALAR_TEXT_MARGIN), ui_scalar(UI_SCALAR_TEXT_MARGIN))), window->name);
 	ui_panel_begin_ex(panel_id, rect, UI_PANEL_SCROLLABLE_VERT);
 }
 
-void ui_window_end(void)
+void ui_window_end(ui_window_t *window)
 {
 	ASSERT(ui.initialized);
+
+	(void)window;
 
     r_pop_view();
 	ui_panel_end();

@@ -28,10 +28,6 @@ static bitmap_font_t debug_font;
 static waveform_t *test_waveform;
 static waveform_t *short_sound;
 
-#define MAX_VERTICES (8192)
-static size_t map_vertex_count;
-static v3_t map_vertices[MAX_VERTICES];
-
 static mixer_id_t music;
 
 static triangle_mesh_t test_convex_hull;
@@ -121,14 +117,8 @@ void player_freecam(player_t *player, float dt)
     rotor3_t r_pitch = rotor3_from_plane_angle(PLANE_ZX, DEG_TO_RAD*camera->pitch);
     rotor3_t r_yaw   = rotor3_from_plane_angle(PLANE_YZ, DEG_TO_RAD*camera->yaw  );
 
-    // quat_t qpitch = make_quat_axis_angle((v3_t){ 0, 1, 0 }, DEG_TO_RAD*camera->pitch);
-    // quat_t qyaw   = make_quat_axis_angle((v3_t){ 0, 0, 1 }, DEG_TO_RAD*camera->yaw);
-
     move_delta = rotor3_rotatev(r_pitch, move_delta);
     move_delta = rotor3_rotatev(r_yaw  , move_delta);
-
-    // move_delta = quat_rotatev(qpitch, move_delta);
-    // move_delta = quat_rotatev(qyaw,   move_delta);
 
     if (button_down(BUTTON_JUMP))     move_delta.z += move_speed;
     if (button_down(BUTTON_CROUCH))   move_delta.z -= move_speed;
@@ -516,12 +506,22 @@ void game_tick(game_io_t *in_io, float dt)
     if (button_pressed(BUTTON_FIRE2))
         g_cursor_locked = !g_cursor_locked;
 
-#if 0
+#if 1
     if (button_pressed(BUTTON_FIRE1))
-        play_sound(&(play_sound_t){
-			.waveform = short_sound,
-			.volume   = 1.0f,
-		});
+	{
+		static bool mono = true;
+
+		mono = !mono;
+
+		if (mono)
+		{
+			update_playing_sound_flags(music, 0, PLAY_SOUND_FORCE_MONO);
+		}
+		else
+		{
+			update_playing_sound_flags(music, PLAY_SOUND_FORCE_MONO, 0);
+		}
+	}
 #endif
 
     io->cursor_locked = g_cursor_locked;

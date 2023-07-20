@@ -38,9 +38,17 @@ static void push_brush_wireframe(map_t *map, map_brush_t *brush, v4_t color)
     }
 }
 
+typedef enum editor_kind_t
+{
+	EDITOR_TIMINGS,
+	EDITOR_LIGHTMAP,
+	EDITOR_CONVEX_HULL,
+	EDITOR_COUNT,
+} editor_kind_t;
+
 typedef struct lightmap_editor_state_t
 {
-    float window_openness;
+	ui_window_t window;
 
     bool debug_lightmaps;
 
@@ -63,6 +71,8 @@ typedef struct lightmap_editor_state_t
 
 typedef struct hull_test_panel_t
 {
+	ui_window_t window;
+
 	bool initialized;
 
 	int random_seed;
@@ -91,29 +101,45 @@ typedef struct hull_test_panel_t
 	float  brute_force_triggered_error_timer;
 } hull_test_panel_t;
 
+typedef stack_t(editor_kind_t, EDITOR_COUNT) editor_stack_t;
+
 typedef struct editor_state_t
 {
+	bool initialized;
+
     rect2_t *fullscreen_layout;
     float bar_openness;
 
     bool show_timings;
 
     bool lightmap_editor_enabled;
-    lightmap_editor_state_t lightmap_editor;
+    lightmap_editor_state_t lm_editor;
 
 	bool hull_test_panel_enabled;
 	hull_test_panel_t hull_test;
+
+	// TODO: bit silly
+	editor_stack_t next_window_order;
+	editor_stack_t window_order;
 } editor_state_t;
 
-static editor_state_t g_editor = {
+static editor_state_t editor = {
     .show_timings = false,
 
-    .lightmap_editor = {
+    .lm_editor = {
+		.window = {
+			.name = Sc("Lightmap Editor"),
+		},
+
 		.min_display_recursion = 0,
 		.max_display_recursion = 10,
     },
 
 	.hull_test = {
+		.window = {
+			.name = Sc("Convex Hull Debugger"),
+		},
+
 		.automatically_recalculate_hull = true,
 		.random_seed              = 1,
 		.point_count              = 12,
@@ -132,9 +158,21 @@ static editor_state_t g_editor = {
 	},
 };
 
+static void bring_editor_to_front(editor_kind_t kind)
+{
+	stack_erase(editor.next_window_order, kind);
+	stack_push_back(editor.next_window_order, kind); // in front = back of the queue! because it's back-to-front!
+}
+
+static void send_editor_to_back(editor_kind_t kind)
+{
+	stack_erase(editor.next_window_order, kind);
+	stack_push_front(editor.next_window_order, kind); // to back = front of the queue! because it's back-to-front!
+}
+
 static void generate_new_random_convex_hull(size_t point_count, random_series_t *r)
 {
-	hull_test_panel_t *hull_test = &g_editor.hull_test;
+	hull_test_panel_t *hull_test = &editor.hull_test;
 
 	triangle_mesh_t *mesh  = &hull_test->mesh;
 	hull_debug_t    *debug = &hull_test->debug;
@@ -169,7 +207,7 @@ static void generate_new_random_convex_hull(size_t point_count, random_series_t 
 
 static void hull_render_debug_triangles(hull_debug_step_t *step, bool final_step, bool render_degenerate, bool render_wireframe)
 {
-	hull_test_panel_t        *hull_test = &g_editor.hull_test;
+	hull_test_panel_t        *hull_test = &editor.hull_test;
 	hull_debug_t             *debug   = &hull_test->debug;
 	hull_diagnostic_result_t *diag    = debug->diagnostics;
 
@@ -232,10 +270,10 @@ static void hull_render_debug_triangles(hull_debug_step_t *step, bool final_step
 
 static void update_and_render_convex_hull_test_panel(void)
 {
-	if (!g_editor.hull_test_panel_enabled)
-		return;
+	hull_test_panel_t *hull_test = &editor.hull_test;
 
-	hull_test_panel_t *hull_test = &g_editor.hull_test;
+	if (!hull_test->window.open)
+		return;
 
 	triangle_mesh_t *mesh  = &hull_test->mesh;
 	hull_debug_t    *debug = &hull_test->debug;
@@ -363,7 +401,7 @@ static void update_and_render_convex_hull_test_panel(void)
 		r_immediate_flush();
 	}
 
-	UI_WINDOW(S("Convex Hull Debug"), rect2_from_min_dim(make_v2(64.0f, 64.0f), make_v2(512.0f, 512.0f)), &g_editor.hull_test_panel_enabled)
+	UI_WINDOW(&hull_test->window)
 	{
 		bool changed = false;
 		changed |= ui_slider_int(S("Random Seed"), &hull_test->random_seed, 1, 128);
@@ -526,6 +564,11 @@ static void update_and_render_convex_hull_test_panel(void)
 		}
 	}
 
+	if (ui_is_active(hull_test->window.id))
+	{
+		bring_editor_to_front(EDITOR_CONVEX_HULL);
+	}
+
 	hull_test->initialized = true;
 }
 
@@ -546,17 +589,12 @@ static void update_and_render_lightmap_editor(void)
     camera_t *camera = player->attached_camera;
 	(void)camera;
 
-    lightmap_editor_state_t *lm_editor = &g_editor.lightmap_editor;
+    lightmap_editor_state_t *lm_editor = &editor.lm_editor;
 
-    lm_editor->window_openness = ui_animate_towards(lm_editor->window_openness, 
-                                                    g_editor.lightmap_editor_enabled ? 1.0f : 0.0f);
+	if (!lm_editor->window.open)
+		return;
 
-    float height = 512.0f*lm_editor->window_openness;
-
-    if (height < 0.1f)
-        return;
-
-	UI_WINDOW(S("Lightmap Editor"), rect2_from_min_dim(make_v2(32.0f, 32.0f), make_v2(512.0f, height)), &g_editor.lightmap_editor_enabled)
+	UI_WINDOW(&lm_editor->window)
 	{
         if (!map->lightmap_state || !map->lightmap_state->finalized)
         {
@@ -836,6 +874,11 @@ static void update_and_render_lightmap_editor(void)
 		}
 	}
 
+	if (ui_is_active(lm_editor->window.id))
+	{
+		bring_editor_to_front(EDITOR_LIGHTMAP);
+	}
+
     if (lm_editor->debug_lightmaps)
     {
         r_command_identifier(S("lightmap debug"));
@@ -1069,19 +1112,19 @@ DREAM_INLINE void fullscreen_show_timings(void)
 
 DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 {
-    rect2_t bar = ui_cut_top(g_editor.fullscreen_layout, 32.0f);
+    rect2_t bar = ui_cut_top(editor.fullscreen_layout, 32.0f);
 
     rect2_t collision_bar = bar;
     collision_bar.min.y -= 32.0f;
 
     bool mouse_hover = rect2_contains_point(collision_bar, ui.mouse_p);
-    g_editor.bar_openness = ui_animate_towards(g_editor.bar_openness, mouse_hover ? 1.0f : 0.0f);
+    editor.bar_openness = ui_animate_towards(editor.bar_openness, mouse_hover ? 1.0f : 0.0f);
 
-    if (g_editor.bar_openness > 0.0001f)
+    if (editor.bar_openness > 0.0001f)
     {
         float height = rect2_height(bar);
 
-        bar = rect2_add_offset(bar, make_v2(0.0f, (1.0f - g_editor.bar_openness)*height));
+        bar = rect2_add_offset(bar, make_v2(0.0f, (1.0f - editor.bar_openness)*height));
 
         r_immediate_rect2_filled(bar, ui_color(UI_COLOR_WINDOW_BACKGROUND));
         r_immediate_flush();
@@ -1093,20 +1136,24 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
             {
                 string_t name;
                 bool *toggle;
+				editor_kind_t editor;
             } menu_t;
 
             menu_t menus[] = {
                 {
                     .name = S("Timings (F1)"),
-                    .toggle = &g_editor.show_timings,
+                    .toggle = &editor.show_timings,
+					.editor = EDITOR_TIMINGS,
                 },
                 {
                     .name = S("Lightmap Editor (F2)"),
-                    .toggle = &g_editor.lightmap_editor_enabled,
+                    .toggle = &editor.lm_editor.window.open,
+					.editor = EDITOR_LIGHTMAP,
                 },
                 {
                     .name = S("Convex Hull Tester (F3)"),
-                    .toggle = &g_editor.hull_test_panel_enabled,
+                    .toggle = &editor.hull_test.window.open,
+					.editor = EDITOR_CONVEX_HULL,
                 },
             };
 
@@ -1130,6 +1177,10 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
                 if (ui_button(menu->name))
                 {
                     *menu->toggle = !*menu->toggle;
+					if (*menu->toggle)
+					{
+						bring_editor_to_front(menu->editor);
+					}
                 }
 
                 if (active)
@@ -1143,14 +1194,59 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 
 void update_and_render_in_game_editor(void)
 {
+	if (!editor.initialized)
+	{
+		editor.initialized = true;
+
+		send_editor_to_back(EDITOR_LIGHTMAP);
+		editor.lm_editor.window.rect = rect2_from_min_dim(make_v2(32, 32), make_v2(512, 512));
+
+		send_editor_to_back(EDITOR_CONVEX_HULL);
+		editor.hull_test.window.rect = rect2_from_min_dim(make_v2(64, 64), make_v2(512, 512));
+	}
+
     if (ui_button_pressed(BUTTON_F1))
-        g_editor.show_timings = !g_editor.show_timings;
+        editor.show_timings = !editor.show_timings;
 
     if (ui_button_pressed(BUTTON_F2))
-        g_editor.lightmap_editor_enabled = !g_editor.lightmap_editor_enabled;
+	{
+		if (editor.lm_editor.window.open)
+		{
+			if (stack_top(editor.window_order) == EDITOR_LIGHTMAP)
+			{
+				editor.lm_editor.window.open = false;
+			}
+			else
+			{
+				bring_editor_to_front(EDITOR_LIGHTMAP);
+			}
+		}
+		else
+		{
+			editor.lm_editor.window.open = true;
+		}
+	}
 
     if (ui_button_pressed(BUTTON_F3))
-        g_editor.hull_test_panel_enabled = !g_editor.hull_test_panel_enabled;
+	{
+		if (editor.hull_test.window.open)
+		{
+			if (stack_top(editor.window_order) == EDITOR_CONVEX_HULL)
+			{
+				editor.hull_test.window.open = false;
+			}
+			else
+			{
+				bring_editor_to_front(EDITOR_CONVEX_HULL);
+			}
+		}
+		else
+		{
+			editor.hull_test.window.open = true;
+		}
+	}
+
+	copy_struct(&editor.window_order, &editor.next_window_order);
 
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);
@@ -1160,18 +1256,25 @@ void update_and_render_in_game_editor(void)
         .max = { (float)res_x, (float)res_y },
     };
 
+	for (size_t i = 0; i < stack_count(editor.window_order); i++)
+	{
+		editor_kind_t kind = editor.window_order.values[i];
+
+		switch (kind)
+		{
+			case EDITOR_LIGHTMAP:    { update_and_render_lightmap_editor(); } break;
+			case EDITOR_CONVEX_HULL: { update_and_render_convex_hull_test_panel(); } break;
+		}
+	}
+
     UI_SCALAR(UI_SCALAR_WIDGET_MARGIN, 0.0f)
-    ui_panel_begin(fullscreen_rect);
+    UI_PANEL(fullscreen_rect)
+	{
+		editor.fullscreen_layout = ui_layout_rect();
 
-    g_editor.fullscreen_layout = ui_layout_rect();
+		fullscreen_update_and_render_top_editor_bar();
 
-    fullscreen_update_and_render_top_editor_bar();
-
-    if (g_editor.show_timings)
-        fullscreen_show_timings();
-
-    ui_panel_end();
-
-    update_and_render_lightmap_editor();
-	update_and_render_convex_hull_test_panel();
+		if (editor.show_timings)
+			fullscreen_show_timings();
+	}
 }

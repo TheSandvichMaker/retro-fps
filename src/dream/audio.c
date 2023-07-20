@@ -7,9 +7,7 @@
 #include "asset.h"
 #include "audio.h"
 
-//
-//
-//
+#define MIXER_FLUSH_DENORMALS 1
 
 uint32_t g_mixer_next_playing_sound_id;
 uint32_t g_mixer_command_read_index;
@@ -20,17 +18,62 @@ mix_command_t g_mixer_commands[MIXER_COMMAND_BUFFER_SIZE];
 //
 //
 
+typedef struct channel_matrix_t
+{
+	float m[A_CHANNEL_COUNT][A_CHANNEL_COUNT]; // [src][dst]
+} channel_matrix_t;
+
+DREAM_INLINE void init_channel_matrix_identity(channel_matrix_t *matrix)
+{
+	zero_struct(matrix);
+	for (size_t i = 0; i < A_CHANNEL_COUNT; i++)
+	{
+		matrix->m[i][i] = 1.0f;
+	}
+}
+
+DREAM_INLINE void init_channel_matrix_mono(channel_matrix_t *matrix, float value)
+{
+	for (size_t i = 0; i < A_CHANNEL_COUNT; i++)
+	{
+		for (size_t j = 0; j < A_CHANNEL_COUNT; j++)
+		{
+			matrix->m[i][j] = value;
+		}
+	}
+}
+
+DREAM_INLINE channel_matrix_t lerp_channel_matrix(const channel_matrix_t *a, const channel_matrix_t *b, float t)
+{
+	channel_matrix_t result;
+
+	for (size_t i = 0; i < A_CHANNEL_COUNT; i++)
+	{
+		for (size_t j = 0; j < A_CHANNEL_COUNT; j++)
+		{
+			result.m[i][j] = lerp(a->m[i][j], b->m[i][j], t);
+		}
+	}
+
+	return result;
+}
+
 typedef struct fade_t fade_t;
 
 typedef struct playing_sound_t
 {
 	waveform_t *waveform;
 	mixer_id_t id;
+
 	uint32_t at_index;
+
 	float    volume;
 	uint32_t flags;
+
 	v3_t     p;
 	float    min_distance;
+
+	uint32_t fade_count;
 	fade_t  *first_fade;
 } playing_sound_t;
 
@@ -40,10 +83,11 @@ typedef struct fade_t
 	fade_t          *next;
 
 	uint32_t     flags;
+	fade_style_t style;
+
 	float        start;
 	float        target;
 	float        current;
-	fade_style_t style;
 	uint32_t     frame_index;   
 	uint32_t     frame_duration;
 } fade_t;
@@ -76,11 +120,71 @@ static void stop_playing_sound_internal(playing_sound_t *playing)
 	}
 
 	bd_rem_item(&playing_sounds, playing);
-	hash_rem(&playing_sound_from_id, playing->id.id);
+	hash_rem(&playing_sound_from_id, playing->id.value);
+}
+
+DREAM_INLINE channel_matrix_t spatialize_channel_matrix(playing_sound_t *playing, const channel_matrix_t *matrix)
+{
+	waveform_t *waveform = playing->waveform;
+
+	v3_t to_sound = sub(playing->p, listener_p);
+
+	float distance_sq = vlensq(to_sound);
+
+	if (distance_sq > 0.01f)
+	{
+		to_sound = div(to_sound, sqrt_ss(distance_sq));
+	}
+	else
+	{
+		to_sound = (v3_t){ 0.0f, 0.0f, 0.0f };
+	}
+
+	float m = playing->min_distance;
+	float attenuation = m / (m + distance_sq);
+
+	float cos_theta  = to_sound.x*listener_x.x + to_sound.y*listener_x.y;
+	float cos_theta2 = sqrt_ss(0.5f*(cos_theta + 1.0f));
+	float sin_theta2 = sqrt_ss(1.0f - cos_theta2*cos_theta2);
+
+	channel_matrix_t result = {0};
+
+	for (size_t i = 0; i < waveform->channel_count; i++)
+	{
+		result.m[i][A_CHANNEL_LEFT]  = attenuation*sin_theta2;
+		result.m[i][A_CHANNEL_RIGHT] = attenuation*cos_theta2;
+	}
+
+	float flatten = max(0.0f, m - distance_sq) / m;
+	result = lerp_channel_matrix(&result, matrix, flatten);
+
+	return result;
+}
+
+static bool mixer_initialized;
+
+static void mixer_init(void)
+{
+	/* this is where I would initialize things - if I had any */
+
+	mixer_initialized = true;
 }
 
 void mix_samples(uint32_t frames_to_mix, float *buffer)
 {
+#if MIXER_FLUSH_DENORMALS
+#define FLUSH_TO_ZERO_BIT      (1 << 15)
+#define DENORMALS_ARE_ZERO_BIT (1 << 6)
+	uint32_t old_csr = _mm_getcsr();
+	uint32_t new_csr = old_csr|FLUSH_TO_ZERO_BIT|DENORMALS_ARE_ZERO_BIT;
+	_mm_setcsr(new_csr);
+#endif
+
+	if (!mixer_initialized)
+	{
+		mixer_init();
+	}
+
 	size_t mix_channel_count = 2; // TODO: Surround sound!?
 
 	//
@@ -99,23 +203,27 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 		{
 			case MIX_PLAY_SOUND:
 			{
+				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
+
                 playing_sound_t playing = {
                     .id           = command->id,
-                    .waveform     = command->sound.waveform,
-                    .volume       = command->sound.volume,
-                    .flags        = command->sound.flags,
-                    .p            = command->sound.p,
-                    .min_distance = command->sound.min_distance,
+                    .waveform     = command->play_sound.waveform,
+                    .volume       = command->play_sound.volume,
+                    .flags        = command->play_sound.flags,
+                    .p            = command->play_sound.p,
+                    .min_distance = command->play_sound.min_distance,
                 };
 
                 resource_handle_t handle = bd_add_item(&playing_sounds, &playing);
-                hash_add(&playing_sound_from_id, playing.id.id, handle.value);
+                hash_add(&playing_sound_from_id, playing.id.value, handle.value);
 			} break;
 
 			case MIX_STOP_SOUND:
 			{
+				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
+
 				resource_handle_t handle;
-				if (hash_find(&playing_sound_from_id, command->id.id, &handle.value))
+				if (hash_find(&playing_sound_from_id, command->id.value, &handle.value))
 				{
 					playing_sound_t *playing = bd_get(&playing_sounds, handle);
 					stop_playing_sound_internal(playing);
@@ -124,8 +232,10 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 
 			case MIX_FADE:
 			{
+				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
+
 				resource_handle_t handle;
-				if (hash_find(&playing_sound_from_id, command->id.id, &handle.value))
+				if (hash_find(&playing_sound_from_id, command->id.value, &handle.value))
 				{
 					playing_sound_t *playing = bd_get(&playing_sounds, handle);
 
@@ -142,10 +252,11 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 
 					fade->next = playing->first_fade;
 					playing->first_fade = fade;
+					playing->fade_count += 1;
 				}
 			} break;
 
-			case MIX_LISTENER_POSITION:
+			case MIX_UPDATE_LISTENER:
 			{
 				listener_p = command->listener.p;
 				listener_d = normalize_or_zero(command->listener.d);
@@ -154,11 +265,26 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 
 			case MIX_SOUND_POSITION:
 			{
+				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
+
 				resource_handle_t handle;
-				if (hash_find(&playing_sound_from_id, command->id.id, &handle.value))
+				if (hash_find(&playing_sound_from_id, command->id.value, &handle.value))
 				{
 					playing_sound_t *playing = bd_get(&playing_sounds, handle);
-					playing->p = command->sound.p;
+					playing->p = command->sound_p.p;
+				}
+			} break;
+
+			case MIX_SET_PLAYING_SOUND_FLAGS:
+			{
+				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
+
+				resource_handle_t handle;
+				if (hash_find(&playing_sound_from_id, command->id.value, &handle.value))
+				{
+					playing_sound_t *playing = bd_get(&playing_sounds, handle);
+					playing->flags &= ~command->set_playing_sound_flags.unset_flags;
+					playing->flags |=  command->set_playing_sound_flags.set_flags;
 				}
 			} break;
 		}
@@ -194,149 +320,119 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 			frames_to_write = MIN(frames_to_mix, frames_left);
 		}
 
-		v2_t volume = make_v2(playing->volume, playing->volume);
+		channel_matrix_t channel_matrix = {0};
+
+		if (playing->flags & PLAY_SOUND_FORCE_MONO)
+		{
+			init_channel_matrix_mono(&channel_matrix, 0.707f);
+		}
+		else
+		{
+			init_channel_matrix_identity(&channel_matrix);
+		}
 
 		if (playing->flags & PLAY_SOUND_SPATIAL)
 		{
-			v3_t to_sound = sub(playing->p, listener_p);
-
-			float distance_sq = vlensq(to_sound);
-
-			if (distance_sq > 0.01f)
-			{
-				to_sound = div(to_sound, sqrt_ss(distance_sq));
-			}
-			else
-			{
-				to_sound = (v3_t){ 0.0f, 0.0f, 0.0f };
-			}
-
-			float m = playing->min_distance;
-			float attenuation = m / (m + distance_sq);
-
-			float flatten = 1.0f - max(0.0f, m - distance_sq) / m;
-
-			float cos_theta  = flatten*(to_sound.x*listener_x.x + to_sound.y*listener_x.y);
-			float cos_theta2 = sqrt_ss(0.5f*(cos_theta + 1.0f));
-			float sin_theta2 = sqrt_ss(1.0f - cos_theta2*cos_theta2);
-
-			volume.x *= attenuation*sin_theta2;
-			volume.y *= attenuation*cos_theta2;
+			channel_matrix = spatialize_channel_matrix(playing, &channel_matrix);
 		}
 
         bool sound_should_stop = false;
 
-        for (size_t channel_index = 0; channel_index < mix_channel_count; channel_index++)
-        {
-            int16_t *start = NULL;
+		for (size_t src_channel_index = 0; src_channel_index < waveform->channel_count; src_channel_index++)
+		{
+			int16_t *start = NULL;
 
-            if (waveform->channel_count == 1)
-            {
-                start = waveform_channel(waveform, 0);
-            }
-            else
-            {
-                start = waveform_channel(waveform, channel_index);
-            }
+			if (waveform->channel_count == 1)
+			{
+				start = waveform_channel(waveform, 0);
+			}
+			else
+			{
+				start = waveform_channel(waveform, src_channel_index);
+			}
 
-            if (NEVER(!start))
-                continue;
+			if (NEVER(!start))
+				continue;
 
-            start += playing->at_index;
+			start += playing->at_index;
 
-            int16_t *end = start + waveform->frame_count;
-            int16_t *src = start;
-            float   *dst = mix_buffer + channel_index*frames_to_mix;
+			int16_t *end = start + waveform->frame_count;
+			int16_t *src = start;
 
-            for (size_t frame_index = 0; frame_index < frames_to_write; frame_index++)
-            {
-                // wrap looping sounds
+			for (size_t frame_index = 0; frame_index < frames_to_write; frame_index++)
+			{
+				// wrap looping sounds
 
-                if (src >= end)
-                {
-                    size_t diff = end - src;
-                    src = start + diff;
-                }
+				if (src >= end)
+				{
+					size_t diff = end - src;
+					src = start + diff;
+				}
 
-                //
-                // process fades
-                //
+				//
+				// process fades
+				//
 
-                float volume_mod = 1.0f;
+				float volume_mod = 1.0f;
 
-                for (fade_t *fade = playing->first_fade; fade; fade = fade->next)
-                {
-                    size_t fade_frame_index = fade->frame_index + frame_index;
+				for (fade_t *fade = playing->first_fade; fade; fade = fade->next)
+				{
+					size_t fade_frame_index = fade->frame_index + frame_index;
 
-                    if (fade_frame_index < fade->frame_duration)
-                    {
-                        float t = (float)fade_frame_index / (float)fade->frame_duration;
+					if (fade_frame_index < fade->frame_duration)
+					{
+						float t = (float)fade_frame_index / (float)fade->frame_duration;
 
-                        switch (fade->style)
-                        {
-                            case FADE_STYLE_LINEAR:
-                            {
-                                // nothing to do
-                            } break;
+						switch (fade->style)
+						{
+							case FADE_STYLE_LINEAR:
+							{
+								// nothing to do
+							} break;
 
-                            case FADE_STYLE_SMOOTHSTEP:
-                            {
-                                t = smoothstep(t);
-                            } break;
+							case FADE_STYLE_SMOOTHSTEP:
+							{
+								t = smoothstep(t);
+							} break;
 
-                            case FADE_STYLE_SMOOTHERSTEP:
-                            {
-                                t = smootherstep(t);
-                            } break;
-                        }
+							case FADE_STYLE_SMOOTHERSTEP:
+							{
+								t = smootherstep(t);
+							} break;
+						}
 
-                        float fade_value = lerp(fade->start, fade->target, t);
-                        
-                        if (fade->flags & FADE_TARGET_VOLUME)
-                        {
-                            volume_mod *= fade_value;
-                        }
-                    }
-                    else
-                    {
-                        if (fade->flags & FADE_STOP_SOUND_WHEN_FINISHED)
-                        {
-                            sound_should_stop = true;
-                        }
-                    }
-                }
+						float fade_value = lerp(fade->start, fade->target, t);
+						
+						if (fade->flags & FADE_TARGET_VOLUME)
+						{
+							volume_mod *= fade_value;
+						}
+					}
+					else
+					{
+						if (fade->flags & FADE_STOP_SOUND_WHEN_FINISHED)
+						{
+							sound_should_stop = true;
+							volume_mod        = 0.0f;
+						}
+					}
+				}
 
-                //
-                // mix samples
-                //
+				//
+				// mix samples
+				//
 
-                v2_t final_volume = mul(volume, volume_mod);
-                final_volume = max(0.0f, final_volume);
+				float sample = unorm_from_i16(*src++);
+				sample *= playing->volume;
 
-#if 0
-                if (playing->flags & PLAY_SOUND_FORCE_MONO)
-                {
-                    float final = 0.0f;
-                    float mod = 1.0f / (float)waveform->channel_count;
+				for (size_t dst_channel_index = 0; dst_channel_index < mix_channel_count; dst_channel_index++)
+				{
+					float mix_mapping = channel_matrix.m[src_channel_index][dst_channel_index];
 
-                    for (size_t channel_index = 0; channel_index < waveform->channel_count; channel_index++)
-                    {
-                        int16_t sample = *src++;
-
-                        final += mod*((float)sample / (float)INT16_MAX);
-                    }
-
-                    for (size_t channel_index = 0; channel_index < mix_channel_count; channel_index++)
-                    {
-                        *dst++ += limit(final_volume.e[channel_index]*final);
-                    }
-                }
-                else
-#endif
-
-                int16_t sample = *src++;
-                *dst++ += final_volume.e[channel_index]*unorm_from_i16(sample);
-            }
+					float *dst = mix_buffer + dst_channel_index*frames_to_mix + frame_index;
+					*dst += mix_mapping*sample;
+				}
+			}
         }
 
 		playing->at_index += frames_to_write;
@@ -380,6 +476,7 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
                     {
                         removed_from_playing = true;
                         sll_pop(*remove_at);
+						if (ALWAYS(playing->fade_count > 0)) playing->fade_count -= 1;
                         break;
                     }
                 }
@@ -403,8 +500,11 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
             float *src_r = mix_buffer + frames_to_mix;
             for (size_t frame_index = 0; frame_index < frames_to_mix; frame_index++)
             {
-                *dst++ = limit(*src_l++);
-                *dst++ = limit(*src_r++);
+				float l = *src_l++;
+				float r = *src_r++;
+
+                *dst++ = limit(l);
+                *dst++ = limit(r);
             }
         }
         else
@@ -421,4 +521,8 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
     }
 
 	mixer_frame_index += frames_to_mix;
+
+#if MIXER_FLUSH_DENORMALS
+	_mm_setcsr(old_csr);
+#endif
 }

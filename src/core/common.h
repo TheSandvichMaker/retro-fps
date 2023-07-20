@@ -19,7 +19,22 @@
 
 // these macros would be easier to write if I used a sentinel for the doubly linked lists, but that has its own complications that I don't always want
 
-#define dll_push_front(f, l, n) do { if (!(l)) { (f) = (l) = (n); } else { (f)->prev = (n); (n)->next = (f); (f) = (n); } } while (0)
+#define dll_push_front(f, l, n) \
+	do {                        \
+		if (!(f))               \
+		{                       \
+			ASSERT(!(l));       \
+			(f) = (l) = (n);    \
+		}                       \
+		else                    \
+		{                       \
+			(f)->prev = (n);    \
+			(n)->next = (f);    \
+			(n)->prev = NULL;   \
+			(f) = (n);          \
+		}                       \
+	} while (0)
+
 #define dll_push_back(f, l, n)  do { if (!(f)) { (f) = (l) = (n); } else { (n)->prev = (l); (l) = (l)->next = (n); } } while (0)
 
 #define dll_insert_before(f, l, i, n)               \

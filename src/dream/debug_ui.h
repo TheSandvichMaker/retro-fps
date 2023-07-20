@@ -68,13 +68,24 @@ typedef enum ui_panel_flags_enum_t
 	UI_PANEL_SCROLLABLE_VERT = 0x2,
 } ui_panel_flags_enum_t;
 
+typedef struct ui_window_t
+{
+	string_t name;
+	ui_id_t  id;
+
+	rect2_t rect;
+
+	bool  open;
+	float openness;
+} ui_window_t;
+
 DREAM_API bool ui_begin(float dt);
 DREAM_API void ui_end(void);
 
-DREAM_API void ui_window_begin(string_t label, rect2_t size, bool *open);
-DREAM_API void ui_window_end(void);
+DREAM_API void ui_window_begin(ui_window_t *window);
+DREAM_API void ui_window_end(ui_window_t *window);
 
-#define UI_WINDOW(label, size, open) DEFER_LOOP(ui_window_begin(label, size, open), ui_window_end())
+#define UI_WINDOW(window) DEFER_LOOP(ui_window_begin(window), ui_window_end(window))
 
 DREAM_API void ui_panel_begin(rect2_t size);
 DREAM_API void ui_panel_begin_ex(ui_id_t id, rect2_t size, ui_panel_flags_t flags);

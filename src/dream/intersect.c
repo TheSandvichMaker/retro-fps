@@ -13,6 +13,9 @@
 //
 //
 
+// TODO: Figure out compiler-independent warning disabling
+#pragma warning(push)
+#pragma warning(disable: 4723) // warns against divide-by-0. But dividing by 0 in this code behaves correctly, so that's ok.
 float ray_intersect_rect3(v3_t o, v3_t d, rect3_t rect)
 {
     v3_t inv_d = { 1.0f / d.x, 1.0f / d.y, 1.0f / d.z };
@@ -42,7 +45,11 @@ float ray_intersect_rect3(v3_t o, v3_t d, rect3_t rect)
     else                
         return FLT_MAX;
 }
+#pragma warning(pop)
 
+// TODO: Figure out compiler-independent warning disabling
+#pragma warning(push)
+#pragma warning(disable: 4723) // warns against divide-by-0. But dividing by 0 in this code behaves correctly, so that's ok.
 bool ray_intersect_rect3_bvh(v3_t o, v3_t d, rect3_t rect, float max_t)
 {
     v3_t inv_d = { 1.0f / d.x, 1.0f / d.y, 1.0f / d.z };
@@ -67,6 +74,7 @@ bool ray_intersect_rect3_bvh(v3_t o, v3_t d, rect3_t rect, float max_t)
 
     return (t_max >= t_min) && (t_min <= max_t);
 }
+#pragma warning(pop)
 
 float ray_intersect_triangle(v3_t o, v3_t d, v3_t a, v3_t b, v3_t c, v3_t *uvw)
 {

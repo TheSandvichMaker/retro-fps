@@ -159,6 +159,7 @@ int main(int argc, char **argv)
     bool ndebug    = false;
     bool release   = false;
     bool stub      = false;
+	bool modules   = false;
     bool not_slow  = false;
     bool asan      = false;
     backend_compiler_t backend = BACKEND_MSVC;
@@ -202,6 +203,10 @@ int main(int argc, char **argv)
         {
             stub = true;
         }
+        else if (args_match(args, "-modules"))
+        {
+            modules = true;
+        }
         else if (args_match(args, "-compiler"))
         {
             string_t compiler = args_next(args);
@@ -239,107 +244,137 @@ int main(int argc, char **argv)
     // ==========================================================================================================================
     // build source
 
-    printf("\n");
-    printf("=================================================\n");
-    printf("                  BUILD SOURCE                   \n");
-    printf("=================================================\n");
-    printf("\n");
-
-	if (stub)
+	if (modules)
 	{
-		string_t source_directory = S("src");
-
-		bool build_failed = false;
-
-		object_collection_t objects = {0};
-
-		build_params_t build = {
-			.no_cache      = true, // incremental compilation is kaput
-
-			.configuration = S("debug"),
-			.backend       = backend,
-		};
-
-		for (fs_entry_t *entry = fs_scan_directory(temp, source_directory, 0);
-			 entry;
-			 entry = fs_entry_next(entry))
+		for (int config = 0; config < 2; config++)
 		{
-			if (string_match_nocase(entry->name, S("buildtool")))
-				continue;
+			bool is_debug   = config == 0;
+			bool is_release = config == 1;
 
-			compile_params_t compile = {
-				.single_translation_unit = true,
-				.stub_name               = entry->name,
-
-				.address_sanitizer       = asan,
-
-				.warnings_are_errors     = true,
-				.warning_level           = W4,
-
-				.optimization_level      = O0,
-
-				.defines = slist_from_array(temp, array_expand(string_t,
-					S("_CRT_SECURE_NO_WARNINGS"),
-					S("UNICODE"),
-					ndebug   ? S("NDEBUG")     : S("DEBUG"),
-					not_slow ? S("DREAM_FAST") : S("DREAM_SLOW"),
-				)),
-
-				.include_paths = slist_from_array(temp, array_expand(string_t,
-					S("src"),
-					S("external/include")
-				)),
-
-				.ignored_directories = slist_from_array(temp, array_expand(string_t,
-					S("buildtool"),
-					S("DONTBUILD")
-				)),
-			};
-
-			compile_error_t error = compile_directory(entry->path, &build, &compile, &objects);
-
-			if (error)
+			if (is_debug)
 			{
-				fprintf(stderr, "Compilation failed! TODO: More information\n");
-
-				build_failed = true;
-				break;
+				printf("\n");
+				printf("=================================================\n");
+				printf("                BUILDING DEBUG                   \n");
+				printf("=================================================\n");
+				printf("\n");
 			}
-		}
+			else if (is_release)
+			{
+				printf("\n");
+				printf("=================================================\n");
+				printf("                BUILDING RELEASE                 \n");
+				printf("=================================================\n");
+				printf("\n");
+			}
+			else
+			{
+				INVALID_CODE_PATH;
+			}
 
-		if (!build_failed)
-		{
-			link_params_t link = {
-				.output_exe              = S("retro"),
-				.run_dir                 = S("run"),
-				.copy_executables_to_run = true,
+			string_t source_directory = S("src");
 
-				.libraries = slist_from_array(temp, array_expand(string_t, 
-					S("user32"),
-					S("dxguid"),
-					S("d3d11"),
-					S("dxgi"),
-					S("d3dcompiler"),
-					S("gdi32"),
-					S("user32"),
-					S("ole32"),
-					S("ksuser"),
-					S("shell32"),
-					S("Synchronization")
-				)),
+			bool build_failed = false;
+
+			object_collection_t objects = {0};
+
+			build_params_t build = {
+				.no_cache      = true, // incremental compilation is kaput
+
+				.configuration = is_debug ? S("debug") : S("release"),
+				.backend       = backend,
 			};
 
-			link_error_t error = link_executable(&objects, &build, &link);
-
-			if (error)
+			for (fs_entry_t *entry = fs_scan_directory(temp, source_directory, 0);
+				 entry;
+				 entry = fs_entry_next(entry))
 			{
-				fprintf(stderr, "Linking failed! TODO: More information\n");
-				build_failed = true;
+				if (string_match_nocase(entry->name, S("buildtool")))
+					continue;
+
+				compile_params_t compile = {
+					.single_translation_unit = true,
+					.stub_name               = entry->name,
+
+					.address_sanitizer       = asan,
+
+					.warnings_are_errors     = true,
+					.warning_level           = W4,
+
+					.optimization_level      = is_debug ? O0 : O2,
+
+					.defines = slist_from_array(temp, array_expand(string_t,
+						S("_CRT_SECURE_NO_WARNINGS"),
+						S("UNICODE"),
+						ndebug   ? S("NDEBUG")     : S("DEBUG"),
+						not_slow ? S("DREAM_FAST") : S("DREAM_SLOW"),
+					)),
+
+					.include_paths = slist_from_array(temp, array_expand(string_t,
+						S("src"),
+						S("external/include")
+					)),
+
+					.ignored_directories = slist_from_array(temp, array_expand(string_t,
+						S("buildtool"),
+						S("DONTBUILD")
+					)),
+				};
+
+				if (is_debug)   slist_appends(&compile.defines, temp, S("DREAM_UNOPTIMIZED=1"));
+				if (is_release) slist_appends(&compile.defines, temp, S("DREAM_OPTIMIZED=1"));
+
+				compile_error_t error = compile_directory(entry->path, &build, &compile, &objects);
+
+				if (error)
+				{
+					fprintf(stderr, "Compilation failed! TODO: More information\n");
+
+					build_failed = true;
+					break;
+				}
+			}
+
+			if (!build_failed)
+			{
+				link_params_t link = {
+					.output_exe              = S("retro"),
+					.run_dir                 = S("run"),
+					.copy_executables_to_run = true,
+
+					.libraries = slist_from_array(temp, array_expand(string_t, 
+						S("user32"),
+						S("dxguid"),
+						S("d3d11"),
+						S("dxgi"),
+						S("d3dcompiler"),
+						S("gdi32"),
+						S("user32"),
+						S("ole32"),
+						S("ksuser"),
+						S("shell32"),
+						S("Synchronization")
+					)),
+				};
+
+				link_error_t error = link_executable(&objects, &build, &link);
+
+				if (error)
+				{
+					fprintf(stderr, "Linking failed! TODO: More information\n");
+					build_failed = true;
+				}
 			}
 		}
 	}
 	else
 	{
+		printf("\n");
+		printf("=================================================\n");
+		printf("                  BUILDING SOURCE                \n");
+		printf("=================================================\n");
+		printf("\n");
+
 		build_error_t error = BUILD_ERROR_NONE;
 
 		all_params_t base_params = {
