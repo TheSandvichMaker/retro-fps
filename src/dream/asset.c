@@ -17,7 +17,7 @@ static void *stbi_realloc(void *ptr, size_t new_size);
 #include "core/common.h"
 #include "core/arena.h"
 #include "core/fs.h"
-#include "core/bulk_data.h"
+#include "core/pool.h"
 #include "core/hashtable.h"
 
 #include "dream/job_queues.h"
@@ -74,7 +74,7 @@ image_t    missing_image;
 waveform_t missing_waveform;
 
 static arena_t asset_arena;
-static bulk_t  asset_store = INIT_BULK_DATA(asset_slot_t);
+static pool_t  asset_store = INIT_POOL(asset_slot_t);
 static hash_t  asset_index;
 static asset_config_t asset_config;
 
@@ -282,7 +282,7 @@ void initialize_asset_system(const asset_config_t *config)
 
 			if (kind)
 			{
-				asset_slot_t *asset = bd_add(&asset_store);
+				asset_slot_t *asset = pool_add(&asset_store);
 				asset->hash  = asset_hash_from_string(entry->path);
 				asset->kind  = kind;
 				asset->state = ASSET_STATE_ON_DISK;

@@ -3,12 +3,12 @@
 
 #include "api_types.h"
 
-enum { BD_FREE_BIT = 1 << 31 };
+enum { POOL_FREE_BIT = 1 << 31 };
 
-typedef struct bulk_item_t
+typedef struct pool_item_t
 {
     uint32_t generation;
-} bulk_item_t;
+} pool_item_t;
 
 typedef struct free_item_t
 {
@@ -16,10 +16,10 @@ typedef struct free_item_t
     uint32_t next;
 } free_item_t;
 
-typedef enum bulk_flags_t
+typedef enum pool_flags_t
 {
-	BULK_FLAGS_CONCURRENT = 0x1,
-} bulk_flags_t;
+	POOL_FLAGS_CONCURRENT = 0x1,
+} pool_flags_t;
 
 typedef struct pool_t
 {

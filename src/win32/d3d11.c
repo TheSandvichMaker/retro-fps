@@ -24,8 +24,8 @@
 
 extern _declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
 
-bulk_t d3d_models   = INIT_BULK_DATA_EX(d3d_model_t,   BULK_FLAGS_CONCURRENT);
-bulk_t d3d_textures = INIT_BULK_DATA_EX(d3d_texture_t, BULK_FLAGS_CONCURRENT);
+pool_t d3d_models   = INIT_POOL_EX(d3d_model_t,   POOL_FLAGS_CONCURRENT);
+pool_t d3d_textures = INIT_POOL_EX(d3d_texture_t, POOL_FLAGS_CONCURRENT);
 
 d3d_state_t d3d;
 
@@ -475,7 +475,7 @@ int init_d3d11(void *hwnd_)
                 .pixels = &pixel,
             },
         });
-        d3d.white_texture = bd_get(&d3d_textures, handle);
+        d3d.white_texture = pool_get(&d3d_textures, handle);
     }
 
     // default "missing texture" texture
@@ -509,7 +509,7 @@ int init_d3d11(void *hwnd_)
                 .pixels = pixels,
             },
         });
-        d3d.missing_texture = bd_get(&d3d_textures, handle);
+        d3d.missing_texture = pool_get(&d3d_textures, handle);
 
         resource_handle_t cubemap_handle = upload_texture(&(upload_texture_t){
             .desc = {
@@ -529,7 +529,7 @@ int init_d3d11(void *hwnd_)
                 },
             },
         });
-        d3d.missing_texture_cubemap = bd_get(&d3d_textures, cubemap_handle);
+        d3d.missing_texture_cubemap = pool_get(&d3d_textures, cubemap_handle);
     }
 
     // blue noise texture
@@ -565,7 +565,7 @@ int init_d3d11(void *hwnd_)
                 .pixels = pixels,
             },
         });
-        d3d.blue_noise = bd_get(&d3d_textures, handle);
+        d3d.blue_noise = pool_get(&d3d_textures, handle);
     }
 
     // create immediate rendering buffers
@@ -606,7 +606,7 @@ int init_d3d11(void *hwnd_)
             .vertex_count  = ARRAY_COUNT(g_skybox_vertices) / 3,
             .vertices      = g_skybox_vertices,
         });
-        d3d.skybox_model = bd_get(&d3d_models, handle);
+        d3d.skybox_model = pool_get(&d3d_models, handle);
     }
 
     // sun shadow map
@@ -717,7 +717,7 @@ void render_model(const render_pass_t *pass)
 
 static d3d_texture_t *d3d_get_texture_or(resource_handle_t handle, d3d_texture_t *fallback)
 {
-	d3d_texture_t *texture = bd_get(&d3d_textures, handle);
+	d3d_texture_t *texture = pool_get(&d3d_textures, handle);
 
 	if (!texture || texture->state != D3D_TEXTURE_STATE_LOADED)  
 		texture = fallback;
@@ -947,7 +947,7 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                     r_command_model_t *command = (r_command_model_t *)base;
                     at = align_address(at + sizeof(*command), RENDER_COMMAND_ALIGN);
 
-                    d3d_model_t *model = bd_get(&d3d_models, command->model);
+                    d3d_model_t *model = pool_get(&d3d_models, command->model);
                     if (model)
                     {
                         d3d_cbuffer_t cbuffer = {
@@ -1104,7 +1104,7 @@ done_with_sun_shadows:
                     r_command_model_t *command = (r_command_model_t *)base;
                     at = align_address(at + sizeof(*command), RENDER_COMMAND_ALIGN);
 
-                    d3d_model_t *model = bd_get(&d3d_models, command->model);
+                    d3d_model_t *model = pool_get(&d3d_models, command->model);
                     if (model)
                     {
                         d3d_texture_t *texture  = d3d_get_texture_or(command->texture, d3d.missing_texture);
@@ -1390,10 +1390,10 @@ void get_resolution(int *w, int *h)
 
 resource_handle_t reserve_texture(void)
 {
-    d3d_texture_t *resource = bd_add(&d3d_textures);
+    d3d_texture_t *resource = pool_add(&d3d_textures);
 	resource->state = D3D_TEXTURE_STATE_RESERVED;
 
-	resource_handle_t result = bd_get_handle(&d3d_textures, resource);
+	resource_handle_t result = pool_get_handle(&d3d_textures, resource);
 
 	return result;
 }
@@ -1403,7 +1403,7 @@ void populate_texture(resource_handle_t handle, const upload_texture_t *params)
     if (!params->data.pixels)
         return;
 
-    d3d_texture_t *resource = bd_get(&d3d_textures, handle);
+    d3d_texture_t *resource = pool_get(&d3d_textures, handle);
 
 	uint32_t state = resource->state;
 
@@ -1609,7 +1609,7 @@ resource_handle_t upload_texture(const upload_texture_t *params)
 
 void destroy_texture(resource_handle_t handle)
 {
-    d3d_texture_t *resource = bd_get(&d3d_textures, handle);
+    d3d_texture_t *resource = pool_get(&d3d_textures, handle);
 
 	if (!resource)
 		return;
@@ -1642,7 +1642,7 @@ void destroy_texture(resource_handle_t handle)
 
 		D3D_SAFE_RELEASE(resource->srv);
 
-		bd_rem(&d3d_textures, handle);
+		pool_rem(&d3d_textures, handle);
 	}
 }
 
@@ -1653,7 +1653,7 @@ resource_handle_t upload_model(const upload_model_t *params)
     if (NEVER(params->vertex_format >= VERTEX_FORMAT_COUNT))
         return result;
 
-    d3d_model_t *resource = bd_add(&d3d_models);
+    d3d_model_t *resource = pool_add(&d3d_models);
 
     if (resource)
     {
@@ -1702,7 +1702,7 @@ resource_handle_t upload_model(const upload_model_t *params)
             ID3D11Device_CreateBuffer(d3d.device, &desc, &initial, &resource->ibuffer);
         }
 
-        result = bd_get_handle(&d3d_models, resource);
+        result = pool_get_handle(&d3d_models, resource);
     }
 
     return result;

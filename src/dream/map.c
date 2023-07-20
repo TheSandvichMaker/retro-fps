@@ -6,7 +6,7 @@
 //
 
 #include "core/subset_iter.h"
-#include "core/bulk_data.h"
+#include "core/pool.h"
 #include "core/sort.h"
 #include "core/hashtable.h"
 

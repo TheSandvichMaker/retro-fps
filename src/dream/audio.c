@@ -1,6 +1,6 @@
 #include "core/common.h"
 #include "core/arena.h"
-#include "core/bulk_data.h"
+#include "core/pool.h"
 #include "core/hashtable.h"
 #include "core/math.h"
 
@@ -104,9 +104,9 @@ typedef struct fade_t
 	uint32_t     frame_duration;
 } fade_t;
 
-static bulk_t playing_sounds = INIT_BULK_DATA(playing_sound_t);
+static pool_t playing_sounds = INIT_POOL(playing_sound_t);
 static hash_t playing_sound_from_id;
-static bulk_t active_fades = INIT_BULK_DATA(fade_t);
+static pool_t active_fades = INIT_POOL(fade_t);
 
 static uint64_t mixer_frame_index;
 static v3_t listener_p;
@@ -128,10 +128,10 @@ static void stop_playing_sound_internal(playing_sound_t *playing)
 		fade_t *fade = playing->first_fade;
 		playing->first_fade = fade->next;
 
-		bd_rem_item(&active_fades, fade);
+		pool_rem_item(&active_fades, fade);
 	}
 
-	bd_rem_item(&playing_sounds, playing);
+	pool_rem_item(&playing_sounds, playing);
 	hash_rem(&playing_sound_from_id, playing->id.value);
 }
 
@@ -229,7 +229,7 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
                     .min_distance = command->play_sound.min_distance,
                 };
 
-                resource_handle_t handle = bd_add_item(&playing_sounds, &playing);
+                resource_handle_t handle = pool_add_item(&playing_sounds, &playing);
                 hash_add(&playing_sound_from_id, playing.id.value, handle.value);
 			} break;
 
@@ -240,7 +240,7 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 				resource_handle_t handle;
 				if (hash_find(&playing_sound_from_id, command->id.value, &handle.value))
 				{
-					playing_sound_t *playing = bd_get(&playing_sounds, handle);
+					playing_sound_t *playing = pool_get(&playing_sounds, handle);
 					stop_playing_sound_internal(playing);
 				}
 			} break;
@@ -252,9 +252,9 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 				resource_handle_t handle;
 				if (hash_find(&playing_sound_from_id, command->id.value, &handle.value))
 				{
-					playing_sound_t *playing = bd_get(&playing_sounds, handle);
+					playing_sound_t *playing = pool_get(&playing_sounds, handle);
 
-					resource_handle_t fade_handle = bd_add_item(&active_fades, &(fade_t){
+					resource_handle_t fade_handle = pool_add_item(&active_fades, &(fade_t){
 						.playing        = playing,
 						.flags          = command->fade.flags,
 						.start          = command->fade.start,
@@ -263,7 +263,7 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 						.style          = command->fade.style,
 						.frame_duration = command->fade.duration,
 					});
-					fade_t *fade = bd_get(&active_fades, fade_handle);
+					fade_t *fade = pool_get(&active_fades, fade_handle);
 
 					fade->next = playing->first_fade;
 					playing->first_fade = fade;
@@ -285,7 +285,7 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 				resource_handle_t handle;
 				if (hash_find(&playing_sound_from_id, command->id.value, &handle.value))
 				{
-					playing_sound_t *playing = bd_get(&playing_sounds, handle);
+					playing_sound_t *playing = pool_get(&playing_sounds, handle);
 					playing->p = command->sound_p.p;
 				}
 			} break;
@@ -297,7 +297,7 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 				resource_handle_t handle;
 				if (hash_find(&playing_sound_from_id, command->id.value, &handle.value))
 				{
-					playing_sound_t *playing = bd_get(&playing_sounds, handle);
+					playing_sound_t *playing = pool_get(&playing_sounds, handle);
 					playing->flags &= ~command->set_playing_sound_flags.unset_flags;
 					playing->flags |=  command->set_playing_sound_flags.set_flags;
 				}
@@ -327,9 +327,9 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 
     float *mix_buffer = m_alloc_array(temp, mix_channel_count*frames_to_mix, float);
 
-	for (bd_iter_t it = bd_iter(&playing_sounds);
-		 bd_iter_valid(&it);
-		 bd_iter_next(&it))
+	for (pool_iter_t it = pool_iter(&playing_sounds);
+		 pool_iter_valid(&it);
+		 pool_iter_next(&it))
 	{
 		playing_sound_t *playing  = it.data;
 		waveform_t      *waveform = playing->waveform;
@@ -472,9 +472,9 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 		}
 	}
 
-	for (bd_iter_t it = bd_iter(&active_fades);
-		 bd_iter_valid(&it);
-		 bd_iter_next(&it))
+	for (pool_iter_t it = pool_iter(&active_fades);
+		 pool_iter_valid(&it);
+		 pool_iter_next(&it))
 	{
         fade_t *fade = it.data;
 
@@ -485,7 +485,7 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
         {
             if (fade->frame_index + frames_to_mix >= fade->frame_duration)
             {
-                bd_rem_item(&active_fades, fade);
+                pool_rem_item(&active_fades, fade);
 
                 bool removed_from_playing = false;
 

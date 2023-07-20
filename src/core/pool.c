@@ -1,144 +1,144 @@
 #include "core/core.h"
 
-#define BULK_DATA_RESERVE_SIZE GB(16)
-#define BULK_DATA_COMMIT_SIZE  KB(16)
+#define POOL_RESERVE_SIZE GB(16)
+#define POOL_COMMIT_SIZE  KB(16)
 
-static bulk_item_t *bulk_item_from_item(void *item)
+static pool_item_t *pool_item_from_item(void *item)
 {
-    return ((bulk_item_t *)item) - 1;
+    return ((pool_item_t *)item) - 1;
 }
 
-static void *item_from_bulk_item(bulk_item_t *bulk_item)
+static void *item_from_pool_item(pool_item_t *pool_item)
 {
-    return bulk_item + 1;
+    return pool_item + 1;
 }
 
-static size_t bd_stride(bulk_t *bd)
+static size_t pool_stride(pool_t *pool)
 {
-    return align_forward(MAX(sizeof(free_item_t), bd->item_size) + sizeof(bulk_item_t), bd->align);
+    return align_forward(MAX(sizeof(free_item_t), pool->item_size) + sizeof(pool_item_t), pool->align);
 }
 
-static uint32_t index_from_bulk_item(bulk_t *bd, bulk_item_t *bulk_item)
+static uint32_t index_from_pool_item(pool_t *pool, pool_item_t *pool_item)
 {
-    return (uint32_t)(((char *)bulk_item - bd->buffer) / bd_stride(bd));
+    return (uint32_t)(((char *)pool_item - pool->buffer) / pool_stride(pool));
 }
 
-static void *bd_at_index(bulk_t *bd, size_t index)
+static void *pool_item_at_index(pool_t *pool, size_t index)
 {
-    return (void *)(bd->buffer + index*bd_stride(bd));
+    return (void *)(pool->buffer + index*pool_stride(pool));
 }
 
-static void bd_init(bulk_t *bd)
+static void pool_init(pool_t *pool)
 {
-    ASSERT_MSG(bd->item_size, "BULK DATA INITIALIZATION FAILURE: ITEM SIZE IS ZERO"); // this needs to be initialized by the user
+    ASSERT_MSG(pool->item_size, "POOL INITIALIZATION FAILURE: ITEM SIZE IS ZERO"); // this needs to be initialized by the user
 
-	if (bd->flags & BULK_FLAGS_CONCURRENT) mutex_lock(bd->lock);
+	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_lock(pool->lock);
 
-    if (ALWAYS(!bd->buffer))
+    if (ALWAYS(!pool->buffer))
     {
-        bd->buffer = vm_reserve(NULL, BULK_DATA_RESERVE_SIZE);
-        vm_commit(bd->buffer, BULK_DATA_COMMIT_SIZE);
+        pool->buffer = vm_reserve(NULL, POOL_RESERVE_SIZE);
+        vm_commit(pool->buffer, POOL_COMMIT_SIZE);
 
-        bd->watermark = bd_stride(bd); // first entry is the freelist sentinel
+        pool->watermark = pool_stride(pool); // first entry is the freelist sentinel
     }
 
-	if (bd->flags & BULK_FLAGS_CONCURRENT) mutex_unlock(bd->lock);
+	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_unlock(pool->lock);
 }
 
-void *bd_add(bulk_t *bd)
+void *pool_add(pool_t *pool)
 {
-    if (!bd->buffer)  bd_init(bd);
+    if (!pool->buffer)  pool_init(pool);
 
     void *result = NULL;
 
-	if (bd->flags & BULK_FLAGS_CONCURRENT) mutex_lock(bd->lock);
+	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_lock(pool->lock);
 
-    free_item_t *sentinel = bd_at_index(bd, 0);
+    free_item_t *sentinel = pool_item_at_index(pool, 0);
     if (sentinel->next != 0)
     {
-        free_item_t *free_item = bd_at_index(bd, sentinel->next);
+        free_item_t *free_item = pool_item_at_index(pool, sentinel->next);
         sentinel->next = free_item->next;
 
-        free_item->generation &= ~BD_FREE_BIT;
+        free_item->generation &= ~POOL_FREE_BIT;
 
-        bulk_item_t *bulk_item = (bulk_item_t *)free_item;
+        pool_item_t *pool_item = (pool_item_t *)free_item;
 
-        result = item_from_bulk_item(bulk_item);
-        zero_memory(result, bd->item_size);
+        result = item_from_pool_item(pool_item);
+        zero_memory(result, pool->item_size);
     }
     else
     {
-        size_t stride = bd_stride(bd);
+        size_t stride = pool_stride(pool);
 
-        size_t new_size = bd->watermark + stride;
+        size_t new_size = pool->watermark + stride;
 
-        bool new_chunk = (align_forward(new_size, BULK_DATA_COMMIT_SIZE) > align_forward(bd->watermark, BULK_DATA_COMMIT_SIZE));
+        bool new_chunk = (align_forward(new_size, POOL_COMMIT_SIZE) > align_forward(pool->watermark, POOL_COMMIT_SIZE));
 
         if (new_chunk)
-            vm_commit(bd->buffer + align_backward(new_size, BULK_DATA_COMMIT_SIZE), BULK_DATA_COMMIT_SIZE);
+            vm_commit(pool->buffer + align_backward(new_size, POOL_COMMIT_SIZE), POOL_COMMIT_SIZE);
 
-        size_t index = bd->watermark / stride;
+        size_t index = pool->watermark / stride;
 
         // bump the size
-        bd->watermark += stride;
+        pool->watermark += stride;
 
-        bulk_item_t *bulk_item = bd_at_index(bd, index);
+        pool_item_t *pool_item = pool_item_at_index(pool, index);
 
         // don't need to zero the memory because it's fresh from VirtualAlloc, guaranteed to be zero
-        result = item_from_bulk_item(bulk_item);
+        result = item_from_pool_item(pool_item);
     }
 
-	if (bd->flags & BULK_FLAGS_CONCURRENT) mutex_unlock(bd->lock);
+	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_unlock(pool->lock);
 
     return result;
 }
 
-resource_handle_t bd_add_item(bulk_t *bd, const void *item)
+resource_handle_t pool_add_item(pool_t *pool, const void *item)
 {
-    void *result = bd_add(bd);
-    copy_memory(result, item, bd->item_size);
-    return bd_get_handle(bd, result);
+    void *result = pool_add(pool);
+    copy_memory(result, item, pool->item_size);
+    return pool_get_handle(pool, result);
 }
 
-void *bd_get(bulk_t *bd, resource_handle_t handle)
+void *pool_get(pool_t *pool, resource_handle_t handle)
 {
-    if (NEVER(!bd->buffer))  FATAL_ERROR("Bulk data not initialized!");
+    if (NEVER(!pool->buffer))  FATAL_ERROR("Pool not initialized!");
 
     void *result = NULL;
 
-    size_t stride = bd_stride(bd);
-    size_t count  = bd->watermark / stride;
+    size_t stride = pool_stride(pool);
+    size_t count  = pool->watermark / stride;
 
     if (handle.index > 0 && ALWAYS(handle.index < count))
     {
-        bulk_item_t *bulk_item = bd_at_index(bd, handle.index);
-        if (bulk_item->generation == handle.generation)
+        pool_item_t *pool_item = pool_item_at_index(pool, handle.index);
+        if (pool_item->generation == handle.generation)
         {
-            result = item_from_bulk_item(bulk_item);
+            result = item_from_pool_item(pool_item);
         }
     }
 
     return result;
 }
 
-bool bd_rem(bulk_t *bd, resource_handle_t handle)
+bool pool_rem(pool_t *pool, resource_handle_t handle)
 {
-    if (NEVER(!bd->buffer))  FATAL_ERROR("Bulk data not initialized!");
+    if (NEVER(!pool->buffer))  FATAL_ERROR("Pool not initialized!");
 
     bool result = false;
 
-	if (bd->flags & BULK_FLAGS_CONCURRENT) mutex_lock(bd->lock);
+	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_lock(pool->lock);
 
-    size_t stride = bd_stride(bd);
-    size_t count  = bd->watermark / stride;
+    size_t stride = pool_stride(pool);
+    size_t count  = pool->watermark / stride;
 
     if (handle.index > 0 && ALWAYS(handle.index < count))
     {
-        free_item_t *sentinel  = bd_at_index(bd, 0);
-        free_item_t *free_item = bd_at_index(bd, handle.index);
+        free_item_t *sentinel  = pool_item_at_index(pool, 0);
+        free_item_t *free_item = pool_item_at_index(pool, handle.index);
 
         free_item->generation += 1;
-        free_item->generation |= BD_FREE_BIT;
+        free_item->generation |= POOL_FREE_BIT;
 
         free_item->next = sentinel->next;
         sentinel ->next = handle.index;
@@ -146,79 +146,79 @@ bool bd_rem(bulk_t *bd, resource_handle_t handle)
         result = true;
     }
 
-	if (bd->flags & BULK_FLAGS_CONCURRENT) mutex_unlock(bd->lock);
+	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_unlock(pool->lock);
 
     return result;
 }
 
-bool bd_rem_item(bulk_t *bd, void *item)
+bool pool_rem_item(pool_t *pool, void *item)
 {
-    resource_handle_t handle = bd_get_handle(bd, item);
-    return bd_rem(bd, handle);
+    resource_handle_t handle = pool_get_handle(pool, item);
+    return pool_rem(pool, handle);
 }
 
-resource_handle_t bd_get_handle(bulk_t *bd, void *item)
+resource_handle_t pool_get_handle(pool_t *pool, void *item)
 {
-    if (NEVER(!bd->buffer))  return NULL_RESOURCE_HANDLE;
+    if (NEVER(!pool->buffer))  return NULL_RESOURCE_HANDLE;
 
-    bulk_item_t *bulk_item = bulk_item_from_item(item);
+    pool_item_t *pool_item = pool_item_from_item(item);
 
-    if ((((uintptr_t)bulk_item) & (bd->align-1)) != 0)
+    if ((((uintptr_t)pool_item) & (pool->align-1)) != 0)
         FATAL_ERROR("Funny bulk data item align!");
 
-    size_t count = bd->watermark / bd_stride(bd);
+    size_t count = pool->watermark / pool_stride(pool);
 
-    uint32_t index = index_from_bulk_item(bd, bulk_item);
+    uint32_t index = index_from_pool_item(pool, pool_item);
 
     if (NEVER(index < 0))      return NULL_RESOURCE_HANDLE;
     if (NEVER(index > count))  return NULL_RESOURCE_HANDLE;
 
     resource_handle_t handle = {
         .index      = index,
-        .generation = bulk_item->generation,
+        .generation = pool_item->generation,
     };
 
     return handle;
 }
 
-bd_iter_t bd_iter(bulk_t *bd)
+pool_iter_t pool_iter(pool_t *pool)
 {
-    bd_iter_t it = {
-        .bd   = bd,
-        .data = item_from_bulk_item((bulk_item_t *)bd->buffer),
+    pool_iter_t it = {
+        .pool   = pool,
+        .data = item_from_pool_item((pool_item_t *)pool->buffer),
     };
-    bd_iter_next(&it);
+    pool_iter_next(&it);
     return it;
 }
 
-bool bd_iter_valid(bd_iter_t *it)
+bool pool_iter_valid(pool_iter_t *it)
 {
     return !!it->data;
 }
 
-void bd_iter_next(bd_iter_t *it)
+void pool_iter_next(pool_iter_t *it)
 {
     if (!it->data)
         return;
 
     for (;;)
     {
-        it->data = (char *)it->data + bd_stride(it->bd);
+        it->data = (char *)it->data + pool_stride(it->pool);
 
-        bulk_item_t *bulk_item = bulk_item_from_item(it->data);
+        pool_item_t *pool_item = pool_item_from_item(it->data);
 
-        if ((char *)bulk_item >= it->bd->buffer + it->bd->watermark)
+        if ((char *)pool_item >= it->pool->buffer + it->pool->watermark)
         {
             it->data = NULL;
             break;
         }
 
-        if (!(bulk_item->generation & BD_FREE_BIT))
+        if (!(pool_item->generation & POOL_FREE_BIT))
             break;
     }
 }
 
-void bd_iter_rem(bd_iter_t *it)
+void pool_iter_rem(pool_iter_t *it)
 {
-	bd_rem_item(it->bd, it->data);
+	pool_rem_item(it->pool, it->data);
 }

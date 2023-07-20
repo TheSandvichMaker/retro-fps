@@ -141,7 +141,7 @@ float ui_divide_space(float item_count)
 	return size;
 }
 
-static bulk_t widgets = INIT_BULK_DATA(ui_widget_t);
+static pool_t widgets = INIT_POOL(ui_widget_t);
 static hash_t widget_index;
 
 ui_widget_t *ui_get_widget(ui_id_t id)
@@ -150,7 +150,7 @@ ui_widget_t *ui_get_widget(ui_id_t id)
 
 	if (!result)
 	{
-		result = bd_add(&widgets);
+		result = pool_add(&widgets);
 		result->id = id;
 		result->new = true;
 		hash_add_object(&widget_index, id.value, result);
@@ -294,7 +294,7 @@ bool ui_begin(float dt)
 
 	ui.frame_index += 1;
 
-	for (bd_iter_t it = bd_iter(&widgets); bd_iter_valid(&it); bd_iter_next(&it))
+	for (pool_iter_t it = pool_iter(&widgets); pool_iter_valid(&it); pool_iter_next(&it))
 	{
 		ui_widget_t *widget = it.data;
 
@@ -303,7 +303,7 @@ bool ui_begin(float dt)
 		if (widget->last_touched_frame_index + 1 < ui.frame_index)
 		{
 			hash_rem(&widget_index, widget->id.value);
-			bd_rem_item(&widgets, widget);
+			pool_rem_item(&widgets, widget);
 		}
 	}
 

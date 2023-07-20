@@ -71,8 +71,8 @@ typedef struct d3d_texture_t
     ID3D11ShaderResourceView *srv;
 } d3d_texture_t;
 
-DREAM_API bulk_t d3d_models;
-DREAM_API bulk_t d3d_textures;
+DREAM_API pool_t d3d_models;
+DREAM_API pool_t d3d_textures;
 
 typedef enum d3d_sampler_t
 {
