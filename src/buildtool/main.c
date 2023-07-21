@@ -43,98 +43,12 @@ static string_t format_seconds(arena_t *arena, double seconds)
 #include "core/os.c"
 #include "core/utility.c"
 #include "core/tls.c"
+#include "core/args_parser.h"
 
 #include "backend_msvc.c"
 #include "backend_clang.c"
 #include "build.c"
 #include "assets.c"
-
-typedef struct cmd_args_t
-{
-    char **at;
-    char **end;
-
-    bool error;
-} cmd_args_t;
-
-static void init_args(cmd_args_t *args, int argc, char **argv)
-{
-    args->error = false;
-
-    args->at  = argv + 1;
-    args->end = args->at + argc - 1;
-}
-
-static bool args_left(cmd_args_t *args)
-{
-    return args->at < args->end;
-}
-
-static bool args_match(cmd_args_t *args, const char *arg)
-{
-    if (strcmp(*args->at, arg) == 0)
-    {
-        args->at += 1;
-        return true;
-    }
-    return false;
-}
-
-static void args_error(cmd_args_t *args, string_t failure_reason)
-{
-    fprintf(stderr, "argument parse error: %.*s", strexpand(failure_reason));
-    args->error = true;
-}
-
-static string_t args_next(cmd_args_t *args)
-{
-    if (args_left(args))
-    {
-        string_t result = string_from_cstr(*args->at);
-        args->at += 1;
-        return result;
-    }
-    else
-    {
-        args_error(args, S("expected another argument"));
-        return strnull;
-    }
-}
-
-static int args_parse_int(cmd_args_t *args)
-{
-    string_t arg = args_next(args);
-
-    char *end;
-    int result = (int)strtol(arg.data, &end, 0);
-
-    if (end == arg.data)
-    {
-        args_error(args, S("argument must be an integer"));
-    }
-
-    return result;
-}
-
-static float args_parse_float(cmd_args_t *args)
-{
-    string_t arg = args_next(args);
-
-    char *end;
-    float result = strtof(arg.data, &end);
-
-    if (end == arg.data)
-    {
-        args_error(args, S("argument must be an integer"));
-    }
-
-    return result;
-}
-
-static void skip_arg(cmd_args_t *args)
-{
-    args->at += 1;
-}
 
 static void print_usage(void)
 {
@@ -154,14 +68,14 @@ int main(int argc, char **argv)
     // ==========================================================================================================================
     // parse arguments
 
-    bool build_all = true;
-    bool no_cache  = false;
-    bool ndebug    = false;
-    bool release   = false;
-    bool stub      = false;
-	bool modules   = false;
-    bool not_slow  = false;
-    bool asan      = false;
+    bool build_all  = true;
+    bool no_cache   = false;
+    bool ndebug     = false;
+    bool release    = false;
+    bool stub       = false;
+	bool nomodules  = false;
+    bool not_slow   = false;
+    bool asan       = false;
     backend_compiler_t backend = BACKEND_MSVC;
 
     cmd_args_t *args = &(cmd_args_t){0};
@@ -203,9 +117,9 @@ int main(int argc, char **argv)
         {
             stub = true;
         }
-        else if (args_match(args, "-modules"))
+        else if (args_match(args, "-nomodules"))
         {
-            modules = true;
+            nomodules = true;
         }
         else if (args_match(args, "-compiler"))
         {
@@ -244,131 +158,8 @@ int main(int argc, char **argv)
     // ==========================================================================================================================
     // build source
 
-	if (modules)
-	{
-		for (int config = 0; config < 2; config++)
-		{
-			bool is_debug   = config == 0;
-			bool is_release = config == 1;
-
-			if (is_debug)
-			{
-				printf("\n");
-				printf("=================================================\n");
-				printf("                BUILDING DEBUG                   \n");
-				printf("=================================================\n");
-				printf("\n");
-			}
-			else if (is_release)
-			{
-				printf("\n");
-				printf("=================================================\n");
-				printf("                BUILDING RELEASE                 \n");
-				printf("=================================================\n");
-				printf("\n");
-			}
-			else
-			{
-				INVALID_CODE_PATH;
-			}
-
-			string_t source_directory = S("src");
-
-			bool build_failed = false;
-
-			object_collection_t objects = {0};
-
-			build_params_t build = {
-				.no_cache      = true, // incremental compilation is kaput
-
-				.configuration = is_debug ? S("debug") : S("release"),
-				.backend       = backend,
-			};
-
-			for (fs_entry_t *entry = fs_scan_directory(temp, source_directory, 0);
-				 entry;
-				 entry = fs_entry_next(entry))
-			{
-				if (string_match_nocase(entry->name, S("buildtool")))
-					continue;
-
-				compile_params_t compile = {
-					.single_translation_unit = true,
-					.stub_name               = entry->name,
-
-					.address_sanitizer       = asan,
-
-					.warnings_are_errors     = true,
-					.warning_level           = W4,
-
-					.optimization_level      = is_debug ? O0 : O2,
-
-					.defines = slist_from_array(temp, array_expand(string_t,
-						S("_CRT_SECURE_NO_WARNINGS"),
-						S("UNICODE"),
-						ndebug   ? S("NDEBUG")     : S("DEBUG"),
-						not_slow ? S("DREAM_FAST") : S("DREAM_SLOW"),
-					)),
-
-					.include_paths = slist_from_array(temp, array_expand(string_t,
-						S("src"),
-						S("external/include")
-					)),
-
-					.ignored_directories = slist_from_array(temp, array_expand(string_t,
-						S("buildtool"),
-						S("DONTBUILD")
-					)),
-				};
-
-				if (is_debug)   slist_appends(&compile.defines, temp, S("DREAM_UNOPTIMIZED=1"));
-				if (is_release) slist_appends(&compile.defines, temp, S("DREAM_OPTIMIZED=1"));
-
-				compile_error_t error = compile_directory(entry->path, &build, &compile, &objects);
-
-				if (error)
-				{
-					fprintf(stderr, "Compilation failed! TODO: More information\n");
-
-					build_failed = true;
-					break;
-				}
-			}
-
-			if (!build_failed)
-			{
-				link_params_t link = {
-					.output_exe              = S("retro"),
-					.run_dir                 = S("run"),
-					.copy_executables_to_run = true,
-
-					.libraries = slist_from_array(temp, array_expand(string_t, 
-						S("user32"),
-						S("dxguid"),
-						S("d3d11"),
-						S("dxgi"),
-						S("d3dcompiler"),
-						S("gdi32"),
-						S("user32"),
-						S("ole32"),
-						S("ksuser"),
-						S("shell32"),
-						S("Synchronization")
-					)),
-				};
-
-				link_error_t error = link_executable(&objects, &build, &link);
-
-				if (error)
-				{
-					fprintf(stderr, "Linking failed! TODO: More information\n");
-					build_failed = true;
-				}
-			}
-		}
-	}
-	else
-	{
+	if (nomodules)
+	{		
 		printf("\n");
 		printf("=================================================\n");
 		printf("                  BUILDING SOURCE                \n");
@@ -435,6 +226,13 @@ int main(int argc, char **argv)
 			},
 		};
 
+		build_context_t *context = m_alloc_struct(temp, build_context_t);
+		context->arena     = temp;
+		context->params    = &base_params.build;
+		context->build_dir = Sf("build/%.*s", Sx(base_params.build.configuration));
+
+		fs_create_directory(context->build_dir);
+
 		all_params_t release_params = base_params;
 		release_params.build.configuration = S("release");
 		release_params.compile.optimization_level = O2;
@@ -444,7 +242,7 @@ int main(int argc, char **argv)
 
 		if (!release || build_all)
 		{
-			error |= build_directory(S("src"), &base_params);
+			error |= build_directory(context, S("src"), &base_params);
 
 			switch (error)
 			{
@@ -457,7 +255,7 @@ int main(int argc, char **argv)
 
 		if ((release || build_all) && !error)
 		{
-			error |= build_directory(S("src"), &release_params);
+			error |= build_directory(context, S("src"), &release_params);
 
 			switch (error)
 			{
@@ -465,6 +263,146 @@ int main(int argc, char **argv)
 				case BUILD_ERROR_OTHER_FAILURE: fprintf(stderr, "Build failed for other reasons! Oh no!\n"); break;
 				case BUILD_ERROR_COMPILATION:   fprintf(stderr, "Build failed with compilation errors\n"); break;
 				case BUILD_ERROR_LINKER:        fprintf(stderr, "Build failed with linker errors\n"); break;
+			}
+		}
+
+	}
+	else
+	{
+
+		for (int config = 0; config < 2; config++)
+		{
+			bool is_debug   = config == 0;
+			bool is_release = config == 1;
+
+			if (is_debug)
+			{
+				printf("\n");
+				printf("=================================================\n");
+				printf("                BUILDING DEBUG                   \n");
+				printf("=================================================\n");
+				printf("\n");
+			}
+			else if (is_release)
+			{
+				printf("\n");
+				printf("=================================================\n");
+				printf("                BUILDING RELEASE                 \n");
+				printf("=================================================\n");
+				printf("\n");
+			}
+			else
+			{
+				INVALID_CODE_PATH;
+			}
+
+			string_t source_directory = S("src");
+
+			bool build_failed = false;
+
+			object_collection_t objects = {0};
+
+			build_params_t build = {
+				.no_cache      = true, // incremental compilation is kaput
+
+				.configuration = is_debug ? S("debug") : S("release"),
+				.backend       = backend,
+			};
+
+			build_context_t *context = m_alloc_struct(temp, build_context_t);
+			context->arena     = temp;
+			context->params    = &build;
+			context->build_dir = Sf("build/%.*s", Sx(build.configuration));
+
+			fs_create_directory(context->build_dir);
+
+			compile_params_t compile = {
+				.single_translation_unit = false,
+
+				.address_sanitizer       = asan,
+
+				.warnings_are_errors     = true,
+				.warning_level           = W4,
+
+				.optimization_level      = is_debug ? O0 : O2,
+
+				.defines = slist_from_array(temp, array_expand(string_t,
+					S("_CRT_SECURE_NO_WARNINGS"),
+					S("UNICODE"),
+					ndebug   ? S("NDEBUG")     : S("DEBUG"),
+					not_slow ? S("DREAM_FAST") : S("DREAM_SLOW"),
+				)),
+
+				.include_paths = slist_from_array(temp, array_expand(string_t,
+					S("src"),
+					S("external/include")
+				)),
+
+				.ignored_directories = slist_from_array(temp, array_expand(string_t,
+					S("buildtool"),
+					S("DONTBUILD")
+				)),
+			};
+
+			if (is_debug)   slist_appends(&compile.defines, temp, S("DREAM_UNOPTIMIZED=1"));
+			if (is_release) slist_appends(&compile.defines, temp, S("DREAM_OPTIMIZED=1"));
+
+			source_files_t module_files = {0};
+
+			for (fs_entry_t *entry = fs_scan_directory(temp, source_directory, 0);
+				 entry;
+				 entry = fs_entry_next(entry))
+			{
+				if (string_match_nocase(entry->name, S("buildtool")))
+					continue;
+
+				source_files_t files = {0};
+				gather_source_files(temp, entry->path, &compile, &files);
+				transform_into_stub(context, &files, entry->name);
+
+				dll_push_back(module_files.first, module_files.last, files.first);
+			}
+
+			compile_error_t compile_error = compile_files(context, module_files, &build, &compile, &objects);
+
+			if (compile_error)
+			{
+				fprintf(stderr, "Compilation failed! TODO: More information\n");
+
+				build_failed = true;
+				break;
+			}
+
+			if (!build_failed)
+			{
+				link_params_t link = {
+					.output_exe              = S("retro"),
+					.run_dir                 = S("run"),
+					.copy_executables_to_run = true,
+
+					.libraries = slist_from_array(temp, array_expand(string_t, 
+						S("user32"),
+						S("dxguid"),
+						S("d3d11"),
+						S("dxgi"),
+						S("d3dcompiler"),
+						S("gdi32"),
+						S("user32"),
+						S("ole32"),
+						S("ksuser"),
+						S("shell32"),
+						S("Synchronization")
+					)),
+				};
+
+				link_error_t link_error = link_executable(context, &objects, &build, &link);
+
+				if (link_error)
+				{
+					fprintf(stderr, "Linking failed! TODO: More information\n");
+					build_failed = true;
+					break;
+				}
 			}
 		}
 	}

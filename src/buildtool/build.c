@@ -74,7 +74,6 @@ source_file_t *generate_file(build_context_t *context, string_t path, string_t c
             result->name = string_path_leaf(result->path);
 
             result->flags |= SOURCE_FILE_GENERATED;
-            // dll_push_back(context->first_generated_file, context->last_generated_file, result);
 
             fs_write_entire_file(path, contents);
         }
@@ -83,7 +82,7 @@ source_file_t *generate_file(build_context_t *context, string_t path, string_t c
     return result;
 }
 
-static void transform_into_stub(build_context_t *context, source_files_t *files, string_t stub_name)
+void transform_into_stub(build_context_t *context, source_files_t *files, string_t stub_name)
 {
     string_list_t stub = { 0 };
 
@@ -101,26 +100,19 @@ static void transform_into_stub(build_context_t *context, source_files_t *files,
     files->first = files->last = file;
 }
 
-compile_error_t compile_directory(string_t directory, const build_params_t *build, const compile_params_t *compile, object_collection_t *objects)
+compile_error_t compile_directory(build_context_t *context, string_t directory, const build_params_t *build, const compile_params_t *compile, object_collection_t *objects)
 {
     source_files_t source = { 0 };
     gather_source_files(temp, directory, compile, &source);
 
-	return compile_files(source, build, compile, objects);
+	return compile_files(context, source, build, compile, objects);
 }
 
-compile_error_t compile_files(source_files_t files, const build_params_t *build, const compile_params_t *compile_, object_collection_t *objects)
+compile_error_t compile_files(build_context_t *context, source_files_t files, const build_params_t *build, const compile_params_t *compile_, object_collection_t *objects)
 {
 	compile_error_t result = COMPILE_ERROR_NONE;
 
 	compile_params_t *compile = m_copy_struct(temp, compile_);
-
-	build_context_t *context = m_alloc_struct(temp, build_context_t);
-	context->arena  = temp;
-	context->params = build;
-
-	context->build_dir = Sf("build/%.*s", Sx(build->configuration));
-	fs_create_directory(context->build_dir);
 
 	if (compile->single_translation_unit)
 	{
@@ -144,16 +136,9 @@ compile_error_t compile_files(source_files_t files, const build_params_t *build,
 	return result;
 }
 
-link_error_t link_executable(const object_collection_t *objects, const build_params_t *build, const link_params_t *link)
+link_error_t link_executable(build_context_t *context, const object_collection_t *objects, const build_params_t *build, const link_params_t *link)
 {
 	link_error_t result = LINK_ERROR_NONE;
-
-	build_context_t *context = m_alloc_struct(temp, build_context_t);
-	context->arena  = temp;
-	context->params = build;
-
-	context->build_dir = Sf("build/%.*s", Sx(build->configuration));
-	fs_create_directory(context->build_dir);
 
 	backend_i *backend = NULL;
 	switch (build->backend)
@@ -174,22 +159,22 @@ link_error_t link_executable(const object_collection_t *objects, const build_par
 	return result;
 }
 
-build_error_t build_directory(string_t directory, const all_params_t *params)
+build_error_t build_directory(build_context_t *context, string_t directory, const all_params_t *params)
 {
     source_files_t source = { 0 };
     gather_source_files(temp, directory, &params->compile, &source);
 
-    return build_files(source, params);
+    return build_files(context, source, params);
 }
 
-build_error_t build_files(source_files_t source, const all_params_t *params)
+build_error_t build_files(build_context_t *context, source_files_t source, const all_params_t *params)
 {
 	build_error_t result = BUILD_ERROR_NONE;
 
 	m_scoped(temp)
 	{
 		object_collection_t objects = {0};
-		compile_error_t compile_error = compile_files(source, &params->build, &params->compile, &objects);
+		compile_error_t compile_error = compile_files(context, source, &params->build, &params->compile, &objects);
 
 		if (compile_error)
 		{
@@ -197,7 +182,7 @@ build_error_t build_files(source_files_t source, const all_params_t *params)
 		}
 		else
 		{
-			link_error_t link_error = link_executable(&objects, &params->build, &params->link);
+			link_error_t link_error = link_executable(context, &objects, &params->build, &params->link);
 
 			if (link_error)
 			{

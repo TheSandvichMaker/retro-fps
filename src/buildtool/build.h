@@ -160,13 +160,14 @@ typedef enum link_error_t
 
 void gather_source_files(arena_t *arena, string_t directory, const compile_params_t *compile, source_files_t *source);
 source_file_t *generate_file(build_context_t *context, string_t path, string_t contents);
+void transform_into_stub(build_context_t *context, source_files_t *files, string_t stub_name);
 
-compile_error_t compile_files    (source_files_t files, const build_params_t *build, const compile_params_t *compile, object_collection_t *objects);
-compile_error_t compile_directory(string_t directory,   const build_params_t *build, const compile_params_t *compile, object_collection_t *objects);
+compile_error_t compile_files    (build_context_t *context, source_files_t files, const build_params_t *build, const compile_params_t *compile, object_collection_t *objects);
+compile_error_t compile_directory(build_context_t *context, string_t directory,   const build_params_t *build, const compile_params_t *compile, object_collection_t *objects);
 
-link_error_t link_executable(const object_collection_t *objects, const build_params_t *build, const link_params_t *link);
+link_error_t link_executable(build_context_t *context, const object_collection_t *objects, const build_params_t *build, const link_params_t *link);
 
-build_error_t build_files    (source_files_t files, const all_params_t *params);
-build_error_t build_directory(string_t directory,   const all_params_t *params);
+build_error_t build_files    (build_context_t *context, source_files_t files, const all_params_t *params);
+build_error_t build_directory(build_context_t *context, string_t directory,   const all_params_t *params);
 
 #endif /* BUILD_H */

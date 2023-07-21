@@ -174,7 +174,7 @@ int init_d3d11(void *hwnd_)
             { "NORMAL",            0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offsetof(vertex_brush_t,     normal),       D3D11_INPUT_PER_VERTEX_DATA, 0 },
         };
 
-        string_t hlsl_file = strlit("gamedata/shaders/input_layout_nonsense.hlsl");
+        string_t hlsl_file = S("gamedata/shaders/input_layout_nonsense.hlsl");
         string_t hlsl = fs_read_entire_file(temp, hlsl_file);
 
         ID3DBlob *vs_pos       = compile_shader(hlsl_file, hlsl, "pos", "vs_5_0");
@@ -202,7 +202,7 @@ int init_d3d11(void *hwnd_)
 
     m_scoped(temp)
     {
-        string_t hlsl_file = strlit("gamedata/shaders/brushmodel.hlsl");
+        string_t hlsl_file = S("gamedata/shaders/brushmodel.hlsl");
         string_t hlsl = fs_read_entire_file(temp, hlsl_file);
 
         d3d.world_vs = compile_vs(hlsl_file, hlsl, "vs");
@@ -224,7 +224,7 @@ int init_d3d11(void *hwnd_)
 
     m_scoped(temp)
     {
-        string_t hlsl_file = strlit("gamedata/shaders/skybox.hlsl");
+        string_t hlsl_file = S("gamedata/shaders/skybox.hlsl");
         string_t hlsl = fs_read_entire_file(temp, hlsl_file);
 
         d3d.skybox_vs = compile_vs(hlsl_file, hlsl, "vs");
@@ -233,7 +233,7 @@ int init_d3d11(void *hwnd_)
 
     m_scoped(temp)
     {
-        string_t hlsl_file = strlit("gamedata/shaders/postprocess.hlsl");
+        string_t hlsl_file = S("gamedata/shaders/postprocess.hlsl");
         string_t hlsl = fs_read_entire_file(temp, hlsl_file);
 
         d3d.postprocess_vs  = compile_vs(hlsl_file, hlsl, "postprocess_vs");
@@ -243,7 +243,7 @@ int init_d3d11(void *hwnd_)
 
     m_scoped(temp)
     {
-        string_t hlsl_file = strlit("gamedata/shaders/shadowmap.hlsl");
+        string_t hlsl_file = S("gamedata/shaders/shadowmap.hlsl");
         string_t hlsl = fs_read_entire_file(temp, hlsl_file);
 
         d3d.shadowmap_vs = compile_vs(hlsl_file, hlsl, "shadowmap_vs");
@@ -535,10 +535,10 @@ int init_d3d11(void *hwnd_)
     // blue noise texture
     m_scoped(temp)
     {
-        image_t t0 = load_image_from_disk(temp, strlit("gamedata/textures/noise/LDR_LLL1_0.png"), 1);
-        image_t t1 = load_image_from_disk(temp, strlit("gamedata/textures/noise/LDR_LLL1_7.png"), 1);
-        image_t t2 = load_image_from_disk(temp, strlit("gamedata/textures/noise/LDR_LLL1_15.png"), 1);
-        image_t t3 = load_image_from_disk(temp, strlit("gamedata/textures/noise/LDR_LLL1_23.png"), 1);
+        image_t t0 = load_image_from_disk(temp, S("gamedata/textures/noise/LDR_LLL1_0.png"), 1);
+        image_t t1 = load_image_from_disk(temp, S("gamedata/textures/noise/LDR_LLL1_7.png"), 1);
+        image_t t2 = load_image_from_disk(temp, S("gamedata/textures/noise/LDR_LLL1_15.png"), 1);
+        image_t t3 = load_image_from_disk(temp, S("gamedata/textures/noise/LDR_LLL1_23.png"), 1);
 
         uint32_t *pixels = m_alloc_array(temp, t0.w*t0.h, uint32_t);
 
