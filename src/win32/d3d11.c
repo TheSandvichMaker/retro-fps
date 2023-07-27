@@ -1291,6 +1291,15 @@ done_with_sun_shadows:
 
 					update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
 
+					rect2_t clip_rect = view->clip_rect;
+
+					D3D11_RECT scissor_rect = {
+						.left   = (LONG)clip_rect.min.x,
+						.right  = (LONG)clip_rect.max.x,
+						.bottom = height - (LONG)clip_rect.min.y,
+						.top    = height - (LONG)clip_rect.max.y,
+					};
+
 					// set output merger state
 					ID3D11DeviceContext_OMSetBlendState(d3d.context, d3d.bs, NULL, ~0U);
 					ID3D11DeviceContext_OMSetDepthStencilState(d3d.context, d3d.dss_no_depth, 0);
@@ -1308,7 +1317,7 @@ done_with_sun_shadows:
 					// set rasterizer state
 					ID3D11DeviceContext_RSSetViewports(d3d.context, 1, &viewport);
 					ID3D11DeviceContext_RSSetState(d3d.context, (ID3D11RasterizerState *)d3d.rs_no_cull);
-					ID3D11DeviceContext_RSSetScissorRects(d3d.context, 1, (&(D3D11_RECT){ 0, 0, d3d.current_width, d3d.current_height }));
+					ID3D11DeviceContext_RSSetScissorRects(d3d.context, 1, &scissor_rect);
 
 					// set pixel shader
 					ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);

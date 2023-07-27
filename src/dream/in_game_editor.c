@@ -1278,7 +1278,7 @@ void update_and_render_in_game_editor(void)
 	}
 
     UI_SCALAR(UI_SCALAR_WIDGET_MARGIN, 0.0f)
-    UI_PANEL(fullscreen_rect)
+    ui_panel_begin(fullscreen_rect);
 	{
 		editor.fullscreen_layout = ui_layout_rect();
 
@@ -1287,4 +1287,5 @@ void update_and_render_in_game_editor(void)
 		if (editor.show_timings)
 			fullscreen_show_timings();
 	}
+	ui_panel_end();
 }

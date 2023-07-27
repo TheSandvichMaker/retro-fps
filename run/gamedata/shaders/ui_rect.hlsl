@@ -2,13 +2,15 @@
 
 struct r_ui_rect_t
 {
-	float2 p_min;
-	float2 p_max;
-	float4 roundedness;
-	uint   color;
-	float  shadow_radius;
-	float  shadow_amount;
-	float  pad1;
+	float2 p_min;           // 8
+	float2 p_max;           // 16
+	float4 roundedness;     // 32
+	uint   color_00;        // 36
+	uint   color_10;        // 42
+	uint   color_11;        // 48
+	uint   color_01;        // 52
+	float  shadow_radius;   // 58
+	float  shadow_amount;   // 64
 };
 
 StructuredBuffer<r_ui_rect_t> ui_rects : register(t0);
@@ -33,13 +35,20 @@ PS_INPUT vs(uint vertex_id : SV_VertexID, uint instance_id : SV_InstanceID)
 		{ rect.p_max.x + r, rect.p_max.y + r, 0, 1 },
 	};
 
+	uint colors[] = {
+		rect.color_00,
+		rect.color_01,
+		rect.color_10,
+		rect.color_11,
+	};
+
 	float4 vert = verts[vertex_id];
 	vert = 2.0f*(vert / float4(screen_dim, 1, 1)) - 1.0f;
 
 	PS_INPUT OUT;
 	OUT.pos = vert;
 	OUT.id  = instance_id + instance_offset;
-	OUT.col = unpack_color(rect.color);
+	OUT.col = unpack_color(colors[vertex_id]);
 	return OUT;
 }
 
@@ -71,20 +80,10 @@ float4 ps(PS_INPUT IN) : SV_Target
 
 	float shadow_radius = rect.shadow_radius;
 
-	float aa_radius = max(fwidth(pos.x), fwidth(pos.y));
-	float aa  = smoothstep(0.5f*aa_radius, -0.5f*aa_radius, d);
-	float rim = 1.0f; // smoothstep(-1.0f*aa_radius, -3.0f*aa_radius, d);
+	float aa = smoothstep(0.5f, -0.5f, d);
 
 	float4 color = IN.col;
-	color.rgb = lerp(color.rgb, 1.5f*color.rgb, 1.0f - rim);
 	color.a *= aa;
 
-	// float4 shadow = float4(0, 0, 0, rect.shadow_amount*(1.0f - saturate(d / shadow_radius)));
-	// shadow.a *= shadow.a;
-
-	// float4 result = lerp(shadow, color, saturate(aa));
-	// result.rgb *= result.a;
-	float4 result = color;
-
-	return result;
+	return color;
 }

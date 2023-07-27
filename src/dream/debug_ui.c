@@ -356,7 +356,7 @@ bool ui_begin(float dt)
         ui.base_scalars[UI_SCALAR_ANIMATION_DAMPEN   ] = 32.0f;
 		ui.base_scalars[UI_SCALAR_WIDGET_MARGIN      ] = 0.66f;
 		ui.base_scalars[UI_SCALAR_TEXT_MARGIN        ] = 5.4f;
-		ui.base_scalars[UI_SCALAR_ROUNDEDNESS        ] = 0.0f;
+		ui.base_scalars[UI_SCALAR_ROUNDEDNESS        ] = 2.5f;
 		ui.base_scalars[UI_SCALAR_TEXT_ALIGN_X       ] = 0.5f;
 		ui.base_scalars[UI_SCALAR_TEXT_ALIGN_Y       ] = 0.5f;
 		ui.base_scalars[UI_SCALAR_SCROLLBAR_WIDTH    ] = 12.0f;
@@ -364,6 +364,7 @@ bool ui_begin(float dt)
         ui.base_scalars[UI_SCALAR_SLIDER_HANDLE_RATIO] = 3.0f;
 		ui.base_colors [UI_COLOR_TEXT                ] = make_v4(0.90f, 0.90f, 0.90f, 1.0f);
 		ui.base_colors [UI_COLOR_TEXT_SHADOW         ] = make_v4(0.00f, 0.00f, 0.00f, 0.75f);
+		ui.base_colors [UI_COLOR_WIDGET_SHADOW       ] = make_v4(0.00f, 0.00f, 0.00f, 0.20f);
 		ui.base_colors [UI_COLOR_WINDOW_BACKGROUND   ] = make_v4(0.15f, 0.15f, 0.15f, 1.0f);
 		ui.base_colors [UI_COLOR_WINDOW_TITLE_BAR    ] = make_v4(0.45f, 0.25f, 0.25f, 1.0f);
 		ui.base_colors [UI_COLOR_WINDOW_CLOSE_BUTTON ] = make_v4(0.35f, 0.15f, 0.15f, 1.0f);
@@ -446,24 +447,36 @@ void ui_end(void)
 
 DREAM_INLINE void ui_draw_styled_rect(rect2_t rect, v4_t color)
 {
+	uint32_t color_packed = pack_color(color);
+
 	r_ui_rect((r_ui_rect_t){
 		.rect        = rect, 
 		.roundedness = v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS)),
-		.color       = pack_color(color),
+		.color_00    = color_packed,
+		.color_10    = color_packed,
+		.color_11    = color_packed,
+		.color_01    = color_packed,
 	});
 }
 
 DREAM_INLINE void ui_draw_styled_rect_roundness(rect2_t rect, v4_t color, v4_t roundness)
 {
+	uint32_t color_packed = pack_color(color);
+
 	r_ui_rect((r_ui_rect_t){
 		.rect        = rect, 
 		.roundedness = mul(roundness, v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS))),
-		.color       = pack_color(color),
+		.color_00    = color_packed,
+		.color_10    = color_packed,
+		.color_11    = color_packed,
+		.color_01    = color_packed,
 	});
 }
 
 DREAM_INLINE void ui_draw_text(v2_t p, string_t text)
 {
+	p.x = floorf(p.x);
+	p.y = floorf(p.y);
     r_draw_text(&ui.font, add(p, make_v2(1.0f, -1.0f)), ui_color(UI_COLOR_TEXT_SHADOW), text);
     r_draw_text(&ui.font, p, ui_color(UI_COLOR_TEXT), text);
 }
@@ -818,14 +831,14 @@ bool ui_button(string_t label)
 								   ui_color(UI_COLOR_BUTTON_FIRED));
 
 	float hover_lift = ui_is_hot(id) && !ui_is_active(id) ? 2.0f : 0.0f;
-	hover_lift = ui_interpolate_f32(id, hover_lift);
+	hover_lift = ui_interpolate_f32(ui_child_id(id, S("hover_lift")), hover_lift);
 
 	rect2_t shadow = rect;
 
 	rect      = rect2_add_offset(rect,      make_v2(0.0f, hover_lift));
 	text_rect = rect2_add_offset(text_rect, make_v2(0.0f, hover_lift));
 
-	ui_draw_styled_rect(shadow, make_v4(0.0f, 0.0f, 0.0f, 0.25f));
+	ui_draw_styled_rect(shadow, ui_color(UI_COLOR_WIDGET_SHADOW));
 	ui_draw_styled_rect(rect, color);
 
 	ui_draw_text(ui_text_center_p(text_rect, label), label);
@@ -986,8 +999,15 @@ void ui_slider(string_t label, float *v, float min, float max)
 								   ui_color(UI_COLOR_SLIDER_ACTIVE),
 								   ui_color(UI_COLOR_SLIDER_ACTIVE));
 
+	float hover_lift = ui_is_hot(id) ? 2.0f : 0.0f;
+	hover_lift = ui_interpolate_f32(ui_child_id(id, S("hover_lift")), hover_lift);
+
+	rect2_t shadow = handle;
+	handle = rect2_add_offset(handle, make_v2(0, hover_lift));
+
 	// r_immediate_clip_rect(slider_body); TODO: ui rect clip rects?
 	ui_draw_styled_rect(slider_body, ui_color(UI_COLOR_SLIDER_BACKGROUND));
+	ui_draw_styled_rect(shadow, ui_color(UI_COLOR_WIDGET_SHADOW));
 	ui_draw_styled_rect(handle, color);
 	ui_draw_styled_rect(right, ui_color(UI_COLOR_SLIDER_BACKGROUND));
 
@@ -1130,7 +1150,7 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 	}
 #endif
 
-	ui_draw_styled_rect(handle_no_offset, make_v4(0.0f, 0.0f, 0.0f, 0.15f));
+	ui_draw_styled_rect(handle_no_offset, ui_color(UI_COLOR_WIDGET_SHADOW));
 	ui_draw_styled_rect(handle, color);
 
 	ui_draw_text(label_rect.min, label);
