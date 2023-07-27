@@ -618,7 +618,7 @@ static void update_and_render_lightmap_editor(void)
             static bool use_dynamic_sun_shadows = true;
 
             static string_t preset_labels[] = { Sc("Crappy"), Sc("Acceptable"), Sc("Excessive") };
-            if (ui_radio(S("preset"), &bake_preset, ARRAY_COUNT(preset_labels), preset_labels))
+            if (ui_radio(S("Preset"), &bake_preset, ARRAY_COUNT(preset_labels), preset_labels))
             {
                 switch (bake_preset)
                 {
@@ -648,9 +648,9 @@ static void update_and_render_lightmap_editor(void)
                 }
             }
 
-            ui_slider_int(S("rays per pixel"), &ray_count, 1, 32);
-            ui_slider_int(S("max recursion"), &ray_recursion, 1, 8);
-            ui_slider_int(S("fog light sample count"), &fog_light_sample_count, 1, 8);
+            ui_slider_int(S("Rays Per Pixel"), &ray_count, 1, 32);
+            ui_slider_int(S("Max Recursion"), &ray_recursion, 1, 8);
+            ui_slider_int(S("Fog Light Sample Count"), &fog_light_sample_count, 1, 8);
 
             static int fogmap_scales[] = {
                 32, 16, 8, 4,
@@ -660,11 +660,11 @@ static void update_and_render_lightmap_editor(void)
                 Sc("32"), Sc("16"), Sc("8"), Sc("4"),
             };
 
-            ui_radio(S("fogmap scale"), &fogmap_scale_index, ARRAY_COUNT(fogmap_scales), fogmap_scale_labels);
+            ui_radio(S("Fogmap Scale"), &fogmap_scale_index, ARRAY_COUNT(fogmap_scales), fogmap_scale_labels);
 
             int actual_fogmap_scale = fogmap_scales[fogmap_scale_index];
 
-            ui_checkbox(S("dynamic sun shadows"), &use_dynamic_sun_shadows);
+            ui_checkbox(S("Dynamic Sun Shadows"), &use_dynamic_sun_shadows);
 
             if (!map->lightmap_state)
             {
@@ -1132,11 +1132,22 @@ DREAM_INLINE void update_and_render_ui_demo(void)
 		ui_slider    (S("Float Slider"), &demo->slider_f32, -1.0f, 1.0f);
 		ui_slider_int(S("Int Slider"), &demo->slider_i32, 0, 8);
 
+		static int font_size = 20;
+		if (ui_slider_int(S("UI Font Size"), &font_size, 8, 32))
+		{
+			ui_set_font_size((float)font_size);
+		}
+
 		ui_slider(S("UI Widget Margin"), &ui.base_scalars[UI_SCALAR_WIDGET_MARGIN], 0.0f, 8.0f);
 		ui_slider(S("UI Text Margin"), &ui.base_scalars[UI_SCALAR_TEXT_MARGIN], 0.0f, 8.0f);
 		ui_slider(S("UI Roundedness"), &ui.base_scalars[UI_SCALAR_ROUNDEDNESS], 0.0f, 16.0f);
 		ui_slider(S("UI Animation Stiffness"), &ui.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS], 1.0f, 1024.0f);
 		ui_slider(S("UI Animation Dampen"), &ui.base_scalars[UI_SCALAR_ANIMATION_DAMPEN], 1.0f, 128.0f);
+	}
+
+	if (ui_is_active(demo->window.id))
+	{
+		bring_editor_to_front(EDITOR_UI_DEMO);
 	}
 }
 

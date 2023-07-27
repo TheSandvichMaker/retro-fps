@@ -1226,6 +1226,15 @@ DREAM_INLINE rect2_t rect2_uninvert(rect2_t rect)
 	return result;
 }
 
+DREAM_INLINE rect2_t rect2_inverted_infinity(void)
+{
+    rect2_t result = {
+        .min = {  FLT_MAX,  FLT_MAX },
+        .max = { -FLT_MAX, -FLT_MAX },
+    };
+    return result;
+}
+
 DREAM_INLINE rect2_t rect2_infinity(void)
 {
     rect2_t result = {

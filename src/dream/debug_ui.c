@@ -6,9 +6,14 @@
 #include "dream/render_helpers.h"
 #include "dream/input.h"
 #include "dream/asset.h"
+#include "dream/font.h"
 #include "dream/debug_ui.h"
 
 ui_t ui;
+
+//
+// style stacks
+//
 
 float ui_scalar(ui_style_scalar_t scalar)
 {
@@ -41,6 +46,177 @@ v4_t ui_pop_color(ui_style_color_t color)
 {
     return stack_pop(ui.colors[color]);
 }
+
+//
+// drawing
+//
+
+DREAM_INLINE void ui_draw_styled_rect(rect2_t rect, v4_t color)
+{
+	uint32_t color_packed = pack_color(color);
+
+	r_ui_rect((r_ui_rect_t){
+		.rect        = rect, 
+		.roundedness = v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS)),
+		.color_00    = color_packed,
+		.color_10    = color_packed,
+		.color_11    = color_packed,
+		.color_01    = color_packed,
+	});
+}
+
+DREAM_INLINE void ui_draw_styled_rect_roundness(rect2_t rect, v4_t color, v4_t roundness)
+{
+	uint32_t color_packed = pack_color(color);
+
+	r_ui_rect((r_ui_rect_t){
+		.rect        = rect, 
+		.roundedness = mul(roundness, v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS))),
+		.color_00    = color_packed,
+		.color_10    = color_packed,
+		.color_11    = color_packed,
+		.color_01    = color_packed,
+	});
+}
+
+typedef enum ui_text_op_t
+{
+	UI_TEXT_OP_BOUNDS,
+	UI_TEXT_OP_DRAW,
+	UI_TEXT_OP_COUNT,
+} ui_text_op_t;
+
+DREAM_INLINE rect2_t ui_text_op(v2_t p, string_t text, v4_t color, ui_text_op_t op)
+{
+	rect2_t result = rect2_inverted_infinity();
+
+	p.x = roundf(p.x);
+	p.y = roundf(p.y);
+
+	uint32_t color_packed = pack_color(color);
+
+	font_atlas_t *font = &ui.font;
+	r_immediate_texture(font->texture);
+	r_immediate_shader(R_SHADER_TEXT);
+	r_immediate_blend_mode(R_BLEND_PREMUL_ALPHA);
+
+	float w = (float)font->texture_w;
+	float h = (float)font->texture_h;
+
+	v2_t at = p;
+	at.y -= 0.5f*font->descent;
+
+	for (size_t i = 0; i < text.count; i++)
+	{
+		char c = text.data[i];
+
+		if (is_newline(c))
+		{
+			at.x  = p.x;
+			at.y -= font->y_advance;
+		}
+		else
+		{
+			font_glyph_t *glyph = atlas_get_glyph(font, c);
+
+			float cw = (float)(glyph->max_x - glyph->min_x);
+			float ch = (float)(glyph->max_y - glyph->min_y);
+
+			cw *= 0.5f; // oversampling
+			ch *= 0.5f; // oversampling
+
+			v2_t point = at;
+			point.x += glyph->x_offset;
+			point.y -= glyph->y_offset2;
+
+			rect2_t rect = rect2_from_min_dim(point, make_v2(cw, ch));
+			result = rect2_union(result, rect);
+
+			if (op == UI_TEXT_OP_DRAW)
+			{
+				float u0 = (float)glyph->min_x / w;
+				float v0 = (float)glyph->min_y / h;
+				float u1 = (float)glyph->max_x / w;
+				float v1 = (float)glyph->max_y / h;
+
+				uint32_t i0 = r_immediate_vertex(&(vertex_immediate_t) {
+					.pos = { point.x, point.y, 0.0f },
+					.tex = { u0, v1 },
+					.col = color_packed,
+				});
+
+				uint32_t i1 = r_immediate_vertex(&(vertex_immediate_t) {
+					.pos = { point.x + cw, point.y, 0.0f },
+					.tex = { u1, v1 },
+					.col = color_packed,
+				});
+
+				uint32_t i2 = r_immediate_vertex(&(vertex_immediate_t) {
+					.pos = { point.x + cw, point.y + ch, 0.0f },
+					.tex = { u1, v0 },
+					.col = color_packed,
+				});
+
+				uint32_t i3 = r_immediate_vertex(&(vertex_immediate_t) {
+					.pos = { point.x, point.y + ch, 0.0f },
+					.tex = { u0, v0 },
+					.col = color_packed,
+				});
+
+				r_immediate_index(i0);
+				r_immediate_index(i1);
+				r_immediate_index(i2);
+				r_immediate_index(i0);
+				r_immediate_index(i2);
+				r_immediate_index(i3);
+			}
+
+			if (i + 1 < text.count)
+			{
+				char c_next = text.data[i + 1];
+				at.x += atlas_get_advance(font, c, c_next);
+			}
+		}
+	}
+
+	r_immediate_flush();
+
+	return result;
+}
+
+DREAM_INLINE rect2_t ui_text_bounds(v2_t p, string_t text)
+{
+	return ui_text_op(p, text, (v4_t){0,0,0,0}, UI_TEXT_OP_BOUNDS);
+}
+
+DREAM_INLINE float ui_text_width(string_t text)
+{
+	rect2_t rect = ui_text_bounds((v2_t){0, 0}, text);
+	return rect2_width(rect);
+}
+
+DREAM_INLINE float ui_text_height(string_t text)
+{
+	rect2_t rect = ui_text_bounds((v2_t){0, 0}, text);
+	return rect2_height(rect);
+}
+
+DREAM_INLINE v2_t ui_text_dim(string_t text)
+{
+	rect2_t rect = ui_text_bounds((v2_t){0, 0}, text);
+	return rect2_dim(rect);
+}
+
+DREAM_INLINE rect2_t ui_draw_text(v2_t p, string_t text)
+{
+	ui_text_op(add(p, make_v2(1.0f, -1.0f)), text, ui_color(UI_COLOR_TEXT_SHADOW), UI_TEXT_OP_DRAW);
+	rect2_t result = ui_text_op(p, text, ui_color(UI_COLOR_TEXT), UI_TEXT_OP_DRAW);
+	return result;
+}
+
+//
+// panels core
+//
 
 DREAM_INLINE ui_panel_t *ui_push_panel(rect2_t rect)
 {
@@ -323,13 +499,13 @@ rect2_t ui_default_label_rect(string_t label)
 			case UI_CUT_LEFT:
 			case UI_CUT_RIGHT:
 			{
-				a += (float)label.count*ui.font.cw;
+				a += ui_text_width(label);
 			} break;
 
 			case UI_CUT_TOP:
 			case UI_CUT_BOTTOM:
 			{
-				a += (float)ui.font.ch;
+				a += ui.font.font_height;
 			} break;
 		}
 
@@ -342,14 +518,7 @@ bool ui_begin(float dt)
 {
 	if (!ui.initialized)
 	{
-		image_t *font_image = get_image_from_string(S("gamedata/textures/font.png"));
-        ui.font.w       = font_image->w;
-        ui.font.h       = font_image->h;
-        ui.font.cw      = 10;
-        ui.font.ch      = 12;
-        ui.font.texture = font_image->gpu;
-
-		ui.initialized = true;
+		ui_set_font_size(20.0f);
 
 		v4_t background    = make_v4(0.20f, 0.15f, 0.17f, 1.0f);
 		v4_t background_hi = make_v4(0.22f, 0.18f, 0.18f, 1.0f);
@@ -362,8 +531,9 @@ bool ui_begin(float dt)
         ui.base_scalars[UI_SCALAR_ANIMATION_RATE     ] = 40.0f;
         ui.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS] = 512.0f;
         ui.base_scalars[UI_SCALAR_ANIMATION_DAMPEN   ] = 32.0f;
-		ui.base_scalars[UI_SCALAR_WIDGET_MARGIN      ] = 0.66f;
-		ui.base_scalars[UI_SCALAR_TEXT_MARGIN        ] = 5.4f;
+        ui.base_scalars[UI_SCALAR_HOVER_LIFT         ] = 1.5f;
+		ui.base_scalars[UI_SCALAR_WIDGET_MARGIN      ] = 0.75f;
+		ui.base_scalars[UI_SCALAR_TEXT_MARGIN        ] = 2.2f;
 		ui.base_scalars[UI_SCALAR_ROUNDEDNESS        ] = 2.5f;
 		ui.base_scalars[UI_SCALAR_TEXT_ALIGN_X       ] = 0.5f;
 		ui.base_scalars[UI_SCALAR_TEXT_ALIGN_Y       ] = 0.5f;
@@ -371,10 +541,11 @@ bool ui_begin(float dt)
         ui.base_scalars[UI_SCALAR_SLIDER_HANDLE_RATIO] = 3.0f;
         ui.base_scalars[UI_SCALAR_SLIDER_HANDLE_RATIO] = 3.0f;
 		ui.base_colors [UI_COLOR_TEXT                ] = make_v4(0.95f, 0.90f, 0.85f, 1.0f);
-		ui.base_colors [UI_COLOR_TEXT_SHADOW         ] = make_v4(0.00f, 0.00f, 0.00f, 0.75f);
+		ui.base_colors [UI_COLOR_TEXT_SHADOW         ] = make_v4(0.00f, 0.00f, 0.00f, 0.50f);
 		ui.base_colors [UI_COLOR_WIDGET_SHADOW       ] = make_v4(0.00f, 0.00f, 0.00f, 0.20f);
 		ui.base_colors [UI_COLOR_WINDOW_BACKGROUND   ] = background;
 		ui.base_colors [UI_COLOR_WINDOW_TITLE_BAR    ] = make_v4(0.45f, 0.25f, 0.25f, 1.0f);
+		ui.base_colors [UI_COLOR_WINDOW_TITLE_BAR_HOT] = make_v4(0.45f, 0.22f, 0.22f, 1.0f);
 		ui.base_colors [UI_COLOR_WINDOW_CLOSE_BUTTON ] = make_v4(0.35f, 0.15f, 0.15f, 1.0f);
 		ui.base_colors [UI_COLOR_PROGRESS_BAR_EMPTY  ] = background_hi;
 		ui.base_colors [UI_COLOR_PROGRESS_BAR_FILLED ] = hot;
@@ -386,6 +557,8 @@ bool ui_begin(float dt)
 		ui.base_colors [UI_COLOR_SLIDER_FOREGROUND   ] = foreground;
 		ui.base_colors [UI_COLOR_SLIDER_HOT          ] = hot;
 		ui.base_colors [UI_COLOR_SLIDER_ACTIVE       ] = active;
+
+		ui.initialized = true;
 	}
 
 	ui.frame_index += 1;
@@ -453,40 +626,18 @@ void ui_end(void)
 	ASSERT(ui.panel == NULL);
 }
 
-DREAM_INLINE void ui_draw_styled_rect(rect2_t rect, v4_t color)
+void ui_set_font_size(float size)
 {
-	uint32_t color_packed = pack_color(color);
+	if (ui.font.initialized)
+	{
+		destroy_font_atlas(&ui.font);
+	}
 
-	r_ui_rect((r_ui_rect_t){
-		.rect        = rect, 
-		.roundedness = v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS)),
-		.color_00    = color_packed,
-		.color_10    = color_packed,
-		.color_11    = color_packed,
-		.color_01    = color_packed,
-	});
-}
+	font_range_t ranges[] = {
+		{ .start = ' ', .end = '~' },
+	};
 
-DREAM_INLINE void ui_draw_styled_rect_roundness(rect2_t rect, v4_t color, v4_t roundness)
-{
-	uint32_t color_packed = pack_color(color);
-
-	r_ui_rect((r_ui_rect_t){
-		.rect        = rect, 
-		.roundedness = mul(roundness, v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS))),
-		.color_00    = color_packed,
-		.color_10    = color_packed,
-		.color_11    = color_packed,
-		.color_01    = color_packed,
-	});
-}
-
-DREAM_INLINE void ui_draw_text(v2_t p, string_t text)
-{
-	p.x = floorf(p.x);
-	p.y = floorf(p.y);
-    r_draw_text(&ui.font, add(p, make_v2(1.0f, -1.0f)), ui_color(UI_COLOR_TEXT_SHADOW), text);
-    r_draw_text(&ui.font, p, ui_color(UI_COLOR_TEXT), text);
+	ui.font = make_font_atlas(S("gamedata/fonts/NotoSans/NotoSans-Regular.ttf"), ARRAY_COUNT(ranges), ranges, size);
 }
 
 typedef enum ui_interaction_t
@@ -539,18 +690,21 @@ DREAM_INLINE uint32_t ui_button_behaviour(ui_id_t id, rect2_t rect)
 	return result;
 }
 
-DREAM_INLINE void ui_check_hovered(rect2_t rect)
+DREAM_INLINE bool ui_check_hovered(rect2_t rect)
 {
+	bool result = false;
 	if (rect2_contains_point(rect, ui.mouse_p))
 	{
+		result = true;
 		ui.hovered = true;
 	}
+	return result;
 }
 
 DREAM_INLINE v2_t ui_text_center_p(rect2_t rect, string_t text)
 {
-    float text_width  = (float)text.count*(float)ui.font.cw;
-    float text_height = (float)ui.font.ch;
+    float text_width  = ui_text_width(text);
+    float text_height = 0.5f*ui.font.y_advance;
 
     float rect_width  = rect2_width(rect);
     float rect_height = rect2_height(rect);
@@ -568,8 +722,8 @@ DREAM_INLINE v2_t ui_text_align_p(rect2_t rect, string_t text)
     float align_x = ui_scalar(UI_SCALAR_TEXT_ALIGN_X);
     float align_y = ui_scalar(UI_SCALAR_TEXT_ALIGN_Y);
 
-    float text_width  = (float)text.count*(float)ui.font.cw;
-    float text_height = (float)ui.font.ch;
+    float text_width  = ui_text_width(text);
+    float text_height = 0.5f*ui.font.y_advance;
 
     float rect_width  = rect2_width(rect);
     float rect_height = rect2_height(rect);
@@ -591,8 +745,8 @@ void ui_window_begin(ui_window_t *window)
 	rect2_t rect = window->rect;
     ui_check_hovered(rect);
 
-	rect2_t bar = ui_add_top(&rect, (float)ui.font.ch + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN));
-	ui_check_hovered(bar);
+	rect2_t bar = ui_add_top(&rect, ui.font.font_height + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN));
+	bool bar_hovered = ui_check_hovered(bar);
 
     rect2_t both = rect2_union(bar, rect);
     uint32_t interaction = ui_button_behaviour(id, both);
@@ -607,10 +761,28 @@ void ui_window_begin(ui_window_t *window)
         window->rect = rect2_reposition_min(window->rect, add(ui.mouse_p, ui.drag_anchor));
     }
 
+	{
+		uint32_t color_packed = pack_color(ui_color(UI_COLOR_WINDOW_BACKGROUND));
+
+		r_ui_rect((r_ui_rect_t){
+			.rect        = both, 
+			.roundedness = mul(make_v4(2, 2, 2, 2), v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS))),
+			.color_00    = color_packed,
+			.color_10    = color_packed,
+			.color_11    = color_packed,
+			.color_01    = color_packed,
+			.shadow_radius = 32.0f,
+			.shadow_amount = 0.15f,
+		});
+	}
+
     // NOTE: the panel will push a very similar view right away but we need it for the rendering here
 	r_push_view_screenspace_clip_rect(both);
 
-	ui_draw_styled_rect_roundness(bar, ui_color(UI_COLOR_WINDOW_TITLE_BAR), make_v4(2, 0, 2, 0));
+	v4_t bar_color = bar_hovered ? ui_color(UI_COLOR_WINDOW_TITLE_BAR_HOT) : ui_color(UI_COLOR_WINDOW_TITLE_BAR);
+	bar_color = ui_interpolate_v4(ui_child_id(id, S("bar_hover")), bar_color);
+
+	ui_draw_styled_rect_roundness(bar, bar_color, make_v4(2, 0, 2, 0));
 	ui_draw_styled_rect_roundness(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), make_v4(0, 2, 0, 2));
 
 	ui_set_next_rect(ui_cut_right(&bar, ui_label_width(S("Close"))));
@@ -747,7 +919,7 @@ void ui_label(string_t label)
 
 float ui_label_width(string_t label)
 {
-    return (float)label.count*(float)ui.font.cw + ui_widget_padding();
+    return ui_text_width(label) + 2.0f*ui_widget_padding();
 }
 
 void ui_progress_bar(string_t label, float progress)
@@ -838,7 +1010,7 @@ bool ui_button(string_t label)
 								   ui_color(UI_COLOR_BUTTON_ACTIVE),
 								   ui_color(UI_COLOR_BUTTON_FIRED));
 
-	float hover_lift = ui_is_hot(id) && !ui_is_active(id) ? 2.0f : 0.0f;
+	float hover_lift = ui_is_hot(id) && !ui_is_active(id) ? ui_scalar(UI_SCALAR_HOVER_LIFT) : 0.0f;
 	hover_lift = ui_interpolate_f32(ui_child_id(id, S("hover_lift")), hover_lift);
 
 	rect2_t shadow = rect;
@@ -870,7 +1042,7 @@ bool ui_checkbox(string_t label, bool *value)
 	rect = ui_shrink(&rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
 	rect2_t box_rect = ui_cut_left(&rect, rect2_height(rect));
-	rect2_t label_rect = ui_cut_left(&rect, (float)label.count*ui.font.cw);
+	rect2_t label_rect = ui_cut_left(&rect, ui_text_width(label));
 	label_rect = ui_shrink(&label_rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
 
 	uint32_t interaction = ui_button_behaviour(id, box_rect);
@@ -906,10 +1078,10 @@ bool ui_radio(string_t label, int *value, int count, string_t *labels)
 	if (!ui_override_rect(&rect))
 	{
 		ui_panel_t *panel = ui_panel();
-		rect = ui_cut_top(&panel->rect, (float)ui.font.ch + ui_widget_padding());
+		rect = ui_cut_top(&panel->rect, ui.font.font_height + ui_widget_padding());
 	}
 
-	rect2_t label_rect = ui_cut_left(&rect, (float)label.count*ui.font.cw + ui_widget_padding());
+	rect2_t label_rect = ui_cut_left(&rect, ui_text_width(label) + ui_widget_padding());
 	label_rect = ui_shrink(&label_rect, 0.5f*ui_widget_padding());
 
     {
@@ -955,7 +1127,7 @@ void ui_slider(string_t label, float *v, float min, float max)
 	if (!ui_override_rect(&rect))
 	{
 		ui_panel_t *panel = ui_panel();
-		rect = ui_cut_top(&panel->rect, (float)ui.font.ch + ui_widget_padding());
+		rect = ui_cut_top(&panel->rect, ui.font.font_height + ui_widget_padding());
 	}
 
 	rect = ui_shrink(&rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
@@ -1007,7 +1179,7 @@ void ui_slider(string_t label, float *v, float min, float max)
 								   ui_color(UI_COLOR_SLIDER_ACTIVE),
 								   ui_color(UI_COLOR_SLIDER_ACTIVE));
 
-	float hover_lift = ui_is_hot(id) ? 2.0f : 0.0f;
+	float hover_lift = ui_is_hot(id) ? ui_scalar(UI_SCALAR_HOVER_LIFT) : 0.0f;
 	hover_lift = ui_interpolate_f32(ui_child_id(id, S("hover_lift")), hover_lift);
 
 	rect2_t shadow = handle;
@@ -1040,7 +1212,7 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 	if (!ui_override_rect(&rect))
 	{
 		ui_panel_t *panel = ui_panel();
-		rect = ui_cut_top(&panel->rect, (float)ui.font.ch + ui_widget_padding());
+		rect = ui_cut_top(&panel->rect, ui.font.font_height + ui_widget_padding());
 	}
 
 	float w = rect2_width(rect);
@@ -1093,7 +1265,7 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 
 	pct = saturate(pct);
 
-	float hover_lift = ui_is_hot(id) ? 2.0f : 0.0f;
+	float hover_lift = ui_is_hot(id) ? ui_scalar(UI_SCALAR_HOVER_LIFT) : 0.0f;
 	hover_lift = ui_interpolate_f32(ui_child_id(id, S("hover_lift")), hover_lift);
 
 	float pct_interp = pct;
@@ -1128,35 +1300,7 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 	(void)left;
 	(void)right;
 
-	r_immediate_clip_rect(slider_clip);
-	// ui_draw_styled_rect(left, ui_color(UI_COLOR_SLIDER_BACKGROUND));
-	// ui_draw_styled_rect(right, ui_color(UI_COLOR_SLIDER_BACKGROUND));
 	ui_draw_styled_rect(slider_body, ui_color(UI_COLOR_SLIDER_BACKGROUND));
-	// ui_draw_styled_rect(right, ui_color(UI_COLOR_SLIDER_BACKGROUND));
-
-#if 0
-	int divisions = max - min;
-	if (divisions < 0) divisions = -divisions;
-
-	if (divisions <= 24)
-	{
-		rect2_t divisions_rect   = rect2_sub_radius(slider_body, make_v2(handle_half_width, 0));
-		v2_t    divisions_center = rect2_center(divisions_rect);
-		float   divisions_width  = rect2_width(divisions_rect);
-		for (int i = 0; i <= divisions; i++)
-		{
-			float t = (float)i / (float)divisions;
-			float x = t*divisions_width;
-
-			rect2_t r = rect2_center_radius(make_v2(divisions_rect.min.x + x, divisions_center.y), make_v2(2, 2));
-			r_ui_rect((r_ui_rect_t){
-				.rect        = r, 
-				.roundedness = v4_from_scalar(2),
-				.color       = pack_color(make_v4(1.0f, 1.0f, 1.0f, 0.40f)),
-			});
-		}
-	}
-#endif
 
 	ui_draw_styled_rect(handle_no_offset, ui_color(UI_COLOR_WIDGET_SHADOW));
 	ui_draw_styled_rect(handle, color);

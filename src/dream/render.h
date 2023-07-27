@@ -82,6 +82,8 @@ typedef enum upload_texture_flags_t
 
 typedef struct upload_texture_t
 {
+	string_t debug_name;
+
 	uint32_t upload_flags;
     texture_desc_t desc;
     texture_data_t data;
@@ -299,6 +301,7 @@ typedef enum r_immediate_shader_t
 {
 	R_SHADER_FLAT,
 	R_SHADER_DEBUG_LIGHTING,
+	R_SHADER_TEXT,
 	R_SHADER_COUNT,
 } r_immediate_shader_t;
 

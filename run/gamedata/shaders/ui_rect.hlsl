@@ -71,19 +71,28 @@ float4 ps(PS_INPUT IN) : SV_Target
 	r_ui_rect_t rect = ui_rects[IN.id];
 
 	float2 pos = IN.pos.xy;
-	pos.y = screen_dim.y - pos.y;
+	pos.y = screen_dim.y - pos.y - 1;
 
 	float2 p = 0.5f*(rect.p_min + rect.p_max);
 	float2 b = 0.5f*(rect.p_max - rect.p_min);
 
 	float d = rounded_box(pos - p, b, rect.roundedness);
 
-	float shadow_radius = rect.shadow_radius;
-
 	float aa = smoothstep(0.5f, -0.5f, d);
 
-	float4 color = IN.col;
-	color.a *= aa;
+	float4 color = 0;
+	if (aa > 0.0f)
+	{
+		color = IN.col;
+		color.a *= aa;
+	}
+
+	float shadow_radius = rect.shadow_radius;
+	float shadow = 1.0f - saturate(d / shadow_radius);
+	shadow *= shadow;
+	shadow *= rect.shadow_amount;
+
+	color += float4(0, 0, 0, (1.0f - aa)*shadow);
 
 	return color;
 }

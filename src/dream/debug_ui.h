@@ -3,6 +3,7 @@
 
 #include "core/api_types.h"
 #include "core/string.h"
+#include "dream/font.h"
 
 typedef struct ui_id_t
 {
@@ -26,6 +27,7 @@ typedef enum ui_style_scalar_t
 
 	UI_SCALAR_ANIMATION_STIFFNESS,
 	UI_SCALAR_ANIMATION_DAMPEN,
+	UI_SCALAR_HOVER_LIFT,
 
     UI_SCALAR_WIDGET_MARGIN,
     UI_SCALAR_TEXT_MARGIN,
@@ -50,6 +52,7 @@ typedef enum ui_style_color_t
 
     UI_COLOR_WINDOW_BACKGROUND,
     UI_COLOR_WINDOW_TITLE_BAR,
+    UI_COLOR_WINDOW_TITLE_BAR_HOT,
     UI_COLOR_WINDOW_CLOSE_BUTTON,
 
     UI_COLOR_PROGRESS_BAR_EMPTY,
@@ -295,10 +298,13 @@ typedef struct ui_t
 	ui_id_t next_id;
 	rect2_t next_rect;
 
-	bitmap_font_t font;
+	// bitmap_font_t font;
+	font_atlas_t font;
 } ui_t;
 
 DREAM_LOCAL ui_t ui;
+
+DREAM_LOCAL void ui_set_font_size(float size);
 
 DREAM_LOCAL bool ui_is_cold(ui_id_t id);
 DREAM_LOCAL bool ui_is_hot(ui_id_t id);

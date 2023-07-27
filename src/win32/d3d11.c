@@ -212,6 +212,7 @@ int init_d3d11(void *hwnd_)
 	static struct { r_immediate_shader_t shader; string_t path; } immediate_shaders[] = {
 		{ .shader = R_SHADER_FLAT,           .path = Sc("gamedata/shaders/immediate.hlsl")                },
 		{ .shader = R_SHADER_DEBUG_LIGHTING, .path = Sc("gamedata/shaders/immediate_debug_lighting.hlsl") },
+		{ .shader = R_SHADER_TEXT,           .path = Sc("gamedata/shaders/immediate_text.hlsl") },
 	};
 
 	for_array(i, immediate_shaders) m_scoped(temp)
@@ -1687,6 +1688,11 @@ void populate_texture(resource_handle_t handle, const upload_texture_t *params)
 
 		resource->state = D3D_TEXTURE_STATE_LOADED;
 		WakeByAddressAll(&resource->state);
+
+		if (resource->tex[0] && !string_empty(params->debug_name))
+		{
+			ID3D11Device_SetPrivateData(d3d.device, &WKPDID_D3DDebugObjectName, (UINT)params->debug_name.count, params->debug_name.data);
+		}
     }
 }
 
