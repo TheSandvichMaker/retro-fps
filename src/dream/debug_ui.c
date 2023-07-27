@@ -351,6 +351,14 @@ bool ui_begin(float dt)
 
 		ui.initialized = true;
 
+		v4_t background    = make_v4(0.20f, 0.15f, 0.17f, 1.0f);
+		v4_t background_hi = make_v4(0.22f, 0.18f, 0.18f, 1.0f);
+		v4_t foreground    = make_v4(0.33f, 0.28f, 0.28f, 1.0f);
+
+		v4_t hot    = make_v4(0.25f, 0.45f, 0.40f, 1.0f);
+		v4_t active = make_v4(0.30f, 0.55f, 0.50f, 1.0f);
+		v4_t fired  = make_v4(0.40f, 0.60f, 0.50f, 1.0f);
+
         ui.base_scalars[UI_SCALAR_ANIMATION_RATE     ] = 40.0f;
         ui.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS] = 512.0f;
         ui.base_scalars[UI_SCALAR_ANIMATION_DAMPEN   ] = 32.0f;
@@ -365,19 +373,19 @@ bool ui_begin(float dt)
 		ui.base_colors [UI_COLOR_TEXT                ] = make_v4(0.90f, 0.90f, 0.90f, 1.0f);
 		ui.base_colors [UI_COLOR_TEXT_SHADOW         ] = make_v4(0.00f, 0.00f, 0.00f, 0.75f);
 		ui.base_colors [UI_COLOR_WIDGET_SHADOW       ] = make_v4(0.00f, 0.00f, 0.00f, 0.20f);
-		ui.base_colors [UI_COLOR_WINDOW_BACKGROUND   ] = make_v4(0.15f, 0.15f, 0.15f, 1.0f);
+		ui.base_colors [UI_COLOR_WINDOW_BACKGROUND   ] = background;
 		ui.base_colors [UI_COLOR_WINDOW_TITLE_BAR    ] = make_v4(0.45f, 0.25f, 0.25f, 1.0f);
 		ui.base_colors [UI_COLOR_WINDOW_CLOSE_BUTTON ] = make_v4(0.35f, 0.15f, 0.15f, 1.0f);
-		ui.base_colors [UI_COLOR_PROGRESS_BAR_EMPTY  ] = make_v4(0.18f, 0.18f, 0.18f, 1.0f);
-		ui.base_colors [UI_COLOR_PROGRESS_BAR_FILLED ] = make_v4(0.15f, 0.25f, 0.45f, 1.0f);
-		ui.base_colors [UI_COLOR_BUTTON_IDLE         ] = make_v4(0.28f, 0.28f, 0.28f, 1.0f);
-		ui.base_colors [UI_COLOR_BUTTON_HOT          ] = make_v4(0.25f, 0.35f, 0.65f, 1.0f);
-		ui.base_colors [UI_COLOR_BUTTON_ACTIVE       ] = make_v4(0.35f, 0.45f, 0.85f, 1.0f);
-		ui.base_colors [UI_COLOR_BUTTON_FIRED        ] = make_v4(0.45f, 0.65f, 0.95f, 1.0f);
-		ui.base_colors [UI_COLOR_SLIDER_BACKGROUND   ] = make_v4(0.18f, 0.18f, 0.18f, 1.0f);
-		ui.base_colors [UI_COLOR_SLIDER_FOREGROUND   ] = make_v4(0.28f, 0.28f, 0.28f, 1.0f);
-		ui.base_colors [UI_COLOR_SLIDER_HOT          ] = make_v4(0.25f, 0.35f, 0.65f, 1.0f);
-		ui.base_colors [UI_COLOR_SLIDER_ACTIVE       ] = make_v4(0.35f, 0.45f, 0.85f, 1.0f);
+		ui.base_colors [UI_COLOR_PROGRESS_BAR_EMPTY  ] = background_hi;
+		ui.base_colors [UI_COLOR_PROGRESS_BAR_FILLED ] = hot;
+		ui.base_colors [UI_COLOR_BUTTON_IDLE         ] = foreground;
+		ui.base_colors [UI_COLOR_BUTTON_HOT          ] = hot;
+		ui.base_colors [UI_COLOR_BUTTON_ACTIVE       ] = active;
+		ui.base_colors [UI_COLOR_BUTTON_FIRED        ] = fired;
+		ui.base_colors [UI_COLOR_SLIDER_BACKGROUND   ] = background_hi;
+		ui.base_colors [UI_COLOR_SLIDER_FOREGROUND   ] = foreground;
+		ui.base_colors [UI_COLOR_SLIDER_HOT          ] = hot;
+		ui.base_colors [UI_COLOR_SLIDER_ACTIVE       ] = active;
 	}
 
 	ui.frame_index += 1;
