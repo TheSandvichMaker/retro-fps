@@ -43,8 +43,16 @@ typedef enum editor_kind_t
 	EDITOR_TIMINGS,
 	EDITOR_LIGHTMAP,
 	EDITOR_CONVEX_HULL,
+	EDITOR_UI_DEMO,
 	EDITOR_COUNT,
 } editor_kind_t;
+
+typedef struct ui_demo_panel_t
+{
+	ui_window_t window;
+	float slider_f32;
+	int   slider_i32;
+} ui_demo_panel_t;
 
 typedef struct lightmap_editor_state_t
 {
@@ -117,6 +125,8 @@ typedef struct editor_state_t
 
 	bool hull_test_panel_enabled;
 	hull_test_panel_t hull_test;
+
+	ui_demo_panel_t ui_demo;
 
 	// TODO: bit silly
 	editor_stack_t next_window_order;
@@ -1110,6 +1120,26 @@ DREAM_INLINE void fullscreen_show_timings(void)
     }
 }
 
+DREAM_INLINE void update_and_render_ui_demo(void)
+{
+	ui_demo_panel_t *demo = &editor.ui_demo;
+
+	if (!demo->window.open)
+		return;
+
+	UI_WINDOW(&demo->window)
+	{
+		ui_slider    (S("Float Slider"), &demo->slider_f32, -1.0f, 1.0f);
+		ui_slider_int(S("Int Slider"), &demo->slider_i32, 0, 8);
+
+		ui_slider(S("UI Widget Margin"), &ui.base_scalars[UI_SCALAR_WIDGET_MARGIN], 0.0f, 8.0f);
+		ui_slider(S("UI Text Margin"), &ui.base_scalars[UI_SCALAR_TEXT_MARGIN], 0.0f, 8.0f);
+		ui_slider(S("UI Roundedness"), &ui.base_scalars[UI_SCALAR_ROUNDEDNESS], 0.0f, 16.0f);
+		ui_slider(S("UI Animation Stiffness"), &ui.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS], 1.0f, 1024.0f);
+		ui_slider(S("UI Animation Dampen"), &ui.base_scalars[UI_SCALAR_ANIMATION_DAMPEN], 1.0f, 128.0f);
+	}
+}
+
 DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 {
     rect2_t bar = ui_cut_top(editor.fullscreen_layout, 32.0f);
@@ -1154,6 +1184,11 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
                     .name = S("Convex Hull Tester (F3)"),
                     .toggle = &editor.hull_test.window.open,
 					.editor = EDITOR_CONVEX_HULL,
+                },
+                {
+                    .name = S("UI Demo (F4)"),
+                    .toggle = &editor.ui_demo.window.open,
+					.editor = EDITOR_UI_DEMO,
                 },
             };
 
@@ -1203,48 +1238,22 @@ void update_and_render_in_game_editor(void)
 
 		send_editor_to_back(EDITOR_CONVEX_HULL);
 		editor.hull_test.window.rect = rect2_from_min_dim(make_v2(64, 64), make_v2(512, 512));
+
+		send_editor_to_back(EDITOR_UI_DEMO);
+		editor.ui_demo.window.rect = rect2_from_min_dim(make_v2(96, 96), make_v2(512, 512));
 	}
 
     if (ui_button_pressed(BUTTON_F1))
         editor.show_timings = !editor.show_timings;
 
     if (ui_button_pressed(BUTTON_F2))
-	{
-		if (editor.lm_editor.window.open)
-		{
-			if (stack_top(editor.window_order) == EDITOR_LIGHTMAP)
-			{
-				editor.lm_editor.window.open = false;
-			}
-			else
-			{
-				bring_editor_to_front(EDITOR_LIGHTMAP);
-			}
-		}
-		else
-		{
-			editor.lm_editor.window.open = true;
-		}
-	}
+		editor.lm_editor.window.open = !editor.lm_editor.window.open;
 
     if (ui_button_pressed(BUTTON_F3))
-	{
-		if (editor.hull_test.window.open)
-		{
-			if (stack_top(editor.window_order) == EDITOR_CONVEX_HULL)
-			{
-				editor.hull_test.window.open = false;
-			}
-			else
-			{
-				bring_editor_to_front(EDITOR_CONVEX_HULL);
-			}
-		}
-		else
-		{
-			editor.hull_test.window.open = true;
-		}
-	}
+		editor.hull_test.window.open = !editor.hull_test.window.open;
+
+    if (ui_button_pressed(BUTTON_F4))
+		editor.ui_demo.window.open = !editor.ui_demo.window.open;
 
 	copy_struct(&editor.window_order, &editor.next_window_order);
 
@@ -1264,6 +1273,7 @@ void update_and_render_in_game_editor(void)
 		{
 			case EDITOR_LIGHTMAP:    { update_and_render_lightmap_editor(); } break;
 			case EDITOR_CONVEX_HULL: { update_and_render_convex_hull_test_panel(); } break;
+			case EDITOR_UI_DEMO:     { update_and_render_ui_demo(); } break;
 		}
 	}
 

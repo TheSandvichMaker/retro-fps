@@ -58,6 +58,7 @@ void r_reset_command_list(void)
 
     g_list->immediate_icount = 0;
     g_list->immediate_vcount = 0;
+	g_list->ui_rect_count = 0;
 
 	initialize_immediate_draw(&g_list->curr_immediate);
 
@@ -300,6 +301,7 @@ void r_immediate_flush(void)
 	}
 
 	initialize_immediate_draw(draw);
+	g_list->current_ui_rects = NULL;
 }
 
 // TODO: Weirdly subtle and annoying function?
@@ -325,6 +327,7 @@ DREAM_INLINE void r_immediate_flush_pending(void)
 		}
 
 		initialize_immediate_draw(draw);
+		g_list->current_ui_rects = NULL;
 	}
 }
 
@@ -424,4 +427,39 @@ void r_immediate_index(uint32_t index)
 
         g_list->immediate_indices[g_list->immediate_icount++] = index;
     }
+}
+
+void r_ui_rect(r_ui_rect_t rect)
+{
+	r_immediate_flush_pending();
+
+	if (ALWAYS(g_list->ui_rect_count < g_list->max_ui_rect_count))
+	{
+
+		r_command_ui_rects_t *command = g_list->current_ui_rects;
+
+		uint32_t rect_index = g_list->ui_rect_count++;
+
+		if (!command)
+		{
+			command = r_submit_command(R_COMMAND_UI_RECTS, sizeof(r_command_ui_rects_t));
+			command->first = rect_index;
+			command->count = 0;
+
+			g_list->current_ui_rects = command;
+		}
+
+		v2_t dim = rect2_dim(rect.rect);
+		float limit = 0.5f*min(dim.x, dim.y);
+
+		rect.roundedness.x = CLAMP(rect.roundedness.x, 0.0f, limit);
+		rect.roundedness.z = CLAMP(rect.roundedness.z, 0.0f, limit);
+		rect.roundedness.y = CLAMP(rect.roundedness.y, 0.0f, limit);
+		rect.roundedness.w = CLAMP(rect.roundedness.w, 0.0f, limit);
+
+		r_ui_rect_t *ui_rect = &g_list->ui_rects[rect_index];
+		*ui_rect = rect;
+
+		command->count += 1;
+	}
 }

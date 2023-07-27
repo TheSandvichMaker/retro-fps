@@ -24,8 +24,13 @@ typedef enum ui_style_scalar_t
 {
     UI_SCALAR_ANIMATION_RATE,
 
+	UI_SCALAR_ANIMATION_STIFFNESS,
+	UI_SCALAR_ANIMATION_DAMPEN,
+
     UI_SCALAR_WIDGET_MARGIN,
     UI_SCALAR_TEXT_MARGIN,
+
+	UI_SCALAR_ROUNDEDNESS,
 
     UI_SCALAR_TEXT_ALIGN_X,
     UI_SCALAR_TEXT_ALIGN_Y,
@@ -79,45 +84,51 @@ typedef struct ui_window_t
 	float openness;
 } ui_window_t;
 
-DREAM_API bool ui_begin(float dt);
-DREAM_API void ui_end(void);
+DREAM_LOCAL bool ui_begin(float dt);
+DREAM_LOCAL void ui_end(void);
 
-DREAM_API void ui_window_begin(ui_window_t *window);
-DREAM_API void ui_window_end(ui_window_t *window);
+DREAM_LOCAL void ui_window_begin(ui_window_t *window);
+DREAM_LOCAL void ui_window_end(ui_window_t *window);
 
 #define UI_WINDOW(window) DEFER_LOOP(ui_window_begin(window), ui_window_end(window))
 
-DREAM_API void ui_panel_begin(rect2_t size);
-DREAM_API void ui_panel_begin_ex(ui_id_t id, rect2_t size, ui_panel_flags_t flags);
-DREAM_API void ui_panel_end(void);
+DREAM_LOCAL void ui_panel_begin(rect2_t size);
+DREAM_LOCAL void ui_panel_begin_ex(ui_id_t id, rect2_t size, ui_panel_flags_t flags);
+DREAM_LOCAL void ui_panel_end(void);
 
 #define UI_PANEL(size) DEFER_LOOP(ui_panel_begin(size), ui_panel_end())
 
-DREAM_API rect2_t *ui_layout_rect(void);
-DREAM_API void ui_set_layout_direction(ui_cut_side_t side);
-DREAM_API void ui_set_next_rect(rect2_t rect);
-DREAM_API float ui_divide_space(float item_count);
+DREAM_LOCAL rect2_t *ui_layout_rect(void);
+DREAM_LOCAL void ui_set_layout_direction(ui_cut_side_t side);
+DREAM_LOCAL void ui_set_next_rect(rect2_t rect);
+DREAM_LOCAL float ui_divide_space(float item_count);
 
-DREAM_API void ui_set_next_id(ui_id_t id);
+DREAM_LOCAL void ui_set_next_id(ui_id_t id);
 
-DREAM_API float ui_scalar(ui_style_scalar_t scalar);
-DREAM_API void ui_push_scalar(ui_style_scalar_t scalar, float value);
-DREAM_API float ui_pop_scalar(ui_style_scalar_t scalar);
-DREAM_API v4_t ui_color(ui_style_color_t color);
-DREAM_API void ui_push_color(ui_style_color_t color, v4_t value);
-DREAM_API v4_t ui_pop_color(ui_style_color_t color);
+DREAM_LOCAL float ui_scalar(ui_style_scalar_t scalar);
+DREAM_LOCAL void ui_push_scalar(ui_style_scalar_t scalar, float value);
+DREAM_LOCAL float ui_pop_scalar(ui_style_scalar_t scalar);
+DREAM_LOCAL v4_t ui_color(ui_style_color_t color);
+DREAM_LOCAL void ui_push_color(ui_style_color_t color, v4_t value);
+DREAM_LOCAL v4_t ui_pop_color(ui_style_color_t color);
 
 #define UI_SCALAR(scalar, value) DEFER_LOOP(ui_push_scalar(scalar, value), ui_pop_scalar(scalar))
 #define UI_COLOR(color, value)   DEFER_LOOP(ui_push_color (color,  value), ui_pop_color (color))
 
-DREAM_API void ui_label(string_t label);
-DREAM_API float ui_label_width(string_t label);
-DREAM_API void ui_progress_bar(string_t label, float progress);
-DREAM_API bool ui_button(string_t label);
-DREAM_API bool ui_checkbox(string_t label, bool *value);
-DREAM_API bool ui_radio(string_t label, int *value, int count, string_t *labels);
-DREAM_API void ui_slider(string_t label, float *v, float min, float max);
-DREAM_API bool ui_slider_int(string_t label, int *v, int min, int max);
+DREAM_LOCAL void ui_label(string_t label);
+DREAM_LOCAL float ui_label_width(string_t label);
+DREAM_LOCAL void ui_progress_bar(string_t label, float progress);
+DREAM_LOCAL bool ui_button(string_t label);
+DREAM_LOCAL bool ui_checkbox(string_t label, bool *value);
+DREAM_LOCAL bool ui_radio(string_t label, int *value, int count, string_t *labels);
+DREAM_LOCAL void ui_slider(string_t label, float *v, float min, float max);
+DREAM_LOCAL bool ui_slider_int(string_t label, int *v, int min, int max);
+
+DREAM_LOCAL float ui_interpolate_f32(ui_id_t id, float target);
+DREAM_LOCAL float ui_set_f32        (ui_id_t id, float target);
+
+DREAM_LOCAL v4_t ui_interpolate_v4  (ui_id_t id, v4_t target);
+DREAM_LOCAL v4_t ui_set_v4          (ui_id_t id, v4_t target);
 
 //
 // "Internal"
@@ -249,12 +260,6 @@ typedef struct ui_panel_t
 
 #define UI_STYLE_STACK_COUNT 32
 
-typedef struct ui_style_t
-{
-    stack_t(float, UI_STYLE_STACK_COUNT) scalars[UI_SCALAR_COUNT];
-    stack_t(v4_t,  UI_STYLE_STACK_COUNT) colors [UI_COLOR_COUNT];
-} ui_style_t;
-
 typedef struct ui_t
 {
 	bool initialized;
@@ -272,7 +277,11 @@ typedef struct ui_t
 	ui_id_t next_hot;
 	ui_id_t active;
 
-	ui_style_t style;
+	float base_scalars[UI_SCALAR_COUNT];
+	v4_t  base_colors [UI_COLOR_COUNT];
+
+    stack_t(float, UI_STYLE_STACK_COUNT) scalars[UI_SCALAR_COUNT];
+    stack_t(v4_t,  UI_STYLE_STACK_COUNT) colors [UI_COLOR_COUNT];
 
 	v2_t mouse_p;
 	v2_t mouse_pressed_p;
@@ -287,21 +296,21 @@ typedef struct ui_t
 	bitmap_font_t font;
 } ui_t;
 
-DREAM_API ui_t ui;
+DREAM_LOCAL ui_t ui;
 
-DREAM_API bool ui_is_cold(ui_id_t id);
-DREAM_API bool ui_is_hot(ui_id_t id);
-DREAM_API bool ui_is_active(ui_id_t id);
-DREAM_API void ui_set_hot(ui_id_t id);
-DREAM_API void ui_set_active(ui_id_t id);
-DREAM_API void ui_clear_hot(void);
-DREAM_API void ui_clear_active(void);
+DREAM_LOCAL bool ui_is_cold(ui_id_t id);
+DREAM_LOCAL bool ui_is_hot(ui_id_t id);
+DREAM_LOCAL bool ui_is_active(ui_id_t id);
+DREAM_LOCAL void ui_set_hot(ui_id_t id);
+DREAM_LOCAL void ui_set_active(ui_id_t id);
+DREAM_LOCAL void ui_clear_hot(void);
+DREAM_LOCAL void ui_clear_active(void);
 
 typedef struct ui_widget_t
 {
 	ui_id_t id;
-	bool new;
 
+	uint64_t created_frame_index;
 	uint64_t last_touched_frame_index;
 
     rect2_t rect;
@@ -313,11 +322,12 @@ typedef struct ui_widget_t
 	v4_t interp_color;
 } ui_widget_t;
 
-DREAM_API ui_widget_t *ui_get_widget(ui_id_t id);
+DREAM_LOCAL ui_widget_t *ui_get_widget(ui_id_t id);
+DREAM_LOCAL bool ui_widget_is_new(ui_widget_t *widget);
 
-DREAM_API float ui_widget_padding(void);
-DREAM_API bool ui_override_rect(rect2_t *override);
-DREAM_API rect2_t ui_default_label_rect(string_t label);
+DREAM_LOCAL float ui_widget_padding(void);
+DREAM_LOCAL bool ui_override_rect(rect2_t *override);
+DREAM_LOCAL rect2_t ui_default_label_rect(string_t label);
 
 DREAM_INLINE float ui_animate_towards(float at, float target)
 {

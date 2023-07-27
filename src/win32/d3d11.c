@@ -222,6 +222,14 @@ int init_d3d11(void *hwnd_)
 		d3d.immediate_shaders[immediate_shaders[i].shader].ps = compile_ps(path, file, "ps");
 	}
 
+	m_scoped(temp)
+	{
+		string_t path = S("gamedata/shaders/ui_rect.hlsl");
+		string_t file = fs_read_entire_file(temp, path);
+		d3d.ui_rect_vs = compile_vs(path, file, "vs");
+		d3d.ui_rect_ps = compile_ps(path, file, "ps");
+	}
+
     m_scoped(temp)
     {
         string_t hlsl_file = S("gamedata/shaders/skybox.hlsl");
@@ -572,7 +580,7 @@ int init_d3d11(void *hwnd_)
 
     {
         size_t stride = sizeof(uint32_t);
-        size_t icount = MAX_IMMEDIATE_INDICES;
+        size_t icount = R_MAX_IMMEDIATE_INDICES;
 
         D3D11_BUFFER_DESC desc = {
             .ByteWidth      = (DWORD)(stride*icount),
@@ -586,7 +594,7 @@ int init_d3d11(void *hwnd_)
 
     {
         size_t stride = vertex_format_size[VERTEX_FORMAT_IMMEDIATE];
-        size_t vcount = MAX_IMMEDIATE_VERTICES;
+        size_t vcount = R_MAX_IMMEDIATE_VERTICES;
 
         D3D11_BUFFER_DESC desc = {
             .ByteWidth      = (DWORD)(stride*vcount),
@@ -596,6 +604,32 @@ int init_d3d11(void *hwnd_)
         };
 
         ID3D11Device_CreateBuffer(d3d.device, &desc, NULL, &d3d.immediate_vbuffer);
+    }
+
+	// create ui rect buffer
+
+    {
+        uint32_t stride = sizeof(r_ui_rect_t);
+        uint32_t count  = R_MAX_UI_RECTS;
+
+        D3D11_BUFFER_DESC desc = {
+            .ByteWidth           = (DWORD)(stride*count),
+            .Usage               = D3D11_USAGE_DYNAMIC,
+            .BindFlags           = D3D11_BIND_SHADER_RESOURCE,
+            .CPUAccessFlags      = D3D11_CPU_ACCESS_WRITE,
+			.MiscFlags           = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED,
+			.StructureByteStride = stride,
+        };
+
+        ID3D11Device_CreateBuffer(d3d.device, &desc, NULL, &d3d.ui_rect_buffer);
+		ID3D11Device_CreateShaderResourceView(d3d.device, (ID3D11Resource *)d3d.ui_rect_buffer, (&(D3D11_SHADER_RESOURCE_VIEW_DESC){
+			.Format        = DXGI_FORMAT_UNKNOWN,
+			.ViewDimension = D3D11_SRV_DIMENSION_BUFFER,
+			.Buffer = {
+				.FirstElement = 0,
+				.NumElements  = R_MAX_UI_RECTS,
+			},
+		}), &d3d.ui_rect_srv);
     }
 
     // create skybox model
@@ -988,6 +1022,12 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                     at = align_address(at + sizeof(*command), RENDER_COMMAND_ALIGN);
                 } break;
 
+                case R_COMMAND_UI_RECTS:
+                {
+                    r_command_ui_rects_t *command = (r_command_ui_rects_t *)base;
+                    at = align_address(at + sizeof(*command), RENDER_COMMAND_ALIGN);
+                } break;
+
                 case R_COMMAND_END_SCENE_PASS:
                 {
                     goto done_with_sun_shadows;
@@ -1085,6 +1125,9 @@ done_with_sun_shadows:
         // update immediate index/vertex buffer
         update_buffer(d3d.immediate_ibuffer, list->immediate_indices,  sizeof(list->immediate_indices[0])*list->immediate_icount);
         update_buffer(d3d.immediate_vbuffer, list->immediate_vertices, sizeof(list->immediate_vertices[0])*list->immediate_vcount);
+
+        // update ui rect buffer
+        update_buffer(d3d.ui_rect_buffer, list->ui_rects,  sizeof(list->ui_rects[0])*list->ui_rect_count);
 
         d3d_timestamp(RENDER_TS_UPLOAD_IMMEDIATE_DATA);
 
@@ -1235,6 +1278,45 @@ done_with_sun_shadows:
                         },
                     });
                 } break;
+
+				case R_COMMAND_UI_RECTS:
+				{
+                    r_command_ui_rects_t *command = (r_command_ui_rects_t *)base;
+                    at = align_address(at + sizeof(*command), RENDER_COMMAND_ALIGN);
+
+					d3d_cbuffer_t cbuffer = {
+						.screen_dim      = { (float)d3d.current_width, (float)d3d.current_height },
+						.instance_offset = command->first,
+					};
+
+					update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
+
+					// set output merger state
+					ID3D11DeviceContext_OMSetBlendState(d3d.context, d3d.bs, NULL, ~0U);
+					ID3D11DeviceContext_OMSetDepthStencilState(d3d.context, d3d.dss_no_depth, 0);
+					ID3D11DeviceContext_OMSetRenderTargets(d3d.context, 1, &current_render_target->color_rtv, NULL);
+
+					// input assembly
+					ID3D11DeviceContext_IASetInputLayout(d3d.context, NULL);
+					ID3D11DeviceContext_IASetPrimitiveTopology(d3d.context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+
+					// set vertex shader
+					ID3D11DeviceContext_VSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);
+					ID3D11DeviceContext_VSSetShaderResources(d3d.context, 0, 1, (ID3D11ShaderResourceView *[]){ d3d.ui_rect_srv });
+					ID3D11DeviceContext_VSSetShader(d3d.context, d3d.ui_rect_vs, NULL, 0);
+
+					// set rasterizer state
+					ID3D11DeviceContext_RSSetViewports(d3d.context, 1, &viewport);
+					ID3D11DeviceContext_RSSetState(d3d.context, (ID3D11RasterizerState *)d3d.rs_no_cull);
+					ID3D11DeviceContext_RSSetScissorRects(d3d.context, 1, (&(D3D11_RECT){ 0, 0, d3d.current_width, d3d.current_height }));
+
+					// set pixel shader
+					ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);
+					ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 1, (ID3D11ShaderResourceView *[]){ d3d.ui_rect_srv });
+					ID3D11DeviceContext_PSSetShader(d3d.context, d3d.ui_rect_ps, NULL, 0);
+
+					ID3D11DeviceContext_DrawInstanced(d3d.context, 4, command->count, 0, 0);
+				} break;
 
                 case R_COMMAND_END_SCENE_PASS:
                 {

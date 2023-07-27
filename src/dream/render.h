@@ -17,8 +17,9 @@ typedef struct render_settings_t
 
 #define RENDER_COMMAND_ALIGN 16
 
-#define MAX_IMMEDIATE_INDICES  (1 << 24)
-#define MAX_IMMEDIATE_VERTICES (1 << 23)
+#define R_MAX_IMMEDIATE_INDICES  (1 << 24)
+#define R_MAX_IMMEDIATE_VERTICES (1 << 23)
+#define R_MAX_UI_RECTS           4096
 
 typedef struct bitmap_font_t
 {
@@ -237,6 +238,7 @@ typedef enum r_command_kind_t
 
     R_COMMAND_MODEL,
     R_COMMAND_IMMEDIATE,
+	R_COMMAND_UI_RECTS,
     R_COMMAND_END_SCENE_PASS,
     
     R_COMMAND_COUNT,
@@ -273,6 +275,23 @@ typedef struct r_command_model_t
     resource_handle_t texture;
     resource_handle_t lightmap;
 } r_command_model_t;
+
+typedef struct r_ui_rect_t
+{
+	rect2_t  rect;              // 16
+	v4_t     roundedness;       // 32
+	uint32_t color;             // 36
+	float    shadow_radius;     // 40
+	float    shadow_amount;     // 44
+	float    pad0;              // 48
+} r_ui_rect_t;
+
+typedef struct r_command_ui_rects_t
+{
+	r_command_base_t base;
+	uint32_t first;
+	uint32_t count;
+} r_command_ui_rects_t;
 
 typedef enum r_immediate_shader_t
 {
@@ -327,6 +346,8 @@ DREAM_API void     r_immediate_index     (uint32_t index);
 
 DREAM_API void     r_immediate_flush     (void);
 
+DREAM_API void     r_ui_rect(r_ui_rect_t rect);
+
 enum { R_MAX_VIEWS = 128 };
 typedef unsigned char r_view_index_t;
 
@@ -351,6 +372,12 @@ typedef struct r_list_t
     uint32_t max_immediate_vcount;
     uint32_t immediate_vcount;
     vertex_immediate_t *immediate_vertices;
+
+	r_command_ui_rects_t *current_ui_rects;
+
+	uint32_t max_ui_rect_count;
+	uint32_t ui_rect_count;
+	r_ui_rect_t *ui_rects;
 } r_list_t;
 
 void r_command_identifier(string_t identifier);

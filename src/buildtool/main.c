@@ -16,8 +16,20 @@
 // unity build
 arena_t static_arena;
 
-// TODO: Move to somewhere nicer
-static string_t format_seconds(arena_t *arena, double seconds)
+#include "core/arena.c"
+#include "core/string.c"
+#include "core/string_list.c"
+#include "core/os.c"
+#include "core/utility.c"
+#include "core/tls.c"
+#include "core/args_parser.h"
+
+#include "backend_msvc.c"
+#include "backend_clang.c"
+#include "build.c"
+#include "assets.c"
+
+DREAM_INLINE string_t format_seconds(arena_t *arena, double seconds)
 {
     if (seconds < 1.0)
     {
@@ -36,19 +48,6 @@ static string_t format_seconds(arena_t *arena, double seconds)
         return string_format(arena, "%d hours, %d minutes and %d seconds", (int)(seconds / 60.0 / 24.0), (int)(seconds / 60.0), (int)seconds % 60);
     }
 }
-
-#include "core/arena.c"
-#include "core/string.c"
-#include "core/string_list.c"
-#include "core/os.c"
-#include "core/utility.c"
-#include "core/tls.c"
-#include "core/args_parser.h"
-
-#include "backend_msvc.c"
-#include "backend_clang.c"
-#include "build.c"
-#include "assets.c"
 
 static void print_usage(void)
 {
@@ -136,14 +135,14 @@ int main(int argc, char **argv)
                 }
                 else
                 {
-                    args_error(args, string_format(temp, "unknown compiler %.*s\n", strexpand(compiler)));
+                    args_error(args, Sf("unknown compiler %.*s\n", Sx(compiler)));
                 }
             }
         }
         else
         {
-            args_error(args, string_format(temp, "unknown argument '%s'\n", *args->at));
-            args->at += 1;
+            args_error(args, Sf("unknown argument '%s'\n", *args->at));
+			skip_arg(args);
         }
     }
 
@@ -190,8 +189,8 @@ int main(int argc, char **argv)
 				.defines = slist_from_array(temp, array_expand(string_t,
 					S("_CRT_SECURE_NO_WARNINGS"),
 					S("UNICODE"),
-					ndebug ? S("NDEBUG") : S("DEBUG"),
-					not_slow ? S("DREAM_FAST") : S("DREAM_SLOW"),
+					ndebug   ? S("NDEBUG")       : S("DEBUG"),
+					not_slow ? S("DREAM_SLOW=0") : S("DREAM_SLOW=1"),
 				)),
 
 				.include_paths = slist_from_array(temp, array_expand(string_t,
@@ -269,11 +268,16 @@ int main(int argc, char **argv)
 	}
 	else
 	{
-
 		for (int config = 0; config < 2; config++)
 		{
+			if (build_failed)
+				break;
+
 			bool is_debug   = config == 0;
 			bool is_release = config == 1;
+
+			if (!build_all && debug   != is_debug)   continue;
+			if (!build_all && release != is_release) continue;
 
 			if (is_debug)
 			{
@@ -329,8 +333,8 @@ int main(int argc, char **argv)
 				.defines = slist_from_array(temp, array_expand(string_t,
 					S("_CRT_SECURE_NO_WARNINGS"),
 					S("UNICODE"),
-					ndebug   ? S("NDEBUG")     : S("DEBUG"),
-					not_slow ? S("DREAM_FAST") : S("DREAM_SLOW"),
+					ndebug   ? S("NDEBUG")       : S("DEBUG"),
+					not_slow ? S("DREAM_SLOW=0") : S("DREAM_SLOW=1"),
 				)),
 
 				.include_paths = slist_from_array(temp, array_expand(string_t,
@@ -370,7 +374,6 @@ int main(int argc, char **argv)
 				fprintf(stderr, "Compilation failed! TODO: More information\n");
 
 				build_failed = true;
-				break;
 			}
 
 			if (!build_failed)
@@ -401,7 +404,6 @@ int main(int argc, char **argv)
 				{
 					fprintf(stderr, "Linking failed! TODO: More information\n");
 					build_failed = true;
-					break;
 				}
 			}
 		}
@@ -412,7 +414,7 @@ int main(int argc, char **argv)
     hires_time_t total_time_end = os_hires_time();
 
     string_t total_running_time = format_seconds(temp, os_seconds_elapsed(total_time_start, total_time_end));
-    fprintf(stderr, "\nTOTAL BUILD TIME: %.*s\n", strexpand(total_running_time));
+    fprintf(stderr, "\nTOTAL BUILD TIME: %.*s\n", Sx(total_running_time));
 
 	// TODO: print out most of this per build job rather than at the end
 

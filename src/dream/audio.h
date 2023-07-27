@@ -13,6 +13,7 @@ typedef enum audio_channel_t
 
 typedef enum sound_category_t
 {
+	SOUND_CATEGORY_GENERIC, // TODO: Not sure whether a generic sound category should exist (categorize everything properly!)
 	SOUND_CATEGORY_EFFECTS,
 	SOUND_CATEGORY_MUSIC,
 	SOUND_CATEGORY_UI,
@@ -93,6 +94,7 @@ typedef enum mix_command_kind_t
 typedef struct mix_command_play_sound_t
 {
 	waveform_t *waveform;
+	sound_category_t category;
 
 	float       volume;
 	uint32_t    flags;
@@ -162,9 +164,11 @@ DREAM_API uint32_t      g_mixer_command_read_index;
 DREAM_API uint32_t      g_mixer_command_write_index;
 DREAM_API mix_command_t g_mixer_commands[MIXER_COMMAND_BUFFER_SIZE];
 
+// TODO: Deduplicate with mix_command_play_sound_t
 typedef struct play_sound_t
 {
 	waveform_t *waveform;
+	sound_category_t category;
 	float       volume;
 	uint32_t    flags;
 	v3_t        p;
@@ -196,6 +200,7 @@ DREAM_INLINE mixer_id_t play_sound(const play_sound_t *params)
 		.id   = id,
 		.play_sound = {
 			.waveform     = params->waveform,
+			.category     = params->category,
 			.volume       = params->volume,
 			.flags        = params->flags,
 			.p            = params->p,

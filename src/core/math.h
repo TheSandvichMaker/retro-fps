@@ -694,6 +694,11 @@ DREAM_INLINE v4_t make_v4(float x, float y, float z, float w)
     return (v4_t){x,y,z,w};
 }
 
+DREAM_INLINE v4_t v4_from_scalar(float s)
+{
+	return (v4_t){s, s, s, s};
+}
+
 DREAM_INLINE float v4_dot(v4_t l, v4_t r)
 {
     return l.x*r.x + l.y*r.y + l.z*r.z + l.w*r.w;
@@ -1134,11 +1139,29 @@ DREAM_INLINE v2i_t rect2i_get_dim(rect2i_t rect)
 // rect2
 //
 
+DREAM_INLINE rect2_t rect2_min_max(v2_t min, v2_t max)
+{
+	rect2_t result = {
+		.min = min,
+		.max = max,
+	};
+	return result;
+}
+
 DREAM_INLINE rect2_t rect2_from_min_dim(v2_t min, v2_t dim)
 {
     rect2_t result = {
         .min = min,
         .max = add(min, dim),
+    };
+    return result;
+}
+
+DREAM_INLINE rect2_t rect2_center_radius(v2_t center, v2_t radius)
+{
+    rect2_t result = {
+        .min = sub(center, radius),
+        .max = add(center, radius),
     };
     return result;
 }

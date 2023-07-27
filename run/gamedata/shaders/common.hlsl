@@ -39,18 +39,20 @@ cbuffer cbuffer0 : register(b0)
     float4x4 proj_matrix;
     float4x4 model_matrix;
     float4x4 sun_matrix;
+	float2   screen_dim;
+	uint     instance_offset;
     float3   light_direction;
-    float    pad0;
+    float    pad1;
     uint     frame_index;
     float    depth_bias;
-    float    pad1;
     float    pad2;
-    float3   fog_offset;
     float    pad3;
-    float3   fog_dim;
+    float3   fog_offset;
     float    pad4;
-    float3   sun_color;
+    float3   fog_dim;
     float    pad5;
+    float3   sun_color;
+    float    pad6;
     float3   sun_direction;
     float    fog_density;
     float    fog_absorption;
@@ -156,6 +158,15 @@ float sample_pcf_3x3(Texture2D<float> shadowmap, float2 projected_pos, float cur
     shadow /= 9.0;
 
     return shadow;
+}
+
+float4 unpack_color(uint color)
+{
+	float4 result = float4((float)((color >>  0) & 0xFF) / 255.0f,
+						   (float)((color >>  8) & 0xFF) / 255.0f,
+						   (float)((color >> 16) & 0xFF) / 255.0f,
+						   (float)((color >> 24) & 0xFF) / 255.0f);
+    return result;
 }
 
 #endif

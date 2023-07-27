@@ -77,6 +77,8 @@ typedef struct playing_sound_t
 	waveform_t *waveform;
 	mixer_id_t id;
 
+	sound_category_t category;
+
 	uint32_t at_index;
 
 	float    volume;
@@ -87,12 +89,14 @@ typedef struct playing_sound_t
 
 	uint32_t fade_count;
 	fade_t  *first_fade;
+	fade_t  *last_fade;
 } playing_sound_t;
 
 typedef struct fade_t
 {
 	playing_sound_t *playing;
 	fade_t          *next;
+	fade_t          *prev;
 
 	uint32_t     flags;
 	fade_style_t style;
@@ -223,6 +227,7 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
                 playing_sound_t playing = {
                     .id           = command->id,
                     .waveform     = command->play_sound.waveform,
+					.category     = command->play_sound.category,
                     .volume       = command->play_sound.volume,
                     .flags        = command->play_sound.flags,
                     .p            = command->play_sound.p,
@@ -265,9 +270,8 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 					});
 					fade_t *fade = pool_get(&active_fades, fade_handle);
 
-					fade->next = playing->first_fade;
-					playing->first_fade = fade;
 					playing->fade_count += 1;
+					dll_push_back(playing->first_fade, playing->last_fade, fade);
 				}
 			} break;
 
@@ -334,6 +338,15 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 		playing_sound_t *playing  = it.data;
 		waveform_t      *waveform = playing->waveform;
 
+#if DREAM_SLOW
+		{
+			size_t actual_fade_count = 0;
+			for (fade_t *fade = playing->first_fade; fade; fade = fade->next) actual_fade_count++;
+
+			ASSERT(playing->fade_count == actual_fade_count);
+		}
+#endif
+
         if (!waveform->frames)
             continue;
 
@@ -366,6 +379,9 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 		}
 
         bool sound_should_stop = false;
+
+		float base_volume = playing->volume;
+		base_volume *= g_mix_category_volumes[playing->category];
 
 		for (size_t src_channel_index = 0; src_channel_index < waveform->channel_count; src_channel_index++)
 		{
@@ -443,7 +459,9 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 				//
 
 				float sample = unorm_from_i16(*src++);
-				sample *= playing->volume;
+
+				float volume = base_volume*volume_mod;
+				sample *= volume;
 
 				for (size_t dst_channel_index = 0; dst_channel_index < mix_channel_count; dst_channel_index++)
 				{
@@ -485,23 +503,9 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
         {
             if (fade->frame_index + frames_to_mix >= fade->frame_duration)
             {
+				playing->fade_count -= 1;
+				dll_remove(playing->first_fade, playing->last_fade, fade);
                 pool_rem_item(&active_fades, fade);
-
-                bool removed_from_playing = false;
-
-                // TODO: maybe don't linear search
-                for (fade_t **remove_at = &fade->playing->first_fade; *remove_at; remove_at = &(*remove_at)->next)
-                {
-                    if (*remove_at == fade)
-                    {
-                        removed_from_playing = true;
-                        sll_pop(*remove_at);
-						if (ALWAYS(playing->fade_count > 0)) playing->fade_count -= 1;
-                        break;
-                    }
-                }
-
-                ASSERT(removed_from_playing); // sanity test
             }
             else
             {

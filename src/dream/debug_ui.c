@@ -12,32 +12,34 @@ ui_t ui;
 
 float ui_scalar(ui_style_scalar_t scalar)
 {
-    return stack_top(ui.style.scalars[scalar]);
+	if (stack_empty(ui.scalars[scalar])) return ui.base_scalars[scalar];
+	else                                 return stack_top(ui.scalars[scalar]);
 }
 
 void ui_push_scalar(ui_style_scalar_t scalar, float value)
 {
-    stack_push(ui.style.scalars[scalar], value);
+    stack_push(ui.scalars[scalar], value);
 }
 
 float ui_pop_scalar(ui_style_scalar_t scalar)
 {
-    return stack_pop(ui.style.scalars[scalar]);
+    return stack_pop(ui.scalars[scalar]);
 }
 
 v4_t ui_color(ui_style_color_t color)
 {
-    return stack_top(ui.style.colors[color]);
+	if (stack_empty(ui.colors[color])) return ui.base_colors[color];
+	else                               return stack_top(ui.colors[color]);
 }
 
 void ui_push_color(ui_style_color_t color, v4_t value)
 {
-    stack_push(ui.style.colors[color], value);
+    stack_push(ui.colors[color], value);
 }
 
 v4_t ui_pop_color(ui_style_color_t color)
 {
-    return stack_pop(ui.style.colors[color]);
+    return stack_pop(ui.colors[color]);
 }
 
 DREAM_INLINE ui_panel_t *ui_push_panel(rect2_t rect)
@@ -141,6 +143,78 @@ float ui_divide_space(float item_count)
 	return size;
 }
 
+//
+// animations
+//
+
+typedef struct ui_anim_t
+{
+	float c_t;
+	float c_v;
+	v4_t  t_target;
+	v4_t  t_current;
+	v4_t  t_velocity;
+} ui_anim_t;
+
+static pool_t ui_animation_state = INIT_POOL(ui_anim_t);
+static hash_t ui_animation_index;
+
+ui_anim_t *ui_get_anim(ui_id_t id, v4_t init_value)
+{
+	ui_anim_t *result = hash_find_object(&ui_animation_index, id.value);
+
+	if (!result)
+	{
+		result = pool_add(&ui_animation_state);
+		result->t_target  = init_value;
+		result->t_current = init_value;
+		hash_add_object(&ui_animation_index, id.value, result);
+	}
+
+	result->c_t = ui_scalar(UI_SCALAR_ANIMATION_STIFFNESS);
+	result->c_v = ui_scalar(UI_SCALAR_ANIMATION_DAMPEN);
+
+	return result;
+}
+
+float ui_interpolate_f32(ui_id_t id, float target)
+{
+	ui_anim_t *anim = ui_get_anim(id, v4_from_scalar(target));
+	anim->t_target.x = target;
+
+	return anim->t_current.x;
+}
+
+float ui_set_f32(ui_id_t id, float target)
+{
+	ui_anim_t *anim = ui_get_anim(id, v4_from_scalar(target));
+	anim->t_target.x  = target;
+	anim->t_current.x = target;
+
+	return anim->t_current.x;
+}
+
+v4_t ui_interpolate_v4(ui_id_t id, v4_t target)
+{
+	ui_anim_t *anim = ui_get_anim(id, target);
+	anim->t_target = target;
+
+	return anim->t_current;
+}
+
+v4_t ui_set_v4(ui_id_t id, v4_t target)
+{
+	ui_anim_t *anim = ui_get_anim(id, target);
+	anim->t_target  = target;
+	anim->t_current = target;
+
+	return anim->t_current;
+}
+
+//
+// widgets
+//
+
 static pool_t widgets = INIT_POOL(ui_widget_t);
 static hash_t widget_index;
 
@@ -151,8 +225,8 @@ ui_widget_t *ui_get_widget(ui_id_t id)
 	if (!result)
 	{
 		result = pool_add(&widgets);
-		result->id = id;
-		result->new = true;
+		result->id                  = id;
+		result->created_frame_index = ui.frame_index;
 		hash_add_object(&widget_index, id.value, result);
 	}
 
@@ -161,6 +235,15 @@ ui_widget_t *ui_get_widget(ui_id_t id)
 	result->last_touched_frame_index = ui.frame_index;
 	return result;
 }
+
+bool ui_widget_is_new(ui_widget_t *widget)
+{
+	return widget->created_frame_index == ui.frame_index;
+}
+
+//
+//
+//
 
 bool ui_is_cold(ui_id_t id)
 {
@@ -268,43 +351,71 @@ bool ui_begin(float dt)
 
 		ui.initialized = true;
 
-        ui_push_scalar(UI_SCALAR_ANIMATION_RATE      , 40.0f);
-		ui_push_scalar(UI_SCALAR_WIDGET_MARGIN       , 2.0f);
-		ui_push_scalar(UI_SCALAR_TEXT_MARGIN         , 4.0f);
-		ui_push_scalar(UI_SCALAR_TEXT_ALIGN_X        , 0.5f);
-		ui_push_scalar(UI_SCALAR_TEXT_ALIGN_Y        , 0.5f);
-		ui_push_scalar(UI_SCALAR_SCROLLBAR_WIDTH     , 12.0f);
-        ui_push_scalar(UI_SCALAR_SLIDER_HANDLE_RATIO , 3.0f);
-		ui_push_color (UI_COLOR_TEXT                 , make_v4(0.90f, 0.90f, 0.90f, 1.0f));
-		ui_push_color (UI_COLOR_TEXT_SHADOW          , make_v4(0.00f, 0.00f, 0.00f, 0.75f));
-		ui_push_color (UI_COLOR_WINDOW_BACKGROUND    , make_v4(0.15f, 0.15f, 0.15f, 1.0f));
-		ui_push_color (UI_COLOR_WINDOW_TITLE_BAR     , make_v4(0.45f, 0.25f, 0.25f, 1.0f));
-		ui_push_color (UI_COLOR_WINDOW_CLOSE_BUTTON  , make_v4(0.35f, 0.15f, 0.15f, 1.0f));
-		ui_push_color (UI_COLOR_PROGRESS_BAR_EMPTY   , make_v4(0.18f, 0.18f, 0.18f, 1.0f));
-		ui_push_color (UI_COLOR_PROGRESS_BAR_FILLED  , make_v4(0.15f, 0.25f, 0.45f, 1.0f));
-		ui_push_color (UI_COLOR_BUTTON_IDLE          , make_v4(0.28f, 0.28f, 0.28f, 1.0f));
-		ui_push_color (UI_COLOR_BUTTON_HOT           , make_v4(0.25f, 0.35f, 0.65f, 1.0f));
-		ui_push_color (UI_COLOR_BUTTON_ACTIVE        , make_v4(0.35f, 0.45f, 0.85f, 1.0f));
-		ui_push_color (UI_COLOR_BUTTON_FIRED         , make_v4(0.45f, 0.30f, 0.25f, 1.0f));
-		ui_push_color (UI_COLOR_SLIDER_BACKGROUND    , make_v4(0.18f, 0.18f, 0.18f, 1.0f));
-		ui_push_color (UI_COLOR_SLIDER_FOREGROUND    , make_v4(0.28f, 0.28f, 0.28f, 1.0f));
-		ui_push_color (UI_COLOR_SLIDER_HOT           , make_v4(0.25f, 0.35f, 0.65f, 1.0f));
-		ui_push_color (UI_COLOR_SLIDER_ACTIVE        , make_v4(0.35f, 0.45f, 0.85f, 1.0f));
+        ui.base_scalars[UI_SCALAR_ANIMATION_RATE     ] = 40.0f;
+        ui.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS] = 512.0f;
+        ui.base_scalars[UI_SCALAR_ANIMATION_DAMPEN   ] = 32.0f;
+		ui.base_scalars[UI_SCALAR_WIDGET_MARGIN      ] = 0.66f;
+		ui.base_scalars[UI_SCALAR_TEXT_MARGIN        ] = 5.4f;
+		ui.base_scalars[UI_SCALAR_ROUNDEDNESS        ] = 0.0f;
+		ui.base_scalars[UI_SCALAR_TEXT_ALIGN_X       ] = 0.5f;
+		ui.base_scalars[UI_SCALAR_TEXT_ALIGN_Y       ] = 0.5f;
+		ui.base_scalars[UI_SCALAR_SCROLLBAR_WIDTH    ] = 12.0f;
+        ui.base_scalars[UI_SCALAR_SLIDER_HANDLE_RATIO] = 3.0f;
+        ui.base_scalars[UI_SCALAR_SLIDER_HANDLE_RATIO] = 3.0f;
+		ui.base_colors [UI_COLOR_TEXT                ] = make_v4(0.90f, 0.90f, 0.90f, 1.0f);
+		ui.base_colors [UI_COLOR_TEXT_SHADOW         ] = make_v4(0.00f, 0.00f, 0.00f, 0.75f);
+		ui.base_colors [UI_COLOR_WINDOW_BACKGROUND   ] = make_v4(0.15f, 0.15f, 0.15f, 1.0f);
+		ui.base_colors [UI_COLOR_WINDOW_TITLE_BAR    ] = make_v4(0.45f, 0.25f, 0.25f, 1.0f);
+		ui.base_colors [UI_COLOR_WINDOW_CLOSE_BUTTON ] = make_v4(0.35f, 0.15f, 0.15f, 1.0f);
+		ui.base_colors [UI_COLOR_PROGRESS_BAR_EMPTY  ] = make_v4(0.18f, 0.18f, 0.18f, 1.0f);
+		ui.base_colors [UI_COLOR_PROGRESS_BAR_FILLED ] = make_v4(0.15f, 0.25f, 0.45f, 1.0f);
+		ui.base_colors [UI_COLOR_BUTTON_IDLE         ] = make_v4(0.28f, 0.28f, 0.28f, 1.0f);
+		ui.base_colors [UI_COLOR_BUTTON_HOT          ] = make_v4(0.25f, 0.35f, 0.65f, 1.0f);
+		ui.base_colors [UI_COLOR_BUTTON_ACTIVE       ] = make_v4(0.35f, 0.45f, 0.85f, 1.0f);
+		ui.base_colors [UI_COLOR_BUTTON_FIRED        ] = make_v4(0.45f, 0.65f, 0.95f, 1.0f);
+		ui.base_colors [UI_COLOR_SLIDER_BACKGROUND   ] = make_v4(0.18f, 0.18f, 0.18f, 1.0f);
+		ui.base_colors [UI_COLOR_SLIDER_FOREGROUND   ] = make_v4(0.28f, 0.28f, 0.28f, 1.0f);
+		ui.base_colors [UI_COLOR_SLIDER_HOT          ] = make_v4(0.25f, 0.35f, 0.65f, 1.0f);
+		ui.base_colors [UI_COLOR_SLIDER_ACTIVE       ] = make_v4(0.35f, 0.45f, 0.85f, 1.0f);
 	}
 
 	ui.frame_index += 1;
 
-	for (pool_iter_t it = pool_iter(&widgets); pool_iter_valid(&it); pool_iter_next(&it))
+	for (pool_iter_t it = pool_iter(&widgets); 
+		 pool_iter_valid(&it); 
+		 pool_iter_next(&it))
 	{
 		ui_widget_t *widget = it.data;
 
-		widget->new = false;
-
 		if (widget->last_touched_frame_index + 1 < ui.frame_index)
 		{
-			hash_rem(&widget_index, widget->id.value);
+			hash_rem     (&widget_index, widget->id.value);
 			pool_rem_item(&widgets, widget);
 		}
+	}
+
+	for (pool_iter_t it = pool_iter(&ui_animation_state); 
+		 pool_iter_valid(&it); 
+		 pool_iter_next(&it))
+	{
+		ui_anim_t *anim = it.data;
+
+		float c_t = anim->c_t;
+		float c_v = anim->c_v;
+
+		v4_t t_target   = anim->t_target;
+		v4_t t_current  = anim->t_current;
+		v4_t t_velocity = anim->t_velocity;
+
+		v4_t accel_t = mul( c_t, sub(t_target, t_current));
+		v4_t accel_v = mul(-c_v, t_velocity);
+		v4_t accel = add(accel_t, accel_v);
+
+		t_velocity = add(t_velocity, mul(ui.dt, accel));
+		t_current  = add(t_current,  mul(ui.dt, t_velocity));
+
+		anim->t_current  = t_current;
+		anim->t_velocity = t_velocity;
 	}
 
     if (!ui.active.value)
@@ -331,6 +442,30 @@ void ui_end(void)
 	}
 
 	ASSERT(ui.panel == NULL);
+}
+
+DREAM_INLINE void ui_draw_styled_rect(rect2_t rect, v4_t color)
+{
+	r_ui_rect((r_ui_rect_t){
+		.rect        = rect, 
+		.roundedness = v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS)),
+		.color       = pack_color(color),
+	});
+}
+
+DREAM_INLINE void ui_draw_styled_rect_roundness(rect2_t rect, v4_t color, v4_t roundness)
+{
+	r_ui_rect((r_ui_rect_t){
+		.rect        = rect, 
+		.roundedness = mul(roundness, v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS))),
+		.color       = pack_color(color),
+	});
+}
+
+DREAM_INLINE void ui_draw_text(v2_t p, string_t text)
+{
+    r_draw_text(&ui.font, add(p, make_v2(1.0f, -1.0f)), ui_color(UI_COLOR_TEXT_SHADOW), text);
+    r_draw_text(&ui.font, p, ui_color(UI_COLOR_TEXT), text);
 }
 
 typedef enum ui_interaction_t
@@ -389,12 +524,6 @@ DREAM_INLINE void ui_check_hovered(rect2_t rect)
 	{
 		ui.hovered = true;
 	}
-}
-
-DREAM_INLINE void ui_text(v2_t p, string_t text)
-{
-    r_draw_text(&ui.font, add(p, make_v2(1.0f, -1.0f)), ui_color(UI_COLOR_TEXT_SHADOW), text);
-    r_draw_text(&ui.font, p, ui_color(UI_COLOR_TEXT), text);
 }
 
 DREAM_INLINE v2_t ui_text_center_p(rect2_t rect, string_t text)
@@ -460,9 +589,8 @@ void ui_window_begin(ui_window_t *window)
     // NOTE: the panel will push a very similar view right away but we need it for the rendering here
 	r_push_view_screenspace_clip_rect(both);
 
-	r_immediate_rect2_filled(bar, ui_color(UI_COLOR_WINDOW_TITLE_BAR));
-	r_immediate_rect2_filled(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND));
-	r_immediate_flush();
+	ui_draw_styled_rect_roundness(bar, ui_color(UI_COLOR_WINDOW_TITLE_BAR), make_v4(2, 0, 2, 0));
+	ui_draw_styled_rect_roundness(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), make_v4(0, 2, 0, 2));
 
 	ui_set_next_rect(ui_cut_right(&bar, ui_label_width(S("Close"))));
 
@@ -480,7 +608,7 @@ void ui_window_begin(ui_window_t *window)
 	}
 
     ui_id_t panel_id = ui_child_id(id, S("panel"));
-	ui_text(add(bar.min, make_v2(ui_scalar(UI_SCALAR_TEXT_MARGIN), ui_scalar(UI_SCALAR_TEXT_MARGIN))), window->name);
+	ui_draw_text(add(bar.min, make_v2(ui_scalar(UI_SCALAR_TEXT_MARGIN), ui_scalar(UI_SCALAR_TEXT_MARGIN))), window->name);
 	ui_panel_begin_ex(panel_id, rect, UI_PANEL_SCROLLABLE_VERT);
 }
 
@@ -544,10 +672,9 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 
 			v4_t color = ui_color(UI_COLOR_SLIDER_FOREGROUND);
 
-			r_immediate_rect2_filled(top, ui_color(UI_COLOR_SLIDER_BACKGROUND));
-			r_immediate_rect2_filled(handle, color);
-			r_immediate_rect2_filled(bot, ui_color(UI_COLOR_SLIDER_BACKGROUND));
-			r_immediate_flush();
+			ui_draw_styled_rect(top, ui_color(UI_COLOR_SLIDER_BACKGROUND));
+			ui_draw_styled_rect(handle, color);
+			ui_draw_styled_rect(bot, ui_color(UI_COLOR_SLIDER_BACKGROUND));
 
 			offset_y = widget->scroll_offset_y;
 		}
@@ -594,7 +721,7 @@ void ui_label(string_t label)
 	rect = ui_shrink(&rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
 	rect2_t text_rect = ui_shrink(&rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
-	ui_text(ui_text_align_p(text_rect, label), label);
+	ui_draw_text(ui_text_align_p(text_rect, label), label);
 }
 
 float ui_label_width(string_t label)
@@ -616,14 +743,13 @@ void ui_progress_bar(string_t label, float progress)
 
 	float width = rect2_width(rect);
 
+	rect2_t tray   = rect;
 	rect2_t filled = ui_cut_left(&rect, progress*width);
-	rect2_t empty  = rect;
 
-	r_immediate_rect2_filled(filled, ui_color(UI_COLOR_PROGRESS_BAR_FILLED));
-	r_immediate_rect2_filled(empty,  ui_color(UI_COLOR_PROGRESS_BAR_EMPTY));
-	r_immediate_flush();
+	ui_draw_styled_rect(tray, ui_color(UI_COLOR_PROGRESS_BAR_EMPTY));
+	ui_draw_styled_rect(filled, ui_color(UI_COLOR_PROGRESS_BAR_FILLED));
 
-	ui_text(ui_text_align_p(text_rect, label), label);
+	ui_draw_text(ui_text_align_p(text_rect, label), label);
 }
 
 typedef enum ui_widget_state_t
@@ -645,15 +771,13 @@ DREAM_INLINE ui_widget_state_t ui_get_widget_state(ui_id_t id)
 	return result;
 }
 
-DREAM_INLINE v4_t ui_animate_colors(ui_id_t id, ui_widget_state_t state, float rate, v4_t cold, v4_t hot, v4_t active, v4_t fired)
+DREAM_INLINE v4_t ui_animate_colors(ui_id_t id, ui_widget_state_t state, uint32_t interaction, v4_t cold, v4_t hot, v4_t active, v4_t fired)
 {
-	(void)fired;
+	ui_id_t color_id = ui_child_id(id, S("color"));
 
-	ui_widget_t *widget = ui_get_widget(id);
-
-	if (widget->new)
+	if (interaction & UI_FIRED)
 	{
-		widget->interp_color = cold;
+		ui_set_v4(color_id, fired);
 	}
 
 	v4_t target = cold;
@@ -664,11 +788,8 @@ DREAM_INLINE v4_t ui_animate_colors(ui_id_t id, ui_widget_state_t state, float r
 		case UI_WIDGET_STATE_ACTIVE: target = active; break;
 	}
 
-	if (state == UI_WIDGET_STATE_ACTIVE)
-		rate *= 0.5f;
-
-	widget->interp_color = ui_animate_towards_exp4(widget->interp_color, target);
-	return widget->interp_color;
+	v4_t interp_color = ui_interpolate_v4(color_id, target);
+	return interp_color;
 }
 
 bool ui_button(string_t label)
@@ -690,16 +811,24 @@ bool ui_button(string_t label)
 
 	ui_widget_state_t state = ui_get_widget_state(id);
 
-	v4_t color = ui_animate_colors(id, state, ui_scalar(UI_SCALAR_ANIMATION_RATE),
+	v4_t color = ui_animate_colors(id, state, interaction, 
 								   ui_color(UI_COLOR_BUTTON_IDLE),
 								   ui_color(UI_COLOR_BUTTON_HOT),
 								   ui_color(UI_COLOR_BUTTON_ACTIVE),
 								   ui_color(UI_COLOR_BUTTON_FIRED));
 
-	r_immediate_rect2_filled(rect, color);
-	r_immediate_flush();
+	float hover_lift = ui_is_hot(id) && !ui_is_active(id) ? 2.0f : 0.0f;
+	hover_lift = ui_interpolate_f32(id, hover_lift);
 
-	ui_text(ui_text_center_p(text_rect, label), label);
+	rect2_t shadow = rect;
+
+	rect      = rect2_add_offset(rect,      make_v2(0.0f, hover_lift));
+	text_rect = rect2_add_offset(text_rect, make_v2(0.0f, hover_lift));
+
+	ui_draw_styled_rect(shadow, make_v4(0.0f, 0.0f, 0.0f, 0.25f));
+	ui_draw_styled_rect(rect, color);
+
+	ui_draw_text(ui_text_center_p(text_rect, label), label);
 
 	return result;
 }
@@ -736,16 +865,14 @@ bool ui_checkbox(string_t label, bool *value)
 	if (*value && state == UI_WIDGET_STATE_COLD)
 		state = UI_WIDGET_STATE_ACTIVE;
 
-	v4_t color = ui_animate_colors(id, state, ui_scalar(UI_SCALAR_ANIMATION_RATE),
+	v4_t color = ui_animate_colors(id, state, interaction, 
 								   ui_color(UI_COLOR_BUTTON_IDLE),
 								   ui_color(UI_COLOR_BUTTON_HOT),
 								   ui_color(UI_COLOR_BUTTON_ACTIVE),
 								   ui_color(UI_COLOR_BUTTON_FIRED));
 
-	r_immediate_rect2_filled(box_rect, color);
-	r_immediate_flush();
-
-	ui_text(label_rect.min, label);
+	ui_draw_styled_rect(box_rect, color);
+	ui_draw_text(label_rect.min, label);
 
 	return result;
 }
@@ -791,7 +918,7 @@ bool ui_radio(string_t label, int *value, int count, string_t *labels)
         }
     }
 
-	ui_text(label_rect.min, label);
+	ui_draw_text(label_rect.min, label);
 
     return result;
 }
@@ -838,6 +965,8 @@ void ui_slider(string_t label, float *v, float min, float max)
 		pct = (value - min) / (max - min); // TODO: protect against division by zero, think about min > max case
 	}
 
+	pct = ui_interpolate_f32(id, pct);
+
 	float width_exclusive = width - handle_width;
 	float handle_offset = pct*width_exclusive;
 
@@ -845,27 +974,29 @@ void ui_slider(string_t label, float *v, float min, float max)
 	rect2_t handle = ui_cut_left(&rect, handle_width);
 	rect2_t right  = rect;
 
-	ui_button_behaviour(id, handle);
+	(void)left;
+	(void)right;
 
+	uint32_t interaction = ui_button_behaviour(id, handle);
 	ui_widget_state_t state = ui_get_widget_state(id);
 
-	v4_t color = ui_animate_colors(id, state, ui_scalar(UI_SCALAR_ANIMATION_RATE),
+	v4_t color = ui_animate_colors(id, state, interaction, 
 								   ui_color(UI_COLOR_SLIDER_FOREGROUND),
 								   ui_color(UI_COLOR_SLIDER_HOT),
 								   ui_color(UI_COLOR_SLIDER_ACTIVE),
 								   ui_color(UI_COLOR_SLIDER_ACTIVE));
 
-	r_immediate_rect2_filled(left, ui_color(UI_COLOR_SLIDER_BACKGROUND));
-	r_immediate_rect2_filled(handle, color);
-	r_immediate_rect2_filled(right, ui_color(UI_COLOR_SLIDER_BACKGROUND));
-	r_immediate_flush();
+	// r_immediate_clip_rect(slider_body); TODO: ui rect clip rects?
+	ui_draw_styled_rect(slider_body, ui_color(UI_COLOR_SLIDER_BACKGROUND));
+	ui_draw_styled_rect(handle, color);
+	ui_draw_styled_rect(right, ui_color(UI_COLOR_SLIDER_BACKGROUND));
 
-	ui_text(label_rect.min, label);
+	ui_draw_text(label_rect.min, label);
 
 	string_t value_text = Sf("%.03f", *v);
 
 	v2_t text_p = ui_text_center_p(slider_body, value_text);
-	ui_text(text_p, value_text);
+	ui_draw_text(text_p, value_text);
 }
 
 bool ui_slider_int(string_t label, int *v, int min, int max)
@@ -889,8 +1020,8 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 	rect2_t label_rect = ui_cut_left(&rect, 0.5f*w); // (float)label.count*ui.font.cw + ui_widget_padding());
 	label_rect = ui_shrink(&label_rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN) + ui_scalar(UI_SCALAR_TEXT_MARGIN));
 
-	rect2_t sub_rect = ui_cut_left (&rect, (float)ui.font.cw + ui_widget_padding());
-	rect2_t add_rect = ui_cut_right(&rect, (float)ui.font.cw + ui_widget_padding());
+	rect2_t sub_rect = ui_cut_left (&rect, rect2_height(rect));
+	rect2_t add_rect = ui_cut_right(&rect, rect2_height(rect));
 
 	rect = ui_shrink(&rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
@@ -924,6 +1055,7 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 	{
 		pct = relative_x / (width - handle_width);
 		*v = (int)roundf((float)min + pct*(float)(max - min));
+		ui_set_f32(id, pct);
 	}
 	else
 	{
@@ -931,34 +1063,82 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 		pct = (float)(value - min) / (float)(max - min); // TODO: protect against division by zero, think about min > max case
 	}
 
+	pct = saturate(pct);
+
+	float hover_lift = ui_is_hot(id) ? 2.0f : 0.0f;
+	hover_lift = ui_interpolate_f32(ui_child_id(id, S("hover_lift")), hover_lift);
+
+	float pct_interp = pct;
+	if (!ui_is_active(id))
+	{
+		pct_interp = ui_interpolate_f32(id, pct);
+	}
+
 	float width_exclusive = width - handle_width;
-	float handle_offset = pct*width_exclusive;
+	float handle_offset = pct_interp*width_exclusive;
 
 	rect2_t left   = ui_cut_left(&rect, handle_offset);
 	rect2_t handle = ui_cut_left(&rect, handle_width);
 	rect2_t right  = rect;
 
-	ui_button_behaviour(id, handle);
+	uint32_t interaction = ui_button_behaviour(id, handle);
+
+	rect2_t handle_no_offset = handle;
+	handle = rect2_add_offset(handle, make_v2(0, hover_lift));
 
 	ui_widget_state_t state = ui_get_widget_state(id);
 
-	v4_t color = ui_animate_colors(id, state, ui_scalar(UI_SCALAR_ANIMATION_RATE),
+	v4_t color = ui_animate_colors(id, state, interaction, 
 								   ui_color(UI_COLOR_SLIDER_FOREGROUND),
 								   ui_color(UI_COLOR_SLIDER_HOT),
 								   ui_color(UI_COLOR_SLIDER_ACTIVE),
 								   ui_color(UI_COLOR_SLIDER_ACTIVE));
 
-	r_immediate_rect2_filled(left, ui_color(UI_COLOR_SLIDER_BACKGROUND));
-	r_immediate_rect2_filled(handle, color);
-	r_immediate_rect2_filled(right, ui_color(UI_COLOR_SLIDER_BACKGROUND));
-	r_immediate_flush();
+	rect2_t slider_clip = slider_body;
+	slider_clip.max.y += 2.0f;
 
-	ui_text(label_rect.min, label);
+	(void)left;
+	(void)right;
+
+	r_immediate_clip_rect(slider_clip);
+	// ui_draw_styled_rect(left, ui_color(UI_COLOR_SLIDER_BACKGROUND));
+	// ui_draw_styled_rect(right, ui_color(UI_COLOR_SLIDER_BACKGROUND));
+	ui_draw_styled_rect(slider_body, ui_color(UI_COLOR_SLIDER_BACKGROUND));
+	// ui_draw_styled_rect(right, ui_color(UI_COLOR_SLIDER_BACKGROUND));
+
+#if 0
+	int divisions = max - min;
+	if (divisions < 0) divisions = -divisions;
+
+	if (divisions <= 24)
+	{
+		rect2_t divisions_rect   = rect2_sub_radius(slider_body, make_v2(handle_half_width, 0));
+		v2_t    divisions_center = rect2_center(divisions_rect);
+		float   divisions_width  = rect2_width(divisions_rect);
+		for (int i = 0; i <= divisions; i++)
+		{
+			float t = (float)i / (float)divisions;
+			float x = t*divisions_width;
+
+			rect2_t r = rect2_center_radius(make_v2(divisions_rect.min.x + x, divisions_center.y), make_v2(2, 2));
+			r_ui_rect((r_ui_rect_t){
+				.rect        = r, 
+				.roundedness = v4_from_scalar(2),
+				.color       = pack_color(make_v4(1.0f, 1.0f, 1.0f, 0.40f)),
+			});
+		}
+	}
+#endif
+
+	ui_draw_styled_rect(handle_no_offset, make_v4(0.0f, 0.0f, 0.0f, 0.15f));
+	ui_draw_styled_rect(handle, color);
+
+	ui_draw_text(label_rect.min, label);
 
 	string_t value_text = Sf("%d", *v);
 
 	v2_t text_p = ui_text_center_p(slider_body, value_text);
-	ui_text(text_p, value_text);
+	ui_draw_text(text_p, value_text);
 
 	return *v != init_value;
 }

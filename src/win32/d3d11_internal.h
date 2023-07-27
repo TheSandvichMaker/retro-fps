@@ -17,18 +17,21 @@ typedef struct d3d_cbuffer_t
     m4x4_t proj_matrix;
     m4x4_t model_matrix;
     m4x4_t sun_matrix;
+	v2_t     screen_dim;
+	uint32_t instance_offset;
+	float    pad1;
     v3_t     light_direction;
-    float    pad0;
+    float    pad2;
     uint32_t frame_index;
     float    depth_bias;
-    float    pad1;
-    float    pad2;
-    v3_t     fog_offset;
     float    pad3;
-    v3_t     fog_dim;
     float    pad4;
-    v3_t     sun_color;
+    v3_t     fog_offset;
     float    pad5;
+    v3_t     fog_dim;
+    float    pad6;
+    v3_t     sun_color;
+    float    pad7;
     v3_t     sun_direction;
     float    fog_density;
     float    fog_absorption;
@@ -153,6 +156,8 @@ typedef struct d3d_state_t
 
     ID3D11Buffer             *immediate_ibuffer;
     ID3D11Buffer             *immediate_vbuffer;
+    ID3D11Buffer             *ui_rect_buffer;
+	ID3D11ShaderResourceView *ui_rect_srv;
 
     d3d_queries_t             queries[D3D_QUERY_FRAME_COUNT];
     int                       query_frame;
@@ -193,6 +198,8 @@ typedef struct d3d_state_t
     ID3D11VertexShader       *postprocess_vs;
     ID3D11PixelShader        *msaa_resolve_ps;
     ID3D11PixelShader        *hdr_resolve_ps;
+	ID3D11VertexShader       *ui_rect_vs;
+	ID3D11PixelShader        *ui_rect_ps;
 
 	d3d_shader_pair_t         immediate_shaders[R_SHADER_COUNT];
 

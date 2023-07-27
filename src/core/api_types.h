@@ -86,7 +86,7 @@ typedef struct string_t
 #define stack_insert(stack, index, value)                                  \
 	do {                                                                   \
 		ASSERT(!stack_full(stack));                                        \
-		for (int64_t __i = ((int64_t)(stack).at) - 1; __i > index; __i--)  \
+		for (int64_t __i = ((int64_t)(stack).at) - 1; __i >= index; __i--) \
 		{                                                                  \
 			int64_t __j = __i + 1;                                         \
 			(stack).values[__j] = (stack).values[__i];                     \

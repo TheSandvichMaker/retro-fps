@@ -1,7 +1,7 @@
-#ifndef STRING_H
-#define STRING_H
+#ifndef DREAM_STRING_H
+#define DREAM_STRING_H
 
-#include "api_types.h"
+#include "core/api_types.h"
 
 size_t string_count(const char *string);
 size_t string16_count(const wchar_t *string);
@@ -123,4 +123,4 @@ string_t   utf8_from_utf16(arena_t *arena, string16_t string);
 uint64_t string_hash(string_t string);
 uint64_t string_hash_with_seed(string_t string, uint64_t seed);
 
-#endif /* STRING_H */
+#endif /* DREAM_STRING_H */
