@@ -370,7 +370,7 @@ bool ui_begin(float dt)
 		ui.base_scalars[UI_SCALAR_SCROLLBAR_WIDTH    ] = 12.0f;
         ui.base_scalars[UI_SCALAR_SLIDER_HANDLE_RATIO] = 3.0f;
         ui.base_scalars[UI_SCALAR_SLIDER_HANDLE_RATIO] = 3.0f;
-		ui.base_colors [UI_COLOR_TEXT                ] = make_v4(0.90f, 0.90f, 0.90f, 1.0f);
+		ui.base_colors [UI_COLOR_TEXT                ] = make_v4(0.95f, 0.90f, 0.85f, 1.0f);
 		ui.base_colors [UI_COLOR_TEXT_SHADOW         ] = make_v4(0.00f, 0.00f, 0.00f, 0.75f);
 		ui.base_colors [UI_COLOR_WIDGET_SHADOW       ] = make_v4(0.00f, 0.00f, 0.00f, 0.20f);
 		ui.base_colors [UI_COLOR_WINDOW_BACKGROUND   ] = background;
