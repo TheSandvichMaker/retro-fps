@@ -754,7 +754,8 @@ static d3d_texture_t *d3d_get_texture_or(resource_handle_t handle, d3d_texture_t
 {
 	d3d_texture_t *texture = pool_get(&d3d_textures, handle);
 
-	if (!texture || texture->state != D3D_TEXTURE_STATE_LOADED)  
+	// TODO: Review sanity of the thread safety of D3D_TEXTURE_STATE_DESTROY_PENDING
+	if (!texture || (texture->state != D3D_TEXTURE_STATE_LOADED && texture->state != D3D_TEXTURE_STATE_DESTROY_PENDING))
 		texture = fallback;
 
 	return texture;
@@ -1400,6 +1401,41 @@ done_with_sun_shadows:
         d3d_timestamp(RENDER_TS_UI);
     }
 
+	// TODO: Review thread-safety of this 
+	for (pool_iter_t it = pool_iter(&d3d_textures);
+		 pool_iter_valid(&it);
+		 pool_iter_next(&it))
+	{
+		d3d_texture_t *resource = it.data;
+
+		d3d_texture_state_t state = resource->state;
+		if (state == D3D_TEXTURE_STATE_DESTROY_PENDING &&
+			atomic_cas_u32(&resource->state, D3D_TEXTURE_STATE_NONE, D3D_TEXTURE_STATE_DESTROY_PENDING) == D3D_TEXTURE_STATE_NONE)
+		{
+			switch (resource->desc.type)
+			{
+				case TEXTURE_TYPE_2D:
+				{
+					D3D_SAFE_RELEASE(resource->tex[0]);
+					D3D_SAFE_RELEASE(resource->tex[1]);
+					D3D_SAFE_RELEASE(resource->tex[2]);
+					D3D_SAFE_RELEASE(resource->tex[3]);
+					D3D_SAFE_RELEASE(resource->tex[4]);
+					D3D_SAFE_RELEASE(resource->tex[5]);
+				} break;
+
+				case TEXTURE_TYPE_3D:
+				{
+					D3D_SAFE_RELEASE(resource->tex_3d);
+				} break;
+			}
+
+			D3D_SAFE_RELEASE(resource->srv);
+
+			pool_rem_item(&d3d_textures, resource);
+		}
+	}
+
 	ReleaseSRWLockExclusive(&d3d.context_lock);
 
     d3d.frame_index++;
@@ -1497,9 +1533,12 @@ void populate_texture(resource_handle_t handle, const upload_texture_t *params)
 
     d3d_texture_t *resource = pool_get(&d3d_textures, handle);
 
+	if (NEVER(!resource))
+		return;
+
 	uint32_t state = resource->state;
 
-	if (state > D3D_TEXTURE_STATE_RESERVED)
+	if (state != D3D_TEXTURE_STATE_RESERVED)
 		return;
 
     if (resource &&
@@ -1717,29 +1756,9 @@ void destroy_texture(resource_handle_t handle)
 		WaitOnAddress(&resource->state, &unwanted_state, sizeof(resource->state), INFINITE);
 	}
 
-	if (atomic_cas_u32(&resource->state, D3D_TEXTURE_STATE_NONE, D3D_TEXTURE_STATE_LOADED) == D3D_TEXTURE_STATE_LOADED)
+	if (atomic_cas_u32(&resource->state, D3D_TEXTURE_STATE_DESTROY_PENDING, D3D_TEXTURE_STATE_LOADED) == D3D_TEXTURE_STATE_LOADED)
 	{
-		switch (resource->desc.type)
-		{
-			case TEXTURE_TYPE_2D:
-			{
-				D3D_SAFE_RELEASE(resource->tex[0]);
-				D3D_SAFE_RELEASE(resource->tex[1]);
-				D3D_SAFE_RELEASE(resource->tex[2]);
-				D3D_SAFE_RELEASE(resource->tex[3]);
-				D3D_SAFE_RELEASE(resource->tex[4]);
-				D3D_SAFE_RELEASE(resource->tex[5]);
-			} break;
-
-			case TEXTURE_TYPE_3D:
-			{
-				D3D_SAFE_RELEASE(resource->tex_3d);
-			} break;
-		}
-
-		D3D_SAFE_RELEASE(resource->srv);
-
-		pool_rem(&d3d_textures, handle);
+		// yay
 	}
 }
 

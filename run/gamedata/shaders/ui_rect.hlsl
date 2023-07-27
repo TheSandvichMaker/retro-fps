@@ -11,6 +11,10 @@ struct r_ui_rect_t
 	uint   color_01;        // 52
 	float  shadow_radius;   // 58
 	float  shadow_amount;   // 64
+	float  inner_radius;    // 68
+	float  pad0;            // 72
+	float  pad1;            // 76
+	float  pad2;            // 80
 };
 
 StructuredBuffer<r_ui_rect_t> ui_rects : register(t0);
@@ -79,6 +83,11 @@ float4 ps(PS_INPUT IN) : SV_Target
 	float d = rounded_box(pos - p, b, rect.roundedness);
 
 	float aa = smoothstep(0.5f, -0.5f, d);
+
+	if (d < 0.0f && rect.inner_radius > 0.0f)
+	{
+		aa *= smoothstep(rect.inner_radius + 0.5f, rect.inner_radius - 0.5f, -d);
+	}
 
 	float4 color = 0;
 	if (aa > 0.0f)

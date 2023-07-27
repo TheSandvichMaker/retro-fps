@@ -760,14 +760,14 @@ static void update_and_render_lightmap_editor(void)
 			{
 				ui_header(S("Lightmap Debugger"));
 
-				ui_checkbox(S("enabled"), &lm_editor->debug_lightmaps);
-				ui_checkbox(S("show direct light rays"), &lm_editor->show_direct_light_rays);
-				ui_checkbox(S("show indirect light rays"), &lm_editor->show_indirect_light_rays);
-				ui_checkbox(S("fullbright rays"), &lm_editor->fullbright_rays);
-				ui_checkbox(S("no ray depth test"), &lm_editor->no_ray_depth_test);
+				ui_checkbox(S("Enabled"), &lm_editor->debug_lightmaps);
+				ui_checkbox(S("Show Direct Light Rays"), &lm_editor->show_direct_light_rays);
+				ui_checkbox(S("Show Indirect Light Rays"), &lm_editor->show_indirect_light_rays);
+				ui_checkbox(S("Fullbright Rays"), &lm_editor->fullbright_rays);
+				ui_checkbox(S("No Ray Depth Test"), &lm_editor->no_ray_depth_test);
 
-				ui_slider_int(S("min recursion level"), &lm_editor->min_display_recursion, 0, 16);
-				ui_slider_int(S("max recursion level"), &lm_editor->max_display_recursion, 0, 16);
+				ui_slider_int(S("Min Recursion Level"), &lm_editor->min_display_recursion, 0, 16);
+				ui_slider_int(S("Max Recursion Level"), &lm_editor->max_display_recursion, 0, 16);
 
 				if (lm_editor->selected_poly)
 				{
@@ -778,16 +778,16 @@ static void update_and_render_lightmap_editor(void)
 
                     ui_push_scalar(UI_SCALAR_TEXT_ALIGN_X, 0.0f);
 
-					ui_label(Sf("resolution: %u x %u", desc.w, desc.h));
+					ui_label(Sf("Resolution: %u x %u", desc.w, desc.h));
 					if (lm_editor->pixel_selection_active)
 					{
-                        ui_label(Sf("selected pixel region: (%d, %d) (%d, %d)", 
+                        ui_label(Sf("Selected Pixel Region: (%d, %d) (%d, %d)", 
                                     lm_editor->selected_pixels.min.x,
                                     lm_editor->selected_pixels.min.y,
                                     lm_editor->selected_pixels.max.x,
                                     lm_editor->selected_pixels.max.y));
 
-						if (ui_button(S("clear selection")))
+						if (ui_button(S("Clear Selection")))
 						{
 							lm_editor->pixel_selection_active = false;
 							lm_editor->selected_pixels = (rect2i_t){ 0 };
@@ -1139,7 +1139,7 @@ DREAM_INLINE void update_and_render_ui_demo(void)
 
 		ui_slider(S("UI Widget Margin"), &ui.base_scalars[UI_SCALAR_WIDGET_MARGIN], 0.0f, 8.0f);
 		ui_slider(S("UI Text Margin"), &ui.base_scalars[UI_SCALAR_TEXT_MARGIN], 0.0f, 8.0f);
-		ui_slider(S("UI Roundedness"), &ui.base_scalars[UI_SCALAR_ROUNDEDNESS], 0.0f, 32.0f);
+		ui_slider(S("UI Roundedness"), &ui.base_scalars[UI_SCALAR_ROUNDEDNESS], 0.0f, 12.0f);
 		ui_slider(S("UI Animation Stiffness"), &ui.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS], 1.0f, 1024.0f);
 		ui_slider(S("UI Animation Dampen"), &ui.base_scalars[UI_SCALAR_ANIMATION_DAMPEN], 1.0f, 128.0f);
 	}

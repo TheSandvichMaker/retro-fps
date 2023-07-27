@@ -298,8 +298,10 @@ typedef struct ui_t
 	ui_id_t next_id;
 	rect2_t next_rect;
 
-	// bitmap_font_t font;
+	string_t font_data; // so we can rebuild the font at different sizes without going out to disk
 	font_atlas_t font;
+
+	string_t header_font_data; // so we can rebuild the font at different sizes without going out to disk
 	font_atlas_t header_font;
 } ui_t;
 

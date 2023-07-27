@@ -105,9 +105,6 @@ DREAM_INLINE rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t 
 {
 	rect2_t result = rect2_inverted_infinity();
 
-	p.x = roundf(p.x);
-	p.y = roundf(p.y);
-
 	uint32_t color_packed = pack_color(color);
 
 	r_immediate_texture(font->texture);
@@ -119,6 +116,9 @@ DREAM_INLINE rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t 
 
 	v2_t at = p;
 	at.y -= 0.5f*font->descent;
+
+	at.x = roundf(at.x);
+	at.y = roundf(at.y);
 
 	for (size_t i = 0; i < text.count; i++)
 	{
@@ -142,6 +142,9 @@ DREAM_INLINE rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t 
 			v2_t point = at;
 			point.x += glyph->x_offset;
 			point.y += glyph->y_offset;
+
+			point.x = roundf(point.x);
+			// point.y = floorf(point.y);
 
 			rect2_t rect = rect2_from_min_dim(point, make_v2(cw, ch));
 			result = rect2_union(result, rect);
@@ -550,6 +553,8 @@ bool ui_begin(float dt)
 {
 	if (!ui.initialized)
 	{
+		ui.font_data        = fs_read_entire_file(&ui.arena, S("gamedata/fonts/NotoSans/NotoSans-Regular.ttf"));
+		ui.header_font_data = fs_read_entire_file(&ui.arena, S("gamedata/fonts/NotoSans/NotoSans-Bold.ttf"));
 		ui_set_font_size(18.0f);
 
 		v4_t background    = make_v4(0.20f, 0.15f, 0.17f, 1.0f);
@@ -670,8 +675,8 @@ void ui_set_font_size(float size)
 		{ .start = ' ', .end = '~' },
 	};
 
-	ui.font        = make_font_atlas(S("gamedata/fonts/NotoSans/NotoSans-Regular.ttf"), ARRAY_COUNT(ranges), ranges, size);
-	ui.header_font = make_font_atlas(S("gamedata/fonts/NotoSans/NotoSans-Bold.ttf"), ARRAY_COUNT(ranges), ranges, 1.5f*size);
+	ui.font        = make_font_atlas_from_memory(ui.font_data, ARRAY_COUNT(ranges), ranges, size);
+	ui.header_font = make_font_atlas_from_memory(ui.header_font_data, ARRAY_COUNT(ranges), ranges, 1.5f*size);
 }
 
 typedef enum ui_interaction_t
@@ -905,8 +910,12 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 			{
 				float relative_y = CLAMP((ui.mouse_p.y - ui.drag_anchor.y) - scroll_area.min.y - handle_half_size, 0.0f, scroll_area_height - handle_size);
 				pct = 1.0f - (relative_y / (scroll_area_height - handle_size));
-				widget->scroll_offset_y = pct*(widget->scrollable_height_y - rect2_height(inner_rect));
 			}
+
+			// hmm
+			pct = ui_interpolate_f32(scrollbar_id, pct);
+
+			widget->scroll_offset_y = pct*(widget->scrollable_height_y - rect2_height(inner_rect));
 
 			float height_exclusive = scroll_area_height - handle_size;
 			float handle_offset = pct*height_exclusive;
@@ -923,7 +932,7 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 			ui_draw_styled_rect(handle, color);
 			ui_draw_styled_rect(bot, ui_color(UI_COLOR_SLIDER_BACKGROUND));
 
-			offset_y = widget->scroll_offset_y;
+			offset_y = roundf(widget->scroll_offset_y);
 		}
 	}
 
