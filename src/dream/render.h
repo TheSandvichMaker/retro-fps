@@ -288,6 +288,10 @@ typedef struct r_ui_rect_t
 	uint32_t color_01;          // 52
 	float    shadow_radius;     // 58
 	float    shadow_amount;     // 64
+	float    inner_radius;      // 68
+	float    pad0;              // 72
+	float    pad1;              // 76
+	float    pad2;              // 80
 } r_ui_rect_t;
 
 typedef struct r_command_ui_rects_t

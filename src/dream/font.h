@@ -17,7 +17,6 @@ typedef struct font_atlas_t
 
 	arena_t arena;
 
-	float    font_scale;
 	float    font_height;
 	float    ascent;
 	float    descent;
@@ -37,7 +36,6 @@ typedef struct font_atlas_t
 
 typedef struct font_range_t
 {
-	float font_size;
 	uint32_t start;
 	uint32_t end;   // inclusive
 } font_range_t;

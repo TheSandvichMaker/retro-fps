@@ -440,7 +440,7 @@ static void update_and_render_convex_hull_test_panel(void)
 			}
 		}
 
-		ui_label(S("Brute Force Tester"));
+		ui_header(S("Brute Force Tester"));
 		ui_slider_int(S("Min Points"), &hull_test->brute_force_min_point_count, 4, 256);
 		ui_slider_int(S("Max Points"), &hull_test->brute_force_max_point_count, 4, 256);
 		ui_slider_int(S("Iterations Per Count"), &hull_test->brute_force_iterations_per_point_count, 1, 4096);
@@ -608,7 +608,7 @@ static void update_and_render_lightmap_editor(void)
 	{
         if (!map->lightmap_state || !map->lightmap_state->finalized)
         {
-            ui_label(S("Bake Quality"));
+            ui_header(S("Bake Quality"));
 
             static int bake_preset              = 0;
             static int ray_count                = 2;
@@ -758,8 +758,7 @@ static void update_and_render_lightmap_editor(void)
 
 			if (state->finalized)
 			{
-				ui_label(S(""));
-				ui_label(S("Lightmap Debugger"));
+				ui_header(S("Lightmap Debugger"));
 
 				ui_checkbox(S("enabled"), &lm_editor->debug_lightmaps);
 				ui_checkbox(S("show direct light rays"), &lm_editor->show_direct_light_rays);
@@ -1132,7 +1131,7 @@ DREAM_INLINE void update_and_render_ui_demo(void)
 		ui_slider    (S("Float Slider"), &demo->slider_f32, -1.0f, 1.0f);
 		ui_slider_int(S("Int Slider"), &demo->slider_i32, 0, 8);
 
-		static int font_size = 20;
+		static int font_size = 18;
 		if (ui_slider_int(S("UI Font Size"), &font_size, 8, 32))
 		{
 			ui_set_font_size((float)font_size);
@@ -1140,7 +1139,7 @@ DREAM_INLINE void update_and_render_ui_demo(void)
 
 		ui_slider(S("UI Widget Margin"), &ui.base_scalars[UI_SCALAR_WIDGET_MARGIN], 0.0f, 8.0f);
 		ui_slider(S("UI Text Margin"), &ui.base_scalars[UI_SCALAR_TEXT_MARGIN], 0.0f, 8.0f);
-		ui_slider(S("UI Roundedness"), &ui.base_scalars[UI_SCALAR_ROUNDEDNESS], 0.0f, 16.0f);
+		ui_slider(S("UI Roundedness"), &ui.base_scalars[UI_SCALAR_ROUNDEDNESS], 0.0f, 32.0f);
 		ui_slider(S("UI Animation Stiffness"), &ui.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS], 1.0f, 1024.0f);
 		ui_slider(S("UI Animation Dampen"), &ui.base_scalars[UI_SCALAR_ANIMATION_DAMPEN], 1.0f, 128.0f);
 	}

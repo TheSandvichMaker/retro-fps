@@ -300,6 +300,7 @@ typedef struct ui_t
 
 	// bitmap_font_t font;
 	font_atlas_t font;
+	font_atlas_t header_font;
 } ui_t;
 
 DREAM_LOCAL ui_t ui;

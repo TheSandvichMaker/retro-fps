@@ -49,15 +49,15 @@ font_atlas_t make_font_atlas_from_memory(string_t font_data, size_t range_count,
 		stbtt_fontinfo info;
 		if (stbtt_InitFont(&info, data, 0))
 		{
-			result.font_scale = stbtt_ScaleForPixelHeight(&info, font_size);
+			float font_scale = stbtt_ScaleForPixelHeight(&info, font_size);
 
 			int ascent, descent, line_gap;
 			stbtt_GetFontVMetrics(&info, &ascent, &descent, &line_gap);
 
 			result.font_height = font_size;
-			result.ascent      = result.font_scale*(float)ascent;
-			result.descent     = result.font_scale*(float)descent;
-			result.line_gap    = result.font_scale*(float)line_gap;
+			result.ascent      = font_scale*(float)ascent;
+			result.descent     = font_scale*(float)descent;
+			result.line_gap    = font_scale*(float)line_gap;
 			result.y_advance   = result.ascent - result.descent + result.line_gap;
 
 			stbtt_pack_context spc;
@@ -110,10 +110,10 @@ font_atlas_t make_font_atlas_from_memory(string_t font_data, size_t range_count,
 							my_glyph->max_x     = packed->x1;
 							my_glyph->max_y     = packed->y1;
 							my_glyph->x_offset  = packed->xoff;
-							my_glyph->y_offset  = packed->yoff;
+							my_glyph->y_offset  = -packed->yoff2; // swapping yoff2 and yoff because we're in a Y-is-up scenario while stbtt assumes Y-is-down
 							my_glyph->x_advance = packed->xadvance;
 							my_glyph->x_offset2 = packed->xoff2;
-							my_glyph->y_offset2 = packed->yoff2;
+							my_glyph->y_offset2 = -packed->yoff;
 						}
 					}
 				}

@@ -79,6 +79,21 @@ DREAM_INLINE void ui_draw_styled_rect_roundness(rect2_t rect, v4_t color, v4_t r
 	});
 }
 
+DREAM_INLINE void ui_draw_styled_rect_outline(rect2_t rect, v4_t color, float width)
+{
+	uint32_t color_packed = pack_color(color);
+
+	r_ui_rect((r_ui_rect_t){
+		.rect         = rect, 
+		.roundedness  = v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS)),
+		.color_00     = color_packed,
+		.color_10     = color_packed,
+		.color_11     = color_packed,
+		.color_01     = color_packed,
+		.inner_radius = width,
+	});
+}
+
 typedef enum ui_text_op_t
 {
 	UI_TEXT_OP_BOUNDS,
@@ -86,7 +101,7 @@ typedef enum ui_text_op_t
 	UI_TEXT_OP_COUNT,
 } ui_text_op_t;
 
-DREAM_INLINE rect2_t ui_text_op(v2_t p, string_t text, v4_t color, ui_text_op_t op)
+DREAM_INLINE rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op)
 {
 	rect2_t result = rect2_inverted_infinity();
 
@@ -95,7 +110,6 @@ DREAM_INLINE rect2_t ui_text_op(v2_t p, string_t text, v4_t color, ui_text_op_t 
 
 	uint32_t color_packed = pack_color(color);
 
-	font_atlas_t *font = &ui.font;
 	r_immediate_texture(font->texture);
 	r_immediate_shader(R_SHADER_TEXT);
 	r_immediate_blend_mode(R_BLEND_PREMUL_ALPHA);
@@ -127,7 +141,7 @@ DREAM_INLINE rect2_t ui_text_op(v2_t p, string_t text, v4_t color, ui_text_op_t 
 
 			v2_t point = at;
 			point.x += glyph->x_offset;
-			point.y -= glyph->y_offset2;
+			point.y += glyph->y_offset;
 
 			rect2_t rect = rect2_from_min_dim(point, make_v2(cw, ch));
 			result = rect2_union(result, rect);
@@ -186,7 +200,7 @@ DREAM_INLINE rect2_t ui_text_op(v2_t p, string_t text, v4_t color, ui_text_op_t 
 
 DREAM_INLINE rect2_t ui_text_bounds(v2_t p, string_t text)
 {
-	return ui_text_op(p, text, (v4_t){0,0,0,0}, UI_TEXT_OP_BOUNDS);
+	return ui_text_op(&ui.font, p, text, (v4_t){0,0,0,0}, UI_TEXT_OP_BOUNDS);
 }
 
 DREAM_INLINE float ui_text_width(string_t text)
@@ -209,8 +223,26 @@ DREAM_INLINE v2_t ui_text_dim(string_t text)
 
 DREAM_INLINE rect2_t ui_draw_text(v2_t p, string_t text)
 {
-	ui_text_op(add(p, make_v2(1.0f, -1.0f)), text, ui_color(UI_COLOR_TEXT_SHADOW), UI_TEXT_OP_DRAW);
-	rect2_t result = ui_text_op(p, text, ui_color(UI_COLOR_TEXT), UI_TEXT_OP_DRAW);
+	ui_text_op(&ui.font, add(p, make_v2(1.0f, -1.0f)), text, ui_color(UI_COLOR_TEXT_SHADOW), UI_TEXT_OP_DRAW);
+	rect2_t result = ui_text_op(&ui.font, p, text, ui_color(UI_COLOR_TEXT), UI_TEXT_OP_DRAW);
+	return result;
+}
+
+DREAM_INLINE rect2_t ui_header_text_bounds(v2_t p, string_t text)
+{
+	return ui_text_op(&ui.header_font, p, text, (v4_t){0,0,0,0}, UI_TEXT_OP_BOUNDS);
+}
+
+DREAM_INLINE float ui_header_text_width(string_t text)
+{
+	rect2_t rect = ui_header_text_bounds((v2_t){0, 0}, text);
+	return rect2_width(rect);
+}
+
+DREAM_INLINE rect2_t ui_draw_header_text(v2_t p, string_t text)
+{
+	ui_text_op(&ui.header_font, add(p, make_v2(1.0f, -1.0f)), text, ui_color(UI_COLOR_TEXT_SHADOW), UI_TEXT_OP_DRAW);
+	rect2_t result = ui_text_op(&ui.header_font, p, text, ui_color(UI_COLOR_TEXT), UI_TEXT_OP_DRAW);
 	return result;
 }
 
@@ -518,7 +550,7 @@ bool ui_begin(float dt)
 {
 	if (!ui.initialized)
 	{
-		ui_set_font_size(20.0f);
+		ui_set_font_size(18.0f);
 
 		v4_t background    = make_v4(0.20f, 0.15f, 0.17f, 1.0f);
 		v4_t background_hi = make_v4(0.22f, 0.18f, 0.18f, 1.0f);
@@ -629,15 +661,17 @@ void ui_end(void)
 void ui_set_font_size(float size)
 {
 	if (ui.font.initialized)
-	{
 		destroy_font_atlas(&ui.font);
-	}
+
+	if (ui.header_font.initialized)
+		destroy_font_atlas(&ui.header_font);
 
 	font_range_t ranges[] = {
 		{ .start = ' ', .end = '~' },
 	};
 
-	ui.font = make_font_atlas(S("gamedata/fonts/NotoSans/NotoSans-Regular.ttf"), ARRAY_COUNT(ranges), ranges, size);
+	ui.font        = make_font_atlas(S("gamedata/fonts/NotoSans/NotoSans-Regular.ttf"), ARRAY_COUNT(ranges), ranges, size);
+	ui.header_font = make_font_atlas(S("gamedata/fonts/NotoSans/NotoSans-Bold.ttf"), ARRAY_COUNT(ranges), ranges, 1.5f*size);
 }
 
 typedef enum ui_interaction_t
@@ -736,6 +770,26 @@ DREAM_INLINE v2_t ui_text_align_p(rect2_t rect, string_t text)
     return result;
 }
 
+DREAM_INLINE v2_t ui_header_text_align_p(rect2_t rect, string_t text)
+{
+    float align_x = ui_scalar(UI_SCALAR_TEXT_ALIGN_X);
+    float align_y = ui_scalar(UI_SCALAR_TEXT_ALIGN_Y);
+
+    float text_width  = ui_header_text_width(text);
+    float text_height = 0.5f*ui.header_font.y_advance;
+
+    float rect_width  = rect2_width(rect);
+    float rect_height = rect2_height(rect);
+
+    v2_t result = {
+        .x = rect.min.x + align_x*rect_width  - align_x*text_width,
+        .y = rect.min.y + align_y*rect_height - align_y*text_height,
+    };
+
+    return result;
+}
+
+
 void ui_window_begin(ui_window_t *window)
 {
 	ASSERT(ui.initialized);
@@ -745,7 +799,7 @@ void ui_window_begin(ui_window_t *window)
 	rect2_t rect = window->rect;
     ui_check_hovered(rect);
 
-	rect2_t bar = ui_add_top(&rect, ui.font.font_height + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN));
+	rect2_t bar = ui_add_top(&rect, ui.header_font.font_height + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN));
 	bool bar_hovered = ui_check_hovered(bar);
 
     rect2_t both = rect2_union(bar, rect);
@@ -801,7 +855,7 @@ void ui_window_begin(ui_window_t *window)
 	}
 
     ui_id_t panel_id = ui_child_id(id, S("panel"));
-	ui_draw_text(add(bar.min, make_v2(ui_scalar(UI_SCALAR_TEXT_MARGIN), ui_scalar(UI_SCALAR_TEXT_MARGIN))), window->name);
+	ui_draw_header_text(add(bar.min, make_v2(ui_scalar(UI_SCALAR_TEXT_MARGIN), ui_scalar(UI_SCALAR_TEXT_MARGIN))), window->name);
 	ui_panel_begin_ex(panel_id, rect, UI_PANEL_SCROLLABLE_VERT);
 }
 
@@ -917,6 +971,42 @@ void ui_label(string_t label)
 	ui_draw_text(ui_text_align_p(text_rect, label), label);
 }
 
+void ui_header(string_t label)
+{
+	if (NEVER(!ui.initialized)) 
+		return;
+
+	rect2_t rect;
+	if (!ui_override_rect(&rect))
+	{
+		ui_panel_t *panel = ui_panel();
+
+		float a = ui_widget_padding();
+
+		switch (panel->layout_direction)
+		{
+			case UI_CUT_LEFT:
+			case UI_CUT_RIGHT:
+			{
+				a += rect2_width(ui_text_op(&ui.header_font, (v2_t){0, 0}, label, (v4_t){0,0,0,0}, UI_TEXT_OP_BOUNDS));
+			} break;
+
+			case UI_CUT_TOP:
+			case UI_CUT_BOTTOM:
+			{
+				a += ui.header_font.font_height;
+			} break;
+		}
+
+		rect = ui_do_cut((ui_cut_t){ .side = panel->layout_direction, .rect = &panel->rect }, a);
+	}
+
+	rect = ui_shrink(&rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+
+	rect2_t text_rect = ui_shrink(&rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
+	ui_draw_header_text(ui_header_text_align_p(text_rect, label), label);
+}
+
 float ui_label_width(string_t label)
 {
     return ui_text_width(label) + 2.0f*ui_widget_padding();
@@ -1026,6 +1116,24 @@ bool ui_button(string_t label)
 	return result;
 }
 
+DREAM_INLINE float ui_roundedness_ratio(rect2_t rect)
+{
+	float w = rect2_width (rect);
+	float h = rect2_height(rect);
+	float c = 0.5f*min(w, h);
+	float ratio = ui_scalar(UI_SCALAR_ROUNDEDNESS) / c;
+	return ratio;
+}
+
+DREAM_INLINE float ui_roundedness_ratio_to_abs(rect2_t rect, float ratio)
+{
+	float w = rect2_width (rect);
+	float h = rect2_height(rect);
+	float c = 0.5f*min(w, h);
+	float abs = c*ratio;
+	return abs;
+}
+
 bool ui_checkbox(string_t label, bool *value)
 {
 	bool result = false;
@@ -1041,11 +1149,16 @@ bool ui_checkbox(string_t label, bool *value)
 	rect2_t rect = ui_default_label_rect(label);
 	rect = ui_shrink(&rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
-	rect2_t box_rect = ui_cut_left(&rect, rect2_height(rect));
+	rect2_t outer_box_rect = ui_cut_left(&rect, rect2_height(rect));
+
+	float outer_rect_rel_width = 0.15f;
+	float outer_rect_c = outer_rect_rel_width*min(rect2_width(outer_box_rect), rect2_height(outer_box_rect));
+
+	rect2_t inner_box_rect = ui_shrink(&outer_box_rect, outer_rect_c*1.5f);
 	rect2_t label_rect = ui_cut_left(&rect, ui_text_width(label));
 	label_rect = ui_shrink(&label_rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
 
-	uint32_t interaction = ui_button_behaviour(id, box_rect);
+	uint32_t interaction = ui_button_behaviour(id, outer_box_rect);
 	result = interaction & UI_FIRED;
 
 	if (result)
@@ -1064,7 +1177,36 @@ bool ui_checkbox(string_t label, bool *value)
 								   ui_color(UI_COLOR_BUTTON_ACTIVE),
 								   ui_color(UI_COLOR_BUTTON_FIRED));
 
-	ui_draw_styled_rect(box_rect, color);
+	float hover_lift = ui_is_hot(id) && !ui_is_active(id) ? ui_scalar(UI_SCALAR_HOVER_LIFT) : 0.0f;
+	hover_lift = ui_interpolate_f32(ui_child_id(id, S("hover_lift")), hover_lift);
+
+	// clamp roundedness to avoid the checkbox looking like a radio button and
+	// transfer roundedness of outer rect to inner rect so the countours match
+	float roundedness_ratio = min(0.66f, ui_roundedness_ratio(outer_box_rect));
+	float outer_roundedness = ui_roundedness_ratio_to_abs(outer_box_rect, roundedness_ratio);
+	float inner_roundedness = ui_roundedness_ratio_to_abs(inner_box_rect, roundedness_ratio);
+
+	UI_SCALAR(UI_SCALAR_ROUNDEDNESS, outer_roundedness)
+	{
+		rect2_t outer_box_rect_shadow = outer_box_rect;
+		outer_box_rect = rect2_add_offset(outer_box_rect, make_v2(0, hover_lift));
+
+		ui_draw_styled_rect_outline(outer_box_rect_shadow, ui_color(UI_COLOR_WIDGET_SHADOW), outer_rect_c);
+		ui_draw_styled_rect_outline(outer_box_rect, color, outer_rect_c);
+	}
+
+	if (*value) 
+	{
+		UI_SCALAR(UI_SCALAR_ROUNDEDNESS, inner_roundedness)
+		{
+			rect2_t inner_box_rect_shadow = inner_box_rect;
+			inner_box_rect = rect2_add_offset(inner_box_rect, make_v2(0, hover_lift));
+
+			ui_draw_styled_rect(inner_box_rect_shadow, ui_color(UI_COLOR_WIDGET_SHADOW));
+			ui_draw_styled_rect(inner_box_rect, color);
+		}
+	}
+
 	ui_draw_text(label_rect.min, label);
 
 	return result;
@@ -1158,6 +1300,7 @@ void ui_slider(string_t label, float *v, float min, float max)
 		pct = (value - min) / (max - min); // TODO: protect against division by zero, think about min > max case
 	}
 
+	pct = saturate(pct);
 	pct = ui_interpolate_f32(id, pct);
 
 	float width_exclusive = width - handle_width;
