@@ -51,6 +51,22 @@ v4_t ui_pop_color(ui_style_color_t color)
 // drawing
 //
 
+DREAM_INLINE void ui_draw_circle(v2_t p, float radius, v4_t color)
+{
+	uint32_t color_packed = pack_color(color);
+
+	rect2_t rect = rect2_center_radius(p, make_v2(radius, radius));
+
+	r_ui_rect((r_ui_rect_t){
+		.rect        = rect, 
+		.roundedness = v4_from_scalar(radius),
+		.color_00    = color_packed,
+		.color_10    = color_packed,
+		.color_11    = color_packed,
+		.color_01    = color_packed,
+	});
+}
+
 DREAM_INLINE void ui_draw_styled_rect(rect2_t rect, v4_t color)
 {
 	uint32_t color_packed = pack_color(color);
@@ -94,14 +110,7 @@ DREAM_INLINE void ui_draw_styled_rect_outline(rect2_t rect, v4_t color, float wi
 	});
 }
 
-typedef enum ui_text_op_t
-{
-	UI_TEXT_OP_BOUNDS,
-	UI_TEXT_OP_DRAW,
-	UI_TEXT_OP_COUNT,
-} ui_text_op_t;
-
-DREAM_INLINE rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op)
+rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op)
 {
 	rect2_t result = rect2_inverted_infinity();
 
@@ -143,9 +152,6 @@ DREAM_INLINE rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t 
 			point.x += glyph->x_offset;
 			point.y += glyph->y_offset;
 
-			point.x = roundf(point.x);
-			// point.y = floorf(point.y);
-
 			rect2_t rect = rect2_from_min_dim(point, make_v2(cw, ch));
 			result = rect2_union(result, rect);
 
@@ -156,36 +162,31 @@ DREAM_INLINE rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t 
 				float u1 = (float)glyph->max_x / w;
 				float v1 = (float)glyph->max_y / h;
 
-				uint32_t i0 = r_immediate_vertex(&(vertex_immediate_t) {
+				vertex_immediate_t q0 = {
 					.pos = { point.x, point.y, 0.0f },
 					.tex = { u0, v1 },
 					.col = color_packed,
-				});
+				};
 
-				uint32_t i1 = r_immediate_vertex(&(vertex_immediate_t) {
+				vertex_immediate_t q1 = {
 					.pos = { point.x + cw, point.y, 0.0f },
 					.tex = { u1, v1 },
 					.col = color_packed,
-				});
+				};
 
-				uint32_t i2 = r_immediate_vertex(&(vertex_immediate_t) {
+				vertex_immediate_t q2 = {
 					.pos = { point.x + cw, point.y + ch, 0.0f },
 					.tex = { u1, v0 },
 					.col = color_packed,
-				});
+				};
 
-				uint32_t i3 = r_immediate_vertex(&(vertex_immediate_t) {
+				vertex_immediate_t q3 = {
 					.pos = { point.x, point.y + ch, 0.0f },
 					.tex = { u0, v0 },
 					.col = color_packed,
-				});
+				};
 
-				r_immediate_index(i0);
-				r_immediate_index(i1);
-				r_immediate_index(i2);
-				r_immediate_index(i0);
-				r_immediate_index(i2);
-				r_immediate_index(i3);
+				r_immediate_quad(q0, q1, q2, q3);
 			}
 
 			if (i + 1 < text.count)
@@ -201,48 +202,48 @@ DREAM_INLINE rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t 
 	return result;
 }
 
-DREAM_INLINE rect2_t ui_text_bounds(v2_t p, string_t text)
+rect2_t ui_text_bounds(v2_t p, string_t text)
 {
 	return ui_text_op(&ui.font, p, text, (v4_t){0,0,0,0}, UI_TEXT_OP_BOUNDS);
 }
 
-DREAM_INLINE float ui_text_width(string_t text)
+float ui_text_width(string_t text)
 {
 	rect2_t rect = ui_text_bounds((v2_t){0, 0}, text);
 	return rect2_width(rect);
 }
 
-DREAM_INLINE float ui_text_height(string_t text)
+float ui_text_height(string_t text)
 {
 	rect2_t rect = ui_text_bounds((v2_t){0, 0}, text);
 	return rect2_height(rect);
 }
 
-DREAM_INLINE v2_t ui_text_dim(string_t text)
+v2_t ui_text_dim(string_t text)
 {
 	rect2_t rect = ui_text_bounds((v2_t){0, 0}, text);
 	return rect2_dim(rect);
 }
 
-DREAM_INLINE rect2_t ui_draw_text(v2_t p, string_t text)
+rect2_t ui_draw_text(v2_t p, string_t text)
 {
 	ui_text_op(&ui.font, add(p, make_v2(1.0f, -1.0f)), text, ui_color(UI_COLOR_TEXT_SHADOW), UI_TEXT_OP_DRAW);
 	rect2_t result = ui_text_op(&ui.font, p, text, ui_color(UI_COLOR_TEXT), UI_TEXT_OP_DRAW);
 	return result;
 }
 
-DREAM_INLINE rect2_t ui_header_text_bounds(v2_t p, string_t text)
+rect2_t ui_header_text_bounds(v2_t p, string_t text)
 {
 	return ui_text_op(&ui.header_font, p, text, (v4_t){0,0,0,0}, UI_TEXT_OP_BOUNDS);
 }
 
-DREAM_INLINE float ui_header_text_width(string_t text)
+float ui_header_text_width(string_t text)
 {
 	rect2_t rect = ui_header_text_bounds((v2_t){0, 0}, text);
 	return rect2_width(rect);
 }
 
-DREAM_INLINE rect2_t ui_draw_header_text(v2_t p, string_t text)
+rect2_t ui_draw_header_text(v2_t p, string_t text)
 {
 	ui_text_op(&ui.header_font, add(p, make_v2(1.0f, -1.0f)), text, ui_color(UI_COLOR_TEXT_SHADOW), UI_TEXT_OP_DRAW);
 	rect2_t result = ui_text_op(&ui.header_font, p, text, ui_color(UI_COLOR_TEXT), UI_TEXT_OP_DRAW);
@@ -399,8 +400,9 @@ float ui_interpolate_f32(ui_id_t id, float target)
 float ui_set_f32(ui_id_t id, float target)
 {
 	ui_anim_t *anim = ui_get_anim(id, v4_from_scalar(target));
-	anim->t_target.x  = target;
-	anim->t_current.x = target;
+	anim->t_target.x   = target;
+	anim->t_current.x  = target;
+	anim->t_velocity.x = 0.0f;
 
 	return anim->t_current.x;
 }
@@ -416,8 +418,9 @@ v4_t ui_interpolate_v4(ui_id_t id, v4_t target)
 v4_t ui_set_v4(ui_id_t id, v4_t target)
 {
 	ui_anim_t *anim = ui_get_anim(id, target);
-	anim->t_target  = target;
-	anim->t_current = target;
+	anim->t_target   = target;
+	anim->t_current  = target;
+	anim->t_velocity = make_v4(0, 0, 0, 0);
 
 	return anim->t_current;
 }
@@ -775,6 +778,22 @@ DREAM_INLINE v2_t ui_text_align_p(rect2_t rect, string_t text)
     return result;
 }
 
+DREAM_INLINE v2_t ui_header_text_center_p(rect2_t rect, string_t text)
+{
+    float text_width  = ui_header_text_width(text);
+    float text_height = 0.5f*ui.header_font.y_advance;
+
+    float rect_width  = rect2_width(rect);
+    float rect_height = rect2_height(rect);
+
+    v2_t result = {
+        .x = rect.min.x + 0.5f*rect_width  - 0.5f*text_width,
+        .y = rect.min.y + 0.5f*rect_height - 0.5f*text_height,
+    };
+
+    return result;
+}
+
 DREAM_INLINE v2_t ui_header_text_align_p(rect2_t rect, string_t text)
 {
     float align_x = ui_scalar(UI_SCALAR_TEXT_ALIGN_X);
@@ -802,6 +821,16 @@ void ui_window_begin(ui_window_t *window)
 	ui_id_t id = window->id = ui_id_pointer(&window);
 
 	rect2_t rect = window->rect;
+
+#if 0
+	window->openness = ui_interpolate_f32(ui_id_pointer(&window->openness), window->open ? 1.0f : 0.0f);
+
+	float h = rect2_height(rect);
+	h *= window->openness;
+	
+	rect.max.y = rect.min.y + h;
+#endif
+
     ui_check_hovered(rect);
 
 	rect2_t bar = ui_add_top(&rect, ui.header_font.font_height + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN));
@@ -844,23 +873,8 @@ void ui_window_begin(ui_window_t *window)
 	ui_draw_styled_rect_roundness(bar, bar_color, make_v4(2, 0, 2, 0));
 	ui_draw_styled_rect_roundness(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), make_v4(0, 2, 0, 2));
 
-	ui_set_next_rect(ui_cut_right(&bar, ui_label_width(S("Close"))));
-
-	window->open = true;
-
-	// TODO: Have parent IDs propagate automatically?
-	ui_id_t close_id = ui_child_id(id, S("close"));
-	ui_set_next_id(close_id);
-
-	UI_SCALAR(UI_SCALAR_WIDGET_MARGIN, 0.0f)
-	UI_COLOR(UI_COLOR_BUTTON_IDLE, ui_color(UI_COLOR_WINDOW_CLOSE_BUTTON))
-	if (ui_button(S("Close")))
-	{
-		window->open = false;
-	}
-
     ui_id_t panel_id = ui_child_id(id, S("panel"));
-	ui_draw_header_text(add(bar.min, make_v2(ui_scalar(UI_SCALAR_TEXT_MARGIN), ui_scalar(UI_SCALAR_TEXT_MARGIN))), window->name);
+	ui_draw_header_text(ui_header_text_align_p(bar, window->name), window->name);
 	ui_panel_begin_ex(panel_id, rect, UI_PANEL_SCROLLABLE_VERT);
 }
 
@@ -1078,6 +1092,7 @@ DREAM_INLINE v4_t ui_animate_colors(ui_id_t id, ui_widget_state_t state, uint32_
 		case UI_WIDGET_STATE_COLD:   target = cold;   break;
 		case UI_WIDGET_STATE_HOT:    target = hot;    break;
 		case UI_WIDGET_STATE_ACTIVE: target = active; break;
+		INVALID_DEFAULT_CASE;
 	}
 
 	v4_t interp_color = ui_interpolate_v4(color_id, target);
@@ -1155,7 +1170,31 @@ bool ui_checkbox(string_t label, bool *value)
 
 	ui_id_t id = ui_id(label);
 
-	rect2_t rect = ui_default_label_rect(label);
+	rect2_t rect;
+	if (!ui_override_rect(&rect))
+	{
+		ui_panel_t *panel = ui_panel();
+
+		float a = ui_widget_padding();
+
+		switch (panel->layout_direction)
+		{
+			case UI_CUT_LEFT:
+			case UI_CUT_RIGHT:
+			{
+				a += ui_text_width(label) + ui.font.font_height + ui_widget_padding();
+			} break;
+
+			case UI_CUT_TOP:
+			case UI_CUT_BOTTOM:
+			{
+				a += ui.font.font_height;
+			} break;
+		}
+
+		rect = ui_do_cut((ui_cut_t){ .side = panel->layout_direction, .rect = &panel->rect }, a);
+	}
+
 	rect = ui_shrink(&rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
 	rect2_t outer_box_rect = ui_cut_left(&rect, rect2_height(rect));
@@ -1167,7 +1206,9 @@ bool ui_checkbox(string_t label, bool *value)
 	rect2_t label_rect = ui_cut_left(&rect, ui_text_width(label));
 	label_rect = ui_shrink(&label_rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
 
-	uint32_t interaction = ui_button_behaviour(id, outer_box_rect);
+	rect2_t full_widget_rect = rect2_union(label_rect, outer_box_rect);
+
+	uint32_t interaction = ui_button_behaviour(id, full_widget_rect);
 	result = interaction & UI_FIRED;
 
 	if (result)
@@ -1216,12 +1257,16 @@ bool ui_checkbox(string_t label, bool *value)
 		}
 	}
 
-	ui_draw_text(label_rect.min, label);
+	float x = label_rect.min.x;
+	float y = ui_text_center_p(label_rect, label).y;
+	v2_t  p = make_v2(x, y + hover_lift);
+
+	ui_draw_text(p, label);
 
 	return result;
 }
 
-bool ui_radio(string_t label, int *value, int count, string_t *labels)
+bool ui_option_buttons(string_t label, int *value, int count, string_t *labels)
 {
     bool result = false;
 

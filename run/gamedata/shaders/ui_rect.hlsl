@@ -67,7 +67,7 @@ float rounded_box(float2 p, float2 b, float4 r)
 	r.xy = (p.x > 0.0f) ? r.xy : r.zw;
 	r.x  = (p.y > 0.0f) ? r.x  : r.y;
 	float2 q = abs(p) - b + r.x;
-	return min(max(q.x, q.y), 0.0f) + length(max(q, 0.0f)) - r.x;
+	return length(max(q, 0.0f)) + min(max(q.x, q.y), 0.0f) - r.x;
 }
 
 float4 ps(PS_INPUT IN) : SV_Target

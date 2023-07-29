@@ -14,7 +14,7 @@ void con_register(string_t key, const convar_t *var)
     resource_handle_t handle = pool_add_item(&g_convars, var);
 
     convar_t *result = pool_get(&g_convars, handle);
-    STRING_INTO_STORAGE(result->key, key);
+    string_into_storage(result->key, key);
 
     hash_add(&g_convar_from_key, string_hash(key), handle.value);
 }
@@ -27,7 +27,7 @@ convar_t *con_find(string_t key)
     if (hash_find(&g_convar_from_key, string_hash(key), &handle.value))
     {
         result = pool_get(&g_convars, handle);
-        ASSERT(string_match(STRING_FROM_STORAGE(result->key), key));
+        ASSERT(string_match(string_from_storage(result->key), key));
     }
 
     return result;

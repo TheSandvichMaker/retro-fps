@@ -3,6 +3,7 @@
 #include "core/core.h"
 #include "core/random.h"
 
+#include "dream/platform.h"
 #include "dream/game.h"
 #include "dream/map.h"
 #include "dream/input.h"
@@ -19,10 +20,9 @@
 
 static bool initialized = false;
 
-static bool g_cursor_locked;
+bool g_cursor_locked;
 
 world_t *world;
-game_io_t *io;
 static resource_handle_t skybox;
 static bitmap_font_t debug_font;
 static waveform_t *test_waveform;
@@ -385,7 +385,7 @@ static void view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
 void game_init(void)
 {
 	initialize_asset_system(&(asset_config_t){
-        .mix_sample_rate = io->mix_sample_rate,
+        .mix_sample_rate = WAVE_SAMPLE_RATE,
     });
 
 	init_game_job_queues();
@@ -417,11 +417,7 @@ void game_init(void)
 		});
 	}
 
-	string_t startup_map = io->startup_map;
-	if (string_empty(startup_map))
-	{
-		startup_map = S("test");
-	}
+	string_t startup_map = S("test");
 
     map_t    *map    = world->map    = load_map(&world->arena, Sf("gamedata/maps/%.*s.map", Sx(startup_map)));
     player_t *player = world->player = m_alloc_struct(&world->arena, player_t);
@@ -477,19 +473,82 @@ void game_init(void)
     initialized = true;
 }
 
-void game_tick(game_io_t *in_io, float dt)
+static void game_tick(platform_io_t *io)
 {
-	io = in_io;
+	float dt = io->dt;
 
     if (!initialized)
     {
         game_init();
     }
 
-    update_input_state(io->input_state);
+	// TODO: Totally redo input 
+	{
+		input_state_t input = {0};
+		input.mouse_x  = (int)io->mouse_p.x;
+		input.mouse_y  = (int)io->mouse_p.y;
+		input.mouse_dx = (int)io->mouse_dp.x;
+		input.mouse_dy = (int)io->mouse_dp.y;
 
-    // I suppose for UI eating input, I will just check if the UI is focused and then
-    // stop any game code from seeing the input.
+		static uint64_t button_states = 0;
+
+		for (platform_event_t *ev = io->first_event;
+			 ev;
+			 ev = ev->next)
+		{
+			switch (ev->kind)
+			{
+				case PLATFORM_EVENT_MOUSE_BUTTON:
+				{
+					bool pressed = ev->mouse_button.pressed;
+
+					if (ev->mouse_button.button == PLATFORM_MOUSE_BUTTON_LEFT)
+					{
+						button_states = TOGGLE_BIT(button_states, BUTTON_FIRE1, pressed);
+					}
+
+					if (ev->mouse_button.button == PLATFORM_MOUSE_BUTTON_RIGHT)
+					{
+						button_states = TOGGLE_BIT(button_states, BUTTON_FIRE2, pressed);
+					}
+				} break;
+
+				case PLATFORM_EVENT_KEY:
+				{
+					bool pressed = ev->key.pressed;
+
+					switch ((int)ev->key.keycode) // int cast just stops MSVC from complaining that the ascii cases are not valid values of the enum (TODO: add them)
+					{
+						case 'W':                      button_states = TOGGLE_BIT(button_states, BUTTON_FORWARD      , pressed); break;
+						case 'A':                      button_states = TOGGLE_BIT(button_states, BUTTON_LEFT         , pressed); break;
+						case 'S':                      button_states = TOGGLE_BIT(button_states, BUTTON_BACK         , pressed); break;
+						case 'D':                      button_states = TOGGLE_BIT(button_states, BUTTON_RIGHT        , pressed); break;
+						case 'V':                      button_states = TOGGLE_BIT(button_states, BUTTON_TOGGLE_NOCLIP, pressed); break;
+						case PLATFORM_KEYCODE_SPACE:   button_states = TOGGLE_BIT(button_states, BUTTON_JUMP         , pressed); break;
+						case PLATFORM_KEYCODE_CONTROL: button_states = TOGGLE_BIT(button_states, BUTTON_CROUCH       , pressed); break;
+						case PLATFORM_KEYCODE_SHIFT:   button_states = TOGGLE_BIT(button_states, BUTTON_RUN          , pressed); break;
+						case PLATFORM_KEYCODE_ESCAPE:  button_states = TOGGLE_BIT(button_states, BUTTON_ESCAPE       , pressed); break;
+						case PLATFORM_KEYCODE_F1:      button_states = TOGGLE_BIT(button_states, BUTTON_F1           , pressed); break;
+						case PLATFORM_KEYCODE_F2:      button_states = TOGGLE_BIT(button_states, BUTTON_F2           , pressed); break;
+						case PLATFORM_KEYCODE_F3:      button_states = TOGGLE_BIT(button_states, BUTTON_F3           , pressed); break;
+						case PLATFORM_KEYCODE_F4:      button_states = TOGGLE_BIT(button_states, BUTTON_F4           , pressed); break;
+						case PLATFORM_KEYCODE_F5:      button_states = TOGGLE_BIT(button_states, BUTTON_F5           , pressed); break;
+						case PLATFORM_KEYCODE_F6:      button_states = TOGGLE_BIT(button_states, BUTTON_F6           , pressed); break;
+						case PLATFORM_KEYCODE_F7:      button_states = TOGGLE_BIT(button_states, BUTTON_F7           , pressed); break;
+						case PLATFORM_KEYCODE_F8:      button_states = TOGGLE_BIT(button_states, BUTTON_F8           , pressed); break;
+						case PLATFORM_KEYCODE_F9:      button_states = TOGGLE_BIT(button_states, BUTTON_F9           , pressed); break;
+						case PLATFORM_KEYCODE_F10:     button_states = TOGGLE_BIT(button_states, BUTTON_F10          , pressed); break;
+						case PLATFORM_KEYCODE_F11:     button_states = TOGGLE_BIT(button_states, BUTTON_F11          , pressed); break;
+						case PLATFORM_KEYCODE_F12:     button_states = TOGGLE_BIT(button_states, BUTTON_F12          , pressed); break;
+					}
+				} break;
+			}
+		}
+
+		input.button_states = button_states;
+
+		update_input_state(&input);
+	}
 
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);
@@ -524,7 +583,7 @@ void game_tick(game_io_t *in_io, float dt)
 	}
 #endif
 
-    io->cursor_locked = g_cursor_locked;
+    io->lock_cursor = g_cursor_locked;
 
     map_t *map = world->map;
 
@@ -541,7 +600,7 @@ void game_tick(game_io_t *in_io, float dt)
             player->move_mode = PLAYER_MOVE_NORMAL;
     }
 
-    if (io->cursor_locked)
+    if (io->lock_cursor)
         update_camera_rotation(camera, dt);
 
     switch (player->move_mode)
@@ -697,13 +756,22 @@ void game_tick(game_io_t *in_io, float dt)
 
     if (button_pressed(BUTTON_ESCAPE))
     {
-        io->exit_requested = true;
+        io->request_exit = true;
     }
 
 	r_immediate_flush();
 }
 
-void game_mix_audio(game_audio_io_t *audio_io)
+static void game_mix_audio(platform_audio_io_t *audio_io)
 {
-	mix_samples((uint32_t)audio_io->frames_to_mix, audio_io->buffer);
+	mix_samples(audio_io->frames_to_mix, audio_io->buffer);
+}
+
+void platform_init(size_t argc, string_t *argv, platform_hooks_t *hooks)
+{
+	(void)argc;
+	(void)argv;
+
+	hooks->tick       = game_tick;
+	hooks->tick_audio = game_mix_audio;
 }

@@ -19,7 +19,7 @@ typedef struct convar_t
 {
     struct convar_t *next;
 
-    STRING_STORAGE(64) key;
+    string_storage_t(64) key;
     convar_kind_t kind;
     union
     {

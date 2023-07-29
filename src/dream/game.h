@@ -2,36 +2,9 @@
 #define RETRO_H
 
 #include "core/api_types.h"
-#include "input.h"
 
 typedef struct map_t map_t;
 typedef struct map_brush_t map_brush_t;
-
-typedef struct game_io_t
-{
-    // in
-    uint32_t mix_sample_rate;
-
-    string_t startup_map;
-
-    bool has_focus;
-
-    const input_state_t *input_state;
-
-    // out
-    bool cursor_locked;
-    bool exit_requested;
-} game_io_t;
-
-typedef struct game_audio_io_t
-{
-    uint32_t mix_sample_rate;
-    size_t frames_to_mix;
-    float *buffer;
-} game_audio_io_t;
-
-void game_tick(game_io_t *io, float dt);
-void game_mix_audio(game_audio_io_t *audio_io);
 
 typedef enum player_move_mode_t
 {
@@ -84,7 +57,8 @@ typedef struct world_t
 v3_t player_view_origin(player_t *player);
 v3_t player_view_direction(player_t *player);
 
+// frown
 DREAM_API world_t *world;
-DREAM_API game_io_t *io;
+DREAM_API bool g_cursor_locked;
 
 #endif /* RETRO_H */

@@ -11,6 +11,7 @@ DREAM_API void r_immediate_rect2_filled         (rect2_t rect, v4_t color);
 DREAM_API void r_immediate_rect2_filled_gradient(rect2_t rect, v4_t colors[4]);
 DREAM_API void r_immediate_rect3_outline        (rect3_t bounds, v4_t color);
 DREAM_API void r_immediate_triangle             (triangle_t triangle, v4_t color);
+DREAM_API void r_immediate_quad                 (vertex_immediate_t a, vertex_immediate_t b, vertex_immediate_t c, vertex_immediate_t d);
 
 DREAM_API void r_draw_text(const struct bitmap_font_t *font, v2_t p, v4_t color, string_t string);
 

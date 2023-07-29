@@ -125,7 +125,7 @@ DREAM_LOCAL float ui_label_width(string_t label);
 DREAM_LOCAL void ui_progress_bar(string_t label, float progress);
 DREAM_LOCAL bool ui_button(string_t label);
 DREAM_LOCAL bool ui_checkbox(string_t label, bool *value);
-DREAM_LOCAL bool ui_radio(string_t label, int *value, int count, string_t *labels);
+DREAM_LOCAL bool ui_option_buttons(string_t label, int *value, int count, string_t *labels);
 DREAM_LOCAL void ui_slider(string_t label, float *v, float min, float max);
 DREAM_LOCAL bool ui_slider_int(string_t label, int *v, int min, int max);
 
@@ -134,6 +134,24 @@ DREAM_LOCAL float ui_set_f32        (ui_id_t id, float target);
 
 DREAM_LOCAL v4_t ui_interpolate_v4  (ui_id_t id, v4_t target);
 DREAM_LOCAL v4_t ui_set_v4          (ui_id_t id, v4_t target);
+
+typedef enum ui_text_op_t
+{
+	UI_TEXT_OP_BOUNDS,
+	UI_TEXT_OP_DRAW,
+	UI_TEXT_OP_COUNT,
+} ui_text_op_t;
+
+DREAM_LOCAL rect2_t ui_text_op           (font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op);
+DREAM_LOCAL rect2_t ui_text_bounds       (v2_t p, string_t text);
+DREAM_LOCAL float   ui_text_width        (string_t text);
+DREAM_LOCAL float   ui_text_height       (string_t text);
+DREAM_LOCAL v2_t    ui_text_dim          (string_t text);
+DREAM_LOCAL rect2_t ui_draw_text         (v2_t p, string_t text);
+DREAM_LOCAL rect2_t ui_header_text_bounds(v2_t p, string_t text);
+DREAM_LOCAL float   ui_header_text_width (string_t text);
+DREAM_LOCAL rect2_t ui_draw_header_text  (v2_t p, string_t text);
+
 
 //
 // "Internal"

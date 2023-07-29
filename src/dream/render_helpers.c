@@ -193,6 +193,21 @@ void r_immediate_triangle(triangle_t t, v4_t color)
 	r_immediate_index(i2);
 }
 
+void r_immediate_quad(vertex_immediate_t a, vertex_immediate_t b, vertex_immediate_t c, vertex_immediate_t d)
+{
+    uint32_t i0 = r_immediate_vertex(&a);
+    uint32_t i1 = r_immediate_vertex(&b);
+    uint32_t i2 = r_immediate_vertex(&c);
+    uint32_t i3 = r_immediate_vertex(&d);
+
+	r_immediate_index(i0);
+	r_immediate_index(i1);
+	r_immediate_index(i2);
+	r_immediate_index(i0);
+	r_immediate_index(i2);
+	r_immediate_index(i3);
+}
+
 void r_draw_text(const bitmap_font_t *font, v2_t p, v4_t color, string_t string)
 {
 	r_immediate_texture(font->texture);

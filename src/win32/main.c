@@ -18,9 +18,11 @@
 #include "core/core.h"
 
 #include "d3d11.h"
-#include "dream/game.h"
+#include "dream/render.h"
+#include "dream/platform.h"
 
 static arena_t win32_arena;
+static platform_hooks_t hooks;
 
 static bool has_focus;
 static bool cursor_locked;
@@ -208,19 +210,34 @@ static DWORD WINAPI wasapi_thread_proc(void *userdata)
         hr = IAudioRenderClient_GetBuffer(audio_render_client, frame_count, (BYTE **)&buffer);
         ASSERT(SUCCEEDED(hr));
 
-        game_audio_io_t game_audio_io = {
-            .mix_sample_rate = g_win32.mix_sample_rate,
+        platform_audio_io_t io = {
             .frames_to_mix   = frame_count,
             .buffer          = buffer,
         };
 
-        game_mix_audio(&game_audio_io);
+		if (hooks.tick_audio)
+		{
+			hooks.tick_audio(&io);
+		}
+		else
+		{
+			zero_array(buffer, 2*frame_count);
+		}
 
         hr = IAudioRenderClient_ReleaseBuffer(audio_render_client, frame_count, 0);
         ASSERT(SUCCEEDED(hr));
     }
 
     return 0;
+}
+
+DREAM_INLINE v2_t convert_mouse_cursor(POINT cursor, int height)
+{
+	v2_t result = {
+		.x = (float)(cursor.x),
+		.y = (float)(height - cursor.y - 1),
+	};
+	return result;
 }
 
 int wWinMain(HINSTANCE instance, 
@@ -240,7 +257,12 @@ int wWinMain(HINSTANCE instance,
         argv[i] = utf8_from_utf16(&win32_arena, string16_from_cstr(argv_wide[i]));
     }
 
-    string_t startup_map = strlit("test");
+	platform_init((size_t)argc, argv, &hooks);
+
+	if (!hooks.tick && !hooks.tick_audio)
+	{
+		FATAL_ERROR("No tick functions provided - can't do anything.");
+	}
 
     g_win32.wasapi_thread = CreateThread(NULL, 0, wasapi_thread_proc, NULL, 0, NULL);
 
@@ -308,22 +330,26 @@ int wWinMain(HINSTANCE instance,
     ScreenToClient(window, &prev_cursor);
 
     r_list_t r_list = { 0 };
-    r_list.command_list_size = MB(16),
-    r_list.command_list_base = m_alloc_nozero(&win32_arena, r_list.command_list_size, 16);
+    r_list.command_list_size    = MB(16),
+    r_list.command_list_base    = m_alloc_nozero(&win32_arena, r_list.command_list_size, 16);
     r_list.max_immediate_icount = R_MAX_IMMEDIATE_INDICES;
-    r_list.immediate_indices = m_alloc_array_nozero(&win32_arena, r_list.max_immediate_icount, uint32_t);
+    r_list.immediate_indices    = m_alloc_array_nozero(&win32_arena, r_list.max_immediate_icount, uint32_t);
     r_list.max_immediate_vcount = R_MAX_IMMEDIATE_VERTICES;
-    r_list.immediate_vertices = m_alloc_array_nozero(&win32_arena, r_list.max_immediate_vcount, vertex_immediate_t);
-	r_list.max_ui_rect_count = R_MAX_UI_RECTS;
-	r_list.ui_rects = m_alloc_array_nozero(&win32_arena, r_list.max_ui_rect_count, r_ui_rect_t);
+    r_list.immediate_vertices   = m_alloc_array_nozero(&win32_arena, r_list.max_immediate_vcount, vertex_immediate_t);
+	r_list.max_ui_rect_count    = R_MAX_UI_RECTS;
+	r_list.ui_rects             = m_alloc_array_nozero(&win32_arena, r_list.max_ui_rect_count, r_ui_rect_t);
     r_set_command_list(&r_list);
-
 
     // message loop
     bool running = true;
     while (running)
     {
-        input_state_t input = { 0 };
+		arena_t *event_arena = temp; // TODO: Think about how to provide events nicer (will be a ring buffer later probably for threaded fun)
+		platform_event_t *first_event = NULL;
+		platform_event_t * last_event = NULL;
+
+		wchar_t last_char   = 0;
+		size_t  event_count = 0;
 
         MSG msg;
         if (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE))
@@ -334,6 +360,116 @@ int wWinMain(HINSTANCE instance,
                 {
                     running = false;
                 } break;
+
+				case WM_KEYDOWN:
+				case WM_KEYUP:
+				case WM_SYSKEYDOWN:
+				case WM_SYSKEYUP:
+				{
+					int  vk_code = (int)msg.wParam;
+					bool pressed = !!(msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN);
+
+					platform_event_t *event = m_alloc_struct(event_arena, platform_event_t);
+					event_count += 1;
+
+					event->kind        = PLATFORM_EVENT_KEY;
+					event->key.pressed = pressed;
+					event->key.keycode = (platform_keycode_t)vk_code;
+
+					sll_push_back(first_event, last_event, event);
+				} break;
+
+				case WM_LBUTTONDOWN:
+				case WM_LBUTTONUP:
+				case WM_MBUTTONDOWN:
+				case WM_MBUTTONUP:
+				case WM_RBUTTONDOWN:
+				case WM_RBUTTONUP:
+				case WM_XBUTTONDOWN:
+				case WM_XBUTTONUP:
+				{
+					platform_event_t *event = m_alloc_struct(event_arena, platform_event_t);
+					event_count += 1;
+
+					platform_mouse_button_t button = PLATFORM_MOUSE_BUTTON_NONE;
+					switch (msg.message)
+					{
+						case WM_LBUTTONDOWN: case WM_LBUTTONUP:
+						{
+							button = PLATFORM_MOUSE_BUTTON_LEFT;
+						} break;
+
+						case WM_MBUTTONDOWN: case WM_MBUTTONUP:
+						{
+							button = PLATFORM_MOUSE_BUTTON_MIDDLE;
+						} break;
+
+						case WM_RBUTTONDOWN: case WM_RBUTTONUP:
+						{
+							button = PLATFORM_MOUSE_BUTTON_RIGHT;
+						} break;
+
+						case WM_XBUTTONDOWN: case WM_XBUTTONUP:
+						{
+							if (GET_XBUTTON_WPARAM(msg.wParam) == XBUTTON1)
+							{
+								button = PLATFORM_MOUSE_BUTTON_X1;
+							}
+							else
+							{
+								button = PLATFORM_MOUSE_BUTTON_X2;
+							}
+						} break;
+
+						INVALID_DEFAULT_CASE;
+					}
+
+					event->kind = PLATFORM_EVENT_MOUSE_BUTTON;
+					event->mouse_button.pressed = !!(msg.wParam & (MK_LBUTTON|MK_MBUTTON|MK_RBUTTON|MK_XBUTTON1|MK_XBUTTON2));
+					event->mouse_button.button  = button;
+
+					sll_push_back(first_event, last_event, event);
+				} break;
+
+				case WM_CHAR:
+				{
+					platform_event_t *event = m_alloc_struct(event_arena, platform_event_t);
+					event_count += 1;
+
+					event->kind = PLATFORM_EVENT_TEXT;
+
+					// laboured UTF-16 wrangling
+					{
+						wchar_t chars[3] = {0};
+
+						wchar_t curr_char = (wchar_t)msg.wParam;
+						if (IS_HIGH_SURROGATE(curr_char))
+						{
+							last_char = curr_char;
+						}
+						else if (IS_LOW_SURROGATE(curr_char))
+						{
+							if (IS_SURROGATE_PAIR(last_char, curr_char))
+							{
+								chars[0] = last_char;
+								chars[1] = curr_char;
+							}
+							last_char = 0;
+						}
+						else
+						{
+							chars[0] = curr_char;
+							if (chars[0] == L'\r')
+							{
+								chars[0] = L'\n';
+							}
+						}
+
+						event->text.text.count = (size_t)WideCharToMultiByte(CP_UTF8, 0, chars, -1, event->text.text.data, string_storage_size(event->text.text), NULL, NULL) - 1;
+					}
+
+					sll_push_back(first_event, last_event, event);
+				} break;
 
                 default:
                 {
@@ -355,25 +491,15 @@ int wWinMain(HINSTANCE instance,
         GetCursorPos(&cursor);
         ScreenToClient(window, &cursor);
 
+		v2_t mouse_p  = {0};
+		v2_t mouse_dp = {0};
+
         if (has_focus)
         {
-            if (GetAsyncKeyState('W'))        input.button_states |= BUTTON_FORWARD;
-            if (GetAsyncKeyState('A'))        input.button_states |= BUTTON_LEFT;
-            if (GetAsyncKeyState('S'))        input.button_states |= BUTTON_BACK;
-            if (GetAsyncKeyState('D'))        input.button_states |= BUTTON_RIGHT;
-            if (GetAsyncKeyState(VK_SPACE))   input.button_states |= BUTTON_JUMP;
-            if (GetAsyncKeyState(VK_CONTROL)) input.button_states |= BUTTON_CROUCH;
-            if (GetAsyncKeyState(VK_SHIFT))   input.button_states |= BUTTON_RUN;
-            if (GetAsyncKeyState(VK_ESCAPE))  input.button_states |= BUTTON_ESCAPE;
-            if (GetAsyncKeyState('V'))        input.button_states |= BUTTON_TOGGLE_NOCLIP;
-            if (GetAsyncKeyState(VK_LBUTTON)) input.button_states |= BUTTON_FIRE1;
-            if (GetAsyncKeyState(VK_RBUTTON)) input.button_states |= BUTTON_FIRE2;
+			v2_t prev_mouse_p = convert_mouse_cursor(prev_cursor, height);
 
-            input.mouse_x = cursor.x;
-            input.mouse_y = height - cursor.y - 1;
-
-            input.mouse_dx =   cursor.x - prev_cursor.x;
-            input.mouse_dy = -(cursor.y - prev_cursor.y);
+			mouse_p  = convert_mouse_cursor(cursor, height);
+			mouse_dp = sub(mouse_p, prev_mouse_p);
 
             if (cursor_locked)
             {
@@ -387,37 +513,37 @@ int wWinMain(HINSTANCE instance,
             }
         }
 
-        for (UINT i = 0; i < 12; i++)
-        {
-            if (GetAsyncKeyState(VK_F1 + i))
-            {
-                input.button_states |= ((uint64_t)BUTTON_F1 << i);
-            }
-        }
-
         prev_cursor = cursor;
 
         r_reset_command_list();
 
-        game_io_t frame_io = {
-            .mix_sample_rate = g_win32.mix_sample_rate,
-            .startup_map = startup_map,
+		platform_io_t tick_io = {
+			.has_focus   = has_focus,
 
-            .has_focus = has_focus,
-            .input_state = &input,
-        };
+			.dt          = 1.0f / 60.0f,
 
-        game_tick(&frame_io, 1.0f/60.0f);
+			.mouse_p     = mouse_p,
+			.mouse_dp    = mouse_dp,
+			.mouse_wheel = 0.0f, // TODO: Do it.
 
-        if (frame_io.cursor_locked != cursor_locked)
+			// .gamepads..?,
+
+			.event_count = event_count,
+			.first_event = first_event,
+			.last_event  = last_event,
+		};
+
+		hooks.tick(&tick_io);
+
+        if (tick_io.lock_cursor != cursor_locked)
         {
-            lock_cursor(frame_io.cursor_locked);
+            lock_cursor(tick_io.lock_cursor);
         }
 
         d3d11_draw_list(&r_list, width, height);
         d3d11_present();
 
-        if (frame_io.exit_requested)
+        if (tick_io.request_exit)
         {
             running = false;
         }

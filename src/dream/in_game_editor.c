@@ -115,8 +115,11 @@ typedef struct editor_state_t
 {
 	bool initialized;
 
+	bool console_open;
+
     rect2_t *fullscreen_layout;
     float bar_openness;
+	bool pin_bar;
 
     bool show_timings;
 
@@ -165,6 +168,12 @@ static editor_state_t editor = {
 		.brute_force_min_point_count            = 4,
 		.brute_force_max_point_count            = 256,
 		.brute_force_iterations_per_point_count = 4096,
+	},
+
+	.ui_demo = {
+		.window = {
+			.name = Sc("UI Demo Panel"),
+		},
 	},
 };
 
@@ -413,6 +422,8 @@ static void update_and_render_convex_hull_test_panel(void)
 
 	UI_WINDOW(&hull_test->window)
 	{
+		ui_header(S("Generate Random Hull"));
+
 		bool changed = false;
 		changed |= ui_slider_int(S("Random Seed"), &hull_test->random_seed, 1, 128);
 		changed |= ui_slider_int(S("Point Count"), &hull_test->point_count, 8, 256);
@@ -522,6 +533,7 @@ static void update_and_render_convex_hull_test_panel(void)
 
 		if (debug->step_count > 0)
 		{
+			ui_header(S("Step-By-Step Visualizer"));
 			ui_checkbox(S("Show initial points"), &hull_test->show_points);
 			ui_checkbox(S("Show processed edge"), &hull_test->show_processed_edge);
 			ui_checkbox(S("Show non-processed edges"), &hull_test->show_non_processed_edges);
@@ -589,304 +601,18 @@ static void update_and_render_lightmap_editor(void)
 
     map_entity_t *worldspawn = map->worldspawn;
 
-    v3_t sun_color = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
+    v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
     float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
+
     sun_color = mul(sun_brightness, sun_color);
 
     v3_t ambient_color = v3_from_key(map, worldspawn, S("ambient_color"));
     ambient_color = mul(1.0f / 255.0f, ambient_color);
 
-    camera_t *camera = player->attached_camera;
-	(void)camera;
-
     lightmap_editor_state_t *lm_editor = &editor.lm_editor;
 
 	if (!lm_editor->window.open)
 		return;
-
-	UI_WINDOW(&lm_editor->window)
-	{
-        if (!map->lightmap_state || !map->lightmap_state->finalized)
-        {
-            ui_header(S("Bake Quality"));
-
-            static int bake_preset              = 0;
-            static int ray_count                = 2;
-            static int ray_recursion            = 2;
-            static int fog_light_sample_count   = 2;
-            static int fogmap_scale_index       = 1;
-            static bool use_dynamic_sun_shadows = true;
-
-            static string_t preset_labels[] = { Sc("Crappy"), Sc("Acceptable"), Sc("Excessive") };
-            if (ui_radio(S("Preset"), &bake_preset, ARRAY_COUNT(preset_labels), preset_labels))
-            {
-                switch (bake_preset)
-                {
-                    case 0:
-                    {
-                        ray_count              = 2;
-                        ray_recursion          = 2;
-                        fog_light_sample_count = 2;
-                        fogmap_scale_index     = 1;
-                    } break;
-
-                    case 1:
-                    {
-                        ray_count              = 8;
-                        ray_recursion          = 3;
-                        fog_light_sample_count = 4;
-                        fogmap_scale_index     = 1;
-                    } break;
-
-                    case 2:
-                    {
-                        ray_count              = 16;
-                        ray_recursion          = 4;
-                        fog_light_sample_count = 8;
-                        fogmap_scale_index     = 2;
-                    } break;
-                }
-            }
-
-            ui_slider_int(S("Rays Per Pixel"), &ray_count, 1, 32);
-            ui_slider_int(S("Max Recursion"), &ray_recursion, 1, 8);
-            ui_slider_int(S("Fog Light Sample Count"), &fog_light_sample_count, 1, 8);
-
-            static int fogmap_scales[] = {
-                32, 16, 8, 4,
-            };
-
-            static string_t fogmap_scale_labels[] = {
-                Sc("32"), Sc("16"), Sc("8"), Sc("4"),
-            };
-
-            ui_radio(S("Fogmap Scale"), &fogmap_scale_index, ARRAY_COUNT(fogmap_scales), fogmap_scale_labels);
-
-            int actual_fogmap_scale = fogmap_scales[fogmap_scale_index];
-
-            ui_checkbox(S("Dynamic Sun Shadows"), &use_dynamic_sun_shadows);
-
-            if (!map->lightmap_state)
-            {
-                if (ui_button(S("Bake Lighting")))
-                {
-                    // figure out the solid sky color from the fog
-                    float absorption = map->fog_absorption;
-                    float density    = map->fog_density;
-                    float scattering = map->fog_scattering;
-                    v3_t sky_color = mul(sun_color, (1.0f / (4.0f*PI32))*scattering*density / (density*(scattering + absorption)));
-
-                    if (map->lightmap_state)
-                    {
-                        release_bake_state(map->lightmap_state);
-                    }
-
-                    map->lightmap_state = bake_lighting(&(lum_params_t) {
-                        .map                 = map,
-                        .sun_direction       = make_v3(0.25f, 0.75f, 1),
-                        .sun_color           = sun_color,
-                        .sky_color           = sky_color,
-
-                        .use_dynamic_sun_shadows = use_dynamic_sun_shadows,
-
-                        .ray_count               = ray_count,
-                        .ray_recursion           = ray_recursion,
-                        .fog_light_sample_count  = fog_light_sample_count,
-                        .fogmap_scale            = actual_fogmap_scale,
-                    });
-                }
-            }
-            else if (ui_button(S("Cancel")))
-            {
-                bake_cancel(map->lightmap_state);
-
-                for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
-                {
-                    map_poly_t *poly = &map->polys[poly_index];
-                    if (RESOURCE_HANDLE_VALID(poly->lightmap))
-                    {
-                        render->destroy_texture(poly->lightmap);
-                        poly->lightmap = NULL_RESOURCE_HANDLE;
-                    }
-                }
-
-                render->destroy_texture(map->fogmap);
-                map->fogmap = NULL_RESOURCE_HANDLE;
-
-                map->lightmap_state = NULL;
-            }
-        }
-
-		if (map->lightmap_state && map->lightmap_state->finalized)
-		{
-			lum_bake_state_t *state = map->lightmap_state;
-
-            double time_elapsed = state->final_bake_time;
-            int minutes = (int)floor(time_elapsed / 60.0);
-            int seconds = (int)floor(time_elapsed - 60.0*minutes);
-            int microseconds = (int)floor(1000.0*(time_elapsed - 60.0*minutes - seconds));
-
-            UI_SCALAR(UI_SCALAR_TEXT_ALIGN_X, 0.0f)
-            {
-                ui_label(Sf("total bake time:  %02u:%02u:%03u", minutes, seconds, microseconds));
-                ui_label(Sf("fogmap resolution: %u %u %u", map->fogmap_w, map->fogmap_h, map->fogmap_d));
-            }
-
-			if (ui_button(S("Clear Lightmaps")))
-			{
-				for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
-				{
-					map_poly_t *poly = &map->polys[poly_index];
-					if (RESOURCE_HANDLE_VALID(poly->lightmap))
-					{
-						render->destroy_texture(poly->lightmap);
-						poly->lightmap = NULL_RESOURCE_HANDLE;
-					}
-				}
-
-				render->destroy_texture(map->fogmap);
-				map->fogmap = NULL_RESOURCE_HANDLE;
-
-				release_bake_state(map->lightmap_state);
-				map->lightmap_state = NULL;
-			}
-		}
-
-		if (map->lightmap_state)
-		{
-			lum_bake_state_t *state = map->lightmap_state;
-
-			if (state->finalized)
-			{
-				ui_header(S("Lightmap Debugger"));
-
-				ui_checkbox(S("Enabled"), &lm_editor->debug_lightmaps);
-				ui_checkbox(S("Show Direct Light Rays"), &lm_editor->show_direct_light_rays);
-				ui_checkbox(S("Show Indirect Light Rays"), &lm_editor->show_indirect_light_rays);
-				ui_checkbox(S("Fullbright Rays"), &lm_editor->fullbright_rays);
-				ui_checkbox(S("No Ray Depth Test"), &lm_editor->no_ray_depth_test);
-
-				ui_slider_int(S("Min Recursion Level"), &lm_editor->min_display_recursion, 0, 16);
-				ui_slider_int(S("Max Recursion Level"), &lm_editor->max_display_recursion, 0, 16);
-
-				if (lm_editor->selected_poly)
-				{
-					map_poly_t *poly = lm_editor->selected_poly;
-
-					texture_desc_t desc;
-					render->describe_texture(poly->lightmap, &desc);
-
-                    ui_push_scalar(UI_SCALAR_TEXT_ALIGN_X, 0.0f);
-
-					ui_label(Sf("Resolution: %u x %u", desc.w, desc.h));
-					if (lm_editor->pixel_selection_active)
-					{
-                        ui_label(Sf("Selected Pixel Region: (%d, %d) (%d, %d)", 
-                                    lm_editor->selected_pixels.min.x,
-                                    lm_editor->selected_pixels.min.y,
-                                    lm_editor->selected_pixels.max.x,
-                                    lm_editor->selected_pixels.max.y));
-
-						if (ui_button(S("Clear Selection")))
-						{
-							lm_editor->pixel_selection_active = false;
-							lm_editor->selected_pixels = (rect2i_t){ 0 };
-						}
-					}
-					else
-					{
-                        // TODO: add spacers
-                        ui_label(S(""));
-                        ui_label(S(""));
-					}
-
-                    ui_pop_scalar(UI_SCALAR_TEXT_ALIGN_X);
-
-                    float aspect = (float)desc.h / (float)desc.w;
-
-                    rect2_t *layout = ui_layout_rect();
-
-                    float width = rect2_width(*layout);
-
-                    rect2_t image_rect = ui_cut_top(layout, width*aspect);
-
-                    UI_PANEL(image_rect)
-                    {
-                        r_immediate_texture(poly->lightmap);
-                        r_immediate_rect2_filled(image_rect, make_v4(1, 1, 1, 1));
-                        r_immediate_flush();
-                    }
-
-#if 0
-					ui_interaction_t interaction = ui_interaction_from_box(image_viewer);
-					if (interaction.hovering || lm_editor->pixel_selection_active)
-					{
-						v2_t rel_press_p = sub(interaction.press_p, image_viewer->rect.min);
-						v2_t rel_mouse_p = sub(interaction.mouse_p, image_viewer->rect.min);
-
-						v2_t rect_dim   = rect2_get_dim(image_viewer->rect);
-						v2_t pixel_size = div(rect_dim, make_v2((float)desc.w, (float)desc.h));
-
-						UI_Parent(image_viewer)
-						{
-							ui_box_t *selection_highlight = ui_box(S("selection highlight"), UI_DRAW_OUTLINE);
-							selection_highlight->style.outline_color = ui_gradient_from_rgba(1, 0, 0, 1);
-
-							v2_t selection_start = { rel_press_p.x, rel_press_p.y };
-							v2_t selection_end   = { rel_mouse_p.x, rel_mouse_p.y };
-							
-							rect2i_t pixel_selection = { 
-								.min = {
-									(int)(selection_start.x / pixel_size.x),
-									(int)(selection_start.y / pixel_size.y),
-								},
-								.max = {
-									(int)(selection_end.x / pixel_size.x) + 1,
-									(int)(selection_end.y / pixel_size.y) + 1,
-								},
-							};
-
-							if (pixel_selection.max.y < pixel_selection.min.y)
-								SWAP(int, pixel_selection.max.y, pixel_selection.min.y);
-
-							if (interaction.dragging)
-							{
-								lm_editor->pixel_selection_active = true;
-								lm_editor->selected_pixels = pixel_selection;
-							}
-
-							v2i_t selection_dim = rect2i_get_dim(lm_editor->selected_pixels);
-
-							ui_set_size(selection_highlight, AXIS2_X, ui_pixels((float)selection_dim.x*pixel_size.x, 1.0f));
-							ui_set_size(selection_highlight, AXIS2_Y, ui_pixels((float)selection_dim.y*pixel_size.y, 1.0f));
-
-							selection_highlight->position_offset[AXIS2_X] = (float)lm_editor->selected_pixels.min.x * pixel_size.x;
-							selection_highlight->position_offset[AXIS2_Y] = rect_dim.y - (float)(lm_editor->selected_pixels.min.y + selection_dim.y) * pixel_size.y;
-						}
-					}
-#endif
-				}
-			}
-			else
-			{
-                float progress = bake_progress(map->lightmap_state);
-
-                ui_progress_bar(Sf("bake progress: %u / %u (%.02f%%)", map->lightmap_state->jobs_completed, map->lightmap_state->job_count, 100.0f*progress), progress);
-
-                hires_time_t current_time = os_hires_time();
-                double time_elapsed = os_seconds_elapsed(map->lightmap_state->start_time, current_time);
-                int minutes = (int)floor(time_elapsed / 60.0);
-                int seconds = (int)floor(time_elapsed - 60.0*minutes);
-
-                ui_label(Sf("time elapsed:  %02u:%02u", minutes, seconds));
-			}
-		}
-	}
-
-	if (ui_is_active(lm_editor->window.id))
-	{
-		bring_editor_to_front(EDITOR_LIGHTMAP);
-	}
 
     if (lm_editor->debug_lightmaps)
     {
@@ -897,7 +623,7 @@ static void update_and_render_lightmap_editor(void)
 		//r_immediate_depth_bias(0.005f);
 		r_immediate_blend_mode(R_BLEND_ADDITIVE);
 
-        if (io->cursor_locked)
+        if (g_cursor_locked)
         {
             intersect_result_t intersect;
             if (intersect_map(map, &(intersect_params_t) {
@@ -1099,6 +825,289 @@ static void update_and_render_lightmap_editor(void)
 
         r_immediate_flush();
     }
+
+	UI_WINDOW(&lm_editor->window)
+	{
+        if (!map->lightmap_state || !map->lightmap_state->finalized)
+        {
+            ui_header(S("Bake Quality"));
+
+            static int bake_preset              = 0;
+            static int ray_count                = 2;
+            static int ray_recursion            = 2;
+            static int fog_light_sample_count   = 2;
+            static int fogmap_scale_index       = 1;
+            static bool use_dynamic_sun_shadows = true;
+
+            static string_t preset_labels[] = { Sc("Crappy"), Sc("Acceptable"), Sc("Excessive") };
+            if (ui_option_buttons(S("Preset"), &bake_preset, ARRAY_COUNT(preset_labels), preset_labels))
+            {
+                switch (bake_preset)
+                {
+                    case 0:
+                    {
+                        ray_count              = 2;
+                        ray_recursion          = 2;
+                        fog_light_sample_count = 2;
+                        fogmap_scale_index     = 1;
+                    } break;
+
+                    case 1:
+                    {
+                        ray_count              = 8;
+                        ray_recursion          = 3;
+                        fog_light_sample_count = 4;
+                        fogmap_scale_index     = 1;
+                    } break;
+
+                    case 2:
+                    {
+                        ray_count              = 16;
+                        ray_recursion          = 4;
+                        fog_light_sample_count = 8;
+                        fogmap_scale_index     = 2;
+                    } break;
+                }
+            }
+
+            ui_slider_int(S("Rays Per Pixel"), &ray_count, 1, 32);
+            ui_slider_int(S("Max Recursion"), &ray_recursion, 1, 8);
+            ui_slider_int(S("Fog Light Sample Count"), &fog_light_sample_count, 1, 8);
+
+            static int fogmap_scales[] = {
+                32, 16, 8, 4,
+            };
+
+            static string_t fogmap_scale_labels[] = {
+                Sc("32"), Sc("16"), Sc("8"), Sc("4"),
+            };
+
+            ui_option_buttons(S("Fogmap Scale"), &fogmap_scale_index, ARRAY_COUNT(fogmap_scales), fogmap_scale_labels);
+
+            int actual_fogmap_scale = fogmap_scales[fogmap_scale_index];
+
+            ui_checkbox(S("Dynamic Sun Shadows"), &use_dynamic_sun_shadows);
+
+            if (!map->lightmap_state)
+            {
+                if (ui_button(S("Bake Lighting")))
+                {
+                    // figure out the solid sky color from the fog
+                    float absorption = map->fog_absorption;
+                    float density    = map->fog_density;
+                    float scattering = map->fog_scattering;
+                    v3_t sky_color = mul(sun_color, (1.0f / (4.0f*PI32))*scattering*density / (density*(scattering + absorption)));
+
+                    if (map->lightmap_state)
+                    {
+                        release_bake_state(map->lightmap_state);
+                    }
+
+                    map->lightmap_state = bake_lighting(&(lum_params_t) {
+                        .map                 = map,
+                        .sun_direction       = make_v3(0.25f, 0.75f, 1),
+                        .sun_color           = sun_color,
+                        .sky_color           = sky_color,
+
+                        .use_dynamic_sun_shadows = use_dynamic_sun_shadows,
+
+                        .ray_count               = ray_count,
+                        .ray_recursion           = ray_recursion,
+                        .fog_light_sample_count  = fog_light_sample_count,
+                        .fogmap_scale            = actual_fogmap_scale,
+                    });
+                }
+            }
+            else if (ui_button(S("Cancel")))
+            {
+                bake_cancel(map->lightmap_state);
+
+                for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
+                {
+                    map_poly_t *poly = &map->polys[poly_index];
+                    if (RESOURCE_HANDLE_VALID(poly->lightmap))
+                    {
+                        render->destroy_texture(poly->lightmap);
+                        poly->lightmap = NULL_RESOURCE_HANDLE;
+                    }
+                }
+
+                render->destroy_texture(map->fogmap);
+                map->fogmap = NULL_RESOURCE_HANDLE;
+
+                map->lightmap_state = NULL;
+            }
+        }
+
+		if (map->lightmap_state && map->lightmap_state->finalized)
+		{
+			lum_bake_state_t *state = map->lightmap_state;
+
+            double time_elapsed = state->final_bake_time;
+            int minutes = (int)floor(time_elapsed / 60.0);
+            int seconds = (int)floor(time_elapsed - 60.0*minutes);
+            int microseconds = (int)floor(1000.0*(time_elapsed - 60.0*minutes - seconds));
+
+			ui_header(S("Bake Results"));
+
+            UI_SCALAR(UI_SCALAR_TEXT_ALIGN_X, 0.0f)
+            {
+                ui_label(Sf("Total Bake Time:  %02u:%02u:%03u", minutes, seconds, microseconds));
+                ui_label(Sf("Fogmap Resolution: %u %u %u", map->fogmap_w, map->fogmap_h, map->fogmap_d));
+            }
+
+			if (ui_button(S("Clear Lightmaps")))
+			{
+				for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
+				{
+					map_poly_t *poly = &map->polys[poly_index];
+					if (RESOURCE_HANDLE_VALID(poly->lightmap))
+					{
+						render->destroy_texture(poly->lightmap);
+						poly->lightmap = NULL_RESOURCE_HANDLE;
+					}
+				}
+
+				render->destroy_texture(map->fogmap);
+				map->fogmap = NULL_RESOURCE_HANDLE;
+
+				release_bake_state(map->lightmap_state);
+				map->lightmap_state = NULL;
+			}
+		}
+
+		if (map->lightmap_state)
+		{
+			lum_bake_state_t *state = map->lightmap_state;
+
+			if (state->finalized)
+			{
+				ui_header(S("Lightmap Debugger"));
+
+				ui_checkbox(S("Enabled"), &lm_editor->debug_lightmaps);
+				ui_checkbox(S("Show Direct Light Rays"), &lm_editor->show_direct_light_rays);
+				ui_checkbox(S("Show Indirect Light Rays"), &lm_editor->show_indirect_light_rays);
+				ui_checkbox(S("Fullbright Rays"), &lm_editor->fullbright_rays);
+				ui_checkbox(S("No Ray Depth Test"), &lm_editor->no_ray_depth_test);
+
+				ui_slider_int(S("Min Recursion Level"), &lm_editor->min_display_recursion, 0, 16);
+				ui_slider_int(S("Max Recursion Level"), &lm_editor->max_display_recursion, 0, 16);
+
+				if (lm_editor->selected_poly)
+				{
+					map_poly_t *poly = lm_editor->selected_poly;
+
+					texture_desc_t desc;
+					render->describe_texture(poly->lightmap, &desc);
+
+                    ui_push_scalar(UI_SCALAR_TEXT_ALIGN_X, 0.0f);
+
+					ui_label(Sf("Resolution: %u x %u", desc.w, desc.h));
+					if (lm_editor->pixel_selection_active)
+					{
+                        ui_label(Sf("Selected Pixel Region: (%d, %d) (%d, %d)", 
+                                    lm_editor->selected_pixels.min.x,
+                                    lm_editor->selected_pixels.min.y,
+                                    lm_editor->selected_pixels.max.x,
+                                    lm_editor->selected_pixels.max.y));
+
+						if (ui_button(S("Clear Selection")))
+						{
+							lm_editor->pixel_selection_active = false;
+							lm_editor->selected_pixels = (rect2i_t){ 0 };
+						}
+					}
+					else
+					{
+                        // TODO: add spacers
+                        ui_label(S(""));
+                        ui_label(S(""));
+					}
+
+                    ui_pop_scalar(UI_SCALAR_TEXT_ALIGN_X);
+
+                    float aspect = (float)desc.h / (float)desc.w;
+
+                    rect2_t *layout = ui_layout_rect();
+
+                    float width = rect2_width(*layout);
+
+                    rect2_t image_rect = ui_cut_top(layout, width*aspect);
+
+					r_immediate_texture(poly->lightmap);
+					r_immediate_rect2_filled(image_rect, make_v4(1, 1, 1, 1));
+					r_immediate_flush();
+
+#if 0
+					ui_interaction_t interaction = ui_interaction_from_box(image_viewer);
+					if (interaction.hovering || lm_editor->pixel_selection_active)
+					{
+						v2_t rel_press_p = sub(interaction.press_p, image_viewer->rect.min);
+						v2_t rel_mouse_p = sub(interaction.mouse_p, image_viewer->rect.min);
+
+						v2_t rect_dim   = rect2_get_dim(image_viewer->rect);
+						v2_t pixel_size = div(rect_dim, make_v2((float)desc.w, (float)desc.h));
+
+						UI_Parent(image_viewer)
+						{
+							ui_box_t *selection_highlight = ui_box(S("selection highlight"), UI_DRAW_OUTLINE);
+							selection_highlight->style.outline_color = ui_gradient_from_rgba(1, 0, 0, 1);
+
+							v2_t selection_start = { rel_press_p.x, rel_press_p.y };
+							v2_t selection_end   = { rel_mouse_p.x, rel_mouse_p.y };
+							
+							rect2i_t pixel_selection = { 
+								.min = {
+									(int)(selection_start.x / pixel_size.x),
+									(int)(selection_start.y / pixel_size.y),
+								},
+								.max = {
+									(int)(selection_end.x / pixel_size.x) + 1,
+									(int)(selection_end.y / pixel_size.y) + 1,
+								},
+							};
+
+							if (pixel_selection.max.y < pixel_selection.min.y)
+								SWAP(int, pixel_selection.max.y, pixel_selection.min.y);
+
+							if (interaction.dragging)
+							{
+								lm_editor->pixel_selection_active = true;
+								lm_editor->selected_pixels = pixel_selection;
+							}
+
+							v2i_t selection_dim = rect2i_get_dim(lm_editor->selected_pixels);
+
+							ui_set_size(selection_highlight, AXIS2_X, ui_pixels((float)selection_dim.x*pixel_size.x, 1.0f));
+							ui_set_size(selection_highlight, AXIS2_Y, ui_pixels((float)selection_dim.y*pixel_size.y, 1.0f));
+
+							selection_highlight->position_offset[AXIS2_X] = (float)lm_editor->selected_pixels.min.x * pixel_size.x;
+							selection_highlight->position_offset[AXIS2_Y] = rect_dim.y - (float)(lm_editor->selected_pixels.min.y + selection_dim.y) * pixel_size.y;
+						}
+					}
+#endif
+				}
+			}
+			else
+			{
+                float progress = bake_progress(map->lightmap_state);
+
+                ui_progress_bar(Sf("bake progress: %u / %u (%.02f%%)", map->lightmap_state->jobs_completed, map->lightmap_state->job_count, 100.0f*progress), progress);
+
+                hires_time_t current_time = os_hires_time();
+                double time_elapsed = os_seconds_elapsed(map->lightmap_state->start_time, current_time);
+                int minutes = (int)floor(time_elapsed / 60.0);
+                int seconds = (int)floor(time_elapsed - 60.0*minutes);
+
+                ui_label(Sf("time elapsed:  %02u:%02u", minutes, seconds));
+			}
+		}
+	}
+
+	if (ui_is_active(lm_editor->window.id))
+	{
+		bring_editor_to_front(EDITOR_LIGHTMAP);
+	}
 }
 
 DREAM_INLINE void fullscreen_show_timings(void)
@@ -1155,10 +1164,16 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
     rect2_t bar = ui_cut_top(editor.fullscreen_layout, 32.0f);
 
     rect2_t collision_bar = bar;
-    collision_bar.min.y -= 32.0f;
+    collision_bar.min.y -= 64.0f;
+
+	if (editor.bar_openness > 0.0001f)
+		collision_bar.min.y -= 128.0f;
 
     bool mouse_hover = rect2_contains_point(collision_bar, ui.mouse_p);
-    editor.bar_openness = ui_animate_towards(editor.bar_openness, mouse_hover ? 1.0f : 0.0f);
+	mouse_hover |= ui.mouse_p.y >= collision_bar.max.y;
+	mouse_hover |= editor.pin_bar;
+
+    editor.bar_openness = ui_interpolate_f32(ui_id_pointer(&editor.bar_openness), mouse_hover ? 1.0f : 0.0f);
 
     if (editor.bar_openness > 0.0001f)
     {
@@ -1170,8 +1185,16 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
         r_immediate_flush();
 
         rect2_t inner_bar = ui_shrink(&bar, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+
+		UI_SCALAR(UI_SCALAR_HOVER_LIFT, 0.0f)
         UI_PANEL(inner_bar)
         {
+			ui_set_layout_direction(UI_CUT_LEFT);
+
+			ui_checkbox(S("Pin"), &editor.pin_bar);
+
+			ui_set_layout_direction(UI_CUT_RIGHT);
+
             typedef struct menu_t
             {
                 string_t name;
@@ -1202,23 +1225,14 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
                 },
             };
 
-            ui_set_next_rect(ui_cut_left(&bar, ui_label_width(S("Menus:  "))));
-            ui_label(S("Menus:"));
-
-            for (size_t i = 0; i < ARRAY_COUNT(menus); i++)
+            for (int64_t i = ARRAY_COUNT(menus) - 1; i >= 0; i--)
             {
                 menu_t *menu = &menus[i];
                 
-                float width = ui_label_width(menu->name);
-
                 bool active = *menu->toggle;
 
-                if (active)
-                {
-                    ui_push_color(UI_COLOR_BUTTON_IDLE, ui_color(UI_COLOR_BUTTON_ACTIVE));
-                }
+                if (active) ui_push_color(UI_COLOR_BUTTON_IDLE, ui_color(UI_COLOR_BUTTON_ACTIVE));
 
-                ui_set_next_rect(ui_cut_left(&bar, width));
                 if (ui_button(menu->name))
                 {
                     *menu->toggle = !*menu->toggle;
@@ -1228,11 +1242,12 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 					}
                 }
 
-                if (active)
-                {
-                    ui_pop_color(UI_COLOR_BUTTON_IDLE);
-                }
+                if (active) ui_pop_color(UI_COLOR_BUTTON_IDLE);
             }
+
+            ui_label(S("  Menus: "));
+
+            ui_label(Sf("Mouse Position: %.02f x %.02f", ui.mouse_p.x, ui.mouse_p.y));
         }
     }
 }
@@ -1275,18 +1290,6 @@ void update_and_render_in_game_editor(void)
         .max = { (float)res_x, (float)res_y },
     };
 
-	for (size_t i = 0; i < stack_count(editor.window_order); i++)
-	{
-		editor_kind_t kind = editor.window_order.values[i];
-
-		switch (kind)
-		{
-			case EDITOR_LIGHTMAP:    { update_and_render_lightmap_editor(); } break;
-			case EDITOR_CONVEX_HULL: { update_and_render_convex_hull_test_panel(); } break;
-			case EDITOR_UI_DEMO:     { update_and_render_ui_demo(); } break;
-		}
-	}
-
     UI_SCALAR(UI_SCALAR_WIDGET_MARGIN, 0.0f)
     ui_panel_begin(fullscreen_rect);
 	{
@@ -1298,4 +1301,16 @@ void update_and_render_in_game_editor(void)
 			fullscreen_show_timings();
 	}
 	ui_panel_end();
+
+	for (size_t i = 0; i < stack_count(editor.window_order); i++)
+	{
+		editor_kind_t kind = editor.window_order.values[i];
+
+		switch (kind)
+		{
+			case EDITOR_LIGHTMAP:    { update_and_render_lightmap_editor(); } break;
+			case EDITOR_CONVEX_HULL: { update_and_render_convex_hull_test_panel(); } break;
+			case EDITOR_UI_DEMO:     { update_and_render_ui_demo(); } break;
+		}
+	}
 }

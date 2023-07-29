@@ -20,6 +20,8 @@
 #define DREAM_LOCAL  extern 
 #endif
 
+#define DREAM_DLLEXPORT extern __declspec(dllexport)
+
 #define DREAM_INLINE static inline
 
 // still not sure where this should go, but it should be present in headers as well.
@@ -47,6 +49,7 @@
 #define PAD(n) char PASTE(pad__, __LINE__)[n]
 
 #define MASK_BITS(n) ((1 << ((n) + 1)) - 1)
+#define TOGGLE_BIT(x, n, b) ((b) ? ((x)|(n)) : ((x)&~(n)))
 
 #define DEFAULT_STRING_ALIGN 16
 
@@ -56,10 +59,10 @@ typedef struct string_t
     const char *data;
 } string_t;
 
-#define STRING_STORAGE(size) struct { size_t count; char data[size]; }
-#define STRING_FROM_STORAGE(storage) (string_t) { (storage).count, (storage).data }
-#define STRING_INTO_STORAGE(storage, string) (copy_memory((storage).data, (string).data, MIN(ARRAY_COUNT((storage).data), (string).count)), (storage).count = (string).count)
-#define STRING_STORAGE_SIZE(storage) ARRAY_COUNT((storage).data)
+#define string_storage_t(size) struct { size_t count; char data[size]; }
+#define string_from_storage(storage) (string_t) { (storage).count, (storage).data }
+#define string_into_storage(storage, string) (copy_memory((storage).data, (string).data, MIN(ARRAY_COUNT((storage).data), (string).count)), (storage).count = (string).count)
+#define string_storage_size(storage) ARRAY_COUNT((storage).data)
 
 #define strinit(text) { sizeof(text)-1, (const char *)("" text) }
 #define Sc(text) { sizeof(text)-1, (const char *)("" text) }

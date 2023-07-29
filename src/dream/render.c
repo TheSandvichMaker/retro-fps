@@ -95,11 +95,11 @@ void r_reset_command_list(void)
     }
 }
 
-static STRING_STORAGE(64) g_next_command_identifier;
+static string_storage_t(64) g_next_command_identifier;
 
 void r_command_identifier(string_t identifier)
 {
-    STRING_INTO_STORAGE(g_next_command_identifier, identifier);
+    string_into_storage(g_next_command_identifier, identifier);
 }
 
 static void *r_submit_command(r_command_kind_t kind, size_t command_size)
@@ -127,7 +127,7 @@ static void *r_submit_command(r_command_kind_t kind, size_t command_size)
 
 #ifndef NDEBUG
             if (g_next_command_identifier.count > 0)
-                base->identifier = string_copy(temp, STRING_FROM_STORAGE(g_next_command_identifier));
+                base->identifier = string_copy(temp, string_from_storage(g_next_command_identifier));
 
             g_next_command_identifier.count = 0;
 #endif

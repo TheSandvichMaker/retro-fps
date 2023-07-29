@@ -61,7 +61,7 @@ typedef struct asset_slot_t
 	asset_hash_t hash;
 	asset_kind_t kind;
 
-	STRING_STORAGE(256) path;
+	string_storage_t(256) path;
 
 	union
 	{
@@ -130,7 +130,7 @@ static void asset_job(job_context_t *context, void *userdata)
 				{
 					resource_handle_t idiot_code = asset->image.gpu;
 
-					asset->image = load_image_from_disk(arena, STRING_FROM_STORAGE(asset->path), 4);
+					asset->image = load_image_from_disk(arena, string_from_storage(asset->path), 4);
 					asset->image.gpu = idiot_code;
 
 					render->populate_texture(asset->image.gpu, &(upload_texture_t){
@@ -150,7 +150,7 @@ static void asset_job(job_context_t *context, void *userdata)
 
 				case ASSET_KIND_WAVEFORM:
 				{
-                    waveform_t  src_waveform = load_waveform_from_disk(temp, STRING_FROM_STORAGE(asset->path));
+                    waveform_t  src_waveform = load_waveform_from_disk(temp, string_from_storage(asset->path));
                     waveform_t *dst_waveform = &asset->waveform;
 
                     ASSERT(src_waveform.channel_count == asset->waveform.channel_count);
@@ -224,7 +224,7 @@ static void preload_asset_info(asset_slot_t *asset)
 
 			m_scoped(temp)
 			{
-				string_t path = STRING_FROM_STORAGE(asset->path);
+				string_t path = string_from_storage(asset->path);
 
 				int x, y, comp;
 				if (stbi_info(string_null_terminate(temp, path), &x, &y, &comp))
@@ -240,7 +240,7 @@ static void preload_asset_info(asset_slot_t *asset)
 
         case ASSET_KIND_WAVEFORM:
         {
-            waveform_t waveform = load_waveform_info_from_disk(STRING_FROM_STORAGE(asset->path));
+            waveform_t waveform = load_waveform_info_from_disk(string_from_storage(asset->path));
 
             // we're gonna resample waveforms that don't match:
             waveform.frame_count = convert_sample_count(waveform.sample_rate, asset_config.mix_sample_rate, waveform.frame_count);
@@ -286,7 +286,7 @@ void initialize_asset_system(const asset_config_t *config)
 				asset->hash  = asset_hash_from_string(entry->path);
 				asset->kind  = kind;
 				asset->state = ASSET_STATE_ON_DISK;
-				STRING_INTO_STORAGE(asset->path, entry->path);
+				string_into_storage(asset->path, entry->path);
 
 				hash_add_object(&asset_index, asset->hash.value, asset);
 

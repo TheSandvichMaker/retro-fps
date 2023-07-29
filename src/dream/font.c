@@ -105,15 +105,15 @@ font_atlas_t make_font_atlas_from_memory(string_t font_data, size_t range_count,
 							stbtt_packedchar *packed   = &tt_range->chardata_for_range[packed_index];
 							font_glyph_t     *my_glyph = &result.glyph_table[glyph_index];
 
-							my_glyph->min_x     = packed->x0;
-							my_glyph->min_y     = packed->y0;
-							my_glyph->max_x     = packed->x1;
-							my_glyph->max_y     = packed->y1;
-							my_glyph->x_offset  = packed->xoff;
+							my_glyph->min_x     =  packed->x0;
+							my_glyph->min_y     =  packed->y0;
+							my_glyph->max_x     =  packed->x1;
+							my_glyph->max_y     =  packed->y1;
+							my_glyph->x_offset  =  packed->xoff;
 							my_glyph->y_offset  = -packed->yoff2; // swapping yoff2 and yoff because we're in a Y-is-up scenario while stbtt assumes Y-is-down
-							my_glyph->x_advance = packed->xadvance;
-							my_glyph->x_offset2 = packed->xoff2;
-							my_glyph->y_offset2 = -packed->yoff;
+							my_glyph->x_advance =  packed->xadvance;
+							my_glyph->x_offset2 =  packed->xoff2;
+							my_glyph->y_offset2 = -packed->yoff;  // swapping yoff2 and yoff because we're in a Y-is-up scenario while stbtt assumes Y-is-down
 						}
 					}
 				}
