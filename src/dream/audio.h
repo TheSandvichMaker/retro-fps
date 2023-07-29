@@ -265,7 +265,7 @@ DREAM_INLINE void fade_out_sound(mixer_id_t id, float fade_time)
 	});
 }
 
-DREAM_INLINE void set_listener(v3_t p, v3_t d)
+DREAM_INLINE void mixer_set_listener(v3_t p, v3_t d)
 {
 	push_mix_command(&(mix_command_t){
 		.kind = MIX_UPDATE_LISTENER,

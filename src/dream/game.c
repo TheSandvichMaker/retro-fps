@@ -609,7 +609,7 @@ static void game_tick(platform_io_t *io)
         case PLAYER_MOVE_FREECAM: player_freecam(player, dt); break;
     }
 
-	set_listener(camera->p, negate(camera->computed_z));
+	mixer_set_listener(camera->p, negate(camera->computed_z));
 
     rect2_t viewport = {
         0, 0, (float)res_x, (float)res_y,

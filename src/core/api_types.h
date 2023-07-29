@@ -56,7 +56,7 @@
 typedef struct string_t
 {
     size_t count;
-    const char *data;
+    char *data;
 } string_t;
 
 #define string_storage_t(size) struct { size_t count; char data[size]; }
@@ -64,9 +64,9 @@ typedef struct string_t
 #define string_into_storage(storage, string) (copy_memory((storage).data, (string).data, MIN(ARRAY_COUNT((storage).data), (string).count)), (storage).count = (string).count)
 #define string_storage_size(storage) ARRAY_COUNT((storage).data)
 
-#define strinit(text) { sizeof(text)-1, (const char *)("" text) }
-#define Sc(text) { sizeof(text)-1, (const char *)("" text) }
-#define strlit(text) ((string_t) { sizeof(text)-1, (const char *)("" text) })
+#define strinit(text) { sizeof(text)-1, (char *)("" text) }
+#define Sc(text) { sizeof(text)-1, (char *)("" text) }
+#define strlit(text) ((string_t) { sizeof(text)-1, (char *)("" text) })
 #define S(text) strlit(text) // new laziness thing, will it stick?
 #define strexpand(string) (int)(string).count, (string).data
 #define Sx(text) strexpand(text)

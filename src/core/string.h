@@ -11,7 +11,7 @@ DREAM_INLINE bool string_empty(string_t string)
 	return string.count == 0 || !string.data;
 }
 
-static inline string_t string_from_cstr(const char *string)
+static inline string_t string_from_cstr(char *string)
 {
     string_t result;
     result.count = string_count(string);
@@ -19,7 +19,7 @@ static inline string_t string_from_cstr(const char *string)
     return result;
 }
 
-static inline string16_t string16_from_cstr(const wchar_t *string)
+static inline string16_t string16_from_cstr(wchar_t *string)
 {
     string16_t result;
     result.count = string16_count(string);
@@ -29,8 +29,8 @@ static inline string16_t string16_from_cstr(const wchar_t *string)
 
 string_t string_copy(arena_t *arena, string_t string);
 string_t string_copy_cstr(arena_t *arena, const char *string);
-const char *string_null_terminate(arena_t *arena, string_t string);
-const wchar_t *string16_null_terminate(arena_t *arena, string16_t string);
+char *string_null_terminate(arena_t *arena, string_t string);
+wchar_t *string16_null_terminate(arena_t *arena, string16_t string);
 
 string_t string_format(arena_t *arena, const char *fmt, ...);
 string_t string_format_va(arena_t *arena, const char *fmt, va_list args);

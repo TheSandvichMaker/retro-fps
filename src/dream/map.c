@@ -71,12 +71,12 @@ typedef struct map_token_s
     float num_value;
     string_t string_value;
 
-    const char *start, *end;
+    char *start, *end;
 } map_token_t;
 
 typedef struct map_parser_s
 {
-    const char *start, *at, *end;
+    char *start, *at, *end;
     map_token_t token;
     map_token_t prev_token;
 } map_parser_t;
@@ -118,7 +118,7 @@ void map_parse_error(map_parser_t *parser, string_t error)
 {
     int line = 1, col = 0;
 
-    for (const char *at = parser->start; at < parser->at; at++)
+    for (char *at = parser->start; at < parser->at; at++)
     {
         if (*at == '\n')
         {
@@ -137,8 +137,8 @@ void map_parse_error(map_parser_t *parser, string_t error)
 
 static void map_skip_whitespace(map_parser_t *parser)
 {
-    const char *at  = parser->at;
-    const char *end = parser->end;
+    char *at  = parser->at;
+    char *end = parser->end;
 
     while (at < end)
     {
@@ -176,8 +176,8 @@ bool map_next_token(map_parser_t *parser)
 {
     map_skip_whitespace(parser);
 
-    const char *at  = parser->at;
-    const char *end = parser->end;
+    char *at  = parser->at;
+    char *end = parser->end;
 
     parser->prev_token = parser->token;
     zero_struct(&parser->token);
@@ -188,7 +188,7 @@ bool map_next_token(map_parser_t *parser)
         return false;
     }
 
-    const char *start = at;
+    char *start = at;
     switch (at[0])
     {
         case '(':
@@ -228,7 +228,7 @@ bool map_next_token(map_parser_t *parser)
         {
             parser->token.kind = MTOK_NUMBER;
 
-            const char *strtod_end;
+            char *strtod_end;
             parser->token.num_value = (float)strtod(at, &strtod_end);
 
             // texture names may (and do) start with symbols like +
@@ -273,10 +273,10 @@ void map_force_text_token(map_parser_t *parser)
 
     parser->at = parser->token.start;
 
-    const char *at  = parser->at;
-    const char *end = parser->end;
+    char *at  = parser->at;
+    char *end = parser->end;
 
-    const char *start = at;
+    char *start = at;
 
     while (at < end && !is_whitespace(at[0]))
     {

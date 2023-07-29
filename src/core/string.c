@@ -58,7 +58,7 @@ string_t string_copy_cstr(arena_t *arena, const char *string)
     return (string_t){ count, data };
 }
 
-const char *string_null_terminate(arena_t *arena, string_t string)
+char *string_null_terminate(arena_t *arena, string_t string)
 {
     char *data = m_alloc_string(arena, string.count + 1);
 
@@ -71,7 +71,7 @@ const char *string_null_terminate(arena_t *arena, string_t string)
     return data;
 }
 
-const wchar_t *string16_null_terminate(arena_t *arena, string16_t string)
+wchar_t *string16_null_terminate(arena_t *arena, string16_t string)
 {
     wchar_t *data = m_alloc_string16(arena, string.count + 1);
 
