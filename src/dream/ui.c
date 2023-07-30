@@ -340,7 +340,7 @@ void ui_process_windows(void)
 											 
 			}
 
-			float tray_width = 2.0f;
+			float tray_width = 4.0f;
 
 			rect2_t tray_w  = rect2_cut_left  (&rect,   tray_width);
 			rect2_t tray_e  = rect2_cut_right (&rect,   tray_width);
@@ -348,7 +348,7 @@ void ui_process_windows(void)
 			rect2_t tray_sw = rect2_cut_bottom(&tray_w, tray_width);
 			rect2_t tray_se = rect2_cut_bottom(&tray_e, tray_width);
 
-			uint32_t tray_region = 0;
+			ui_rect_edge_t tray_region = 0;
 
 			if (ui_widget_behaviour(ui_id(S("tray_w")),  tray_w)  & UI_HELD) tray_region |= UI_RECT_EDGE_W;
 			if (ui_widget_behaviour(ui_id(S("tray_e")),  tray_e)  & UI_HELD) tray_region |= UI_RECT_EDGE_E;
@@ -356,9 +356,17 @@ void ui_process_windows(void)
 			if (ui_widget_behaviour(ui_id(S("tray_sw")), tray_sw) & UI_HELD) tray_region |= UI_RECT_EDGE_S|UI_RECT_EDGE_W;
 			if (ui_widget_behaviour(ui_id(S("tray_se")), tray_se) & UI_HELD) tray_region |= UI_RECT_EDGE_S|UI_RECT_EDGE_E;
 
-#if 0
-			ui_resize_rect(&window->rect, tray_region);
-#endif
+			if (tray_region)
+			{
+				v2_t dp = ui.input.mouse_dp; // TODO: DON'T USE MOUSE DP. IT BREAKS IF THE RESIZING BECOMES DISCONTINUOUS (AKA WHEN YOU HIT THE MINIMUM SIZE)
+
+				if (tray_region & UI_RECT_EDGE_E) window->rect = rect2_extend_right(window->rect,  dp.x);
+				if (tray_region & UI_RECT_EDGE_W) window->rect = rect2_extend_left (window->rect, -dp.x);
+				if (tray_region & UI_RECT_EDGE_N) window->rect = rect2_extend_up   (window->rect,  dp.y);
+				if (tray_region & UI_RECT_EDGE_S) window->rect = rect2_extend_down (window->rect, -dp.y);
+
+				window->rect = rect2_uninvert(window->rect);
+			}
 
 			float margin = max(ui_scalar(UI_SCALAR_WIDGET_MARGIN), 2.0f*ui_scalar(UI_SCALAR_ROUNDEDNESS)) - ui_scalar(UI_SCALAR_WIDGET_MARGIN);
 			rect2_cut_bottom(&rect, margin);

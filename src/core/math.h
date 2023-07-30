@@ -1355,6 +1355,42 @@ DREAM_INLINE rect2_t rect2_extend(rect2_t rect, float a)
 	return result;
 }
 
+DREAM_INLINE rect2_t rect2_extend_right(rect2_t rect, float a)
+{
+	rect2_t result = {
+		.min = { rect.min.x    , rect.min.y     },
+		.max = { rect.max.x + a, rect.max.y     },
+	};
+	return result;
+}
+
+DREAM_INLINE rect2_t rect2_extend_left(rect2_t rect, float a)
+{
+	rect2_t result = {
+		.min = { rect.min.x - a, rect.min.y     },
+		.max = { rect.max.x    , rect.max.y     },
+	};
+	return result;
+}
+
+DREAM_INLINE rect2_t rect2_extend_up(rect2_t rect, float a)
+{
+	rect2_t result = {
+		.min = { rect.min.x    , rect.min.y     },
+		.max = { rect.max.x    , rect.max.y + a },
+	};
+	return result;
+}
+
+DREAM_INLINE rect2_t rect2_extend_down(rect2_t rect, float a)
+{
+	rect2_t result = {
+		.min = { rect.min.x    , rect.min.y - a },
+		.max = { rect.max.x    , rect.max.y     },
+	};
+	return result;
+}
+
 DREAM_INLINE rect2_t rect2_shrink(rect2_t rect, float a)
 {
 	return rect2_extend(rect, -a);
