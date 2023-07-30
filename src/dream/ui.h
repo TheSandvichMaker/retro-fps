@@ -365,6 +365,9 @@ typedef struct ui_t
 	ui_id_t next_id;
 	rect2_t next_rect;
 
+	ui_id_t next_hovered_panel;
+	ui_id_t hovered_panel;
+
 	v2_t    drag_anchor;
 	v2_t    drag_offset;
 	rect2_t resize_original_rect;
@@ -382,10 +385,11 @@ typedef struct ui_t
 
 DREAM_LOCAL ui_t ui;
 
-DREAM_LOCAL bool ui_is_cold       (ui_id_t id);
-DREAM_LOCAL bool ui_is_next_hot   (ui_id_t id);
-DREAM_LOCAL bool ui_is_hot        (ui_id_t id);
-DREAM_LOCAL bool ui_is_active     (ui_id_t id);
+DREAM_LOCAL bool ui_is_cold         (ui_id_t id);
+DREAM_LOCAL bool ui_is_next_hot     (ui_id_t id);
+DREAM_LOCAL bool ui_is_hot          (ui_id_t id);
+DREAM_LOCAL bool ui_is_active       (ui_id_t id);
+DREAM_LOCAL bool ui_is_hovered_panel(ui_id_t id);
 
 DREAM_LOCAL void ui_set_next_hot  (ui_id_t id);
 DREAM_LOCAL void ui_set_hot       (ui_id_t id);

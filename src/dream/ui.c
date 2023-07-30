@@ -373,7 +373,7 @@ void ui_process_windows(void)
 
 			// drag and resize behaviour
 
-			float tray_width = 6.0f;
+			float tray_width = 8.0f;
 
 			rect2_t interact_total = rect2_extend(total, 0.5f*tray_width);
 			ui_interaction_t interaction = ui_widget_behaviour(id, interact_total);
@@ -438,7 +438,7 @@ void ui_process_windows(void)
 
 			float margin = max(ui_scalar(UI_SCALAR_WIDGET_MARGIN), 0.5f*ui_scalar(UI_SCALAR_ROUNDEDNESS));
 			rect = rect2_shrink(rect, margin);
-			rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WINDOW_MARGIN));
+			rect = rect2_pillarbox(rect, ui_scalar(UI_SCALAR_WINDOW_MARGIN));
 
 			// TODO: Custom scrollbar rendering for windows?
 			ui_panel_begin_ex(ui_id(S("panel")), rect, UI_PANEL_SCROLLABLE_VERT);
@@ -900,27 +900,37 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 {
 	ASSERT(ui.initialized);
 
-	if (id.value) ui_push_id(id);
-
 	r_push_view_screenspace_clip_rect(rect);
+
+	if (id.value) 
+	{
+		ui_push_id(id);
+
+		if (ui_hover_rect(rect))
+		{
+			ui.next_hovered_panel = id;
+		}
+	}
 
 	float offset_y = 0.0f;
 
 	if (flags & UI_PANEL_SCROLLABLE_VERT)
 	{
+		ASSERT(id.value);
+
 		// rect2_t scroll_area = rect2_cut_right(&rect, ui_scalar(UI_SCALAR_SCROLLBAR_WIDTH));
 
 		ui_panel_state_t *state = &ui_get_state(id)->panel;
-		
+
 		if (state->scrollable_height_y > 0.0f)
 		{
-			if (ui_hover_rect(rect))
+			if (ui_is_hovered_panel(id))
 			{
 				state->scroll_offset_y -= ui.input.mouse_wheel;
-				state->scroll_offset_y = flt_clamp(state->scroll_offset_y, 0.0f, max(0.0f, state->scrollable_height_y - rect2_height(rect)));
+				state->scroll_offset_y = flt_clamp(state->scroll_offset_y, 0.0f, max(0.0f, state->scrollable_height_y + ui_scalar(UI_SCALAR_WIDGET_MARGIN) - rect2_height(rect)));
 			}
 
-			ui_id_t scrollbar_id = ui_child_id(S("scrollbar"), id);
+			// ui_id_t scrollbar_id = ui_child_id(S("scrollbar"), id);
 #if 0
 
 			float scroll_area_height = rect2_height(scroll_area);
@@ -958,7 +968,7 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 			ui_draw_rect(bot, ui_color(UI_COLOR_SLIDER_BACKGROUND));
 #endif
 
-			offset_y = roundf(ui_interpolate_f32(scrollbar_id, state->scroll_offset_y));
+			offset_y = roundf(ui_interpolate_f32(ui_id_pointer(&state->scroll_offset_y), state->scroll_offset_y));
 		}
 	}
 
@@ -1585,6 +1595,11 @@ bool ui_is_active(ui_id_t id)
 	return ui.active.value == id.value;
 }
 
+bool ui_is_hovered_panel(ui_id_t id)
+{
+	return ui.hovered_panel.value == id.value;
+}
+
 void ui_set_hot(ui_id_t id)
 {
 	if (!ui.active.value)
@@ -1732,9 +1747,13 @@ bool ui_begin(float dt)
 	}
 
     if (!ui.active.value)
-        ui.hot = ui.next_hot;
+	{
+		ui.hot           = ui.next_hot;
+		ui.hovered_panel = ui.next_hovered_panel;
+	}
 
-	ui.next_hot = UI_ID_NULL;
+	ui.next_hot           = UI_ID_NULL;
+	ui.next_hovered_panel = UI_ID_NULL;
 
 	ui.hovered = false;
 	

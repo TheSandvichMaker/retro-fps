@@ -1411,6 +1411,11 @@ DREAM_INLINE rect2_t rect2_extend2(rect2_t rect, float x, float y)
 	return result;
 }
 
+DREAM_INLINE rect2_t rect2_pillarbox(rect2_t rect, float a)
+{
+	return rect2_extend2(rect, -a, 0);
+}
+
 DREAM_INLINE rect2_t rect2_shrink2(rect2_t rect, float x, float y)
 {
 	return rect2_extend2(rect, -x, -y);
