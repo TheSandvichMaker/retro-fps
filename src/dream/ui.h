@@ -281,10 +281,11 @@ DREAM_LOCAL float   ui_text_width         (font_atlas_t *font, string_t text);
 DREAM_LOCAL float   ui_text_height        (font_atlas_t *font, string_t text);
 DREAM_LOCAL v2_t    ui_text_dim           (font_atlas_t *font, string_t text);
 
-DREAM_LOCAL void    ui_draw_rect          (rect2_t rect, v4_t color);
-DREAM_LOCAL void    ui_draw_rect_roundness(rect2_t rect, v4_t color, v4_t roundness);
-DREAM_LOCAL void    ui_draw_rect_outline  (rect2_t rect, v4_t color, float outline_width);
-DREAM_LOCAL void    ui_draw_circle        (v2_t p, float r, v4_t color);
+DREAM_LOCAL void    ui_draw_rect                   (rect2_t rect, v4_t color);
+DREAM_LOCAL void    ui_draw_rect_roundedness       (rect2_t rect, v4_t color, v4_t roundness);
+DREAM_LOCAL void    ui_draw_rect_roundedness_shadow(rect2_t rect, v4_t color, v4_t roundness, float shadow_amount, float shadow_radius);
+DREAM_LOCAL void    ui_draw_rect_outline           (rect2_t rect, v4_t color, float outline_width);
+DREAM_LOCAL void    ui_draw_circle                 (v2_t p, float r, v4_t color);
 
 //
 // Widget Building Utilities

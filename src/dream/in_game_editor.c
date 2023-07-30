@@ -47,6 +47,10 @@ typedef enum editor_kind_t
 	EDITOR_COUNT,
 } editor_kind_t;
 
+static void ui_demo_proc         (void *);
+static void lightmap_editor_proc (void *);
+static void convex_hull_test_proc(void *);
+
 typedef struct ui_demo_panel_t
 {
 	ui_window_t window;
@@ -109,8 +113,6 @@ typedef struct hull_test_panel_t
 	float  brute_force_triggered_error_timer;
 } hull_test_panel_t;
 
-typedef stack_t(editor_kind_t, EDITOR_COUNT) editor_stack_t;
-
 typedef struct editor_state_t
 {
 	bool initialized;
@@ -130,10 +132,6 @@ typedef struct editor_state_t
 	hull_test_panel_t hull_test;
 
 	ui_demo_panel_t ui_demo;
-
-	// TODO: bit silly
-	editor_stack_t next_window_order;
-	editor_stack_t window_order;
 } editor_state_t;
 
 static editor_state_t editor = {
@@ -141,7 +139,8 @@ static editor_state_t editor = {
 
     .lm_editor = {
 		.window = {
-			.title = Sc("Lightmap Editor"),
+			.title     = Sc("Lightmap Editor"),
+			.draw_proc = lightmap_editor_proc,
 		},
 
 		.min_display_recursion = 0,
@@ -150,7 +149,8 @@ static editor_state_t editor = {
 
 	.hull_test = {
 		.window = {
-			.title = Sc("Convex Hull Debugger"),
+			.title     = Sc("Convex Hull Debugger"),
+			.draw_proc = convex_hull_test_proc,
 		},
 
 		.automatically_recalculate_hull = true,
@@ -172,22 +172,11 @@ static editor_state_t editor = {
 
 	.ui_demo = {
 		.window = {
-			.title = Sc("UI Demo Panel"),
+			.title     = Sc("UI Demo Panel"),
+			.draw_proc = ui_demo_proc,
 		},
 	},
 };
-
-static void bring_editor_to_front(editor_kind_t kind)
-{
-	stack_erase(editor.next_window_order, kind);
-	stack_push_back(editor.next_window_order, kind); // in front = back of the queue! because it's back-to-front!
-}
-
-static void send_editor_to_back(editor_kind_t kind)
-{
-	stack_erase(editor.next_window_order, kind);
-	stack_push_front(editor.next_window_order, kind); // to back = front of the queue! because it's back-to-front!
-}
 
 static void generate_new_random_convex_hull(size_t point_count, random_series_t *r)
 {
@@ -287,13 +276,11 @@ static void hull_render_debug_triangles(hull_debug_step_t *step, bool final_step
 	}
 }
 
-static void update_and_render_convex_hull_test_panel(void)
+static void convex_hull_test_proc(void *user_data)
 {
-#if 0
-	hull_test_panel_t *hull_test = &editor.hull_test;
+	(void *)user_data;
 
-	if (!hull_test->window.open)
-		return;
+	hull_test_panel_t *hull_test = &editor.hull_test;
 
 	triangle_mesh_t *mesh  = &hull_test->mesh;
 	hull_debug_t    *debug = &hull_test->debug;
@@ -421,186 +408,176 @@ static void update_and_render_convex_hull_test_panel(void)
 		r_immediate_flush();
 	}
 
-#if 0
-	UI_WINDOW(&hull_test->window)
+	ui_header(S("Generate Random Hull"));
+
+	bool changed = false;
+	changed |= ui_slider_int(S("Random Seed"), &hull_test->random_seed, 1, 128);
+	changed |= ui_slider_int(S("Point Count"), &hull_test->point_count, 8, 256);
+
+	ui_checkbox(S("Automatically Recalculate Hull"), &hull_test->automatically_recalculate_hull);
+
+	bool should_recalculate = ui_button(S("Calculate Random Convex Hull"));
+	if (hull_test->automatically_recalculate_hull && changed)               should_recalculate = true;
+	if (hull_test->automatically_recalculate_hull && !hull_test->initialized) should_recalculate = true;
+
+	if (should_recalculate)
 	{
-		ui_header(S("Generate Random Hull"));
+		random_series_t r = { (uint32_t)hull_test->random_seed };
+		generate_new_random_convex_hull((size_t)hull_test->point_count, &r);
+	}
 
-		bool changed = false;
-		changed |= ui_slider_int(S("Random Seed"), &hull_test->random_seed, 1, 128);
-		changed |= ui_slider_int(S("Point Count"), &hull_test->point_count, 8, 256);
-
-		ui_checkbox(S("Automatically Recalculate Hull"), &hull_test->automatically_recalculate_hull);
-
-		bool should_recalculate = ui_button(S("Calculate Random Convex Hull"));
-		if (hull_test->automatically_recalculate_hull && changed)               should_recalculate = true;
-		if (hull_test->automatically_recalculate_hull && !hull_test->initialized) should_recalculate = true;
-
-		if (should_recalculate)
+	if (mesh->triangle_count > 0)
+	{
+		if (ui_button(S("Delete Convex Hull Data")))
 		{
-			random_series_t r = { (uint32_t)hull_test->random_seed };
-			generate_new_random_convex_hull((size_t)hull_test->point_count, &r);
+			m_release(&hull_test->mesh_arena);
+			m_release(&hull_test->debug.arena);
+			zero_struct(mesh);
+			zero_struct(debug);
 		}
+	}
 
-		if (mesh->triangle_count > 0)
+	ui_header(S("Brute Force Tester"));
+	ui_slider_int(S("Min Points"), &hull_test->brute_force_min_point_count, 4, 256);
+	ui_slider_int(S("Max Points"), &hull_test->brute_force_max_point_count, 4, 256);
+	ui_slider_int(S("Iterations Per Count"), &hull_test->brute_force_iterations_per_point_count, 1, 4096);
+
+	if (ui_button(S("Run Brute Force Test")))
+	{
+		random_series_t r = { (uint32_t)hull_test->random_seed };
+
+		hull_test->brute_force_triggered_success_timer = 0.0f;
+		hull_test->brute_force_triggered_error_timer   = 0.0f;
+
+		for (int point_count = hull_test->brute_force_min_point_count;
+			 point_count <= hull_test->brute_force_max_point_count;
+			 point_count++)
 		{
-			if (ui_button(S("Delete Convex Hull Data")))
+			generate_new_random_convex_hull((size_t)point_count, &r);
+
+			if (ALWAYS(debug->diagnostics))
 			{
-				m_release(&hull_test->mesh_arena);
-				m_release(&hull_test->debug.arena);
-				zero_struct(mesh);
-				zero_struct(debug);
-			}
-		}
-
-		ui_header(S("Brute Force Tester"));
-		ui_slider_int(S("Min Points"), &hull_test->brute_force_min_point_count, 4, 256);
-		ui_slider_int(S("Max Points"), &hull_test->brute_force_max_point_count, 4, 256);
-		ui_slider_int(S("Iterations Per Count"), &hull_test->brute_force_iterations_per_point_count, 1, 4096);
-
-		if (ui_button(S("Run Brute Force Test")))
-		{
-			random_series_t r = { (uint32_t)hull_test->random_seed };
-
-			hull_test->brute_force_triggered_success_timer = 0.0f;
-			hull_test->brute_force_triggered_error_timer   = 0.0f;
-
-			for (int point_count = hull_test->brute_force_min_point_count;
-				 point_count <= hull_test->brute_force_max_point_count;
-				 point_count++)
-			{
-				generate_new_random_convex_hull((size_t)point_count, &r);
-
-				if (ALWAYS(debug->diagnostics))
+				hull_diagnostic_result_t *diagnostics = debug->diagnostics;
+				if (diagnostics->degenerate_hull)
 				{
-					hull_diagnostic_result_t *diagnostics = debug->diagnostics;
-					if (diagnostics->degenerate_hull)
-					{
-						hull_test->brute_force_triggered_error_timer = 10.0f;
-						break;
-					}
-				}
-			}
-
-			if (hull_test->brute_force_triggered_error_timer <= 0.0f)
-			{
-				hull_test->brute_force_triggered_success_timer = 5.0f;
-			}
-		}
-
-		if (hull_test->brute_force_triggered_success_timer > 0.0f)
-		{
-			UI_COLOR(UI_COLOR_TEXT, make_v4(0.5f, 1.0f, 0.2f, 1.0f))
-			ui_label(S("Brute force test passed."));
-
-			hull_test->brute_force_triggered_success_timer -= ui.dt;
-		}
-
-		if (hull_test->brute_force_triggered_error_timer > 0.0f)
-		{
-			UI_COLOR(UI_COLOR_TEXT, COLORF_RED)
-			ui_label(S("BRUTE FORCE TEST FOUND A DEGENERATE HULL!?!?!"));
-
-			hull_test->brute_force_triggered_error_timer -= ui.dt;
-		}
-
-		if (degenerate_hull)
-		{
-			UI_COLOR(UI_COLOR_TEXT, COLORF_RED)
-			ui_label(S("!! DEGENERATE CONVEX HULL !!"));
-			if (triangle_is_degenerate[0])
-			{
-				UI_COLOR(UI_COLOR_TEXT, COLORF_RED)
-				ui_label(S("THE FIRST TRIANGLE IS DEGENERATE, THAT'S NO GOOD"));
-			}
-			ui_label(Sf("Degenerate Triangle Count: %d", degenerate_triangle_count));
-		}
-
-		if (duplicate_triangle_count > 0)
-		{
-			UI_COLOR(UI_COLOR_TEXT, COLORF_ORANGE)
-			ui_label(Sf("There are %d duplicate triangles!", duplicate_triangle_count));
-		}
-
-		if (no_area_triangle_count > 0)
-		{
-			UI_COLOR(UI_COLOR_TEXT, COLORF_ORANGE)
-			ui_label(Sf("There are %d triangles with (nearly) 0 area!", no_area_triangle_count));
-			if (triangle_is_degenerate[0])
-			{
-				UI_COLOR(UI_COLOR_TEXT, COLORF_ORANGE)
-				ui_label(S("The first triangle has no area, which seems bad"));
-			}
-		}
-
-		if (debug->step_count > 0)
-		{
-			ui_header(S("Step-By-Step Visualizer"));
-			ui_checkbox(S("Show initial points"), &hull_test->show_points);
-			ui_checkbox(S("Show processed edge"), &hull_test->show_processed_edge);
-			ui_checkbox(S("Show non-processed edges"), &hull_test->show_non_processed_edges);
-			ui_checkbox(S("Show new triangle"), &hull_test->show_new_triangle);
-			ui_checkbox(S("Show all triangles"), &hull_test->show_triangles);
-			ui_checkbox(S("Show duplicate triangles"), &hull_test->show_duplicate_triangles);
-			ui_checkbox(S("Show wireframe"), &hull_test->show_wireframe);
-			ui_slider_int(S("Step"), &hull_test->current_step_index, 0, (int)(hull_test->debug.step_count));
-
-			if (hull_test->current_step_index > (int)hull_test->debug.step_count)
-			    hull_test->current_step_index = (int)hull_test->debug.step_count;
-
-			int step_index = 0;
-			hull_debug_step_t *step = debug->first_step;
-			for (;
-				 step;
-				 step = step->next)
-			{
-				if (step_index == MIN(hull_test->current_step_index, (int)debug->step_count - 1))
-				{
+					hull_test->brute_force_triggered_error_timer = 10.0f;
 					break;
 				}
-				step_index++;
 			}
+		}
 
-			if (ALWAYS(step))
+		if (hull_test->brute_force_triggered_error_timer <= 0.0f)
+		{
+			hull_test->brute_force_triggered_success_timer = 5.0f;
+		}
+	}
+
+	if (hull_test->brute_force_triggered_success_timer > 0.0f)
+	{
+		UI_COLOR(UI_COLOR_TEXT, make_v4(0.5f, 1.0f, 0.2f, 1.0f))
+		ui_label(S("Brute force test passed."));
+
+		hull_test->brute_force_triggered_success_timer -= ui.input.dt;
+	}
+
+	if (hull_test->brute_force_triggered_error_timer > 0.0f)
+	{
+		UI_COLOR(UI_COLOR_TEXT, COLORF_RED)
+		ui_label(S("BRUTE FORCE TEST FOUND A DEGENERATE HULL!?!?!"));
+
+		hull_test->brute_force_triggered_error_timer -= ui.input.dt;
+	}
+
+	if (degenerate_hull)
+	{
+		UI_COLOR(UI_COLOR_TEXT, COLORF_RED)
+		ui_label(S("!! DEGENERATE CONVEX HULL !!"));
+		if (triangle_is_degenerate[0])
+		{
+			UI_COLOR(UI_COLOR_TEXT, COLORF_RED)
+			ui_label(S("THE FIRST TRIANGLE IS DEGENERATE, THAT'S NO GOOD"));
+		}
+		ui_label(Sf("Degenerate Triangle Count: %d", degenerate_triangle_count));
+	}
+
+	if (duplicate_triangle_count > 0)
+	{
+		UI_COLOR(UI_COLOR_TEXT, COLORF_ORANGE)
+		ui_label(Sf("There are %d duplicate triangles!", duplicate_triangle_count));
+	}
+
+	if (no_area_triangle_count > 0)
+	{
+		UI_COLOR(UI_COLOR_TEXT, COLORF_ORANGE)
+		ui_label(Sf("There are %d triangles with (nearly) 0 area!", no_area_triangle_count));
+		if (triangle_is_degenerate[0])
+		{
+			UI_COLOR(UI_COLOR_TEXT, COLORF_ORANGE)
+			ui_label(S("The first triangle has no area, which seems bad"));
+		}
+	}
+
+	if (debug->step_count > 0)
+	{
+		ui_header(S("Step-By-Step Visualizer"));
+		ui_checkbox(S("Show initial points"), &hull_test->show_points);
+		ui_checkbox(S("Show processed edge"), &hull_test->show_processed_edge);
+		ui_checkbox(S("Show non-processed edges"), &hull_test->show_non_processed_edges);
+		ui_checkbox(S("Show new triangle"), &hull_test->show_new_triangle);
+		ui_checkbox(S("Show all triangles"), &hull_test->show_triangles);
+		ui_checkbox(S("Show duplicate triangles"), &hull_test->show_duplicate_triangles);
+		ui_checkbox(S("Show wireframe"), &hull_test->show_wireframe);
+		ui_slider_int(S("Step"), &hull_test->current_step_index, 0, (int)(hull_test->debug.step_count));
+
+		if (hull_test->current_step_index > (int)hull_test->debug.step_count)
+			hull_test->current_step_index = (int)hull_test->debug.step_count;
+
+		int step_index = 0;
+		hull_debug_step_t *step = debug->first_step;
+		for (;
+			 step;
+			 step = step->next)
+		{
+			if (step_index == MIN(hull_test->current_step_index, (int)debug->step_count - 1))
 			{
-				ui_label(Sf("edge count: %zu", step->edge_count));
-				ui_label(Sf("triangle count: %zu", step->triangle_count));
+				break;
+			}
+			step_index++;
+		}
 
-				ui_slider_int(S("Test Tetrahedron Index"), &hull_test->test_tetrahedron_index, -1, (int)(debug->initial_points_count) - 1);
+		if (ALWAYS(step))
+		{
+			ui_label(Sf("edge count: %zu", step->edge_count));
+			ui_label(Sf("triangle count: %zu", step->triangle_count));
 
-				if (hull_test->test_tetrahedron_index > (int)debug->initial_points_count - 1)
-				    hull_test->test_tetrahedron_index = (int)debug->initial_points_count - 1;
+			ui_slider_int(S("Test Tetrahedron Index"), &hull_test->test_tetrahedron_index, -1, (int)(debug->initial_points_count) - 1);
 
-				if (hull_test->test_tetrahedron_index >= 0)
-				{
-					triangle_t t = step->first_triangle->t;
-					ASSERT(step->first_triangle->added_this_step);
+			if (hull_test->test_tetrahedron_index > (int)debug->initial_points_count - 1)
+				hull_test->test_tetrahedron_index = (int)debug->initial_points_count - 1;
 
-					v3_t p = debug->initial_points[hull_test->test_tetrahedron_index];
+			if (hull_test->test_tetrahedron_index >= 0)
+			{
+				triangle_t t = step->first_triangle->t;
+				ASSERT(step->first_triangle->added_this_step);
 
-					float volume = tetrahedron_signed_volume(t.a, t.b, t.c, p);
-					ui_label(Sf("Tetrahedron Volume: %f", volume));
+				v3_t p = debug->initial_points[hull_test->test_tetrahedron_index];
 
-					float area = triangle_area_sq(t.a, t.b, p);
-					ui_label(Sf("Squared Triangle Area: %f", area));
-				}
+				float volume = tetrahedron_signed_volume(t.a, t.b, t.c, p);
+				ui_label(Sf("Tetrahedron Volume: %f", volume));
+
+				float area = triangle_area_sq(t.a, t.b, p);
+				ui_label(Sf("Squared Triangle Area: %f", area));
 			}
 		}
 	}
 
-	if (ui_is_active(hull_test->window.id))
-	{
-		bring_editor_to_front(EDITOR_CONVEX_HULL);
-	}
-#endif
-
 	hull_test->initialized = true;
-#endif
 }
 
-static void update_and_render_lightmap_editor(void)
+static void lightmap_editor_proc(void *user_data)
 {
-#if 0
+	(void)user_data;
+
     player_t *player = world->player;
     map_t    *map    = world->map;
 
@@ -615,9 +592,6 @@ static void update_and_render_lightmap_editor(void)
     ambient_color = mul(1.0f / 255.0f, ambient_color);
 
     lightmap_editor_state_t *lm_editor = &editor.lm_editor;
-
-	if (!lm_editor->window.open)
-		return;
 
     if (lm_editor->debug_lightmaps)
     {
@@ -831,291 +805,280 @@ static void update_and_render_lightmap_editor(void)
         r_immediate_flush();
     }
 
-#if 0
-	UI_WINDOW(&lm_editor->window)
+	if (!map->lightmap_state || !map->lightmap_state->finalized)
 	{
-        if (!map->lightmap_state || !map->lightmap_state->finalized)
-        {
-            ui_header(S("Bake Quality"));
+		ui_header(S("Bake Quality"));
 
-            static int bake_preset              = 0;
-            static int ray_count                = 2;
-            static int ray_recursion            = 2;
-            static int fog_light_sample_count   = 2;
-            static int fogmap_scale_index       = 1;
-            static bool use_dynamic_sun_shadows = true;
+		static int bake_preset              = 0;
+		static int ray_count                = 2;
+		static int ray_recursion            = 2;
+		static int fog_light_sample_count   = 2;
+		static int fogmap_scale_index       = 1;
+		static bool use_dynamic_sun_shadows = true;
 
-            static string_t preset_labels[] = { Sc("Crappy"), Sc("Acceptable"), Sc("Excessive") };
-            if (ui_option_buttons(S("Preset"), &bake_preset, ARRAY_COUNT(preset_labels), preset_labels))
-            {
-                switch (bake_preset)
-                {
-                    case 0:
-                    {
-                        ray_count              = 2;
-                        ray_recursion          = 2;
-                        fog_light_sample_count = 2;
-                        fogmap_scale_index     = 1;
-                    } break;
-
-                    case 1:
-                    {
-                        ray_count              = 8;
-                        ray_recursion          = 3;
-                        fog_light_sample_count = 4;
-                        fogmap_scale_index     = 1;
-                    } break;
-
-                    case 2:
-                    {
-                        ray_count              = 16;
-                        ray_recursion          = 4;
-                        fog_light_sample_count = 8;
-                        fogmap_scale_index     = 2;
-                    } break;
-                }
-            }
-
-            ui_slider_int(S("Rays Per Pixel"), &ray_count, 1, 32);
-            ui_slider_int(S("Max Recursion"), &ray_recursion, 1, 8);
-            ui_slider_int(S("Fog Light Sample Count"), &fog_light_sample_count, 1, 8);
-
-            static int fogmap_scales[] = {
-                32, 16, 8, 4,
-            };
-
-            static string_t fogmap_scale_labels[] = {
-                Sc("32"), Sc("16"), Sc("8"), Sc("4"),
-            };
-
-            ui_option_buttons(S("Fogmap Scale"), &fogmap_scale_index, ARRAY_COUNT(fogmap_scales), fogmap_scale_labels);
-
-            int actual_fogmap_scale = fogmap_scales[fogmap_scale_index];
-
-            ui_checkbox(S("Dynamic Sun Shadows"), &use_dynamic_sun_shadows);
-
-            if (!map->lightmap_state)
-            {
-                if (ui_button(S("Bake Lighting")))
-                {
-                    // figure out the solid sky color from the fog
-                    float absorption = map->fog_absorption;
-                    float density    = map->fog_density;
-                    float scattering = map->fog_scattering;
-                    v3_t sky_color = mul(sun_color, (1.0f / (4.0f*PI32))*scattering*density / (density*(scattering + absorption)));
-
-                    if (map->lightmap_state)
-                    {
-                        release_bake_state(map->lightmap_state);
-                    }
-
-                    map->lightmap_state = bake_lighting(&(lum_params_t) {
-                        .map                 = map,
-                        .sun_direction       = make_v3(0.25f, 0.75f, 1),
-                        .sun_color           = sun_color,
-                        .sky_color           = sky_color,
-
-                        .use_dynamic_sun_shadows = use_dynamic_sun_shadows,
-
-                        .ray_count               = ray_count,
-                        .ray_recursion           = ray_recursion,
-                        .fog_light_sample_count  = fog_light_sample_count,
-                        .fogmap_scale            = actual_fogmap_scale,
-                    });
-                }
-            }
-            else if (ui_button(S("Cancel")))
-            {
-                bake_cancel(map->lightmap_state);
-
-                for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
-                {
-                    map_poly_t *poly = &map->polys[poly_index];
-                    if (RESOURCE_HANDLE_VALID(poly->lightmap))
-                    {
-                        render->destroy_texture(poly->lightmap);
-                        poly->lightmap = NULL_RESOURCE_HANDLE;
-                    }
-                }
-
-                render->destroy_texture(map->fogmap);
-                map->fogmap = NULL_RESOURCE_HANDLE;
-
-                map->lightmap_state = NULL;
-            }
-        }
-
-		if (map->lightmap_state && map->lightmap_state->finalized)
+		static string_t preset_labels[] = { Sc("Crappy"), Sc("Acceptable"), Sc("Excessive") };
+		if (ui_option_buttons(S("Preset"), &bake_preset, ARRAY_COUNT(preset_labels), preset_labels))
 		{
-			lum_bake_state_t *state = map->lightmap_state;
-
-            double time_elapsed = state->final_bake_time;
-            int minutes = (int)floor(time_elapsed / 60.0);
-            int seconds = (int)floor(time_elapsed - 60.0*minutes);
-            int microseconds = (int)floor(1000.0*(time_elapsed - 60.0*minutes - seconds));
-
-			ui_header(S("Bake Results"));
-
-            UI_SCALAR(UI_SCALAR_TEXT_ALIGN_X, 0.0f)
-            {
-                ui_label(Sf("Total Bake Time:  %02u:%02u:%03u", minutes, seconds, microseconds));
-                ui_label(Sf("Fogmap Resolution: %u %u %u", map->fogmap_w, map->fogmap_h, map->fogmap_d));
-            }
-
-			if (ui_button(S("Clear Lightmaps")))
+			switch (bake_preset)
 			{
-				for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
+				case 0:
 				{
-					map_poly_t *poly = &map->polys[poly_index];
-					if (RESOURCE_HANDLE_VALID(poly->lightmap))
-					{
-						render->destroy_texture(poly->lightmap);
-						poly->lightmap = NULL_RESOURCE_HANDLE;
-					}
-				}
+					ray_count              = 2;
+					ray_recursion          = 2;
+					fog_light_sample_count = 2;
+					fogmap_scale_index     = 1;
+				} break;
 
-				render->destroy_texture(map->fogmap);
-				map->fogmap = NULL_RESOURCE_HANDLE;
+				case 1:
+				{
+					ray_count              = 8;
+					ray_recursion          = 3;
+					fog_light_sample_count = 4;
+					fogmap_scale_index     = 1;
+				} break;
 
-				release_bake_state(map->lightmap_state);
-				map->lightmap_state = NULL;
+				case 2:
+				{
+					ray_count              = 16;
+					ray_recursion          = 4;
+					fog_light_sample_count = 8;
+					fogmap_scale_index     = 2;
+				} break;
 			}
 		}
 
-		if (map->lightmap_state)
+		ui_slider_int(S("Rays Per Pixel"), &ray_count, 1, 32);
+		ui_slider_int(S("Max Recursion"), &ray_recursion, 1, 8);
+		ui_slider_int(S("Fog Light Sample Count"), &fog_light_sample_count, 1, 8);
+
+		static int fogmap_scales[] = {
+			32, 16, 8, 4,
+		};
+
+		static string_t fogmap_scale_labels[] = {
+			Sc("32"), Sc("16"), Sc("8"), Sc("4"),
+		};
+
+		ui_option_buttons(S("Fogmap Scale"), &fogmap_scale_index, ARRAY_COUNT(fogmap_scales), fogmap_scale_labels);
+
+		int actual_fogmap_scale = fogmap_scales[fogmap_scale_index];
+
+		ui_checkbox(S("Dynamic Sun Shadows"), &use_dynamic_sun_shadows);
+
+		if (!map->lightmap_state)
 		{
-			lum_bake_state_t *state = map->lightmap_state;
-
-			if (state->finalized)
+			if (ui_button(S("Bake Lighting")))
 			{
-				ui_header(S("Lightmap Debugger"));
+				// figure out the solid sky color from the fog
+				float absorption = map->fog_absorption;
+				float density    = map->fog_density;
+				float scattering = map->fog_scattering;
+				v3_t sky_color = mul(sun_color, (1.0f / (4.0f*PI32))*scattering*density / (density*(scattering + absorption)));
 
-				ui_checkbox(S("Enabled"), &lm_editor->debug_lightmaps);
-				ui_checkbox(S("Show Direct Light Rays"), &lm_editor->show_direct_light_rays);
-				ui_checkbox(S("Show Indirect Light Rays"), &lm_editor->show_indirect_light_rays);
-				ui_checkbox(S("Fullbright Rays"), &lm_editor->fullbright_rays);
-				ui_checkbox(S("No Ray Depth Test"), &lm_editor->no_ray_depth_test);
-
-				ui_slider_int(S("Min Recursion Level"), &lm_editor->min_display_recursion, 0, 16);
-				ui_slider_int(S("Max Recursion Level"), &lm_editor->max_display_recursion, 0, 16);
-
-				if (lm_editor->selected_poly)
+				if (map->lightmap_state)
 				{
-					map_poly_t *poly = lm_editor->selected_poly;
+					release_bake_state(map->lightmap_state);
+				}
 
-					texture_desc_t desc;
-					render->describe_texture(poly->lightmap, &desc);
+				map->lightmap_state = bake_lighting(&(lum_params_t) {
+					.map                 = map,
+					.sun_direction       = make_v3(0.25f, 0.75f, 1),
+					.sun_color           = sun_color,
+					.sky_color           = sky_color,
 
-                    ui_push_scalar(UI_SCALAR_TEXT_ALIGN_X, 0.0f);
+					.use_dynamic_sun_shadows = use_dynamic_sun_shadows,
 
-					ui_label(Sf("Resolution: %u x %u", desc.w, desc.h));
-					if (lm_editor->pixel_selection_active)
-					{
-                        ui_label(Sf("Selected Pixel Region: (%d, %d) (%d, %d)", 
-                                    lm_editor->selected_pixels.min.x,
-                                    lm_editor->selected_pixels.min.y,
-                                    lm_editor->selected_pixels.max.x,
-                                    lm_editor->selected_pixels.max.y));
+					.ray_count               = ray_count,
+					.ray_recursion           = ray_recursion,
+					.fog_light_sample_count  = fog_light_sample_count,
+					.fogmap_scale            = actual_fogmap_scale,
+				});
+			}
+		}
+		else if (ui_button(S("Cancel")))
+		{
+			bake_cancel(map->lightmap_state);
 
-						if (ui_button(S("Clear Selection")))
-						{
-							lm_editor->pixel_selection_active = false;
-							lm_editor->selected_pixels = (rect2i_t){ 0 };
-						}
-					}
-					else
-					{
-                        // TODO: add spacers
-                        ui_label(S(""));
-                        ui_label(S(""));
-					}
-
-                    ui_pop_scalar(UI_SCALAR_TEXT_ALIGN_X);
-
-                    float aspect = (float)desc.h / (float)desc.w;
-
-                    rect2_t *layout = ui_layout_rect();
-
-                    float width = rect2_width(*layout);
-
-                    rect2_t image_rect = rect2_cut_top(layout, width*aspect);
-
-					r_immediate_texture(poly->lightmap);
-					r_immediate_rect2_filled(image_rect, make_v4(1, 1, 1, 1));
-					r_immediate_flush();
-
-#if 0
-					ui_interaction_t interaction = ui_interaction_from_box(image_viewer);
-					if (interaction.hovering || lm_editor->pixel_selection_active)
-					{
-						v2_t rel_press_p = sub(interaction.press_p, image_viewer->rect.min);
-						v2_t rel_mouse_p = sub(interaction.mouse_p, image_viewer->rect.min);
-
-						v2_t rect_dim   = rect2_get_dim(image_viewer->rect);
-						v2_t pixel_size = div(rect_dim, make_v2((float)desc.w, (float)desc.h));
-
-						UI_Parent(image_viewer)
-						{
-							ui_box_t *selection_highlight = ui_box(S("selection highlight"), UI_DRAW_OUTLINE);
-							selection_highlight->style.outline_color = ui_gradient_from_rgba(1, 0, 0, 1);
-
-							v2_t selection_start = { rel_press_p.x, rel_press_p.y };
-							v2_t selection_end   = { rel_mouse_p.x, rel_mouse_p.y };
-							
-							rect2i_t pixel_selection = { 
-								.min = {
-									(int)(selection_start.x / pixel_size.x),
-									(int)(selection_start.y / pixel_size.y),
-								},
-								.max = {
-									(int)(selection_end.x / pixel_size.x) + 1,
-									(int)(selection_end.y / pixel_size.y) + 1,
-								},
-							};
-
-							if (pixel_selection.max.y < pixel_selection.min.y)
-								SWAP(int, pixel_selection.max.y, pixel_selection.min.y);
-
-							if (interaction.dragging)
-							{
-								lm_editor->pixel_selection_active = true;
-								lm_editor->selected_pixels = pixel_selection;
-							}
-
-							v2i_t selection_dim = rect2i_get_dim(lm_editor->selected_pixels);
-
-							ui_set_size(selection_highlight, AXIS2_X, ui_pixels((float)selection_dim.x*pixel_size.x, 1.0f));
-							ui_set_size(selection_highlight, AXIS2_Y, ui_pixels((float)selection_dim.y*pixel_size.y, 1.0f));
-
-							selection_highlight->position_offset[AXIS2_X] = (float)lm_editor->selected_pixels.min.x * pixel_size.x;
-							selection_highlight->position_offset[AXIS2_Y] = rect_dim.y - (float)(lm_editor->selected_pixels.min.y + selection_dim.y) * pixel_size.y;
-						}
-					}
-#endif
+			for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
+			{
+				map_poly_t *poly = &map->polys[poly_index];
+				if (RESOURCE_HANDLE_VALID(poly->lightmap))
+				{
+					render->destroy_texture(poly->lightmap);
+					poly->lightmap = NULL_RESOURCE_HANDLE;
 				}
 			}
-			else
-			{
-                float progress = bake_progress(map->lightmap_state);
 
-                ui_progress_bar(Sf("bake progress: %u / %u (%.02f%%)", map->lightmap_state->jobs_completed, map->lightmap_state->job_count, 100.0f*progress), progress);
+			render->destroy_texture(map->fogmap);
+			map->fogmap = NULL_RESOURCE_HANDLE;
 
-                hires_time_t current_time = os_hires_time();
-                double time_elapsed = os_seconds_elapsed(map->lightmap_state->start_time, current_time);
-                int minutes = (int)floor(time_elapsed / 60.0);
-                int seconds = (int)floor(time_elapsed - 60.0*minutes);
-
-                ui_label(Sf("time elapsed:  %02u:%02u", minutes, seconds));
-			}
+			map->lightmap_state = NULL;
 		}
 	}
 
-	if (ui_is_active(lm_editor->window.id))
+	if (map->lightmap_state && map->lightmap_state->finalized)
 	{
-		bring_editor_to_front(EDITOR_LIGHTMAP);
+		lum_bake_state_t *state = map->lightmap_state;
+
+		double time_elapsed = state->final_bake_time;
+		int minutes = (int)floor(time_elapsed / 60.0);
+		int seconds = (int)floor(time_elapsed - 60.0*minutes);
+		int microseconds = (int)floor(1000.0*(time_elapsed - 60.0*minutes - seconds));
+
+		ui_header(S("Bake Results"));
+
+		UI_SCALAR(UI_SCALAR_TEXT_ALIGN_X, 0.0f)
+		{
+			ui_label(Sf("Total Bake Time:  %02u:%02u:%03u", minutes, seconds, microseconds));
+			ui_label(Sf("Fogmap Resolution: %u %u %u", map->fogmap_w, map->fogmap_h, map->fogmap_d));
+		}
+
+		if (ui_button(S("Clear Lightmaps")))
+		{
+			for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
+			{
+				map_poly_t *poly = &map->polys[poly_index];
+				if (RESOURCE_HANDLE_VALID(poly->lightmap))
+				{
+					render->destroy_texture(poly->lightmap);
+					poly->lightmap = NULL_RESOURCE_HANDLE;
+				}
+			}
+
+			render->destroy_texture(map->fogmap);
+			map->fogmap = NULL_RESOURCE_HANDLE;
+
+			release_bake_state(map->lightmap_state);
+			map->lightmap_state = NULL;
+		}
 	}
+
+	if (map->lightmap_state)
+	{
+		lum_bake_state_t *state = map->lightmap_state;
+
+		if (state->finalized)
+		{
+			ui_header(S("Lightmap Debugger"));
+
+			ui_checkbox(S("Enabled"), &lm_editor->debug_lightmaps);
+			ui_checkbox(S("Show Direct Light Rays"), &lm_editor->show_direct_light_rays);
+			ui_checkbox(S("Show Indirect Light Rays"), &lm_editor->show_indirect_light_rays);
+			ui_checkbox(S("Fullbright Rays"), &lm_editor->fullbright_rays);
+			ui_checkbox(S("No Ray Depth Test"), &lm_editor->no_ray_depth_test);
+
+			ui_slider_int(S("Min Recursion Level"), &lm_editor->min_display_recursion, 0, 16);
+			ui_slider_int(S("Max Recursion Level"), &lm_editor->max_display_recursion, 0, 16);
+
+			if (lm_editor->selected_poly)
+			{
+				map_poly_t *poly = lm_editor->selected_poly;
+
+				texture_desc_t desc;
+				render->describe_texture(poly->lightmap, &desc);
+
+				ui_push_scalar(UI_SCALAR_TEXT_ALIGN_X, 0.0f);
+
+				ui_label(Sf("Resolution: %u x %u", desc.w, desc.h));
+				if (lm_editor->pixel_selection_active)
+				{
+					ui_label(Sf("Selected Pixel Region: (%d, %d) (%d, %d)", 
+								lm_editor->selected_pixels.min.x,
+								lm_editor->selected_pixels.min.y,
+								lm_editor->selected_pixels.max.x,
+								lm_editor->selected_pixels.max.y));
+
+					if (ui_button(S("Clear Selection")))
+					{
+						lm_editor->pixel_selection_active = false;
+						lm_editor->selected_pixels = (rect2i_t){ 0 };
+					}
+				}
+				else
+				{
+					// TODO: add spacers
+					ui_label(S(""));
+					ui_label(S(""));
+				}
+
+				ui_pop_scalar(UI_SCALAR_TEXT_ALIGN_X);
+
+				float aspect = (float)desc.h / (float)desc.w;
+
+				rect2_t *layout = ui_layout_rect();
+
+				float width = rect2_width(*layout);
+
+				rect2_t image_rect = rect2_cut_top(layout, width*aspect);
+
+				r_immediate_texture(poly->lightmap);
+				r_immediate_rect2_filled(image_rect, make_v4(1, 1, 1, 1));
+				r_immediate_flush();
+
+#if 0
+				ui_interaction_t interaction = ui_interaction_from_box(image_viewer);
+				if (interaction.hovering || lm_editor->pixel_selection_active)
+				{
+					v2_t rel_press_p = sub(interaction.press_p, image_viewer->rect.min);
+					v2_t rel_mouse_p = sub(interaction.mouse_p, image_viewer->rect.min);
+
+					v2_t rect_dim   = rect2_get_dim(image_viewer->rect);
+					v2_t pixel_size = div(rect_dim, make_v2((float)desc.w, (float)desc.h));
+
+					UI_Parent(image_viewer)
+					{
+						ui_box_t *selection_highlight = ui_box(S("selection highlight"), UI_DRAW_OUTLINE);
+						selection_highlight->style.outline_color = ui_gradient_from_rgba(1, 0, 0, 1);
+
+						v2_t selection_start = { rel_press_p.x, rel_press_p.y };
+						v2_t selection_end   = { rel_mouse_p.x, rel_mouse_p.y };
+						
+						rect2i_t pixel_selection = { 
+							.min = {
+								(int)(selection_start.x / pixel_size.x),
+								(int)(selection_start.y / pixel_size.y),
+							},
+							.max = {
+								(int)(selection_end.x / pixel_size.x) + 1,
+								(int)(selection_end.y / pixel_size.y) + 1,
+							},
+						};
+
+						if (pixel_selection.max.y < pixel_selection.min.y)
+							SWAP(int, pixel_selection.max.y, pixel_selection.min.y);
+
+						if (interaction.dragging)
+						{
+							lm_editor->pixel_selection_active = true;
+							lm_editor->selected_pixels = pixel_selection;
+						}
+
+						v2i_t selection_dim = rect2i_get_dim(lm_editor->selected_pixels);
+
+						ui_set_size(selection_highlight, AXIS2_X, ui_pixels((float)selection_dim.x*pixel_size.x, 1.0f));
+						ui_set_size(selection_highlight, AXIS2_Y, ui_pixels((float)selection_dim.y*pixel_size.y, 1.0f));
+
+						selection_highlight->position_offset[AXIS2_X] = (float)lm_editor->selected_pixels.min.x * pixel_size.x;
+						selection_highlight->position_offset[AXIS2_Y] = rect_dim.y - (float)(lm_editor->selected_pixels.min.y + selection_dim.y) * pixel_size.y;
+					}
+				}
 #endif
-#endif
+			}
+		}
+		else
+		{
+			float progress = bake_progress(map->lightmap_state);
+
+			ui_progress_bar(Sf("bake progress: %u / %u (%.02f%%)", map->lightmap_state->jobs_completed, map->lightmap_state->job_count, 100.0f*progress), progress);
+
+			hires_time_t current_time = os_hires_time();
+			double time_elapsed = os_seconds_elapsed(map->lightmap_state->start_time, current_time);
+			int minutes = (int)floor(time_elapsed / 60.0);
+			int seconds = (int)floor(time_elapsed - 60.0*minutes);
+
+			ui_label(Sf("time elapsed:  %02u:%02u", minutes, seconds));
+		}
+	}
 }
 
 DREAM_INLINE void fullscreen_show_timings(void)
@@ -1136,37 +1099,26 @@ DREAM_INLINE void fullscreen_show_timings(void)
     }
 }
 
-DREAM_INLINE void update_and_render_ui_demo(void)
+DREAM_INLINE void ui_demo_proc(void *user_data)
 {
+	(void)user_data;
+
 	ui_demo_panel_t *demo = &editor.ui_demo;
 
-	if (!demo->window.open)
-		return;
+	ui_slider    (S("Float Slider"), &demo->slider_f32, -1.0f, 1.0f);
+	ui_slider_int(S("Int Slider"), &demo->slider_i32, 0, 8);
 
-#if 0
-	UI_WINDOW(&demo->window)
+	static int font_size = 18;
+	if (ui_slider_int(S("UI Font Size"), &font_size, 8, 32))
 	{
-		ui_slider    (S("Float Slider"), &demo->slider_f32, -1.0f, 1.0f);
-		ui_slider_int(S("Int Slider"), &demo->slider_i32, 0, 8);
-
-		static int font_size = 18;
-		if (ui_slider_int(S("UI Font Size"), &font_size, 8, 32))
-		{
-			ui_set_font_size((float)font_size);
-		}
-
-		ui_slider(S("UI Widget Margin"), &ui.base_scalars[UI_SCALAR_WIDGET_MARGIN], 0.0f, 8.0f);
-		ui_slider(S("UI Text Margin"), &ui.base_scalars[UI_SCALAR_TEXT_MARGIN], 0.0f, 8.0f);
-		ui_slider(S("UI Roundedness"), &ui.base_scalars[UI_SCALAR_ROUNDEDNESS], 0.0f, 12.0f);
-		ui_slider(S("UI Animation Stiffness"), &ui.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS], 1.0f, 1024.0f);
-		ui_slider(S("UI Animation Dampen"), &ui.base_scalars[UI_SCALAR_ANIMATION_DAMPEN], 1.0f, 128.0f);
+		ui_set_font_height((float)font_size);
 	}
 
-	if (ui_is_active(demo->window.id))
-	{
-		bring_editor_to_front(EDITOR_UI_DEMO);
-	}
-#endif
+	ui_slider(S("UI Widget Margin"), &ui.style.base_scalars[UI_SCALAR_WIDGET_MARGIN], 0.0f, 8.0f);
+	ui_slider(S("UI Text Margin"), &ui.style.base_scalars[UI_SCALAR_TEXT_MARGIN], 0.0f, 8.0f);
+	ui_slider(S("UI Roundedness"), &ui.style.base_scalars[UI_SCALAR_ROUNDEDNESS], 0.0f, 12.0f);
+	ui_slider(S("UI Animation Stiffness"), &ui.style.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS], 1.0f, 1024.0f);
+	ui_slider(S("UI Animation Dampen"), &ui.style.base_scalars[UI_SCALAR_ANIMATION_DAMPEN], 1.0f, 128.0f);
 }
 
 DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
@@ -1209,29 +1161,25 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
             {
                 string_t name;
                 bool *toggle;
-				editor_kind_t editor;
+				ui_window_t *window;
             } menu_t;
 
             menu_t menus[] = {
                 {
                     .name = S("Timings (F1)"),
                     .toggle = &editor.show_timings,
-					.editor = EDITOR_TIMINGS,
                 },
                 {
                     .name = S("Lightmap Editor (F2)"),
-                    .toggle = &editor.lm_editor.window.open,
-					.editor = EDITOR_LIGHTMAP,
+                    .window = &editor.lm_editor.window,
                 },
                 {
                     .name = S("Convex Hull Tester (F3)"),
-                    .toggle = &editor.hull_test.window.open,
-					.editor = EDITOR_CONVEX_HULL,
+                    .window = &editor.hull_test.window,
                 },
                 {
                     .name = S("UI Demo (F4)"),
-                    .toggle = &editor.ui_demo.window.open,
-					.editor = EDITOR_UI_DEMO,
+                    .window = &editor.ui_demo.window,
                 },
             };
 
@@ -1239,16 +1187,20 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
             {
                 menu_t *menu = &menus[i];
                 
-                bool active = *menu->toggle;
+                bool active = menu->toggle ? *menu->toggle : menu->window->open;
 
                 if (active) ui_push_color(UI_COLOR_BUTTON_IDLE, ui_color(UI_COLOR_BUTTON_ACTIVE));
 
                 if (ui_button(menu->name))
                 {
-                    *menu->toggle = !*menu->toggle;
-					if (*menu->toggle)
+					if (menu->toggle) *menu->toggle = !*menu->toggle;
+					if (menu->window)
 					{
-						bring_editor_to_front(menu->editor);
+						menu->window->open = !menu->window->open;
+						if (menu->window->open)
+						{
+							ui_bring_window_to_front(menu->window);
+						}
 					}
                 }
 
@@ -1268,16 +1220,17 @@ void update_and_render_in_game_editor(void)
 	{
 		editor.initialized = true;
 
-		send_editor_to_back(EDITOR_LIGHTMAP);
+		ui_add_window(&editor.lm_editor.window);
 		editor.lm_editor.window.rect = rect2_from_min_dim(make_v2(32, 32), make_v2(512, 512));
 
-		send_editor_to_back(EDITOR_CONVEX_HULL);
+		ui_add_window(&editor.hull_test.window);
 		editor.hull_test.window.rect = rect2_from_min_dim(make_v2(64, 64), make_v2(512, 512));
 
-		send_editor_to_back(EDITOR_UI_DEMO);
+		ui_add_window(&editor.ui_demo.window);
 		editor.ui_demo.window.rect = rect2_from_min_dim(make_v2(96, 96), make_v2(512, 512));
 	}
 
+#if 0
     if (ui_button_pressed(BUTTON_F1))
         editor.show_timings = !editor.show_timings;
 
@@ -1289,8 +1242,7 @@ void update_and_render_in_game_editor(void)
 
     if (ui_button_pressed(BUTTON_F4))
 		editor.ui_demo.window.open = !editor.ui_demo.window.open;
-
-	copy_struct(&editor.window_order, &editor.next_window_order);
+#endif
 
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);
@@ -1312,15 +1264,5 @@ void update_and_render_in_game_editor(void)
 	}
 	ui_panel_end();
 
-	for (size_t i = 0; i < stack_count(editor.window_order); i++)
-	{
-		editor_kind_t kind = editor.window_order.values[i];
-
-		switch (kind)
-		{
-			case EDITOR_LIGHTMAP:    { update_and_render_lightmap_editor(); } break;
-			case EDITOR_CONVEX_HULL: { update_and_render_convex_hull_test_panel(); } break;
-			case EDITOR_UI_DEMO:     { update_and_render_ui_demo(); } break;
-		}
-	}
+	ui_process_windows();
 }

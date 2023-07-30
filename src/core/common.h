@@ -35,7 +35,21 @@
 		}                       \
 	} while (0)
 
-#define dll_push_back(f, l, n)  do { if (!(f)) { (f) = (l) = (n); } else { (n)->prev = (l); (l) = (l)->next = (n); } } while (0)
+#define dll_push_back(f, l, n) \
+	do {                       \
+		if (!(f))              \
+		{                      \
+			ASSERT(!(l));      \
+			(f) = (l) = (n);   \
+		}                      \
+		else                   \
+		{                      \
+			(n)->prev = (l);   \
+			(n)->next = NULL;  \
+			(l)->next = (n);   \
+			(l) = (n);         \
+		}                      \
+	} while (0)
 
 #define dll_insert_before(f, l, i, n)               \
     do {                                            \

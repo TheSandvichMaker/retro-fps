@@ -292,6 +292,8 @@ void ui_process_windows(void)
 {
 	ui_window_t *hovered_window = NULL;
 
+	r_push_view_screenspace();
+
 	for (ui_window_t *window = ui.windows.first_window;
 		 window;
 		 window = window->next)
@@ -305,22 +307,23 @@ void ui_process_windows(void)
 		{
 			rect2_t rect = window->rect;
 
-			if (ui_hover_rect(rect))
+			float   title_bar_height = ui_header_font_height() + ui_widget_padding();
+			rect2_t title_bar = rect2_add_top(rect, title_bar_height);
+
+			rect2_t total = rect2_union(title_bar, rect);
+
+			if (ui_hover_rect(total))
 			{
 				hovered_window = window;
 			}
 
-			uint32_t interaction_window = ui_widget_behaviour(id, rect);
-
-			float   title_bar_height = ui_header_font_height() + ui_widget_padding();
-			rect2_t title_bar = rect2_add_top(rect, title_bar_height);
-
-			interaction_window |= ui_widget_behaviour(ui_id(S("title_bar")), title_bar);
+			ui_widget_behaviour(id, total);
 
 			string_t title = string_from_storage(window->title);
 
-			ui_draw_rect(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND));
-			ui_draw_rect(title_bar, ui_color(UI_COLOR_WINDOW_TITLE_BAR));
+			ui_draw_rect_roundedness_shadow(total, make_v4(0, 0, 0, 0), make_v4(2, 2, 2, 2), 0.25f, 32.0f);
+			ui_draw_rect_roundedness(title_bar, ui_color(UI_COLOR_WINDOW_TITLE_BAR), make_v4(2, 0, 2, 0));
+			ui_draw_rect_roundedness(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), make_v4(0, 2, 0, 2));
 			ui_draw_text(&ui.style.header_font, ui_text_center_p(&ui.style.header_font, title_bar, title), title);
 
 #if 0
@@ -352,8 +355,8 @@ void ui_process_windows(void)
 			ui_resize_rect(&window->rect, tray_region);
 #endif
 
-			float margin = max(ui_scalar(UI_SCALAR_WIDGET_MARGIN), ui_scalar(UI_SCALAR_ROUNDEDNESS));
-			rect = rect2_shrink(rect, margin);
+			float margin = max(ui_scalar(UI_SCALAR_WIDGET_MARGIN), 2.0f*ui_scalar(UI_SCALAR_ROUNDEDNESS)) - ui_scalar(UI_SCALAR_WIDGET_MARGIN);
+			rect2_cut_bottom(&rect, margin);
 
 			// TODO: Custom scrollbar rendering for windows?
 			ui_panel_begin_ex(ui_id(S("panel")), rect, 0);
@@ -364,6 +367,8 @@ void ui_process_windows(void)
 		}
 		ui_pop_id();
 	}
+
+	r_pop_view();
 
 	if (hovered_window)
 	{
@@ -649,6 +654,22 @@ void ui_draw_rect_roundedness(rect2_t rect, v4_t color, v4_t roundness)
 	});
 }
 
+void ui_draw_rect_roundedness_shadow(rect2_t rect, v4_t color, v4_t roundness, float shadow_amount, float shadow_radius)
+{
+	uint32_t color_packed = pack_color(color);
+
+	r_ui_rect((r_ui_rect_t){
+		.rect        = rect, 
+		.roundedness = mul(roundness, v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS))),
+		.color_00    = color_packed,
+		.color_10    = color_packed,
+		.color_11    = color_packed,
+		.color_01    = color_packed,
+		.shadow_amount = shadow_amount,
+		.shadow_radius = shadow_radius,
+	});
+}
+
 void ui_draw_rect_outline(rect2_t rect, v4_t color, float width)
 {
 	uint32_t color_packed = pack_color(color);
@@ -702,7 +723,7 @@ ui_interaction_t ui_widget_behaviour(ui_id_t id, rect2_t rect)
 	{
 		result |= UI_HELD;
 
-		if (ui_mouse_buttons_pressed(UI_MOUSE_LEFT))
+		if (ui_mouse_buttons_released(UI_MOUSE_LEFT))
 		{
 			if (rect2_contains_point(hit_rect, ui.input.mouse_p))
 			{
