@@ -145,11 +145,14 @@ typedef struct ui_windows_t
 	ui_window_t *focus_window;
 } ui_windows_t;
 
-DREAM_LOCAL void ui_add_window           (ui_window_t *window);
-DREAM_LOCAL void ui_remove_window        (ui_window_t *window);
-DREAM_LOCAL void ui_bring_window_to_front(ui_window_t *window);
-DREAM_LOCAL void ui_send_window_to_back  (ui_window_t *window);
-DREAM_LOCAL void ui_focus_window         (ui_window_t *window);
+DREAM_LOCAL void ui_add_window            (ui_window_t *window);
+DREAM_LOCAL void ui_remove_window         (ui_window_t *window);
+DREAM_LOCAL void ui_bring_window_to_front (ui_window_t *window);
+DREAM_LOCAL void ui_send_window_to_back   (ui_window_t *window);
+DREAM_LOCAL void ui_focus_window          (ui_window_t *window);
+DREAM_LOCAL void ui_open_window           (ui_window_t *window);
+DREAM_LOCAL void ui_close_window          (ui_window_t *window);
+DREAM_LOCAL void ui_toggle_window_openness(ui_window_t *window);
 
 DREAM_LOCAL void ui_process_windows(void);
 

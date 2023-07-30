@@ -1199,12 +1199,7 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 					if (menu->toggle) *menu->toggle = !*menu->toggle;
 					if (menu->window)
 					{
-						menu->window->open = !menu->window->open;
-						if (menu->window->open)
-						{
-							ui_bring_window_to_front(menu->window);
-							ui_focus_window         (menu->window);
-						}
+						ui_toggle_window_openness(menu->window);
 					}
                 }
 
@@ -1234,19 +1229,25 @@ void update_and_render_in_game_editor(void)
 		editor.ui_demo.window.rect = rect2_from_min_dim(make_v2(96, 96), make_v2(512, 512));
 	}
 
-#if 0
     if (ui_button_pressed(BUTTON_F1))
+	{
         editor.show_timings = !editor.show_timings;
+	}
 
     if (ui_button_pressed(BUTTON_F2))
-		editor.lm_editor.window.open = !editor.lm_editor.window.open;
+	{
+		ui_toggle_window_openness(&editor.lm_editor.window);
+	}
 
     if (ui_button_pressed(BUTTON_F3))
-		editor.hull_test.window.open = !editor.hull_test.window.open;
+	{
+		ui_toggle_window_openness(&editor.hull_test.window);
+	}
 
     if (ui_button_pressed(BUTTON_F4))
-		editor.ui_demo.window.open = !editor.ui_demo.window.open;
-#endif
+	{
+		ui_toggle_window_openness(&editor.ui_demo.window);
+	}
 
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);

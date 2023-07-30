@@ -294,6 +294,35 @@ void ui_focus_window(ui_window_t *window)
 	ui.has_focus            = true;
 }
 
+void ui_open_window(ui_window_t *window)
+{
+	window->open = true;
+	ui_bring_window_to_front(window);
+	ui_focus_window         (window);
+}
+
+void ui_close_window(ui_window_t *window)
+{
+	window->open = false;
+	ui_send_window_to_back(window);
+	if (ui.windows.focus_window == window && ui.windows.last_window != window)
+	{
+		ui_focus_window(ui.windows.last_window);
+	}
+}
+
+void ui_toggle_window_openness(ui_window_t *window)
+{
+	if (window->open)
+	{
+		ui_close_window(window);
+	}
+	else
+	{
+		ui_open_window(window);
+	}
+}
+
 void ui_process_windows(void)
 {
 	ui_window_t *hovered_window = NULL;

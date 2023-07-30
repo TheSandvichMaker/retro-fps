@@ -283,7 +283,7 @@ int wWinMain(HINSTANCE instance,
             .style         = CS_HREDRAW|CS_VREDRAW,
             .lpfnWndProc   = window_proc,
             .hIcon         = LoadIconW(NULL, L"APPICON"),
-            .hCursor       = LoadCursorW(NULL, IDC_ARROW),
+            .hCursor       = NULL, 
             .lpszClassName = L"retro_window_class",
         };
 
@@ -553,7 +553,7 @@ int wWinMain(HINSTANCE instance,
         }
 
 		cursor = tick_io.cursor;
-		//if (cursor != last_cursor)
+		if (cursor != last_cursor)
 		{
 			if (cursor == PLATFORM_CURSOR_NONE)
 			{
