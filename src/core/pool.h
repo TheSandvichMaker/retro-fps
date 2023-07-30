@@ -24,6 +24,7 @@ typedef enum pool_flags_t
 typedef struct pool_t
 {
     size_t watermark;
+	size_t count;
     uint32_t item_size;
     uint32_t align;
     char *buffer;

@@ -216,6 +216,9 @@ typedef enum ui_style_color_t
 
 typedef struct ui_anim_t
 {
+	ui_id_t  id;
+	uint64_t last_touched_frame_index;
+
 	float c_t;
 	float c_v;
 	v4_t  t_target;

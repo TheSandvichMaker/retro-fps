@@ -1209,6 +1209,7 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
             ui_label(S("  Menus: "));
 
             ui_label(Sf("Mouse Position: %.02f x %.02f", ui.input.mouse_p.x, ui.input.mouse_p.y));
+			ui_label(Sf("Active UI Animation Count: %zu", ui.style.animation_state.count));
         }
     }
 }

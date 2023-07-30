@@ -88,6 +88,8 @@ void *pool_add(pool_t *pool)
         result = item_from_pool_item(pool_item);
     }
 
+	pool->count += 1;
+
 	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_unlock(pool->lock);
 
     return result;
@@ -144,6 +146,8 @@ bool pool_rem(pool_t *pool, resource_handle_t handle)
         sentinel ->next = handle.index;
 
         result = true;
+
+		pool->count -= 1;
     }
 
 	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_unlock(pool->lock);

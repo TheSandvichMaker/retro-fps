@@ -457,7 +457,7 @@ void ui_process_windows(void)
 
 			v4_t  interpolated_title_bar_color = v4_lerps(title_bar_color_greyscale, title_bar_color, focus_t);
 
-			ui_draw_rect_roundedness_shadow(rect2_shrink(total, 1.0f), make_v4(0, 0, 0, 0), make_v4(4, 4, 4, 4), shadow_amount, 32.0f);
+			ui_draw_rect_roundedness_shadow(rect2_shrink(total, 1.0f), make_v4(0, 0, 0, 0), make_v4(5, 5, 5, 5), shadow_amount, 32.0f);
 			ui_draw_rect_roundedness(title_bar, interpolated_title_bar_color, make_v4(2, 0, 2, 0));
 			ui_draw_rect_roundedness(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), make_v4(0, 2, 0, 2));
 			ui_draw_text(&ui.style.header_font, ui_text_center_p(&ui.style.header_font, title_bar, title), title);
@@ -508,6 +508,7 @@ ui_anim_t *ui_get_anim(ui_id_t id, v4_t init_value)
 	if (!result)
 	{
 		result = pool_add(&ui.style.animation_state);
+		result->id        = id;
 		result->t_target  = init_value;
 		result->t_current = init_value;
 		hash_add_object(&ui.style.animation_index, id.value, result);
@@ -515,6 +516,11 @@ ui_anim_t *ui_get_anim(ui_id_t id, v4_t init_value)
 
 	result->c_t = ui_scalar(UI_SCALAR_ANIMATION_STIFFNESS);
 	result->c_v = ui_scalar(UI_SCALAR_ANIMATION_DAMPEN);
+
+	result->last_touched_frame_index = ui.frame_index;
+
+	ASSERT(result->id.value == id.value);
+	result->id = id;
 
 	return result;
 }
@@ -1757,22 +1763,30 @@ bool ui_begin(float dt)
 	{
 		ui_anim_t *anim = it.data;
 
-		float c_t = anim->c_t;
-		float c_v = anim->c_v;
+		if (anim->last_touched_frame_index + 1 >= ui.frame_index)
+		{
+			float c_t = anim->c_t;
+			float c_v = anim->c_v;
 
-		v4_t t_target   = anim->t_target;
-		v4_t t_current  = anim->t_current;
-		v4_t t_velocity = anim->t_velocity;
+			v4_t t_target   = anim->t_target;
+			v4_t t_current  = anim->t_current;
+			v4_t t_velocity = anim->t_velocity;
 
-		v4_t accel_t = mul( c_t, sub(t_target, t_current));
-		v4_t accel_v = mul(-c_v, t_velocity);
-		v4_t accel = add(accel_t, accel_v);
+			v4_t accel_t = mul( c_t, sub(t_target, t_current));
+			v4_t accel_v = mul(-c_v, t_velocity);
+			v4_t accel = add(accel_t, accel_v);
 
-		t_velocity = add(t_velocity, mul(ui.input.dt, accel));
-		t_current  = add(t_current,  mul(ui.input.dt, t_velocity));
+			t_velocity = add(t_velocity, mul(ui.input.dt, accel));
+			t_current  = add(t_current,  mul(ui.input.dt, t_velocity));
 
-		anim->t_current  = t_current;
-		anim->t_velocity = t_velocity;
+			anim->t_current  = t_current;
+			anim->t_velocity = t_velocity;
+		}
+		else
+		{
+			hash_rem     (&ui.style.animation_index, anim->id.value);
+			pool_rem_item(&ui.style.animation_state, anim);
+		}
 	}
 
     if (!ui.active.value)
