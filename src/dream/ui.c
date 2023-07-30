@@ -317,7 +317,7 @@ void ui_process_windows(void)
 				hovered_window = window;
 			}
 
-			ui_widget_behaviour(id, total);
+			ui_interaction_t interaction = ui_widget_behaviour(id, total);
 
 			string_t title = string_from_storage(window->title);
 
@@ -326,14 +326,19 @@ void ui_process_windows(void)
 			ui_draw_rect_roundedness(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), make_v4(0, 2, 0, 2));
 			ui_draw_text(&ui.style.header_font, ui_text_center_p(&ui.style.header_font, title_bar, title), title);
 
-#if 0
-			if (interaction_window & UI_HELD)
+			if (interaction & UI_PRESSED)
 			{
-				ui_drag_rect(&window->rect); // updates window->rect, _not_ the rect we have on the stack. Otherwise the behaviour would be weirdish.
-											 // But this adds a frame of delay, and that could be resolved by writing the code more carefully to handle
-											 // immediate updating of the window rect.
+				ui.drag_offset = sub(window->rect.min, ui.input.mouse_p);
 			}
-#endif
+
+			if (interaction & UI_HELD)
+			{
+				v2_t new_p = add(ui.input.mouse_p, ui.drag_offset);
+				window->rect = rect2_reposition_min(window->rect, new_p); // updates window->rect, _not_ the rect we have on the stack. Otherwise the behaviour would be weirdish.
+																		  // But this adds a frame of delay, and that could be resolved by writing the code more carefully to handle
+																		  // immediate updating of the window rect.
+											 
+			}
 
 			float tray_width = 2.0f;
 

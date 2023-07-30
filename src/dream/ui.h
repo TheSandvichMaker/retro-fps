@@ -364,6 +364,8 @@ typedef struct ui_t
 	ui_id_t next_id;
 	rect2_t next_rect;
 
+	v2_t drag_offset;
+
 	stack_t(ui_id_t, UI_ID_STACK_COUNT) id_stack;
 
 	pool_t state;
