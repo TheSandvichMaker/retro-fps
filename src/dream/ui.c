@@ -769,7 +769,7 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 {
 	ASSERT(ui.initialized);
 
-	ui_push_id(id);
+	if (id.value) ui_push_id(id);
 
 	r_push_view_screenspace_clip_rect(rect);
 
@@ -1593,4 +1593,5 @@ void ui_end(void)
 	ui.input.mouse_buttons_released = 0;
 
 	ASSERT(ui.panels.current_panel == NULL);
+	ASSERT(ui.id_stack.at == 0);
 }
