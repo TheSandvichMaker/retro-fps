@@ -294,60 +294,6 @@ void ui_focus_window(ui_window_t *window)
 	ui.has_focus            = true;
 }
 
-DREAM_INLINE ui_rect_edge_t ui_handle_tray(ui_id_t id, rect2_t rect)
-{
-	float tray_width = 6.0f;
-
-	rect2_t tray_e  = rect2_cut_right (&rect,   tray_width);
-	rect2_t tray_w  = rect2_cut_left  (&rect,   tray_width);
-	rect2_t tray_n  = rect2_cut_top   (&rect,   tray_width);
-	rect2_t tray_s  = rect2_cut_bottom(&rect,   tray_width);
-	rect2_t tray_ne = rect2_cut_top   (&tray_e, tray_width);
-	rect2_t tray_nw = rect2_cut_top   (&tray_w, tray_width);
-	rect2_t tray_se = rect2_cut_bottom(&tray_e, tray_width);
-	rect2_t tray_sw = rect2_cut_bottom(&tray_w, tray_width);
-
-	ui_rect_edge_t tray_region = 0;
-
-	ui_id_t id_n  = ui_child_id(S("tray_id_n"), id);
-	ui_id_t id_e  = ui_child_id(S("tray_id_e"), id);
-	ui_id_t id_s  = ui_child_id(S("tray_id_s"), id);
-	ui_id_t id_w  = ui_child_id(S("tray_id_w"), id);
-	ui_id_t id_ne = ui_child_id(S("tray_id_ne"), id);
-	ui_id_t id_nw = ui_child_id(S("tray_id_nw"), id);
-	ui_id_t id_se = ui_child_id(S("tray_id_se"), id);
-	ui_id_t id_sw = ui_child_id(S("tray_id_sw"), id);
-
-	ui_widget_behaviour(id_n,  tray_n);
-	ui_widget_behaviour(id_e,  tray_e);
-	ui_widget_behaviour(id_s,  tray_s);
-	ui_widget_behaviour(id_w,  tray_w);
-	ui_widget_behaviour(id_ne, tray_ne);
-	ui_widget_behaviour(id_nw, tray_nw);
-	ui_widget_behaviour(id_se, tray_se);
-	ui_widget_behaviour(id_sw, tray_sw);
-
-	if (ui_is_hot(id_n))  { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NS; };
-	if (ui_is_hot(id_e))  { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_EW; };
-	if (ui_is_hot(id_s))  { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NS; };
-	if (ui_is_hot(id_w))  { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_EW; };
-	if (ui_is_hot(id_ne)) { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NESW; };
-	if (ui_is_hot(id_nw)) { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NWSE; };
-	if (ui_is_hot(id_se)) { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NWSE; };
-	if (ui_is_hot(id_sw)) { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NESW; };
-
-	if (ui_is_active(id_n))  tray_region = UI_RECT_EDGE_N;
-	if (ui_is_active(id_e))  tray_region = UI_RECT_EDGE_E;
-	if (ui_is_active(id_s))  tray_region = UI_RECT_EDGE_S;
-	if (ui_is_active(id_w))  tray_region = UI_RECT_EDGE_W;
-	if (ui_is_active(id_ne)) tray_region = UI_RECT_EDGE_N|UI_RECT_EDGE_E;
-	if (ui_is_active(id_nw)) tray_region = UI_RECT_EDGE_N|UI_RECT_EDGE_W;
-	if (ui_is_active(id_se)) tray_region = UI_RECT_EDGE_S|UI_RECT_EDGE_E;
-	if (ui_is_active(id_sw)) tray_region = UI_RECT_EDGE_S|UI_RECT_EDGE_W;
-
-	return tray_region;
-}
-
 void ui_process_windows(void)
 {
 	ui_window_t *hovered_window = NULL;
@@ -365,12 +311,66 @@ void ui_process_windows(void)
 
 		ui_push_id(id);
 		{
+			// handle dragging and resizing first to remove frame delay
+
+			if (ui_is_active(id))
+			{
+				v2_t new_p = add(ui.input.mouse_p, ui.drag_offset);
+				window->rect = rect2_reposition_min(window->rect, new_p); 
+			}
+
+			ui_id_t id_n  = ui_id(S("tray_id_n"));
+			ui_id_t id_e  = ui_id(S("tray_id_e"));
+			ui_id_t id_s  = ui_id(S("tray_id_s"));
+			ui_id_t id_w  = ui_id(S("tray_id_w"));
+			ui_id_t id_ne = ui_id(S("tray_id_ne"));
+			ui_id_t id_nw = ui_id(S("tray_id_nw"));
+			ui_id_t id_se = ui_id(S("tray_id_se"));
+			ui_id_t id_sw = ui_id(S("tray_id_sw"));
+
+			if (ui_is_hot(id_n))  { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NS; };
+			if (ui_is_hot(id_e))  { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_EW; };
+			if (ui_is_hot(id_s))  { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NS; };
+			if (ui_is_hot(id_w))  { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_EW; };
+			if (ui_is_hot(id_ne)) { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NESW; };
+			if (ui_is_hot(id_nw)) { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NWSE; };
+			if (ui_is_hot(id_se)) { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NWSE; };
+			if (ui_is_hot(id_sw)) { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NESW; };
+
+			ui_rect_edge_t tray_region = 0;
+
+			if (ui_is_active(id_n))  tray_region = UI_RECT_EDGE_N;
+			if (ui_is_active(id_e))  tray_region = UI_RECT_EDGE_E;
+			if (ui_is_active(id_s))  tray_region = UI_RECT_EDGE_S;
+			if (ui_is_active(id_w))  tray_region = UI_RECT_EDGE_W;
+			if (ui_is_active(id_ne)) tray_region = UI_RECT_EDGE_N|UI_RECT_EDGE_E;
+			if (ui_is_active(id_nw)) tray_region = UI_RECT_EDGE_N|UI_RECT_EDGE_W;
+			if (ui_is_active(id_se)) tray_region = UI_RECT_EDGE_S|UI_RECT_EDGE_E;
+			if (ui_is_active(id_sw)) tray_region = UI_RECT_EDGE_S|UI_RECT_EDGE_W;
+
+			if (tray_region)
+			{
+				v2_t dp = ui.input.mouse_dp; // TODO: DON'T USE MOUSE DP. IT BREAKS IF THE RESIZING BECOMES DISCONTINUOUS (AKA WHEN YOU HIT THE MINIMUM SIZE)
+
+				// same caveat as for dragging: this has a frame delay due to updating window->rect. I should fix that, since it wouldn't be very hard to do.
+				if (tray_region & UI_RECT_EDGE_E) window->rect = rect2_extend_right(window->rect,  dp.x);
+				if (tray_region & UI_RECT_EDGE_W) window->rect = rect2_extend_left (window->rect, -dp.x);
+				if (tray_region & UI_RECT_EDGE_N) window->rect = rect2_extend_up   (window->rect,  dp.y);
+				if (tray_region & UI_RECT_EDGE_S) window->rect = rect2_extend_down (window->rect, -dp.y);
+
+				window->rect = rect2_uninvert(window->rect);
+			}
+
+			// ---
+
 			rect2_t rect = window->rect;
 
 			float   title_bar_height = ui_header_font_height() + ui_widget_padding();
 			rect2_t title_bar = rect2_add_top(rect, title_bar_height);
 
 			rect2_t total = rect2_union(title_bar, rect);
+
+			// drag and resize behaviour
 
 			float tray_width = 6.0f;
 
@@ -381,6 +381,32 @@ void ui_process_windows(void)
 			{
 				hovered_window = window;
 			}
+
+			if (interaction & UI_PRESSED)
+			{
+				ui.drag_offset = sub(window->rect.min, ui.input.mouse_p);
+			}
+
+			rect2_t tray_init = interact_total;
+			rect2_t tray_e  = rect2_cut_right (&tray_init, tray_width);
+			rect2_t tray_w  = rect2_cut_left  (&tray_init, tray_width);
+			rect2_t tray_n  = rect2_cut_top   (&tray_init, tray_width);
+			rect2_t tray_s  = rect2_cut_bottom(&tray_init, tray_width);
+			rect2_t tray_ne = rect2_cut_top   (&tray_e,    tray_width);
+			rect2_t tray_nw = rect2_cut_top   (&tray_w,    tray_width);
+			rect2_t tray_se = rect2_cut_bottom(&tray_e,    tray_width);
+			rect2_t tray_sw = rect2_cut_bottom(&tray_w,    tray_width);
+
+			ui_widget_behaviour(id_n,  tray_n);
+			ui_widget_behaviour(id_e,  tray_e);
+			ui_widget_behaviour(id_s,  tray_s);
+			ui_widget_behaviour(id_w,  tray_w);
+			ui_widget_behaviour(id_ne, tray_ne);
+			ui_widget_behaviour(id_nw, tray_nw);
+			ui_widget_behaviour(id_se, tray_se);
+			ui_widget_behaviour(id_sw, tray_sw);
+
+			// --
 
 			string_t title = string_from_storage(window->title);
 
@@ -401,38 +427,8 @@ void ui_process_windows(void)
 			ui_draw_text(&ui.style.header_font, ui_text_center_p(&ui.style.header_font, title_bar, title), title);
 			ui_draw_rect_roundedness_outline(total, ui_color(UI_COLOR_WINDOW_OUTLINE), make_v4(2, 2, 2, 2), 2.0f);
 
-			if (interaction & UI_PRESSED)
-			{
-				ui.drag_offset = sub(window->rect.min, ui.input.mouse_p);
-			}
-
-			if (interaction & UI_HELD)
-			{
-				v2_t new_p = add(ui.input.mouse_p, ui.drag_offset);
-				window->rect = rect2_reposition_min(window->rect, new_p); // updates window->rect, _not_ the rect we have on the stack. Otherwise the behaviour would be weirdish.
-																		  // But this adds a frame of delay, and that could be resolved by writing the code more carefully to handle
-																		  // immediate updating of the window rect.
-											 
-			}
-
-			ui_rect_edge_t tray_region = ui_handle_tray(id, interact_total);
-
-			if (tray_region)
-			{
-				v2_t dp = ui.input.mouse_dp; // TODO: DON'T USE MOUSE DP. IT BREAKS IF THE RESIZING BECOMES DISCONTINUOUS (AKA WHEN YOU HIT THE MINIMUM SIZE)
-
-				// same caveat as for dragging: this has a frame delay due to updating window->rect. I should fix that, since it wouldn't be very hard to do.
-				if (tray_region & UI_RECT_EDGE_E) window->rect = rect2_extend_right(window->rect,  dp.x);
-				if (tray_region & UI_RECT_EDGE_W) window->rect = rect2_extend_left (window->rect, -dp.x);
-				if (tray_region & UI_RECT_EDGE_N) window->rect = rect2_extend_up   (window->rect,  dp.y);
-				if (tray_region & UI_RECT_EDGE_S) window->rect = rect2_extend_down (window->rect, -dp.y);
-
-				window->rect = rect2_uninvert(window->rect);
-			}
-
 			float margin = max(ui_scalar(UI_SCALAR_WIDGET_MARGIN), 0.5f*ui_scalar(UI_SCALAR_ROUNDEDNESS));
 			rect = rect2_shrink(rect, margin);
-			//rect2_cut_bottom(&rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 			rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WINDOW_MARGIN));
 
 			// TODO: Custom scrollbar rendering for windows?
