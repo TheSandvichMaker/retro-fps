@@ -350,15 +350,16 @@ void ui_process_windows(void)
 
 			if (tray_region)
 			{
-				v2_t dp = ui.input.mouse_dp; // TODO: DON'T USE MOUSE DP. IT BREAKS IF THE RESIZING BECOMES DISCONTINUOUS (AKA WHEN YOU HIT THE MINIMUM SIZE)
+				v2_t delta = sub(ui.input.mouse_p, ui.input.mouse_pressed_p);
 
-				// same caveat as for dragging: this has a frame delay due to updating window->rect. I should fix that, since it wouldn't be very hard to do.
-				if (tray_region & UI_RECT_EDGE_E) window->rect = rect2_extend_right(window->rect,  dp.x);
-				if (tray_region & UI_RECT_EDGE_W) window->rect = rect2_extend_left (window->rect, -dp.x);
-				if (tray_region & UI_RECT_EDGE_N) window->rect = rect2_extend_up   (window->rect,  dp.y);
-				if (tray_region & UI_RECT_EDGE_S) window->rect = rect2_extend_down (window->rect, -dp.y);
+				window->rect = ui.resize_original_rect;
+				if (tray_region & UI_RECT_EDGE_E) window->rect = rect2_extend_right(window->rect,  delta.x);
+				if (tray_region & UI_RECT_EDGE_W) window->rect = rect2_extend_left (window->rect, -delta.x);
+				if (tray_region & UI_RECT_EDGE_N) window->rect = rect2_extend_up   (window->rect,  delta.y);
+				if (tray_region & UI_RECT_EDGE_S) window->rect = rect2_extend_down (window->rect, -delta.y);
 
-				window->rect = rect2_uninvert(window->rect);
+				rect2_t min_rect = rect2_from_min_dim(window->rect.min, make_v2(64, 64));
+				window->rect = rect2_union(window->rect, min_rect);
 			}
 
 			// ---
@@ -397,16 +398,22 @@ void ui_process_windows(void)
 			rect2_t tray_se = rect2_cut_bottom(&tray_e,    tray_width);
 			rect2_t tray_sw = rect2_cut_bottom(&tray_w,    tray_width);
 
-			ui_widget_behaviour(id_n,  tray_n);
-			ui_widget_behaviour(id_e,  tray_e);
-			ui_widget_behaviour(id_s,  tray_s);
-			ui_widget_behaviour(id_w,  tray_w);
-			ui_widget_behaviour(id_ne, tray_ne);
-			ui_widget_behaviour(id_nw, tray_nw);
-			ui_widget_behaviour(id_se, tray_se);
-			ui_widget_behaviour(id_sw, tray_sw);
+			ui_interaction_t tray_interaction = 0;
+			tray_interaction |= ui_widget_behaviour(id_n,  tray_n);
+			tray_interaction |= ui_widget_behaviour(id_e,  tray_e);
+			tray_interaction |= ui_widget_behaviour(id_s,  tray_s);
+			tray_interaction |= ui_widget_behaviour(id_w,  tray_w);
+			tray_interaction |= ui_widget_behaviour(id_ne, tray_ne);
+			tray_interaction |= ui_widget_behaviour(id_nw, tray_nw);
+			tray_interaction |= ui_widget_behaviour(id_se, tray_se);
+			tray_interaction |= ui_widget_behaviour(id_sw, tray_sw);
 
-			// --
+			if (tray_interaction & UI_PRESSED)
+			{
+				ui.resize_original_rect = window->rect;
+			}
+
+			// draw window
 
 			string_t title = string_from_storage(window->title);
 
@@ -426,6 +433,8 @@ void ui_process_windows(void)
 			ui_draw_rect_roundedness(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), make_v4(0, 2, 0, 2));
 			ui_draw_text(&ui.style.header_font, ui_text_center_p(&ui.style.header_font, title_bar, title), title);
 			ui_draw_rect_roundedness_outline(total, ui_color(UI_COLOR_WINDOW_OUTLINE), make_v4(2, 2, 2, 2), 2.0f);
+
+			// handle window contents
 
 			float margin = max(ui_scalar(UI_SCALAR_WIDGET_MARGIN), 0.5f*ui_scalar(UI_SCALAR_ROUNDEDNESS));
 			rect = rect2_shrink(rect, margin);

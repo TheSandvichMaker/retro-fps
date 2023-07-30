@@ -365,8 +365,9 @@ typedef struct ui_t
 	ui_id_t next_id;
 	rect2_t next_rect;
 
-	v2_t drag_anchor;
-	v2_t drag_offset;
+	v2_t    drag_anchor;
+	v2_t    drag_offset;
+	rect2_t resize_original_rect;
 
 	stack_t(ui_id_t, UI_ID_STACK_COUNT) id_stack;
 
