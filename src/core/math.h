@@ -1291,6 +1291,121 @@ DREAM_INLINE rect2_t rect2_reposition_min(rect2_t rect, v2_t p)
 }
 
 //
+// rect-cut
+//
+
+DREAM_INLINE rect2_t rect2_cut_left(rect2_t *rect, float a)
+{
+	float min_x = rect->x0;
+	rect->min.x = rect->x0 + a;
+	return (rect2_t){ .min = { min_x, rect->min.y }, .max = { rect->min.x, rect->max.y } };
+}
+
+DREAM_INLINE rect2_t rect2_cut_right(rect2_t *rect, float a)
+{
+	float max_x = rect->x1;
+	rect->max.x = rect->x1 - a;
+	return (rect2_t){ .min = { rect->max.x, rect->min.y }, .max = { max_x, rect->max.y } };
+}
+
+DREAM_INLINE rect2_t rect2_cut_top(rect2_t *rect, float a)
+{
+	float max_y = rect->y1;
+	rect->max.y = rect->y1 - a;
+	return (rect2_t){ .min = { rect->min.x, rect->max.y }, .max = { rect->max.x, max_y } };
+}
+
+DREAM_INLINE rect2_t rect2_cut_bottom(rect2_t *rect, float a)
+{
+	float min_y = rect->y0;
+	rect->min.y = rect->y0 + a;
+	return (rect2_t){ .min = { rect->min.x, min_y }, .max = { rect->max.x, rect->min.y } };
+}
+
+DREAM_INLINE rect2_t rect2_add_left(rect2_t rect, float a)
+{
+	float min_x = MIN(rect.x0, rect.x0 - a);
+	return (rect2_t){ .min = { min_x, rect.min.y }, .max = { rect.min.x, rect.max.y } };
+}
+
+DREAM_INLINE rect2_t rect2_add_right(rect2_t rect, float a)
+{
+	float max_x = MAX(rect.x0, rect.x0 + a);
+	return (rect2_t){ .min = { rect.max.x, rect.min.y }, .max = { max_x, rect.max.y } };
+}
+
+DREAM_INLINE rect2_t rect2_add_top(rect2_t rect, float a)
+{
+	float max_y = MAX(rect.y1, rect.y1 + a);
+	return (rect2_t){ .min = { rect.min.x, rect.max.y }, .max = { rect.max.x, max_y } };
+}
+
+DREAM_INLINE rect2_t rect2_add_bottom(rect2_t rect, float a)
+{
+	float min_y = MIN(rect.y0, rect.y0 - a);
+	return (rect2_t){ .min = { rect.min.x, min_y }, .max = { rect.max.x, rect.min.y } };
+}
+
+DREAM_INLINE rect2_t rect2_extend(rect2_t rect, float a)
+{
+	rect2_t result = {
+		.min = sub(rect.min, a),
+		.max = add(rect.max, a),
+	};
+	return result;
+}
+
+DREAM_INLINE rect2_t rect2_shrink(rect2_t rect, float a)
+{
+	return rect2_extend(rect, -a);
+}
+
+DREAM_INLINE rect2_t rect2_extend2(rect2_t rect, float x, float y)
+{
+	v2_t xy = { x, y };
+
+	rect2_t result = {
+		.min = sub(rect.min, xy),
+		.max = add(rect.max, xy),
+	};
+	return result;
+}
+
+DREAM_INLINE rect2_t rect2_shrink2(rect2_t rect, float x, float y)
+{
+	return rect2_extend2(rect, -x, -y);
+}
+
+typedef enum rect2_cut_side_t
+{
+	RECT2_CUT_LEFT,
+	RECT2_CUT_RIGHT,
+	RECT2_CUT_TOP,
+	RECT2_CUT_BOTTOM,
+	RECT2_CUT_COUNT,
+} rect2_cut_side_t;
+
+typedef struct rect2_cut_t
+{
+	rect2_t         *rect;
+	rect2_cut_side_t side;
+} rect2_cut_t;
+
+DREAM_INLINE rect2_t rect2_do_cut(rect2_cut_t cut, float a)
+{
+	switch (cut.side)
+	{
+		case RECT2_CUT_LEFT:   return rect2_cut_left  (cut.rect, a);
+		case RECT2_CUT_RIGHT:  return rect2_cut_right (cut.rect, a);
+		case RECT2_CUT_TOP:    return rect2_cut_top   (cut.rect, a);
+		case RECT2_CUT_BOTTOM: return rect2_cut_bottom(cut.rect, a);
+		INVALID_DEFAULT_CASE;
+	}
+
+	return (rect2_t){ 0 };
+}
+
+//
 // rect3
 //
 

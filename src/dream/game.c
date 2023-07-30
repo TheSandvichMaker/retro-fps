@@ -9,7 +9,7 @@
 #include "dream/input.h"
 #include "dream/asset.h"
 #include "dream/intersect.h"
-#include "dream/debug_ui.h"
+#include "dream/ui.h"
 #include "dream/audio.h"
 #include "dream/in_game_editor.h"
 #include "dream/job_queues.h"
@@ -484,6 +484,9 @@ static void game_tick(platform_io_t *io)
 
 	// TODO: Totally redo input 
 	{
+		ui_submit_mouse_p (io->mouse_p);
+		ui_submit_mouse_dp(io->mouse_dp);
+
 		input_state_t input = {0};
 		input.mouse_x  = (int)io->mouse_p.x;
 		input.mouse_y  = (int)io->mouse_p.y;
@@ -502,14 +505,24 @@ static void game_tick(platform_io_t *io)
 				{
 					bool pressed = ev->mouse_button.pressed;
 
-					if (ev->mouse_button.button == PLATFORM_MOUSE_BUTTON_LEFT)
+					switch (ev->mouse_button.button)
 					{
-						button_states = TOGGLE_BIT(button_states, BUTTON_FIRE1, pressed);
-					}
+						case PLATFORM_MOUSE_BUTTON_LEFT:
+						{
+							button_states = TOGGLE_BIT(button_states, BUTTON_FIRE1, pressed);
+							ui_submit_mouse_buttons(UI_MOUSE_LEFT, pressed);
+						} break;
 
-					if (ev->mouse_button.button == PLATFORM_MOUSE_BUTTON_RIGHT)
-					{
-						button_states = TOGGLE_BIT(button_states, BUTTON_FIRE2, pressed);
+						case PLATFORM_MOUSE_BUTTON_MIDDLE:
+						{
+							ui_submit_mouse_buttons(UI_MOUSE_MIDDLE, pressed);
+						} break;
+
+						case PLATFORM_MOUSE_BUTTON_RIGHT:
+						{
+							button_states = TOGGLE_BIT(button_states, BUTTON_FIRE2, pressed);
+							ui_submit_mouse_buttons(UI_MOUSE_RIGHT, pressed);
+						} break;
 					}
 				} break;
 

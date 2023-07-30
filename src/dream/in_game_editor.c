@@ -6,7 +6,7 @@
 #include "dream/in_game_editor.h"
 #include "dream/game.h"
 #include "dream/map.h"
-#include "dream/debug_ui.h"
+#include "dream/ui.h"
 #include "dream/intersect.h"
 #include "dream/asset.h"
 #include "dream/audio.h"
@@ -141,7 +141,7 @@ static editor_state_t editor = {
 
     .lm_editor = {
 		.window = {
-			.name = Sc("Lightmap Editor"),
+			.title = Sc("Lightmap Editor"),
 		},
 
 		.min_display_recursion = 0,
@@ -150,7 +150,7 @@ static editor_state_t editor = {
 
 	.hull_test = {
 		.window = {
-			.name = Sc("Convex Hull Debugger"),
+			.title = Sc("Convex Hull Debugger"),
 		},
 
 		.automatically_recalculate_hull = true,
@@ -172,7 +172,7 @@ static editor_state_t editor = {
 
 	.ui_demo = {
 		.window = {
-			.name = Sc("UI Demo Panel"),
+			.title = Sc("UI Demo Panel"),
 		},
 	},
 };
@@ -289,6 +289,7 @@ static void hull_render_debug_triangles(hull_debug_step_t *step, bool final_step
 
 static void update_and_render_convex_hull_test_panel(void)
 {
+#if 0
 	hull_test_panel_t *hull_test = &editor.hull_test;
 
 	if (!hull_test->window.open)
@@ -420,6 +421,7 @@ static void update_and_render_convex_hull_test_panel(void)
 		r_immediate_flush();
 	}
 
+#if 0
 	UI_WINDOW(&hull_test->window)
 	{
 		ui_header(S("Generate Random Hull"));
@@ -590,12 +592,15 @@ static void update_and_render_convex_hull_test_panel(void)
 	{
 		bring_editor_to_front(EDITOR_CONVEX_HULL);
 	}
+#endif
 
 	hull_test->initialized = true;
+#endif
 }
 
 static void update_and_render_lightmap_editor(void)
 {
+#if 0
     player_t *player = world->player;
     map_t    *map    = world->map;
 
@@ -826,6 +831,7 @@ static void update_and_render_lightmap_editor(void)
         r_immediate_flush();
     }
 
+#if 0
 	UI_WINDOW(&lm_editor->window)
 	{
         if (!map->lightmap_state || !map->lightmap_state->finalized)
@@ -1032,7 +1038,7 @@ static void update_and_render_lightmap_editor(void)
 
                     float width = rect2_width(*layout);
 
-                    rect2_t image_rect = ui_cut_top(layout, width*aspect);
+                    rect2_t image_rect = rect2_cut_top(layout, width*aspect);
 
 					r_immediate_texture(poly->lightmap);
 					r_immediate_rect2_filled(image_rect, make_v4(1, 1, 1, 1));
@@ -1108,6 +1114,8 @@ static void update_and_render_lightmap_editor(void)
 	{
 		bring_editor_to_front(EDITOR_LIGHTMAP);
 	}
+#endif
+#endif
 }
 
 DREAM_INLINE void fullscreen_show_timings(void)
@@ -1135,6 +1143,7 @@ DREAM_INLINE void update_and_render_ui_demo(void)
 	if (!demo->window.open)
 		return;
 
+#if 0
 	UI_WINDOW(&demo->window)
 	{
 		ui_slider    (S("Float Slider"), &demo->slider_f32, -1.0f, 1.0f);
@@ -1157,11 +1166,12 @@ DREAM_INLINE void update_and_render_ui_demo(void)
 	{
 		bring_editor_to_front(EDITOR_UI_DEMO);
 	}
+#endif
 }
 
 DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 {
-    rect2_t bar = ui_cut_top(editor.fullscreen_layout, 32.0f);
+    rect2_t bar = rect2_cut_top(editor.fullscreen_layout, 32.0f);
 
     rect2_t collision_bar = bar;
     collision_bar.min.y -= 64.0f;
@@ -1169,8 +1179,8 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 	if (editor.bar_openness > 0.0001f)
 		collision_bar.min.y -= 128.0f;
 
-    bool mouse_hover = rect2_contains_point(collision_bar, ui.mouse_p);
-	mouse_hover |= ui.mouse_p.y >= collision_bar.max.y;
+    bool mouse_hover = ui_hover_rect(collision_bar);
+	mouse_hover |= ui.input.mouse_p.y >= collision_bar.max.y;
 	mouse_hover |= editor.pin_bar;
 
     editor.bar_openness = ui_interpolate_f32(ui_id_pointer(&editor.bar_openness), mouse_hover ? 1.0f : 0.0f);
@@ -1184,16 +1194,16 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
         r_immediate_rect2_filled(bar, ui_color(UI_COLOR_WINDOW_BACKGROUND));
         r_immediate_flush();
 
-        rect2_t inner_bar = ui_shrink(&bar, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+        rect2_t inner_bar = rect2_shrink(bar, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
 		UI_SCALAR(UI_SCALAR_HOVER_LIFT, 0.0f)
         UI_PANEL(inner_bar)
         {
-			ui_set_layout_direction(UI_CUT_LEFT);
+			ui_set_layout_direction(RECT2_CUT_LEFT);
 
 			ui_checkbox(S("Pin"), &editor.pin_bar);
 
-			ui_set_layout_direction(UI_CUT_RIGHT);
+			ui_set_layout_direction(RECT2_CUT_RIGHT);
 
             typedef struct menu_t
             {
@@ -1247,7 +1257,7 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 
             ui_label(S("  Menus: "));
 
-            ui_label(Sf("Mouse Position: %.02f x %.02f", ui.mouse_p.x, ui.mouse_p.y));
+            ui_label(Sf("Mouse Position: %.02f x %.02f", ui.input.mouse_p.x, ui.input.mouse_p.y));
         }
     }
 }
