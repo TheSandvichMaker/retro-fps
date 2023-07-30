@@ -484,8 +484,9 @@ static void game_tick(platform_io_t *io)
 
 	// TODO: Totally redo input 
 	{
-		ui_submit_mouse_p (io->mouse_p);
-		ui_submit_mouse_dp(io->mouse_dp);
+		ui_submit_mouse_p    (io->mouse_p);
+		ui_submit_mouse_dp   (io->mouse_dp);
+		ui_submit_mouse_wheel(io->mouse_wheel);
 
 		input_state_t input = {0};
 		input.mouse_x  = (int)io->mouse_p.x;
@@ -504,24 +505,18 @@ static void game_tick(platform_io_t *io)
 				case PLATFORM_EVENT_MOUSE_BUTTON:
 				{
 					bool pressed = ev->mouse_button.pressed;
+					ui_submit_mouse_buttons(ev->mouse_button.button, pressed);
 
 					switch (ev->mouse_button.button)
 					{
 						case PLATFORM_MOUSE_BUTTON_LEFT:
 						{
 							button_states = TOGGLE_BIT(button_states, BUTTON_FIRE1, pressed);
-							ui_submit_mouse_buttons(UI_MOUSE_LEFT, pressed);
-						} break;
-
-						case PLATFORM_MOUSE_BUTTON_MIDDLE:
-						{
-							ui_submit_mouse_buttons(UI_MOUSE_MIDDLE, pressed);
 						} break;
 
 						case PLATFORM_MOUSE_BUTTON_RIGHT:
 						{
 							button_states = TOGGLE_BIT(button_states, BUTTON_FIRE2, pressed);
-							ui_submit_mouse_buttons(UI_MOUSE_RIGHT, pressed);
 						} break;
 					}
 				} break;
@@ -568,6 +563,7 @@ static void game_tick(platform_io_t *io)
 
     v2_t res = make_v2((float)res_x, (float)res_y);
 
+	io->cursor = ui.input.cursor;
 	bool ui_focused = ui_begin(dt);
 
     if (ui_focused)

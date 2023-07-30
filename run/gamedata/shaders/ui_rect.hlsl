@@ -70,6 +70,19 @@ float rounded_box(float2 p, float2 b, float4 r)
 	return length(max(q, 0.0f)) + min(max(q.x, q.y), 0.0f) - r.x;
 }
 
+float r_dither(float2 co)
+{
+	const float2 magic = float2(0.75487766624669276, 0.569840290998);
+    return frac(dot(co, magic));
+}
+
+float remap_tri(float n)
+{
+    float orig = n * 2.0 - 1.0;
+    n = orig * rsqrt(abs(orig));
+    return max(-1.0, n) - sign(orig);
+}
+
 float4 ps(PS_INPUT IN) : SV_Target
 {
 	r_ui_rect_t rect = ui_rects[IN.id];
@@ -97,11 +110,11 @@ float4 ps(PS_INPUT IN) : SV_Target
 	}
 
 	float shadow_radius = rect.shadow_radius;
-	float shadow = 1.0f - saturate(d / shadow_radius);
-	shadow *= shadow;
+	float shadow = min(1.0, exp(-5.0f*d / shadow_radius)); // 1.0f - saturate(d / shadow_radius);
 	shadow *= rect.shadow_amount;
 
 	color += float4(0, 0, 0, (1.0f - aa)*shadow);
+    color += remap_tri(r_dither(IN.pos.xy)) / 255.0f;
 
 	return color;
 }

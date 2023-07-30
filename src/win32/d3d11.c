@@ -1275,8 +1275,8 @@ done_with_sun_shadows:
                         .scissor_rect = {
                             .left   = (LONG)clip_rect.min.x,
                             .right  = (LONG)clip_rect.max.x,
-                            .bottom = height - (LONG)clip_rect.min.y,
-                            .top    = height - (LONG)clip_rect.max.y,
+                            .bottom = height - (LONG)clip_rect.min.y - 1,
+                            .top    = height - (LONG)clip_rect.max.y - 1,
                         },
                     });
                 } break;
@@ -1298,8 +1298,8 @@ done_with_sun_shadows:
 					D3D11_RECT scissor_rect = {
 						.left   = (LONG)clip_rect.min.x,
 						.right  = (LONG)clip_rect.max.x,
-						.bottom = height - (LONG)clip_rect.min.y,
-						.top    = height - (LONG)clip_rect.max.y,
+						.bottom = height - (LONG)clip_rect.min.y - 1,
+						.top    = height - (LONG)clip_rect.max.y - 1,
 					};
 
 					// set output merger state

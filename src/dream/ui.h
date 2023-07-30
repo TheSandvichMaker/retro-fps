@@ -24,15 +24,6 @@ DREAM_INLINE void    ui_pop_id     (void);
 // Input
 //
 
-typedef uint32_t ui_mouse_buttons_t;
-typedef enum ui_mouse_buttons_enum_t
-{
-	UI_MOUSE_LEFT   = (1 << 0),
-	UI_MOUSE_MIDDLE = (1 << 1),
-	UI_MOUSE_RIGHT  = (1 << 2),
-	UI_MOUSE_ANY = UI_MOUSE_LEFT|UI_MOUSE_MIDDLE|UI_MOUSE_RIGHT,
-} ui_mouse_buttons_enum_t;
-
 typedef struct ui_input_t
 {
 	float dt;
@@ -41,24 +32,26 @@ typedef struct ui_input_t
 	bool shift_down;
 	bool ctrl_down;
 
-	ui_mouse_buttons_t mouse_buttons_down;
-	ui_mouse_buttons_t mouse_buttons_pressed;
-	ui_mouse_buttons_t mouse_buttons_released;
-	float              mouse_scroll;
-	v2_t               mouse_p;
-	v2_t               mouse_pressed_p;
-	v2_t               drag_anchor;
-	v2_t               mouse_dp;
+	platform_mouse_buttons_t mouse_buttons_down;
+	platform_mouse_buttons_t mouse_buttons_pressed;
+	platform_mouse_buttons_t mouse_buttons_released;
+	float mouse_wheel;
+	v2_t  mouse_p;
+	v2_t  mouse_pressed_p;
+	v2_t  mouse_dp;
+
+	platform_cursor_t cursor;
+	int               cursor_reset_delay;
 } ui_input_t;
 
-DREAM_LOCAL void ui_submit_mouse_buttons(ui_mouse_buttons_t buttons, bool pressed);
-DREAM_LOCAL void ui_submit_mouse_scroll (float scroll);
+DREAM_LOCAL void ui_submit_mouse_buttons(platform_mouse_buttons_t buttons, bool pressed);
+DREAM_LOCAL void ui_submit_mouse_wheel  (float wheel_delta);
 DREAM_LOCAL void ui_submit_mouse_p      (v2_t p);
 DREAM_LOCAL void ui_submit_mouse_dp     (v2_t dp);
 
-DREAM_LOCAL bool ui_mouse_buttons_down    (ui_mouse_buttons_t buttons);
-DREAM_LOCAL bool ui_mouse_buttons_pressed (ui_mouse_buttons_t buttons);
-DREAM_LOCAL bool ui_mouse_buttons_released(ui_mouse_buttons_t buttons);
+DREAM_LOCAL bool ui_mouse_buttons_down    (platform_mouse_buttons_t buttons);
+DREAM_LOCAL bool ui_mouse_buttons_pressed (platform_mouse_buttons_t buttons);
+DREAM_LOCAL bool ui_mouse_buttons_released(platform_mouse_buttons_t buttons);
 
 //
 // Panels
@@ -149,12 +142,14 @@ typedef struct ui_windows_t
 {
 	ui_window_t *first_window;
 	ui_window_t *last_window;
+	ui_window_t *focus_window;
 } ui_windows_t;
 
 DREAM_LOCAL void ui_add_window           (ui_window_t *window);
 DREAM_LOCAL void ui_remove_window        (ui_window_t *window);
 DREAM_LOCAL void ui_bring_window_to_front(ui_window_t *window);
 DREAM_LOCAL void ui_send_window_to_back  (ui_window_t *window);
+DREAM_LOCAL void ui_focus_window         (ui_window_t *window);
 
 DREAM_LOCAL void ui_process_windows(void);
 
@@ -172,6 +167,7 @@ typedef enum ui_style_scalar_t
 	UI_SCALAR_ANIMATION_DAMPEN,
 	UI_SCALAR_HOVER_LIFT,
 
+    UI_SCALAR_WINDOW_MARGIN,
     UI_SCALAR_WIDGET_MARGIN,
     UI_SCALAR_TEXT_MARGIN,
 
@@ -197,6 +193,7 @@ typedef enum ui_style_color_t
     UI_COLOR_WINDOW_TITLE_BAR,
     UI_COLOR_WINDOW_TITLE_BAR_HOT,
     UI_COLOR_WINDOW_CLOSE_BUTTON,
+    UI_COLOR_WINDOW_OUTLINE,
 
     UI_COLOR_PROGRESS_BAR_EMPTY,
     UI_COLOR_PROGRESS_BAR_FILLED,
@@ -276,16 +273,18 @@ typedef enum ui_text_op_t
 
 DREAM_LOCAL rect2_t ui_text_op            (font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op);
 DREAM_LOCAL rect2_t ui_draw_text          (font_atlas_t *font, v2_t p, string_t text);
+DREAM_LOCAL rect2_t ui_draw_text_aligned  (font_atlas_t *font, rect2_t rect, string_t text, v2_t align);
 DREAM_LOCAL rect2_t ui_text_bounds        (font_atlas_t *font, v2_t p, string_t text);
 DREAM_LOCAL float   ui_text_width         (font_atlas_t *font, string_t text);
 DREAM_LOCAL float   ui_text_height        (font_atlas_t *font, string_t text);
 DREAM_LOCAL v2_t    ui_text_dim           (font_atlas_t *font, string_t text);
 
-DREAM_LOCAL void    ui_draw_rect                   (rect2_t rect, v4_t color);
-DREAM_LOCAL void    ui_draw_rect_roundedness       (rect2_t rect, v4_t color, v4_t roundness);
-DREAM_LOCAL void    ui_draw_rect_roundedness_shadow(rect2_t rect, v4_t color, v4_t roundness, float shadow_amount, float shadow_radius);
-DREAM_LOCAL void    ui_draw_rect_outline           (rect2_t rect, v4_t color, float outline_width);
-DREAM_LOCAL void    ui_draw_circle                 (v2_t p, float r, v4_t color);
+DREAM_LOCAL void    ui_draw_rect                    (rect2_t rect, v4_t color);
+DREAM_LOCAL void    ui_draw_rect_roundedness        (rect2_t rect, v4_t color, v4_t roundness);
+DREAM_LOCAL void    ui_draw_rect_roundedness_shadow (rect2_t rect, v4_t color, v4_t roundness, float shadow_amount, float shadow_radius);
+DREAM_LOCAL void    ui_draw_rect_roundedness_outline(rect2_t rect, v4_t color, v4_t roundedness, float width);
+DREAM_LOCAL void    ui_draw_rect_outline            (rect2_t rect, v4_t color, float outline_width);
+DREAM_LOCAL void    ui_draw_circle                  (v2_t p, float r, v4_t color);
 
 //
 // Widget Building Utilities
@@ -300,6 +299,7 @@ typedef enum ui_interaction_enum_t
 	UI_HELD     = 0x2,
 	UI_RELEASED = 0x4,
 	UI_FIRED    = 0x8,
+	UI_HOVERED  = 0x10,
 } ui_interaction_enum_t;
 
 DREAM_LOCAL ui_interaction_t ui_widget_behaviour(ui_id_t id, rect2_t rect);
@@ -317,6 +317,7 @@ DREAM_LOCAL void ui_panel_end     (void);
 
 #define UI_PANEL(rect) DEFER_LOOP(ui_panel_begin(rect), ui_panel_end())
 
+DREAM_LOCAL void ui_seperator     (void);
 DREAM_LOCAL void ui_label         (string_t text);
 DREAM_LOCAL void ui_header        (string_t text);
 DREAM_LOCAL void ui_progress_bar  (string_t text, float progress);
@@ -364,6 +365,7 @@ typedef struct ui_t
 	ui_id_t next_id;
 	rect2_t next_rect;
 
+	v2_t drag_anchor;
 	v2_t drag_offset;
 
 	stack_t(ui_id_t, UI_ID_STACK_COUNT) id_stack;
@@ -380,6 +382,7 @@ typedef struct ui_t
 DREAM_LOCAL ui_t ui;
 
 DREAM_LOCAL bool ui_is_cold       (ui_id_t id);
+DREAM_LOCAL bool ui_is_next_hot   (ui_id_t id);
 DREAM_LOCAL bool ui_is_hot        (ui_id_t id);
 DREAM_LOCAL bool ui_is_active     (ui_id_t id);
 

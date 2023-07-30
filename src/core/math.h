@@ -244,6 +244,11 @@ DREAM_INLINE v4_t srgb_to_linear(v4_t color)
     return color;
 }
 
+DREAM_INLINE float luminance(v3_t color)
+{
+	return color.x*0.2125f + color.y*0.7154f + color.z*0.0721f;
+}
+
 DREAM_INLINE uint32_t pack_color(v4_t color)
 {
     color.x = CLAMP(color.x, 0.0f, 1.0f);
@@ -253,9 +258,11 @@ DREAM_INLINE uint32_t pack_color(v4_t color)
 
     // color = linear_to_srgb(color);
 
+#if 0
     color.x *= color.w;
     color.y *= color.w;
     color.z *= color.w;
+#endif
 
     uint32_t result = (((uint32_t)(255.0f*color.x) <<  0) |
                        ((uint32_t)(255.0f*color.y) <<  8) |
@@ -266,9 +273,6 @@ DREAM_INLINE uint32_t pack_color(v4_t color)
 
 DREAM_INLINE uint32_t pack_rgba(float r, float g, float b, float a)
 {
-    r *= a;
-    g *= a;
-    b *= a;
     return pack_color((v4_t){r, g, b, a});
 }
 

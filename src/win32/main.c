@@ -325,9 +325,9 @@ int wWinMain(HINSTANCE instance,
         }
     }
 
-    POINT prev_cursor;
-    GetCursorPos(&prev_cursor);
-    ScreenToClient(window, &prev_cursor);
+    POINT prev_cursor_point;
+    GetCursorPos(&prev_cursor_point);
+    ScreenToClient(window, &prev_cursor_point);
 
     r_list_t r_list = { 0 };
     r_list.command_list_size    = MB(16),
@@ -340,6 +340,9 @@ int wWinMain(HINSTANCE instance,
 	r_list.ui_rects             = m_alloc_array_nozero(&win32_arena, r_list.max_ui_rect_count, r_ui_rect_t);
     r_set_command_list(&r_list);
 
+	platform_cursor_t cursor      = PLATFORM_CURSOR_ARROW;
+	platform_cursor_t last_cursor = cursor;
+
     // message loop
     bool running = true;
     while (running)
@@ -351,6 +354,8 @@ int wWinMain(HINSTANCE instance,
 		wchar_t last_char   = 0;
 		size_t  event_count = 0;
 
+		float   mouse_wheel = 0.0f;
+
         MSG msg;
         if (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE))
         {
@@ -360,6 +365,11 @@ int wWinMain(HINSTANCE instance,
                 {
                     running = false;
                 } break;
+
+				case WM_MOUSEWHEEL:
+				{
+					mouse_wheel += (float)GET_WHEEL_DELTA_WPARAM(msg.wParam);
+				} break;
 
 				case WM_KEYDOWN:
 				case WM_KEYUP:
@@ -391,7 +401,7 @@ int wWinMain(HINSTANCE instance,
 					platform_event_t *event = m_alloc_struct(event_arena, platform_event_t);
 					event_count += 1;
 
-					platform_mouse_button_t button = PLATFORM_MOUSE_BUTTON_NONE;
+					platform_mouse_buttons_t button = 0;
 					switch (msg.message)
 					{
 						case WM_LBUTTONDOWN: case WM_LBUTTONUP:
@@ -487,18 +497,18 @@ int wWinMain(HINSTANCE instance,
         int width  = client_rect.right - client_rect.left;
         int height = client_rect.bottom - client_rect.top;
 
-        POINT cursor;
-        GetCursorPos(&cursor);
-        ScreenToClient(window, &cursor);
+        POINT cursor_point;
+        GetCursorPos(&cursor_point);
+        ScreenToClient(window, &cursor_point);
 
 		v2_t mouse_p  = {0};
 		v2_t mouse_dp = {0};
 
         if (has_focus)
         {
-			v2_t prev_mouse_p = convert_mouse_cursor(prev_cursor, height);
+			v2_t prev_mouse_p = convert_mouse_cursor(prev_cursor_point, height);
 
-			mouse_p  = convert_mouse_cursor(cursor, height);
+			mouse_p  = convert_mouse_cursor(cursor_point, height);
 			mouse_dp = sub(mouse_p, prev_mouse_p);
 
             if (cursor_locked)
@@ -506,14 +516,14 @@ int wWinMain(HINSTANCE instance,
                 POINT mid_point;
                 mid_point.x = (client_rect.left + client_rect.right) / 2;
                 mid_point.y = (client_rect.bottom + client_rect.top) / 2;
-                cursor = mid_point;
+                cursor_point = mid_point;
 
                 ClientToScreen(window, &mid_point);
                 SetCursorPos(mid_point.x, mid_point.y);
             }
         }
 
-        prev_cursor = cursor;
+        prev_cursor_point = cursor_point;
 
         r_reset_command_list();
 
@@ -524,13 +534,15 @@ int wWinMain(HINSTANCE instance,
 
 			.mouse_p     = mouse_p,
 			.mouse_dp    = mouse_dp,
-			.mouse_wheel = 0.0f, // TODO: Do it.
+			.mouse_wheel = mouse_wheel,
 
 			// .gamepads..?,
 
 			.event_count = event_count,
 			.first_event = first_event,
 			.last_event  = last_event,
+			
+			.cursor      = cursor,
 		};
 
 		hooks.tick(&tick_io);
@@ -539,6 +551,33 @@ int wWinMain(HINSTANCE instance,
         {
             lock_cursor(tick_io.lock_cursor);
         }
+
+		cursor = tick_io.cursor;
+		//if (cursor != last_cursor)
+		{
+			if (cursor == PLATFORM_CURSOR_NONE)
+			{
+				SetCursor(NULL);
+			}
+			else
+			{
+				wchar_t *win32_cursor = IDC_ARROW;
+				switch (cursor)
+				{
+					case PLATFORM_CURSOR_ARROW:       win32_cursor = IDC_ARROW;    break;
+					case PLATFORM_CURSOR_TEXT_INPUT:  win32_cursor = IDC_IBEAM;    break;
+					case PLATFORM_CURSOR_RESIZE_ALL:  win32_cursor = IDC_SIZEALL;  break;
+					case PLATFORM_CURSOR_RESIZE_EW:   win32_cursor = IDC_SIZEWE;   break;
+					case PLATFORM_CURSOR_RESIZE_NS:   win32_cursor = IDC_SIZENS;   break;
+					case PLATFORM_CURSOR_RESIZE_NESW: win32_cursor = IDC_SIZENESW; break;
+					case PLATFORM_CURSOR_RESIZE_NWSE: win32_cursor = IDC_SIZENWSE; break;
+					case PLATFORM_CURSOR_HAND:        win32_cursor = IDC_HAND;     break;
+					case PLATFORM_CURSOR_NOT_ALLOWED: win32_cursor = IDC_NO;       break;
+				}
+				SetCursor(LoadCursor(NULL, win32_cursor));
+			}
+		}
+		last_cursor = cursor;
 
         d3d11_draw_list(&r_list, width, height);
         d3d11_present();

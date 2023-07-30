@@ -66,7 +66,7 @@ void ui_pop_id(void)
 // Input
 //
 
-void ui_submit_mouse_buttons(ui_mouse_buttons_t buttons, bool pressed)
+void ui_submit_mouse_buttons(platform_mouse_buttons_t buttons, bool pressed)
 {
 	ui.input.mouse_buttons_down = TOGGLE_BIT(ui.input.mouse_buttons_down, buttons, pressed);
 
@@ -80,9 +80,9 @@ void ui_submit_mouse_buttons(ui_mouse_buttons_t buttons, bool pressed)
 	}
 }
 
-void ui_submit_mouse_scroll(float scroll)
+void ui_submit_mouse_wheel(float wheel)
 {
-	ui.input.mouse_scroll = scroll;
+	ui.input.mouse_wheel += wheel;
 }
 
 void ui_submit_mouse_p(v2_t p)
@@ -95,17 +95,17 @@ void ui_submit_mouse_dp(v2_t dp)
 	ui.input.mouse_dp = dp;
 }
 
-bool ui_mouse_buttons_down(ui_mouse_buttons_t buttons)
+bool ui_mouse_buttons_down(platform_mouse_buttons_t buttons)
 {
 	return !!(ui.input.mouse_buttons_down & buttons);
 }
 
-bool ui_mouse_buttons_pressed(ui_mouse_buttons_t buttons)
+bool ui_mouse_buttons_pressed(platform_mouse_buttons_t buttons)
 {
 	return !!(ui.input.mouse_buttons_pressed & buttons);
 }
 
-bool ui_mouse_buttons_released(ui_mouse_buttons_t buttons)
+bool ui_mouse_buttons_released(platform_mouse_buttons_t buttons)
 {
 	return !!(ui.input.mouse_buttons_released & buttons);
 }
@@ -288,6 +288,66 @@ void ui_send_window_to_back(ui_window_t *window)
 	dll_push_front(ui.windows.first_window, ui.windows.last_window, window);
 }
 
+void ui_focus_window(ui_window_t *window)
+{
+	ui.windows.focus_window = window;
+	ui.has_focus            = true;
+}
+
+DREAM_INLINE ui_rect_edge_t ui_handle_tray(ui_id_t id, rect2_t rect)
+{
+	float tray_width = 6.0f;
+
+	rect2_t tray_e  = rect2_cut_right (&rect,   tray_width);
+	rect2_t tray_w  = rect2_cut_left  (&rect,   tray_width);
+	rect2_t tray_n  = rect2_cut_top   (&rect,   tray_width);
+	rect2_t tray_s  = rect2_cut_bottom(&rect,   tray_width);
+	rect2_t tray_ne = rect2_cut_top   (&tray_e, tray_width);
+	rect2_t tray_nw = rect2_cut_top   (&tray_w, tray_width);
+	rect2_t tray_se = rect2_cut_bottom(&tray_e, tray_width);
+	rect2_t tray_sw = rect2_cut_bottom(&tray_w, tray_width);
+
+	ui_rect_edge_t tray_region = 0;
+
+	ui_id_t id_n  = ui_child_id(S("tray_id_n"), id);
+	ui_id_t id_e  = ui_child_id(S("tray_id_e"), id);
+	ui_id_t id_s  = ui_child_id(S("tray_id_s"), id);
+	ui_id_t id_w  = ui_child_id(S("tray_id_w"), id);
+	ui_id_t id_ne = ui_child_id(S("tray_id_ne"), id);
+	ui_id_t id_nw = ui_child_id(S("tray_id_nw"), id);
+	ui_id_t id_se = ui_child_id(S("tray_id_se"), id);
+	ui_id_t id_sw = ui_child_id(S("tray_id_sw"), id);
+
+	ui_widget_behaviour(id_n,  tray_n);
+	ui_widget_behaviour(id_e,  tray_e);
+	ui_widget_behaviour(id_s,  tray_s);
+	ui_widget_behaviour(id_w,  tray_w);
+	ui_widget_behaviour(id_ne, tray_ne);
+	ui_widget_behaviour(id_nw, tray_nw);
+	ui_widget_behaviour(id_se, tray_se);
+	ui_widget_behaviour(id_sw, tray_sw);
+
+	if (ui_is_hot(id_n))  { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NS; };
+	if (ui_is_hot(id_e))  { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_EW; };
+	if (ui_is_hot(id_s))  { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NS; };
+	if (ui_is_hot(id_w))  { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_EW; };
+	if (ui_is_hot(id_ne)) { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NESW; };
+	if (ui_is_hot(id_nw)) { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NWSE; };
+	if (ui_is_hot(id_se)) { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NWSE; };
+	if (ui_is_hot(id_sw)) { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NESW; };
+
+	if (ui_is_active(id_n))  tray_region = UI_RECT_EDGE_N;
+	if (ui_is_active(id_e))  tray_region = UI_RECT_EDGE_E;
+	if (ui_is_active(id_s))  tray_region = UI_RECT_EDGE_S;
+	if (ui_is_active(id_w))  tray_region = UI_RECT_EDGE_W;
+	if (ui_is_active(id_ne)) tray_region = UI_RECT_EDGE_N|UI_RECT_EDGE_E;
+	if (ui_is_active(id_nw)) tray_region = UI_RECT_EDGE_N|UI_RECT_EDGE_W;
+	if (ui_is_active(id_se)) tray_region = UI_RECT_EDGE_S|UI_RECT_EDGE_E;
+	if (ui_is_active(id_sw)) tray_region = UI_RECT_EDGE_S|UI_RECT_EDGE_W;
+
+	return tray_region;
+}
+
 void ui_process_windows(void)
 {
 	ui_window_t *hovered_window = NULL;
@@ -312,19 +372,34 @@ void ui_process_windows(void)
 
 			rect2_t total = rect2_union(title_bar, rect);
 
-			if (ui_hover_rect(total))
+			float tray_width = 6.0f;
+
+			rect2_t interact_total = rect2_extend(total, 0.5f*tray_width);
+			ui_interaction_t interaction = ui_widget_behaviour(id, interact_total);
+
+			if (ui_hover_rect(interact_total))
 			{
 				hovered_window = window;
 			}
 
-			ui_interaction_t interaction = ui_widget_behaviour(id, total);
-
 			string_t title = string_from_storage(window->title);
 
-			ui_draw_rect_roundedness_shadow(total, make_v4(0, 0, 0, 0), make_v4(2, 2, 2, 2), 0.25f, 32.0f);
-			ui_draw_rect_roundedness(title_bar, ui_color(UI_COLOR_WINDOW_TITLE_BAR), make_v4(2, 0, 2, 0));
+			bool has_focus = window == ui.windows.focus_window;
+
+			float focus_t = ui_interpolate_f32(ui_id(S("focus")), has_focus);
+			float shadow_amount = lerp(0.15f, 0.25f, focus_t);
+
+			v4_t  title_bar_color           = ui_color(UI_COLOR_WINDOW_TITLE_BAR);
+			float title_bar_luma            = luminance(title_bar_color.xyz);
+			v4_t  title_bar_color_greyscale = make_v4(title_bar_luma, title_bar_luma, title_bar_luma, 1.0f);
+
+			v4_t  interpolated_title_bar_color = v4_lerps(title_bar_color_greyscale, title_bar_color, focus_t);
+
+			ui_draw_rect_roundedness_shadow(rect2_shrink(total, 1.0f), make_v4(0, 0, 0, 0), make_v4(4, 4, 4, 4), shadow_amount, 32.0f);
+			ui_draw_rect_roundedness(title_bar, interpolated_title_bar_color, make_v4(2, 0, 2, 0));
 			ui_draw_rect_roundedness(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), make_v4(0, 2, 0, 2));
 			ui_draw_text(&ui.style.header_font, ui_text_center_p(&ui.style.header_font, title_bar, title), title);
+			ui_draw_rect_roundedness_outline(total, ui_color(UI_COLOR_WINDOW_OUTLINE), make_v4(2, 2, 2, 2), 2.0f);
 
 			if (interaction & UI_PRESSED)
 			{
@@ -340,26 +415,13 @@ void ui_process_windows(void)
 											 
 			}
 
-			float tray_width = 4.0f;
-
-			rect2_t tray_w  = rect2_cut_left  (&rect,   tray_width);
-			rect2_t tray_e  = rect2_cut_right (&rect,   tray_width);
-			rect2_t tray_s  = rect2_cut_bottom(&rect,   tray_width);
-			rect2_t tray_sw = rect2_cut_bottom(&tray_w, tray_width);
-			rect2_t tray_se = rect2_cut_bottom(&tray_e, tray_width);
-
-			ui_rect_edge_t tray_region = 0;
-
-			if (ui_widget_behaviour(ui_id(S("tray_w")),  tray_w)  & UI_HELD) tray_region |= UI_RECT_EDGE_W;
-			if (ui_widget_behaviour(ui_id(S("tray_e")),  tray_e)  & UI_HELD) tray_region |= UI_RECT_EDGE_E;
-			if (ui_widget_behaviour(ui_id(S("tray_s")),  tray_s)  & UI_HELD) tray_region |= UI_RECT_EDGE_S;
-			if (ui_widget_behaviour(ui_id(S("tray_sw")), tray_sw) & UI_HELD) tray_region |= UI_RECT_EDGE_S|UI_RECT_EDGE_W;
-			if (ui_widget_behaviour(ui_id(S("tray_se")), tray_se) & UI_HELD) tray_region |= UI_RECT_EDGE_S|UI_RECT_EDGE_E;
+			ui_rect_edge_t tray_region = ui_handle_tray(id, interact_total);
 
 			if (tray_region)
 			{
 				v2_t dp = ui.input.mouse_dp; // TODO: DON'T USE MOUSE DP. IT BREAKS IF THE RESIZING BECOMES DISCONTINUOUS (AKA WHEN YOU HIT THE MINIMUM SIZE)
 
+				// same caveat as for dragging: this has a frame delay due to updating window->rect. I should fix that, since it wouldn't be very hard to do.
 				if (tray_region & UI_RECT_EDGE_E) window->rect = rect2_extend_right(window->rect,  dp.x);
 				if (tray_region & UI_RECT_EDGE_W) window->rect = rect2_extend_left (window->rect, -dp.x);
 				if (tray_region & UI_RECT_EDGE_N) window->rect = rect2_extend_up   (window->rect,  dp.y);
@@ -368,11 +430,13 @@ void ui_process_windows(void)
 				window->rect = rect2_uninvert(window->rect);
 			}
 
-			float margin = max(ui_scalar(UI_SCALAR_WIDGET_MARGIN), 2.0f*ui_scalar(UI_SCALAR_ROUNDEDNESS)) - ui_scalar(UI_SCALAR_WIDGET_MARGIN);
-			rect2_cut_bottom(&rect, margin);
+			float margin = max(ui_scalar(UI_SCALAR_WIDGET_MARGIN), 0.5f*ui_scalar(UI_SCALAR_ROUNDEDNESS));
+			rect = rect2_shrink(rect, margin);
+			//rect2_cut_bottom(&rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+			rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WINDOW_MARGIN));
 
 			// TODO: Custom scrollbar rendering for windows?
-			ui_panel_begin_ex(ui_id(S("panel")), rect, 0);
+			ui_panel_begin_ex(ui_id(S("panel")), rect, UI_PANEL_SCROLLABLE_VERT);
 
 			window->draw_proc(window->user_data);
 
@@ -388,12 +452,14 @@ void ui_process_windows(void)
 		ui.hovered = true;
 	}
 
-	if (ui_mouse_buttons_pressed(UI_MOUSE_ANY))
+	if (ui_mouse_buttons_pressed(PLATFORM_MOUSE_BUTTON_ANY))
 	{
 		if (hovered_window)
 		{
 			ui_bring_window_to_front(hovered_window);
 		}
+
+		ui.windows.focus_window = hovered_window;
 	}
 }
 
@@ -639,6 +705,14 @@ rect2_t ui_draw_text(font_atlas_t *font, v2_t p, string_t text)
 	return result;
 }
 
+rect2_t ui_draw_text_aligned(font_atlas_t *font, rect2_t rect, string_t text, v2_t align)
+{
+	v2_t p = ui_text_align_p(font, rect, text, align);
+	ui_text_op(font, add(p, make_v2(1.0f, -1.0f)), text, ui_color(UI_COLOR_TEXT_SHADOW), UI_TEXT_OP_DRAW);
+	rect2_t result = ui_text_op(font, p, text, ui_color(UI_COLOR_TEXT), UI_TEXT_OP_DRAW);
+	return result;
+}
+
 void ui_draw_rect(rect2_t rect, v4_t color)
 {
 	uint32_t color_packed = pack_color(color);
@@ -698,6 +772,21 @@ void ui_draw_rect_outline(rect2_t rect, v4_t color, float width)
 	});
 }
 
+void ui_draw_rect_roundedness_outline(rect2_t rect, v4_t color, v4_t roundedness, float width)
+{
+	uint32_t color_packed = pack_color(color);
+
+	r_ui_rect((r_ui_rect_t){
+		.rect         = rect, 
+		.roundedness  = mul(roundedness, v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS))),
+		.color_00     = color_packed,
+		.color_10     = color_packed,
+		.color_11     = color_packed,
+		.color_01     = color_packed,
+		.inner_radius = width,
+	});
+}
+
 void ui_draw_circle(v2_t p, float radius, v4_t color)
 {
 	uint32_t color_packed = pack_color(color);
@@ -728,6 +817,10 @@ ui_interaction_t ui_widget_behaviour(ui_id_t id, rect2_t rect)
 	uint32_t result = 0;
 
 	rect2_t hit_rect = rect;
+	hit_rect.min.x = floorf(hit_rect.min.x);
+	hit_rect.min.y = floorf(hit_rect.min.y);
+	hit_rect.max.x = ceilf(hit_rect.max.x);
+	hit_rect.max.y = ceilf(hit_rect.max.y);
 
 	if (ui.panels.current_panel)
 		hit_rect = rect2_intersect(ui.panels.current_panel->rect_init, rect);
@@ -736,7 +829,7 @@ ui_interaction_t ui_widget_behaviour(ui_id_t id, rect2_t rect)
 	{
 		result |= UI_HELD;
 
-		if (ui_mouse_buttons_released(UI_MOUSE_LEFT))
+		if (ui_mouse_buttons_released(PLATFORM_MOUSE_BUTTON_LEFT))
 		{
 			if (rect2_contains_point(hit_rect, ui.input.mouse_p))
 			{
@@ -753,11 +846,10 @@ ui_interaction_t ui_widget_behaviour(ui_id_t id, rect2_t rect)
         ui_set_next_hot(id);
 	}
 
-	if (ui_is_hot(id) && ui_mouse_buttons_pressed(UI_MOUSE_LEFT))
+	if (ui_is_hot(id) && ui_mouse_buttons_pressed(PLATFORM_MOUSE_BUTTON_LEFT))
 	{
 		result |= UI_PRESSED;
-		ui.input.mouse_pressed_p = ui.input.mouse_p;
-		ui.input.drag_anchor     = sub(ui.input.mouse_p, rect2_center(rect));
+		ui.drag_anchor = sub(ui.input.mouse_p, rect2_center(rect));
 		ui_set_active(id);
 	}
 
@@ -807,38 +899,43 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 
 	r_push_view_screenspace_clip_rect(rect);
 
-	rect2_t inner_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
-
 	float offset_y = 0.0f;
 
 	if (flags & UI_PANEL_SCROLLABLE_VERT)
 	{
-		rect2_t scroll_area = rect2_cut_right(&rect, ui_scalar(UI_SCALAR_SCROLLBAR_WIDTH));
+		// rect2_t scroll_area = rect2_cut_right(&rect, ui_scalar(UI_SCALAR_SCROLLBAR_WIDTH));
 
 		ui_panel_state_t *state = &ui_get_state(id)->panel;
 		
 		if (state->scrollable_height_y > 0.0f)
 		{
-			ui_id_t scrollbar_id = ui_id(S("scrollbar"));
+			if (ui_hover_rect(rect))
+			{
+				state->scroll_offset_y -= ui.input.mouse_wheel;
+				state->scroll_offset_y = flt_clamp(state->scroll_offset_y, 0.0f, max(0.0f, state->scrollable_height_y - rect2_height(rect)));
+			}
+
+			ui_id_t scrollbar_id = ui_child_id(S("scrollbar"), id);
+#if 0
 
 			float scroll_area_height = rect2_height(scroll_area);
 
-			float visible_area_ratio = rect2_height(inner_rect) / state->scrollable_height_y;
+			float visible_area_ratio = min(1.0f, rect2_height(rect) / state->scrollable_height_y);
 			float handle_size      = visible_area_ratio*scroll_area_height;
 			float handle_half_size = 0.5f*handle_size;
 
-			float pct = state->scroll_offset_y / (state->scrollable_height_y - rect2_height(inner_rect));
+			float pct = state->scroll_offset_y / max(0.0f, (state->scrollable_height_y - rect2_height(rect)));
 
 			if (ui_is_active(scrollbar_id))
 			{
-				float relative_y = CLAMP((ui.input.mouse_p.y - ui.input.drag_anchor.y) - scroll_area.min.y - handle_half_size, 0.0f, scroll_area_height - handle_size);
+				float relative_y = CLAMP((ui.input.mouse_p.y - ui.drag_anchor.y) - scroll_area.min.y - handle_half_size, 0.0f, scroll_area_height - handle_size);
 				pct = 1.0f - (relative_y / (scroll_area_height - handle_size));
 			}
 
 			// hmm
-			pct = ui_interpolate_f32(scrollbar_id, pct);
+			pct = ui_interpolate_f32(ui_child_id(S("jejff"), scrollbar_id), pct);
 
-			state->scroll_offset_y = pct*(state->scrollable_height_y - rect2_height(inner_rect));
+			// state->scroll_offset_y = pct*(state->scrollable_height_y - rect2_height(rect));
 
 			float height_exclusive = scroll_area_height - handle_size;
 			float handle_offset = pct*height_exclusive;
@@ -854,20 +951,21 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 			ui_draw_rect(top, ui_color(UI_COLOR_SLIDER_BACKGROUND));
 			ui_draw_rect(handle, color);
 			ui_draw_rect(bot, ui_color(UI_COLOR_SLIDER_BACKGROUND));
+#endif
 
-			offset_y = roundf(state->scroll_offset_y);
+			offset_y = roundf(ui_interpolate_f32(scrollbar_id, state->scroll_offset_y));
 		}
 	}
 
-	inner_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
-	inner_rect = rect2_add_offset(inner_rect, make_v2(0, offset_y));
+	rect2_t inner_rect = rect2_add_offset(rect, make_v2(0, offset_y));
 
 	if (flags & UI_PANEL_SCROLLABLE_VERT)
 	{
 		inner_rect.min.y = inner_rect.max.y;
 	}
 
-	ui_push_panel(id, inner_rect, flags);
+	ui_panel_t *panel = ui_push_panel(id, inner_rect, flags);
+	panel->rect_init = rect;
 }
 
 void ui_panel_end(void)
@@ -893,6 +991,22 @@ void ui_panel_end(void)
 
 	r_pop_view();
 	ui_pop_panel();
+}
+
+void ui_seperator(void)
+{
+	if (NEVER(!ui.initialized)) 
+		return;
+
+	rect2_t *layout = ui_layout_rect();
+
+	float margin = 2.0f*ui_font_height();
+	rect2_t rect = rect2_cut_top(layout, margin);
+	float w = rect2_width(rect);
+	float h = 2.0f*ui_scalar(UI_SCALAR_WIDGET_MARGIN);
+
+	rect2_t seperator = rect2_center_dim(rect2_center(rect), make_v2(w, h));
+	ui_draw_rect(seperator, make_v4(0.1f, 0.1f, 0.1f, 0.25f));
 }
 
 void ui_label(string_t label)
@@ -1201,6 +1315,7 @@ bool ui_option_buttons(string_t label, int *value, int count, string_t *labels)
 
             ui_set_next_rect(rect2_cut_left(&rect, size));
             bool pressed = ui_button(labels[i]);
+
             result |= pressed;
 
             if (pressed)
@@ -1215,7 +1330,7 @@ bool ui_option_buttons(string_t label, int *value, int count, string_t *labels)
         }
     }
 
-	ui_draw_text(&ui.style.font, label_rect.min, label);
+	ui_draw_text_aligned(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
     return result;
 }
@@ -1249,11 +1364,11 @@ bool ui_slider(string_t label, float *v, float min, float max)
 
 	rect2_t slider_body = rect;
 
-	float handle_width = rect2_height(rect)*ui_scalar(UI_SCALAR_SLIDER_HANDLE_RATIO);
+	float handle_width = max(16.0f, rect2_width(rect)*ui_scalar(UI_SCALAR_SLIDER_HANDLE_RATIO));
 	float handle_half_width = 0.5f*handle_width;
 	
 	float width = rect2_width(rect);
-	float relative_x = CLAMP((ui.input.mouse_p.x - ui.input.drag_anchor.x) - rect.min.x - handle_half_width, 0.0f, width - handle_width);
+	float relative_x = CLAMP((ui.input.mouse_p.x - ui.drag_anchor.x) - rect.min.x - handle_half_width, 0.0f, width - handle_width);
 
 	float pct = 0.0f;
 
@@ -1303,7 +1418,7 @@ bool ui_slider(string_t label, float *v, float min, float max)
 	ui_draw_rect(handle, color);
 	ui_draw_rect(right, ui_color(UI_COLOR_SLIDER_BACKGROUND));
 
-	ui_draw_text(&ui.style.font, label_rect.min, label);
+	ui_draw_text_aligned(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
 	string_t value_text = Sf("%.03f", *v);
 
@@ -1361,24 +1476,27 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 
 	rect2_t slider_body = rect;
 
-	float handle_width = rect2_height(rect)*ui_scalar(UI_SCALAR_SLIDER_HANDLE_RATIO);
+	int   range = max - min;
+	float ratio = 1.0f / (float)range;
+
+	float handle_width = max(16.0f, rect2_width(rect)*ratio); // ui_scalar(UI_SCALAR_SLIDER_HANDLE_RATIO);
 	float handle_half_width = 0.5f*handle_width;
 	
 	float width = rect2_width(rect);
-	float relative_x = CLAMP((ui.input.mouse_p.x - ui.input.drag_anchor.x) - rect.min.x - handle_half_width, 0.0f, width - handle_width);
+	float relative_x = CLAMP((ui.input.mouse_p.x - ui.drag_anchor.x) - rect.min.x - handle_half_width, 0.0f, width - handle_width);
 
 	float pct = 0.0f;
 
 	if (ui_is_active(id))
 	{
 		pct = relative_x / (width - handle_width);
-		*v = (int)roundf((float)min + pct*(float)(max - min));
+		*v = (int)roundf((float)min + pct*(float)(range));
 		ui_set_f32(id, pct);
 	}
 	else
 	{
 		int value = *v;
-		pct = (float)(value - min) / (float)(max - min); // TODO: protect against division by zero, think about min > max case
+		pct = (float)(value - min) / (float)(range); // TODO: protect against division by zero, think about min > max case
 	}
 
 	pct = saturate(pct);
@@ -1386,11 +1504,8 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 	float hover_lift = ui_is_hot(id) ? ui_scalar(UI_SCALAR_HOVER_LIFT) : 0.0f;
 	hover_lift = ui_interpolate_f32(ui_child_id(S("hover_lift"), id), hover_lift);
 
-	float pct_interp = pct;
-	if (!ui_is_active(id))
-	{
-		pct_interp = ui_interpolate_f32(id, pct);
-	}
+	UI_SCALAR(UI_SCALAR_ANIMATION_STIFFNESS, 4.0f*ui_scalar(UI_SCALAR_ANIMATION_STIFFNESS));
+	float pct_interp = ui_interpolate_f32(id, pct);
 
 	float width_exclusive = width - handle_width;
 	float handle_offset = pct_interp*width_exclusive;
@@ -1423,7 +1538,7 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 	ui_draw_rect(handle_no_offset, ui_color(UI_COLOR_WIDGET_SHADOW));
 	ui_draw_rect(handle, color);
 
-	ui_draw_text(&ui.style.font, label_rect.min, label);
+	ui_draw_text_aligned(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
 	string_t value_text = Sf("%d", *v);
 
@@ -1448,6 +1563,11 @@ ui_t ui = {
 bool ui_is_cold(ui_id_t id)
 {
 	return (ui.hot.value != id.value && ui.active.value != id.value);
+}
+
+bool ui_is_next_hot(ui_id_t id)
+{
+	return ui.next_hot.value == id.value;
 }
 
 bool ui_is_hot(ui_id_t id)
@@ -1536,14 +1656,14 @@ bool ui_begin(float dt)
         ui.style.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS] = 512.0f;
         ui.style.base_scalars[UI_SCALAR_ANIMATION_DAMPEN   ] = 32.0f;
         ui.style.base_scalars[UI_SCALAR_HOVER_LIFT         ] = 1.5f;
+		ui.style.base_scalars[UI_SCALAR_WINDOW_MARGIN      ] = 0.0f;
 		ui.style.base_scalars[UI_SCALAR_WIDGET_MARGIN      ] = 0.75f;
 		ui.style.base_scalars[UI_SCALAR_TEXT_MARGIN        ] = 2.2f;
 		ui.style.base_scalars[UI_SCALAR_ROUNDEDNESS        ] = 2.5f;
 		ui.style.base_scalars[UI_SCALAR_TEXT_ALIGN_X       ] = 0.5f;
 		ui.style.base_scalars[UI_SCALAR_TEXT_ALIGN_Y       ] = 0.5f;
 		ui.style.base_scalars[UI_SCALAR_SCROLLBAR_WIDTH    ] = 12.0f;
-        ui.style.base_scalars[UI_SCALAR_SLIDER_HANDLE_RATIO] = 3.0f;
-        ui.style.base_scalars[UI_SCALAR_SLIDER_HANDLE_RATIO] = 3.0f;
+        ui.style.base_scalars[UI_SCALAR_SLIDER_HANDLE_RATIO] = 1.0f / 4.0f;
 		ui.style.base_colors [UI_COLOR_TEXT                ] = make_v4(0.95f, 0.90f, 0.85f, 1.0f);
 		ui.style.base_colors [UI_COLOR_TEXT_SHADOW         ] = make_v4(0.00f, 0.00f, 0.00f, 0.50f);
 		ui.style.base_colors [UI_COLOR_WIDGET_SHADOW       ] = make_v4(0.00f, 0.00f, 0.00f, 0.20f);
@@ -1551,6 +1671,7 @@ bool ui_begin(float dt)
 		ui.style.base_colors [UI_COLOR_WINDOW_TITLE_BAR    ] = make_v4(0.45f, 0.25f, 0.25f, 1.0f);
 		ui.style.base_colors [UI_COLOR_WINDOW_TITLE_BAR_HOT] = make_v4(0.45f, 0.22f, 0.22f, 1.0f);
 		ui.style.base_colors [UI_COLOR_WINDOW_CLOSE_BUTTON ] = make_v4(0.35f, 0.15f, 0.15f, 1.0f);
+		ui.style.base_colors [UI_COLOR_WINDOW_OUTLINE      ] = make_v4(0.1f, 0.1f, 0.1f, 0.20f);
 		ui.style.base_colors [UI_COLOR_PROGRESS_BAR_EMPTY  ] = background_hi;
 		ui.style.base_colors [UI_COLOR_PROGRESS_BAR_FILLED ] = hot;
 		ui.style.base_colors [UI_COLOR_BUTTON_IDLE         ] = foreground;
@@ -1611,18 +1732,32 @@ bool ui_begin(float dt)
 	ui.next_hot = UI_ID_NULL;
 
 	ui.hovered = false;
+	
+	if (ui_mouse_buttons_pressed(PLATFORM_MOUSE_BUTTON_LEFT))
+	{
+		ui.input.mouse_pressed_p = ui.input.mouse_p;
+	}
+
+	if (ui.input.cursor_reset_delay > 0)
+	{
+		ui.input.cursor_reset_delay -= 1;
+	}
+	else
+	{
+		ui.input.cursor = PLATFORM_CURSOR_ARROW;
+	}
 
 	return ui.has_focus;
 }
 
 void ui_end(void)
 {
-	if (ui_mouse_buttons_pressed(UI_MOUSE_ANY))
+	if (ui_mouse_buttons_pressed(PLATFORM_MOUSE_BUTTON_ANY))
 	{
 		ui.has_focus = ui.hovered;
 	}
 
-	ui.input.mouse_scroll           = 0.0f;
+	ui.input.mouse_wheel            = 0.0f;
 	ui.input.mouse_buttons_pressed  = 0;
 	ui.input.mouse_buttons_released = 0;
 

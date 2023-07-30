@@ -437,6 +437,7 @@ static void convex_hull_test_proc(void *user_data)
 		}
 	}
 
+	ui_seperator();
 	ui_header(S("Brute Force Tester"));
 	ui_slider_int(S("Min Points"), &hull_test->brute_force_min_point_count, 4, 256);
 	ui_slider_int(S("Max Points"), &hull_test->brute_force_max_point_count, 4, 256);
@@ -519,6 +520,7 @@ static void convex_hull_test_proc(void *user_data)
 
 	if (debug->step_count > 0)
 	{
+		ui_seperator();
 		ui_header(S("Step-By-Step Visualizer"));
 		ui_checkbox(S("Show initial points"), &hull_test->show_points);
 		ui_checkbox(S("Show processed edge"), &hull_test->show_processed_edge);
@@ -1114,6 +1116,7 @@ DREAM_INLINE void ui_demo_proc(void *user_data)
 		ui_set_font_height((float)font_size);
 	}
 
+	ui_slider(S("UI Window Margin"), &ui.style.base_scalars[UI_SCALAR_WINDOW_MARGIN], 0.0f, 8.0f);
 	ui_slider(S("UI Widget Margin"), &ui.style.base_scalars[UI_SCALAR_WIDGET_MARGIN], 0.0f, 8.0f);
 	ui_slider(S("UI Text Margin"), &ui.style.base_scalars[UI_SCALAR_TEXT_MARGIN], 0.0f, 8.0f);
 	ui_slider(S("UI Roundedness"), &ui.style.base_scalars[UI_SCALAR_ROUNDEDNESS], 0.0f, 12.0f);
@@ -1200,6 +1203,7 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 						if (menu->window->open)
 						{
 							ui_bring_window_to_front(menu->window);
+							ui_focus_window         (menu->window);
 						}
 					}
                 }

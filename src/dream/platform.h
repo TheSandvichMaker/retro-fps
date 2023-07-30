@@ -3,16 +3,16 @@
 
 #include "core/api_types.h"
 
-typedef enum platform_mouse_button_t
+typedef uint32_t platform_mouse_buttons_t;
+typedef enum platform_mouse_button_enum_t
 {
-	PLATFORM_MOUSE_BUTTON_NONE,
-	PLATFORM_MOUSE_BUTTON_LEFT,
-	PLATFORM_MOUSE_BUTTON_MIDDLE,
-	PLATFORM_MOUSE_BUTTON_RIGHT,
-	PLATFORM_MOUSE_BUTTON_X1,
-	PLATFORM_MOUSE_BUTTON_X2,
-	PLATFORM_MOUSE_BUTTON_COUNT,
-} platform_mouse_button_t;
+	PLATFORM_MOUSE_BUTTON_LEFT   = (1 << 0),
+	PLATFORM_MOUSE_BUTTON_MIDDLE = (1 << 1),
+	PLATFORM_MOUSE_BUTTON_RIGHT  = (1 << 2),
+	PLATFORM_MOUSE_BUTTON_X1     = (1 << 3),
+	PLATFORM_MOUSE_BUTTON_X2     = (1 << 4),
+	PLATFORM_MOUSE_BUTTON_ANY    = (PLATFORM_MOUSE_BUTTON_LEFT|PLATFORM_MOUSE_BUTTON_MIDDLE|PLATFORM_MOUSE_BUTTON_RIGHT|PLATFORM_MOUSE_BUTTON_X1|PLATFORM_MOUSE_BUTTON_X2),
+} platform_mouse_button_enum_t;
 
 typedef enum platform_keycode_t
 {
@@ -136,6 +136,21 @@ typedef enum platform_keycode_t
 	PLATFORM_KEY_COUNT,
 } platform_keycode_t;
 
+typedef enum platform_cursor_t
+{
+	PLATFORM_CURSOR_NONE,
+	PLATFORM_CURSOR_ARROW,
+	PLATFORM_CURSOR_TEXT_INPUT,
+	PLATFORM_CURSOR_RESIZE_ALL,
+	PLATFORM_CURSOR_RESIZE_EW,
+	PLATFORM_CURSOR_RESIZE_NS,
+	PLATFORM_CURSOR_RESIZE_NESW,
+	PLATFORM_CURSOR_RESIZE_NWSE,
+	PLATFORM_CURSOR_HAND,
+	PLATFORM_CURSOR_NOT_ALLOWED,
+	PLATFORM_CURSOR_COUNT,
+} platform_cursor_t;
+
 typedef enum platform_event_kind_t
 {
 	PLATFORM_EVENT_MOUSE_BUTTON,
@@ -154,8 +169,8 @@ typedef struct platform_event_t
 	{
 		struct
 		{
-			bool                    pressed;
-			platform_mouse_button_t button;
+			bool                     pressed;
+			platform_mouse_buttons_t button;
 		} mouse_button;
 
 		struct
@@ -210,6 +225,8 @@ typedef struct platform_io_t
 	size_t event_count;
 	platform_event_t *first_event;
 	platform_event_t * last_event;
+
+	platform_cursor_t cursor;
 
 	bool lock_cursor;
 	bool request_exit;
