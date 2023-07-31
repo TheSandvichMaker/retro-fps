@@ -54,6 +54,8 @@ font_atlas_t make_font_atlas_from_memory(string_t font_data, size_t range_count,
 			int ascent, descent, line_gap;
 			stbtt_GetFontVMetrics(&info, &ascent, &descent, &line_gap);
 
+			result.oversampling_x = 2;
+			result.oversampling_y = 2;
 			result.font_height = font_size;
 			result.ascent      = font_scale*(float)ascent;
 			result.descent     = font_scale*(float)descent;
@@ -63,7 +65,7 @@ font_atlas_t make_font_atlas_from_memory(string_t font_data, size_t range_count,
 			stbtt_pack_context spc;
 			if (stbtt_PackBegin(&spc, pixels, w, h, w, 1, temp))
 			{
-				stbtt_PackSetOversampling(&spc, 2, 2);
+				stbtt_PackSetOversampling(&spc, result.oversampling_x, result.oversampling_y);
 
 				// translate passed in font ranges to stbtt font ranges
 
@@ -170,6 +172,67 @@ font_glyph_t *atlas_get_glyph(font_atlas_t *atlas, uint32_t codepoint)
 float atlas_get_advance(font_atlas_t *atlas, uint32_t a, uint32_t b)
 {
 	(void)b;
+	// TODO: Kerning
 	font_glyph_t *glyph = atlas_get_glyph(atlas, a);
 	return glyph->x_advance;
+}
+
+prepared_glyphs_t atlas_prepare_glyphs(font_atlas_t *atlas, arena_t *arena, string_t text)
+{
+	prepared_glyphs_t result = {0};
+	result.count  = text.count;
+	result.glyphs = m_alloc_array_nozero(arena, text.count, prepared_glyph_t);
+
+	float w = (float)atlas->texture_w;
+	float h = (float)atlas->texture_h;
+
+	v2_t at = {0};
+	at.y -= 0.5f*atlas->descent;
+
+	at.y = roundf(at.y);
+
+	for (size_t i = 0; i < text.count; i++)
+	{
+		char c = text.data[i];
+
+		if (is_newline(c))
+		{
+			at.x  = 0.0f;
+			at.y -= atlas->y_advance;
+		}
+		else
+		{
+			font_glyph_t *glyph = atlas_get_glyph(atlas, c);
+
+			float cw = (float)(glyph->max_x - glyph->min_x);
+			float ch = (float)(glyph->max_y - glyph->min_y);
+
+			cw /= (float)atlas->oversampling_x;
+			ch /= (float)atlas->oversampling_y;
+
+			v2_t point = at;
+			point.x += glyph->x_offset;
+			point.y += glyph->y_offset;
+
+			prepared_glyph_t *prep = &result.glyphs[i];
+			prep->rect = rect2_from_min_dim(point, make_v2(cw, ch));
+			prep->rect_uv = (rect2_t){
+				.x0 = (float)glyph->min_x / w,
+				.y0 = (float)glyph->max_y / h,
+				.x1 = (float)glyph->max_x / w,
+				.y1 = (float)glyph->min_y / h,
+			};
+			prep->byte_offset = (uint32_t)i;
+
+			result.bounds = rect2_union(result.bounds, prep->rect);
+
+			if (i + 1 < text.count)
+			{
+				char c_next = text.data[i + 1];
+				at.x += atlas_get_advance(atlas, c, c_next);
+			}
+		}
+	}
+
+	return result;
 }

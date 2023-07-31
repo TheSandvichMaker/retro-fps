@@ -56,6 +56,8 @@ typedef struct ui_demo_panel_t
 	ui_window_t window;
 	float slider_f32;
 	int   slider_i32;
+	char             edit_buffer_storage[256];
+	dynamic_string_t edit_buffer;
 } ui_demo_panel_t;
 
 typedef struct lightmap_editor_state_t
@@ -1122,6 +1124,10 @@ DREAM_INLINE void ui_demo_proc(void *user_data)
 	ui_slider(S("UI Roundedness"), &ui.style.base_scalars[UI_SCALAR_ROUNDEDNESS], 0.0f, 12.0f);
 	ui_slider(S("UI Animation Stiffness"), &ui.style.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS], 1.0f, 1024.0f);
 	ui_slider(S("UI Animation Dampen"), &ui.style.base_scalars[UI_SCALAR_ANIMATION_DAMPEN], 1.0f, 128.0f);
+
+	demo->edit_buffer.data     = demo->edit_buffer_storage;
+	demo->edit_buffer.capacity = ARRAY_COUNT(demo->edit_buffer_storage);
+	ui_text_edit(S("Text Edit"), &demo->edit_buffer);
 }
 
 DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
@@ -1210,6 +1216,7 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 
             ui_label(Sf("Mouse Position: %.02f x %.02f", ui.input.mouse_p.x, ui.input.mouse_p.y));
 			ui_label(Sf("Active UI Animation Count: %zu", ui.style.animation_state.count));
+			ui_label(Sf("Delta Time: %.02fms", 1000.0f*ui.input.dt));
         }
     }
 }
@@ -1268,6 +1275,17 @@ void update_and_render_in_game_editor(void)
 		if (editor.show_timings)
 			fullscreen_show_timings();
 	}
+
+#if 0
+	rect2_t r  = rect2_center_radius(ui.input.mouse_p, make_v2(1, 1));
+	rect2_t r2 = rect2_from_min_dim(ui.input.mouse_p, make_v2(512, 1));
+	ui_draw_rect(rect2_extend(r2, 1.0f), make_v4(0, 0, 0, 1));
+	ui_draw_rect(rect2_extend(r, 1.0f), make_v4(0, 0, 0, 1));
+	ui_draw_rect(r2, make_v4(1, 1, 1, 1));
+	ui_draw_rect(r , make_v4(1, 1, 1, 1));
+	ui_draw_text(&ui.style.font, r.min, S("The Quick Brown Fox Jumped Over The Lazy Dog"));
+#endif
+
 	ui_panel_end();
 
 	ui_process_windows();

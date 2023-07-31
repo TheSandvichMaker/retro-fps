@@ -343,6 +343,9 @@ int wWinMain(HINSTANCE instance,
 	platform_cursor_t cursor      = PLATFORM_CURSOR_ARROW;
 	platform_cursor_t last_cursor = cursor;
 
+	hires_time_t start_time = os_hires_time();
+	float dt = 1.0f / 60.0f;
+
     // message loop
     bool running = true;
     while (running)
@@ -387,6 +390,8 @@ int wWinMain(HINSTANCE instance,
 					event->key.keycode = (platform_keycode_t)vk_code;
 
 					sll_push_back(first_event, last_event, event);
+
+                    TranslateMessage(&msg);
 				} break;
 
 				case WM_LBUTTONDOWN:
@@ -501,26 +506,24 @@ int wWinMain(HINSTANCE instance,
         GetCursorPos(&cursor_point);
         ScreenToClient(window, &cursor_point);
 
-		v2_t mouse_p  = {0};
-		v2_t mouse_dp = {0};
+		bool cursor_is_in_client_rect = (cursor_point.x >  client_rect.left  &&
+										 cursor_point.x <= client_rect.right &&
+										 cursor_point.y >  client_rect.top   &&
+										 cursor_point.y <= client_rect.bottom);
 
-        if (has_focus)
-        {
-			v2_t prev_mouse_p = convert_mouse_cursor(prev_cursor_point, height);
+		v2_t prev_mouse_p = convert_mouse_cursor(prev_cursor_point, height);
+		v2_t mouse_p      = convert_mouse_cursor(cursor_point, height);
+		v2_t mouse_dp     = sub(mouse_p, prev_mouse_p);
 
-			mouse_p  = convert_mouse_cursor(cursor_point, height);
-			mouse_dp = sub(mouse_p, prev_mouse_p);
+		if (has_focus && cursor_locked)
+		{
+			POINT mid_point;
+			mid_point.x = (client_rect.left + client_rect.right) / 2;
+			mid_point.y = (client_rect.bottom + client_rect.top) / 2;
+			cursor_point = mid_point;
 
-            if (cursor_locked)
-            {
-                POINT mid_point;
-                mid_point.x = (client_rect.left + client_rect.right) / 2;
-                mid_point.y = (client_rect.bottom + client_rect.top) / 2;
-                cursor_point = mid_point;
-
-                ClientToScreen(window, &mid_point);
-                SetCursorPos(mid_point.x, mid_point.y);
-            }
+			ClientToScreen(window, &mid_point);
+			SetCursorPos(mid_point.x, mid_point.y);
         }
 
         prev_cursor_point = cursor_point;
@@ -530,7 +533,7 @@ int wWinMain(HINSTANCE instance,
 		platform_io_t tick_io = {
 			.has_focus   = has_focus,
 
-			.dt          = 1.0f / 60.0f,
+			.dt          = dt,
 
 			.mouse_p     = mouse_p,
 			.mouse_dp    = mouse_dp,
@@ -553,7 +556,8 @@ int wWinMain(HINSTANCE instance,
         }
 
 		cursor = tick_io.cursor;
-		if (cursor != last_cursor)
+
+		if (cursor_is_in_client_rect)
 		{
 			if (cursor == PLATFORM_CURSOR_NONE)
 			{
@@ -588,6 +592,11 @@ int wWinMain(HINSTANCE instance,
         }
 
         m_reset_and_decommit(temp);
+
+		hires_time_t end_time = os_hires_time();
+		dt = (float)os_seconds_elapsed(start_time, end_time);
+
+		start_time = end_time;
     }
 
     return 0;

@@ -59,6 +59,20 @@ typedef struct string_t
     char *data;
 } string_t;
 
+typedef struct dynamic_string_t
+{
+	size_t capacity;
+	union
+	{
+		struct
+		{
+			size_t count;
+			char  *data;
+		};
+		string_t string;
+	};
+} dynamic_string_t;
+
 #define string_storage_t(size) struct { size_t count; char data[size]; }
 #define string_from_storage(storage) (string_t) { (storage).count, (storage).data }
 #define string_into_storage(storage, string) (copy_memory((storage).data, (string).data, MIN(ARRAY_COUNT((storage).data), (string).count)), (storage).count = (string).count)
@@ -199,6 +213,11 @@ typedef struct mat_t
 } mat_t;
 
 #define M(mat, row, col) (mat)->e[(mat)->n*(col) + (row)]
+
+typedef struct range2_t
+{
+	float min, max;
+} range2_t;
 
 typedef union rect2_t
 {

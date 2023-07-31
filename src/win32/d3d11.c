@@ -1495,7 +1495,7 @@ void d3d11_present()
 
 	AcquireSRWLockExclusive(&d3d.context_lock);
 
-    HRESULT hr = IDXGISwapChain_Present(d3d.swap_chain, 0, 0);
+    HRESULT hr = IDXGISwapChain_Present(d3d.swap_chain, 1, 0);
 
     d3d_timestamp(RENDER_TS_END_FRAME);
     ID3D11DeviceContext_End(d3d.context, (ID3D11Asynchronous *)queries->disjoint);

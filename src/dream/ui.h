@@ -28,6 +28,7 @@ typedef struct ui_input_t
 {
 	float dt;
 
+	bool app_has_focus;
 	bool alt_down;
 	bool shift_down;
 	bool ctrl_down;
@@ -40,6 +41,8 @@ typedef struct ui_input_t
 	v2_t  mouse_pressed_p;
 	v2_t  mouse_dp;
 
+	dynamic_string_t text;
+
 	platform_cursor_t cursor;
 	int               cursor_reset_delay;
 } ui_input_t;
@@ -48,6 +51,7 @@ DREAM_LOCAL void ui_submit_mouse_buttons(platform_mouse_buttons_t buttons, bool 
 DREAM_LOCAL void ui_submit_mouse_wheel  (float wheel_delta);
 DREAM_LOCAL void ui_submit_mouse_p      (v2_t p);
 DREAM_LOCAL void ui_submit_mouse_dp     (v2_t dp);
+DREAM_LOCAL void ui_submit_text         (string_t text);
 
 DREAM_LOCAL bool ui_mouse_buttons_down    (platform_mouse_buttons_t buttons);
 DREAM_LOCAL bool ui_mouse_buttons_pressed (platform_mouse_buttons_t buttons);
@@ -317,6 +321,13 @@ DREAM_LOCAL v2_t ui_text_center_p(font_atlas_t *font, rect2_t rect, string_t tex
 // Base Widgets
 //
 
+typedef struct ui_text_edit_state_t
+{
+	int selection_start;
+	int selection_end;
+	int cursor;
+} ui_text_edit_state_t;
+
 DREAM_LOCAL void ui_panel_begin   (rect2_t rect);
 DREAM_LOCAL void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags);
 DREAM_LOCAL void ui_panel_end     (void);
@@ -332,6 +343,7 @@ DREAM_LOCAL bool ui_checkbox      (string_t text, bool *value);
 DREAM_LOCAL bool ui_option_buttons(string_t text, int *value, int count, string_t *names);
 DREAM_LOCAL bool ui_slider        (string_t text, float *value, float min, float max);
 DREAM_LOCAL bool ui_slider_int    (string_t text, int *value, int min, int max);
+DREAM_LOCAL void ui_text_edit     (string_t label, dynamic_string_t *buffer);
 
 //
 //
@@ -346,7 +358,8 @@ typedef struct ui_state_t
 
 	union
 	{
-		ui_panel_state_t panel;
+		ui_panel_state_t     panel;
+		ui_text_edit_state_t text_edit;
 	};
 } ui_state_t;
 
@@ -373,6 +386,8 @@ typedef struct ui_t
 
 	ui_id_t next_hovered_panel;
 	ui_id_t hovered_panel;
+
+	ui_id_t focused_id;
 
 	v2_t    drag_anchor;
 	v2_t    drag_offset;
@@ -404,6 +419,9 @@ DREAM_LOCAL void ui_set_active    (ui_id_t id);
 DREAM_LOCAL void ui_clear_next_hot(void);
 DREAM_LOCAL void ui_clear_hot     (void);
 DREAM_LOCAL void ui_clear_active  (void);
+
+DREAM_LOCAL bool ui_has_focus     (void);
+DREAM_LOCAL bool ui_id_has_focus(ui_id_t id);
 
 DREAM_LOCAL ui_state_t *ui_get_state(ui_id_t id);
 DREAM_LOCAL bool ui_state_is_new(ui_state_t *state);

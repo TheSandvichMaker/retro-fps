@@ -95,6 +95,11 @@ void ui_submit_mouse_dp(v2_t dp)
 	ui.input.mouse_dp = dp;
 }
 
+void ui_submit_text(string_t text)
+{
+	dyn_string_appends(&ui.input.text, text);
+}
+
 bool ui_mouse_buttons_down(platform_mouse_buttons_t buttons)
 {
 	return !!(ui.input.mouse_buttons_down & buttons);
@@ -446,7 +451,7 @@ void ui_process_windows(void)
 
 			string_t title = string_from_storage(window->title);
 
-			bool has_focus = window == ui.windows.focus_window;
+			bool has_focus = ui_has_focus() && (window == ui.windows.focus_window);
 
 			float focus_t = ui_interpolate_f32(ui_id(S("focus")), has_focus);
 			float shadow_amount = lerp(0.15f, 0.25f, focus_t);
@@ -457,10 +462,13 @@ void ui_process_windows(void)
 
 			v4_t  interpolated_title_bar_color = v4_lerps(title_bar_color_greyscale, title_bar_color, focus_t);
 
+			rect2_t title_bar_minus_outline = title_bar;
+			title_bar_minus_outline.max.y -= 2.0f;
+
 			ui_draw_rect_roundedness_shadow(rect2_shrink(total, 1.0f), make_v4(0, 0, 0, 0), make_v4(5, 5, 5, 5), shadow_amount, 32.0f);
 			ui_draw_rect_roundedness(title_bar, interpolated_title_bar_color, make_v4(2, 0, 2, 0));
 			ui_draw_rect_roundedness(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), make_v4(0, 2, 0, 2));
-			ui_draw_text(&ui.style.header_font, ui_text_center_p(&ui.style.header_font, title_bar, title), title);
+			ui_draw_text(&ui.style.header_font, ui_text_center_p(&ui.style.header_font, title_bar_minus_outline, title), title);
 			ui_draw_rect_roundedness_outline(total, ui_color(UI_COLOR_WINDOW_OUTLINE), make_v4(2, 2, 2, 2), 2.0f);
 
 			// handle window contents
@@ -629,88 +637,65 @@ rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_tex
 
 	uint32_t color_packed = pack_color(color);
 
-	r_immediate_texture(font->texture);
-	r_immediate_shader(R_SHADER_TEXT);
-	r_immediate_blend_mode(R_BLEND_PREMUL_ALPHA);
-
-	float w = (float)font->texture_w;
-	float h = (float)font->texture_h;
-
-	v2_t at = p;
-	at.y -= 0.5f*font->descent;
-
-	at.x = roundf(at.x);
-	at.y = roundf(at.y);
-
-	for (size_t i = 0; i < text.count; i++)
+	if (op == UI_TEXT_OP_DRAW)
 	{
-		char c = text.data[i];
+		r_immediate_texture(font->texture);
+		r_immediate_shader(R_SHADER_TEXT);
+		r_immediate_blend_mode(R_BLEND_PREMUL_ALPHA);
+	}
 
-		if (is_newline(c))
+	p.x = roundf(p.x);
+	p.y = roundf(p.y);
+
+	m_scoped(temp)
+	{
+		prepared_glyphs_t prep = atlas_prepare_glyphs(font, temp, text);
+		result = rect2_add_offset(prep.bounds, p);
+
+		if (op == UI_TEXT_OP_DRAW)
 		{
-			at.x  = p.x;
-			at.y -= font->y_advance;
-		}
-		else
-		{
-			font_glyph_t *glyph = atlas_get_glyph(font, c);
-
-			float cw = (float)(glyph->max_x - glyph->min_x);
-			float ch = (float)(glyph->max_y - glyph->min_y);
-
-			cw *= 0.5f; // oversampling
-			ch *= 0.5f; // oversampling
-
-			v2_t point = at;
-			point.x += glyph->x_offset;
-			point.y += glyph->y_offset;
-
-			rect2_t rect = rect2_from_min_dim(point, make_v2(cw, ch));
-			result = rect2_union(result, rect);
-
-			if (op == UI_TEXT_OP_DRAW)
+			for (size_t i = 0; i < prep.count; i++)
 			{
-				float u0 = (float)glyph->min_x / w;
-				float v0 = (float)glyph->min_y / h;
-				float u1 = (float)glyph->max_x / w;
-				float v1 = (float)glyph->max_y / h;
+				prepared_glyph_t *glyph = &prep.glyphs[i];
+
+				rect2_t rect    = glyph->rect;
+				rect2_t rect_uv = glyph->rect_uv;
+
+				rect = rect2_add_offset(rect, p);
 
 				vertex_immediate_t q0 = {
-					.pos = { point.x, point.y, 0.0f },
-					.tex = { u0, v1 },
+					.pos = { rect   .min.x, rect   .min.y, 0.0f },
+					.tex = { rect_uv.min.x, rect_uv.min.y       },
 					.col = color_packed,
 				};
 
 				vertex_immediate_t q1 = {
-					.pos = { point.x + cw, point.y, 0.0f },
-					.tex = { u1, v1 },
+					.pos = { rect   .max.x, rect   .min.y, 0.0f },
+					.tex = { rect_uv.max.x, rect_uv.min.y       },
 					.col = color_packed,
 				};
 
 				vertex_immediate_t q2 = {
-					.pos = { point.x + cw, point.y + ch, 0.0f },
-					.tex = { u1, v0 },
+					.pos = { rect   .max.x, rect   .max.y, 0.0f },
+					.tex = { rect_uv.max.x, rect_uv.max.y       },
 					.col = color_packed,
 				};
 
 				vertex_immediate_t q3 = {
-					.pos = { point.x, point.y + ch, 0.0f },
-					.tex = { u0, v0 },
+					.pos = { rect   .min.x, rect   .max.y, 0.0f },
+					.tex = { rect_uv.min.x, rect_uv.max.y       },
 					.col = color_packed,
 				};
 
 				r_immediate_quad(q0, q1, q2, q3);
 			}
-
-			if (i + 1 < text.count)
-			{
-				char c_next = text.data[i + 1];
-				at.x += atlas_get_advance(font, c, c_next);
-			}
 		}
 	}
 
-	r_immediate_flush();
+	if (op == UI_TEXT_OP_DRAW)
+	{
+		r_immediate_flush();
+	}
 
 	return result;
 }
@@ -899,14 +884,14 @@ ui_interaction_t ui_widget_behaviour(ui_id_t id, rect2_t rect)
 v2_t ui_text_align_p(font_atlas_t *font, rect2_t rect, string_t text, v2_t align)
 {
     float text_width  = ui_text_width(font, text);
-    float text_height = 0.5f*font->y_advance;
+    float text_height = font->y_advance;
 
     float rect_width  = rect2_width(rect);
     float rect_height = rect2_height(rect);
 
     v2_t result = {
         .x = rect.min.x + align.x*rect_width  - align.x*text_width,
-        .y = rect.min.y + align.y*rect_height - align.y*text_height,
+        .y = rect.min.y + align.y*rect_height - align.y*text_height - font->descent,
     };
 
     return result;
@@ -1529,7 +1514,7 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 	int   range = max - min;
 	float ratio = 1.0f / (float)range;
 
-	float handle_width = max(16.0f, rect2_width(rect)*ratio); // ui_scalar(UI_SCALAR_SLIDER_HANDLE_RATIO);
+	float handle_width = max(16.0f, 1.5f*rect2_width(rect)*ratio); // ui_scalar(UI_SCALAR_SLIDER_HANDLE_RATIO);
 	float handle_half_width = 0.5f*handle_width;
 	
 	float width = rect2_width(rect);
@@ -1598,6 +1583,102 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 	return *v != init_value;
 }
 
+void ui_text_edit(string_t label, dynamic_string_t *buffer)
+{
+	if (NEVER(!ui.initialized)) 
+		return;
+
+	rect2_t rect;
+	if (!ui_override_rect(&rect))
+	{
+		ui_panel_t *panel = ui_panel();
+		rect = rect2_cut_top(&panel->rect_layout, ui_font_height() + ui_widget_padding());
+	}
+
+	ui_id_t id = ui_id_pointer(buffer);
+	ui_text_edit_state_t *state = &ui_get_state(id)->text_edit;
+
+	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
+
+	ui_interaction_t interaction = ui_widget_behaviour(id, rect);
+	(void)interaction;
+	(void)state;
+
+	if (ui_is_hot(id))
+	{
+		ui.input.cursor = PLATFORM_CURSOR_TEXT_INPUT;
+	}
+
+	if (ui_id_has_focus(id))
+	{
+		for (size_t i = 0; i < ui.input.text.count; i++)
+		{
+			char c = ui.input.text.data[i];
+			if (c >= 32 && c < 127)
+			{
+				dyn_string_appendc(buffer, c);
+			}
+		}
+	}
+
+	string_t string = buffer->string;
+
+	float cursor_p = 0.0f;
+
+	int hovered_cursor_position = 0;
+
+	{
+		font_atlas_t *font = &ui.style.font;
+
+		v2_t at = ui_text_align_p(font, rect, string, make_v2(0.0f, 0.5f));
+		at.y -= 0.5f*font->descent;
+
+		at.x = roundf(at.x);
+		at.y = roundf(at.y);
+
+		for (size_t i = 0; i < string.count; i++)
+		{
+			char c = string.data[i];
+			ASSERT(c >= 32 && c < 127);
+
+			font_glyph_t *glyph = atlas_get_glyph(font, c);
+
+			float cw = (float)(glyph->max_x - glyph->min_x);
+			float ch = (float)(glyph->max_y - glyph->min_y);
+
+			cw *= 0.5f; // oversampling
+			ch *= 0.5f; // oversampling
+
+			v2_t point = at;
+			point.x += glyph->x_offset;
+			point.y += glyph->y_offset;
+
+			if ((int)i == state->cursor)
+			{
+				cursor_p = point.x + cw;
+			}
+
+			if (ui.input.mouse_p.x >= point.x + 0.5f*cw)
+			{
+				hovered_cursor_position = (int)i + 1;
+			}
+		}
+	}
+
+	if (interaction & UI_PRESSED)
+	{
+		state->cursor = hovered_cursor_position;
+	}
+
+	ui_draw_rect(rect, ui_color(UI_COLOR_SLIDER_BACKGROUND));
+	ui_draw_text_aligned(&ui.style.font, rect, string, make_v2(0.0f, 0.5f));
+	ui_draw_text_aligned(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
+
+	rect2_t cursor_rect = rect2_from_min_dim(make_v2(cursor_p, rect.min.y), make_v2(2.0f, rect2_height(rect)));
+	ui_draw_rect(cursor_rect, ui_color(UI_COLOR_TEXT));
+}
+
 //
 // Core
 //
@@ -1651,6 +1732,7 @@ void ui_set_next_hot(ui_id_t id)
 void ui_set_active(ui_id_t id)
 {
 	ui.active = id;
+	ui.focused_id = id;
 }
 
 void ui_clear_next_hot(void)
@@ -1666,6 +1748,16 @@ void ui_clear_hot(void)
 void ui_clear_active(void)
 {
 	ui.active.value = 0;
+}
+
+bool ui_has_focus(void)
+{
+	return ui.has_focus && ui.input.app_has_focus;
+}
+
+bool ui_id_has_focus(ui_id_t id)
+{
+	return ui.has_focus && ui.focused_id.value == id.value;
 }
 
 ui_state_t *ui_get_state(ui_id_t id)
@@ -1691,54 +1783,69 @@ bool ui_state_is_new(ui_state_t *state)
 	return state->created_frame_index == ui.frame_index;
 }
 
+static void ui_initialize(void)
+{
+	ASSERT(!ui.initialized);
+
+	ui.style.font_data        = fs_read_entire_file(&ui.arena, S("gamedata/fonts/NotoSans/NotoSans-Regular.ttf"));
+	ui.style.header_font_data = fs_read_entire_file(&ui.arena, S("gamedata/fonts/NotoSans/NotoSans-Bold.ttf"));
+	ui_set_font_height(18.0f);
+
+	v4_t background    = make_v4(0.20f, 0.15f, 0.17f, 1.0f);
+	v4_t background_hi = make_v4(0.22f, 0.18f, 0.18f, 1.0f);
+	v4_t foreground    = make_v4(0.33f, 0.28f, 0.28f, 1.0f);
+
+	v4_t hot    = make_v4(0.25f, 0.45f, 0.40f, 1.0f);
+	v4_t active = make_v4(0.30f, 0.55f, 0.50f, 1.0f);
+	v4_t fired  = make_v4(0.45f, 0.65f, 0.55f, 1.0f);
+
+	ui.style.base_scalars[UI_SCALAR_ANIMATION_RATE     ] = 40.0f;
+	ui.style.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS] = 512.0f;
+	ui.style.base_scalars[UI_SCALAR_ANIMATION_DAMPEN   ] = 32.0f;
+	ui.style.base_scalars[UI_SCALAR_HOVER_LIFT         ] = 1.5f;
+	ui.style.base_scalars[UI_SCALAR_WINDOW_MARGIN      ] = 0.0f;
+	ui.style.base_scalars[UI_SCALAR_WIDGET_MARGIN      ] = 0.75f;
+	ui.style.base_scalars[UI_SCALAR_TEXT_MARGIN        ] = 2.2f;
+	ui.style.base_scalars[UI_SCALAR_ROUNDEDNESS        ] = 2.5f;
+	ui.style.base_scalars[UI_SCALAR_TEXT_ALIGN_X       ] = 0.5f;
+	ui.style.base_scalars[UI_SCALAR_TEXT_ALIGN_Y       ] = 0.5f;
+	ui.style.base_scalars[UI_SCALAR_SCROLLBAR_WIDTH    ] = 12.0f;
+	ui.style.base_scalars[UI_SCALAR_SLIDER_HANDLE_RATIO] = 1.0f / 4.0f;
+	ui.style.base_colors [UI_COLOR_TEXT                ] = make_v4(0.95f, 0.90f, 0.85f, 1.0f);
+	ui.style.base_colors [UI_COLOR_TEXT_SHADOW         ] = make_v4(0.00f, 0.00f, 0.00f, 0.50f);
+	ui.style.base_colors [UI_COLOR_WIDGET_SHADOW       ] = make_v4(0.00f, 0.00f, 0.00f, 0.20f);
+	ui.style.base_colors [UI_COLOR_WINDOW_BACKGROUND   ] = background;
+	ui.style.base_colors [UI_COLOR_WINDOW_TITLE_BAR    ] = make_v4(0.45f, 0.25f, 0.25f, 1.0f);
+	ui.style.base_colors [UI_COLOR_WINDOW_TITLE_BAR_HOT] = make_v4(0.45f, 0.22f, 0.22f, 1.0f);
+	ui.style.base_colors [UI_COLOR_WINDOW_CLOSE_BUTTON ] = make_v4(0.35f, 0.15f, 0.15f, 1.0f);
+	ui.style.base_colors [UI_COLOR_WINDOW_OUTLINE      ] = make_v4(0.1f, 0.1f, 0.1f, 0.20f);
+	ui.style.base_colors [UI_COLOR_PROGRESS_BAR_EMPTY  ] = background_hi;
+	ui.style.base_colors [UI_COLOR_PROGRESS_BAR_FILLED ] = hot;
+	ui.style.base_colors [UI_COLOR_BUTTON_IDLE         ] = foreground;
+	ui.style.base_colors [UI_COLOR_BUTTON_HOT          ] = hot;
+	ui.style.base_colors [UI_COLOR_BUTTON_ACTIVE       ] = active;
+	ui.style.base_colors [UI_COLOR_BUTTON_FIRED        ] = fired;
+	ui.style.base_colors [UI_COLOR_SLIDER_BACKGROUND   ] = background_hi;
+	ui.style.base_colors [UI_COLOR_SLIDER_FOREGROUND   ] = foreground;
+	ui.style.base_colors [UI_COLOR_SLIDER_HOT          ] = hot;
+	ui.style.base_colors [UI_COLOR_SLIDER_ACTIVE       ] = active;
+
+	size_t text_input_capacity = 64;
+
+	ui.input.text = (dynamic_string_t){
+		.capacity = text_input_capacity,
+		.count    = 0,
+		.data     = m_alloc_nozero(&ui.arena, text_input_capacity, 16),
+	};
+
+	ui.initialized = true;
+}
+
 bool ui_begin(float dt)
 {
 	if (!ui.initialized)
 	{
-		ui.style.font_data        = fs_read_entire_file(&ui.arena, S("gamedata/fonts/NotoSans/NotoSans-Regular.ttf"));
-		ui.style.header_font_data = fs_read_entire_file(&ui.arena, S("gamedata/fonts/NotoSans/NotoSans-Bold.ttf"));
-		ui_set_font_height(18.0f);
-
-		v4_t background    = make_v4(0.20f, 0.15f, 0.17f, 1.0f);
-		v4_t background_hi = make_v4(0.22f, 0.18f, 0.18f, 1.0f);
-		v4_t foreground    = make_v4(0.33f, 0.28f, 0.28f, 1.0f);
-
-		v4_t hot    = make_v4(0.25f, 0.45f, 0.40f, 1.0f);
-		v4_t active = make_v4(0.30f, 0.55f, 0.50f, 1.0f);
-		v4_t fired  = make_v4(0.45f, 0.65f, 0.55f, 1.0f);
-
-        ui.style.base_scalars[UI_SCALAR_ANIMATION_RATE     ] = 40.0f;
-        ui.style.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS] = 512.0f;
-        ui.style.base_scalars[UI_SCALAR_ANIMATION_DAMPEN   ] = 32.0f;
-        ui.style.base_scalars[UI_SCALAR_HOVER_LIFT         ] = 1.5f;
-		ui.style.base_scalars[UI_SCALAR_WINDOW_MARGIN      ] = 0.0f;
-		ui.style.base_scalars[UI_SCALAR_WIDGET_MARGIN      ] = 0.75f;
-		ui.style.base_scalars[UI_SCALAR_TEXT_MARGIN        ] = 2.2f;
-		ui.style.base_scalars[UI_SCALAR_ROUNDEDNESS        ] = 2.5f;
-		ui.style.base_scalars[UI_SCALAR_TEXT_ALIGN_X       ] = 0.5f;
-		ui.style.base_scalars[UI_SCALAR_TEXT_ALIGN_Y       ] = 0.5f;
-		ui.style.base_scalars[UI_SCALAR_SCROLLBAR_WIDTH    ] = 12.0f;
-        ui.style.base_scalars[UI_SCALAR_SLIDER_HANDLE_RATIO] = 1.0f / 4.0f;
-		ui.style.base_colors [UI_COLOR_TEXT                ] = make_v4(0.95f, 0.90f, 0.85f, 1.0f);
-		ui.style.base_colors [UI_COLOR_TEXT_SHADOW         ] = make_v4(0.00f, 0.00f, 0.00f, 0.50f);
-		ui.style.base_colors [UI_COLOR_WIDGET_SHADOW       ] = make_v4(0.00f, 0.00f, 0.00f, 0.20f);
-		ui.style.base_colors [UI_COLOR_WINDOW_BACKGROUND   ] = background;
-		ui.style.base_colors [UI_COLOR_WINDOW_TITLE_BAR    ] = make_v4(0.45f, 0.25f, 0.25f, 1.0f);
-		ui.style.base_colors [UI_COLOR_WINDOW_TITLE_BAR_HOT] = make_v4(0.45f, 0.22f, 0.22f, 1.0f);
-		ui.style.base_colors [UI_COLOR_WINDOW_CLOSE_BUTTON ] = make_v4(0.35f, 0.15f, 0.15f, 1.0f);
-		ui.style.base_colors [UI_COLOR_WINDOW_OUTLINE      ] = make_v4(0.1f, 0.1f, 0.1f, 0.20f);
-		ui.style.base_colors [UI_COLOR_PROGRESS_BAR_EMPTY  ] = background_hi;
-		ui.style.base_colors [UI_COLOR_PROGRESS_BAR_FILLED ] = hot;
-		ui.style.base_colors [UI_COLOR_BUTTON_IDLE         ] = foreground;
-		ui.style.base_colors [UI_COLOR_BUTTON_HOT          ] = hot;
-		ui.style.base_colors [UI_COLOR_BUTTON_ACTIVE       ] = active;
-		ui.style.base_colors [UI_COLOR_BUTTON_FIRED        ] = fired;
-		ui.style.base_colors [UI_COLOR_SLIDER_BACKGROUND   ] = background_hi;
-		ui.style.base_colors [UI_COLOR_SLIDER_FOREGROUND   ] = foreground;
-		ui.style.base_colors [UI_COLOR_SLIDER_HOT          ] = hot;
-		ui.style.base_colors [UI_COLOR_SLIDER_ACTIVE       ] = active;
-
-		ui.initialized = true;
+		ui_initialize();
 	}
 
 	ui.frame_index += 1;
@@ -1827,6 +1934,7 @@ void ui_end(void)
 	ui.input.mouse_wheel            = 0.0f;
 	ui.input.mouse_buttons_pressed  = 0;
 	ui.input.mouse_buttons_released = 0;
+	dyn_string_clear(&ui.input.text);
 
 	ASSERT(ui.panels.current_panel == NULL);
 	ASSERT(ui.id_stack.at == 0);

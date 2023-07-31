@@ -550,6 +550,12 @@ static void game_tick(platform_io_t *io)
 						case PLATFORM_KEYCODE_F12:     button_states = TOGGLE_BIT(button_states, BUTTON_F12          , pressed); break;
 					}
 				} break;
+
+				case PLATFORM_EVENT_TEXT:
+				{
+					string_t text = string_from_storage(ev->text.text);
+					ui_submit_text(text);
+				} break;
 			}
 		}
 
@@ -563,7 +569,9 @@ static void game_tick(platform_io_t *io)
 
     v2_t res = make_v2((float)res_x, (float)res_y);
 
+	ui.input.app_has_focus = io->has_focus;
 	io->cursor = ui.input.cursor;
+
 	bool ui_focused = ui_begin(dt);
 
     if (ui_focused)
@@ -572,7 +580,9 @@ static void game_tick(platform_io_t *io)
     }
 
     if (button_pressed(BUTTON_FIRE2))
+	{
         g_cursor_locked = !g_cursor_locked;
+	}
 
 #if 1
     if (button_pressed(BUTTON_FIRE1))
