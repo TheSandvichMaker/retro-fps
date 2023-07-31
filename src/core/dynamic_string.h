@@ -28,6 +28,24 @@ DREAM_INLINE bool dyn_string_appendc(dynamic_string_t *d, char c)
 	return result;
 }
 
+DREAM_INLINE bool dyn_string_insertc(dynamic_string_t *d, size_t index, char c)
+{
+	bool result = false;
+
+	if (d->count < d->capacity && index <= d->count)
+	{
+		for (int64_t i = d->count; i > (int64_t)index; i--)
+		{
+			d->data[i] = d->data[i - 1];
+		}
+		d->data[index] = c;
+		d->count += 1;
+		result = true;
+	}
+
+	return result;
+}
+
 DREAM_INLINE bool dyn_string_appends(dynamic_string_t *d, string_t s)
 {
 	size_t space = dyn_string_space_remaining(d);

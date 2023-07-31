@@ -541,6 +541,16 @@ float ui_interpolate_f32(ui_id_t id, float target)
 	return anim->t_current.x;
 }
 
+float ui_interpolate_snappy_f32(ui_id_t id, float target)
+{
+	ui_anim_t *anim = ui_get_anim(id, v4_from_scalar(target));
+	anim->t_target.x = target;
+	anim->c_t *= 2.0f;
+	anim->c_v *= 2.0f;
+
+	return anim->t_current.x;
+}
+
 float ui_set_f32(ui_id_t id, float target)
 {
 	ui_anim_t *anim = ui_get_anim(id, v4_from_scalar(target));
@@ -866,7 +876,8 @@ ui_interaction_t ui_widget_behaviour(ui_id_t id, rect2_t rect)
 			ui_clear_active();
 		}
 	}
-	else if (rect2_contains_point(hit_rect, ui.input.mouse_p))
+
+	if (rect2_contains_point(hit_rect, ui.input.mouse_p))
 	{
         ui_set_next_hot(id);
 	}
@@ -1583,6 +1594,28 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 	return *v != init_value;
 }
 
+DREAM_INLINE size_t ui_text_edit__find_insert_point_from_offset(prepared_glyphs_t *prep, float x)
+{
+	size_t result = 0;
+
+	for (size_t i = 0; i < prep->count; i++)
+	{
+		prepared_glyph_t *glyph = &prep->glyphs[i];
+
+		float p = 0.5f*(glyph->rect.min.x + glyph->rect.max.x);
+		if (x >= p)
+		{
+			result = i + 1;
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	return result;
+}
+
 void ui_text_edit(string_t label, dynamic_string_t *buffer)
 {
 	if (NEVER(!ui.initialized)) 
@@ -1595,20 +1628,22 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 		rect = rect2_cut_top(&panel->rect_layout, ui_font_height() + ui_widget_padding());
 	}
 
+	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+
+	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
+	label_rect = rect2_shrink(label_rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
+
 	ui_id_t id = ui_id_pointer(buffer);
 	ui_text_edit_state_t *state = &ui_get_state(id)->text_edit;
 
-	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
-	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
-
 	ui_interaction_t interaction = ui_widget_behaviour(id, rect);
-	(void)interaction;
-	(void)state;
 
 	if (ui_is_hot(id))
 	{
 		ui.input.cursor = PLATFORM_CURSOR_TEXT_INPUT;
 	}
+
+	bool inserted_character = false;
 
 	if (ui_id_has_focus(id))
 	{
@@ -1617,66 +1652,59 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 			char c = ui.input.text.data[i];
 			if (c >= 32 && c < 127)
 			{
-				dyn_string_appendc(buffer, c);
+				dyn_string_insertc(buffer, (int)state->cursor, c);
+				state->cursor += 1;
+
+				inserted_character = true;
 			}
 		}
 	}
 
-	string_t string = buffer->string;
-
-	float cursor_p = 0.0f;
-
-	int hovered_cursor_position = 0;
-
-	{
-		font_atlas_t *font = &ui.style.font;
-
-		v2_t at = ui_text_align_p(font, rect, string, make_v2(0.0f, 0.5f));
-		at.y -= 0.5f*font->descent;
-
-		at.x = roundf(at.x);
-		at.y = roundf(at.y);
-
-		for (size_t i = 0; i < string.count; i++)
-		{
-			char c = string.data[i];
-			ASSERT(c >= 32 && c < 127);
-
-			font_glyph_t *glyph = atlas_get_glyph(font, c);
-
-			float cw = (float)(glyph->max_x - glyph->min_x);
-			float ch = (float)(glyph->max_y - glyph->min_y);
-
-			cw *= 0.5f; // oversampling
-			ch *= 0.5f; // oversampling
-
-			v2_t point = at;
-			point.x += glyph->x_offset;
-			point.y += glyph->y_offset;
-
-			if ((int)i == state->cursor)
-			{
-				cursor_p = point.x + cw;
-			}
-
-			if (ui.input.mouse_p.x >= point.x + 0.5f*cw)
-			{
-				hovered_cursor_position = (int)i + 1;
-			}
-		}
-	}
-
-	if (interaction & UI_PRESSED)
-	{
-		state->cursor = hovered_cursor_position;
-	}
+	string_t string      = buffer->string;
+	rect2_t  buffer_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
 
 	ui_draw_rect(rect, ui_color(UI_COLOR_SLIDER_BACKGROUND));
-	ui_draw_text_aligned(&ui.style.font, rect, string, make_v2(0.0f, 0.5f));
+	ui_draw_text_aligned(&ui.style.font, buffer_rect, string, make_v2(0.0f, 0.5f));
 	ui_draw_text_aligned(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
-	rect2_t cursor_rect = rect2_from_min_dim(make_v2(cursor_p, rect.min.y), make_v2(2.0f, rect2_height(rect)));
-	ui_draw_rect(cursor_rect, ui_color(UI_COLOR_TEXT));
+	if (ui_id_has_focus(id))
+	{
+		prepared_glyphs_t prep = atlas_prepare_glyphs(&ui.style.font, temp, string);
+
+		if (prep.count > 0)
+		{
+			if (interaction & UI_PRESSED)
+			{
+				float mouse_offset_x = ui.input.mouse_p.x - buffer_rect.min.x;
+				state->cursor = (int)ui_text_edit__find_insert_point_from_offset(&prep, mouse_offset_x);
+			}
+
+			float cursor_p = buffer_rect.min.x;
+
+			if (state->cursor < prep.count)
+			{
+				cursor_p += prep.glyphs[state->cursor].rect.min.x;
+			}
+			else
+			{
+				cursor_p += prep.glyphs[prep.count - 1].rect.max.x;
+			}
+
+#if 0
+			if (!inserted_character)
+			{
+				cursor_p = ui_interpolate_snappy_f32(id, cursor_p);
+			}
+#endif
+
+			rect2_t cursor_rect = rect2_from_min_dim(make_v2(cursor_p - 1.0f, buffer_rect.min.y + 2.0f), make_v2(2.0f, rect2_height(buffer_rect) - 4.0f));
+
+			v4_t caret_color = ui_color(UI_COLOR_TEXT);
+			caret_color.w = 0.75f;
+
+			ui_draw_rect_roundedness(cursor_rect, caret_color, v4_from_scalar(0.0f));
+		}
+	}
 }
 
 //
