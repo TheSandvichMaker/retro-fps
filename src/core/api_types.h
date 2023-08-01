@@ -59,6 +59,14 @@ typedef struct string_t
     char *data;
 } string_t;
 
+#define strinit(text) { sizeof(text)-1, (char *)("" text) }
+#define Sc(text) { sizeof(text)-1, (char *)("" text) }
+#define strlit(text) ((string_t) { sizeof(text)-1, (char *)("" text) })
+#define S(text) strlit(text) // new laziness thing, will it stick? answer: yes. I like it
+#define strexpand(string) (int)(string).count, (string).data
+#define Sx(text) strexpand(text)
+#define strnull (string_t){ 0 }
+
 typedef struct dynamic_string_t
 {
 	size_t capacity;
@@ -78,35 +86,48 @@ typedef struct dynamic_string_t
 #define string_into_storage(storage, string) (copy_memory((storage).data, (string).data, MIN(ARRAY_COUNT((storage).data), (string).count)), (storage).count = (string).count)
 #define string_storage_size(storage) ARRAY_COUNT((storage).data)
 
-#define strinit(text) { sizeof(text)-1, (char *)("" text) }
-#define Sc(text) { sizeof(text)-1, (char *)("" text) }
-#define strlit(text) ((string_t) { sizeof(text)-1, (char *)("" text) })
-#define S(text) strlit(text) // new laziness thing, will it stick?
-#define strexpand(string) (int)(string).count, (string).data
-#define Sx(text) strexpand(text)
-#define strnull (string_t){ 0 }
+#define stack_t(type, count)                                               \
+	struct { size_t at; type values[count]; }
 
-#define stack_t(type, count) struct { size_t at; type values[count]; }
-#define stack_empty(stack) ((stack).at == 0)
-#define stack_full(stack) ((stack).at == ARRAY_COUNT((stack).values))
-#define stack_top(stack) (ASSERT(!stack_empty(stack)), (stack).values[(stack).at - 1])
-#define stack_push(stack, value) (ASSERT((stack).at < ARRAY_COUNT((stack).values)), \
-                                  (stack).values[(stack).at++] = (value))
-#define stack_push_back(stack, value) stack_push(stack, value)
-#define stack_pop(stack) (ASSERT(!stack_empty(stack)), (stack).values[--(stack).at])
-#define stack_pop_back(stack) stack_pop(stack)
-#define stack_count(stack) ((stack).at)
-#define stack_unordered_remove(stack, index) (ASSERT(!stack_empty(stack)), \
-											  ASSERT(index < (stack).at), \
-											  (stack).values[index] = (stack).values[--(stack).at])
+#define stack_capacity(stack)                                              \
+	(ARRAY_COUNT(stack.values))                                            \
+
+#define stack_empty(stack)                                                 \
+	((stack).at == 0)
+
+#define stack_full(stack)                                                  \
+	((stack).at == ARRAY_COUNT((stack).values))
+
+#define stack_top(stack)                                                   \
+	(ASSERT(!stack_empty(stack)), (stack).values[(stack).at - 1])
+
+#define stack_push(stack, value)                                           \
+	(ASSERT((stack).at < ARRAY_COUNT((stack).values)),                     \
+	 (stack).values[(stack).at++] = (value))
+
+#define stack_push_back(stack, value)                                      \
+	stack_push(stack, value)
+
+#define stack_pop(stack)                                                   \
+	(ASSERT(!stack_empty(stack)), (stack).values[--(stack).at])
+
+#define stack_pop_back(stack)                                              \
+	stack_pop(stack)
+
+#define stack_count(stack)                                                 \
+	((stack).at)
+
+#define stack_unordered_remove(stack, index)                               \
+	(ASSERT(!stack_empty(stack)),                                          \
+	 ASSERT(index < (stack).at),                                           \
+	 (stack).values[index] = (stack).values[--(stack).at])
 
 #define stack_insert(stack, index, value)                                  \
 	do {                                                                   \
 		ASSERT(!stack_full(stack));                                        \
-		for (int64_t __i = ((int64_t)(stack).at) - 1; __i >= index; __i--) \
+		for (size_t __i = ((stack).at); __i > index; __i--)                \
 		{                                                                  \
-			int64_t __j = __i + 1;                                         \
-			(stack).values[__j] = (stack).values[__i];                     \
+			(stack).values[__i] = (stack).values[__i - 1];                 \
 		}                                                                  \
 		(stack).values[index] = value;                                     \
 		(stack).at += 1;                                                   \
@@ -118,8 +139,7 @@ typedef struct dynamic_string_t
 		ASSERT(index < (stack).at);                                        \
 		for (size_t __i = index; __i < (stack).at - 1; __i++)              \
 		{                                                                  \
-			size_t __j = __i + 1;                                          \
-			(stack).values[__i] = (stack).values[__j];                     \
+			(stack).values[__i] = (stack).values[__i + 1];                 \
 		}                                                                  \
 		(stack).at -= 1;                                                   \
 	} while (false) 
@@ -136,8 +156,11 @@ typedef struct dynamic_string_t
 		}                                                                  \
 	} while (false)
 
-#define stack_push_front(stack, value) stack_insert(stack, 0, value)
-#define stack_pop_front(stack) stack_remove(stack, 0)
+#define stack_push_front(stack, value)                                     \
+	stack_insert(stack, 0, value)
+
+#define stack_pop_front(stack)                                             \
+	stack_remove(stack, 0)
 
 typedef struct string16_t
 {

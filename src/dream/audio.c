@@ -109,7 +109,8 @@ typedef struct fade_t
 } fade_t;
 
 static pool_t playing_sounds = INIT_POOL(playing_sound_t);
-static hash_t playing_sound_from_id;
+static hash_t playing_sounds_index;
+
 static pool_t active_fades = INIT_POOL(fade_t);
 
 static uint64_t mixer_frame_index;
@@ -123,20 +124,6 @@ DREAM_INLINE float limit(float s)
 {
 	s = max(-1.0f, min(1.0f, s));
 	return s;
-}
-
-static void stop_playing_sound_internal(playing_sound_t *playing)
-{
-	while (playing->first_fade)
-	{
-		fade_t *fade = playing->first_fade;
-		playing->first_fade = fade->next;
-
-		pool_rem_item(&active_fades, fade);
-	}
-
-	pool_rem_item(&playing_sounds, playing);
-	hash_rem(&playing_sound_from_id, playing->id.value);
 }
 
 DREAM_INLINE channel_matrix_t spatialize_channel_matrix(playing_sound_t *playing, channel_matrix_t in_matrix)
@@ -189,6 +176,18 @@ static void mixer_init(void)
 	mixer_initialized = true;
 }
 
+static void stop_playing_sound_internal(playing_sound_t *playing)
+{
+	while (playing->first_fade)
+	{
+		fade_t *fade = sll_pop(playing->first_fade);
+		pool_rem_item(&active_fades, fade);
+	}
+
+	hash_rem     (&playing_sounds_index, playing->id.value);
+	pool_rem_item(&playing_sounds, playing);
+}
+
 void mix_samples(uint32_t frames_to_mix, float *buffer)
 {
 #if MIXER_FLUSH_DENORMALS
@@ -224,28 +223,26 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 			{
 				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
 
-                playing_sound_t playing = {
-                    .id           = command->id,
-                    .waveform     = command->play_sound.waveform,
-					.category     = command->play_sound.category,
-                    .volume       = command->play_sound.volume,
-                    .flags        = command->play_sound.flags,
-                    .p            = command->play_sound.p,
-                    .min_distance = command->play_sound.min_distance,
-                };
+				playing_sound_t *playing = pool_add(&playing_sounds);
+				playing->id           = command->id;
+				playing->waveform     = command->play_sound.waveform;
+				playing->category     = command->play_sound.category;
+				playing->volume       = command->play_sound.volume;
+				playing->flags        = command->play_sound.flags;
+				playing->p            = command->play_sound.p;
+				playing->min_distance = command->play_sound.min_distance;
 
-                resource_handle_t handle = pool_add_item(&playing_sounds, &playing);
-                hash_add(&playing_sound_from_id, playing.id.value, handle.value);
+                hash_add_object(&playing_sounds_index, playing->id.value, playing);
 			} break;
 
 			case MIX_STOP_SOUND:
 			{
 				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
 
-				resource_handle_t handle;
-				if (hash_find(&playing_sound_from_id, command->id.value, &handle.value))
+				playing_sound_t *playing = hash_find_object(&playing_sounds_index, command->id.value);
+
+				if (ALWAYS(playing))
 				{
-					playing_sound_t *playing = pool_get(&playing_sounds, handle);
 					stop_playing_sound_internal(playing);
 				}
 			} break;
@@ -254,24 +251,21 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 			{
 				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
 
-				resource_handle_t handle;
-				if (hash_find(&playing_sound_from_id, command->id.value, &handle.value))
+				playing_sound_t *playing = hash_find_object(&playing_sounds_index, command->id.value);
+
+				if (ALWAYS(playing))
 				{
-					playing_sound_t *playing = pool_get(&playing_sounds, handle);
+					fade_t *fade = pool_add(&active_fades);
+					fade->playing        = playing;
+					fade->flags          = command->fade.flags;
+					fade->start          = command->fade.start;
+					fade->target         = command->fade.target;
+					fade->current        = command->fade.start;
+					fade->style          = command->fade.style;
+					fade->frame_duration = command->fade.duration;
 
-					resource_handle_t fade_handle = pool_add_item(&active_fades, &(fade_t){
-						.playing        = playing,
-						.flags          = command->fade.flags,
-						.start          = command->fade.start,
-						.target         = command->fade.target,
-						.current        = command->fade.start,
-						.style          = command->fade.style,
-						.frame_duration = command->fade.duration,
-					});
-					fade_t *fade = pool_get(&active_fades, fade_handle);
-
-					playing->fade_count += 1;
 					dll_push_back(playing->first_fade, playing->last_fade, fade);
+					playing->fade_count += 1;
 				}
 			} break;
 
@@ -286,10 +280,10 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 			{
 				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
 
-				resource_handle_t handle;
-				if (hash_find(&playing_sound_from_id, command->id.value, &handle.value))
+				playing_sound_t *playing = hash_find_object(&playing_sounds_index, command->id.value);
+
+				if (ALWAYS(playing))
 				{
-					playing_sound_t *playing = pool_get(&playing_sounds, handle);
 					playing->p = command->sound_p.p;
 				}
 			} break;
@@ -298,10 +292,10 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 			{
 				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
 
-				resource_handle_t handle;
-				if (hash_find(&playing_sound_from_id, command->id.value, &handle.value))
+				playing_sound_t *playing = hash_find_object(&playing_sounds_index, command->id.value);
+
+				if (ALWAYS(playing))
 				{
-					playing_sound_t *playing = pool_get(&playing_sounds, handle);
 					playing->flags &= ~command->set_playing_sound_flags.unset_flags;
 					playing->flags |=  command->set_playing_sound_flags.set_flags;
 				}
@@ -503,8 +497,9 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
         {
             if (fade->frame_index + frames_to_mix >= fade->frame_duration)
             {
-				playing->fade_count -= 1;
 				dll_remove(playing->first_fade, playing->last_fade, fade);
+				playing->fade_count -= 1;
+
                 pool_rem_item(&active_fades, fade);
             }
             else

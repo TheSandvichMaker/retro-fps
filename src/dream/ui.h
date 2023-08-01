@@ -13,7 +13,7 @@ typedef struct ui_id_t
 #define UI_ID_NULL (ui_id_t){0}
 
 DREAM_INLINE ui_id_t ui_id        (string_t string);
-DREAM_INLINE ui_id_t ui_child_id  (string_t string, ui_id_t parent);
+DREAM_INLINE ui_id_t ui_child_id  (ui_id_t parent, string_t string);
 DREAM_INLINE ui_id_t ui_id_pointer(void *pointer);
 
 DREAM_INLINE void    ui_set_next_id(ui_id_t id);
@@ -62,19 +62,6 @@ DREAM_LOCAL bool ui_mouse_buttons_released(platform_mouse_buttons_t buttons);
 //
 
 typedef uint32_t ui_panel_flags_t;
-typedef enum ui_panel_flags_enum_t
-{
-	UI_PANEL_SCROLLABLE_HORZ = 0x1,
-	UI_PANEL_SCROLLABLE_VERT = 0x2,
-} ui_panel_flags_enum_t;
-
-typedef struct ui_panel_state_t
-{
-	float scrollable_height_x;
-	float scrollable_height_y;
-	float scroll_offset_x;
-	float scroll_offset_y;
-} ui_panel_state_t;
 
 typedef struct ui_panel_t
 {
@@ -164,6 +151,19 @@ DREAM_LOCAL void ui_process_windows(void);
 // Style
 //
 
+typedef struct ui_anim_t
+{
+	ui_id_t  id;
+	uint64_t last_touched_frame_index;
+
+	float length_limit;
+	float c_t;
+	float c_v;
+	v4_t  t_target;
+	v4_t  t_current;
+	v4_t  t_velocity;
+} ui_anim_t;
+
 #define UI_STYLE_STACK_COUNT 32
 
 typedef enum ui_style_scalar_t
@@ -172,6 +172,7 @@ typedef enum ui_style_scalar_t
 
 	UI_SCALAR_ANIMATION_STIFFNESS,
 	UI_SCALAR_ANIMATION_DAMPEN,
+	UI_SCALAR_ANIMATION_LENGTH_LIMIT,
 	UI_SCALAR_HOVER_LIFT,
 
     UI_SCALAR_WINDOW_MARGIN,
@@ -217,18 +218,6 @@ typedef enum ui_style_color_t
 
     UI_COLOR_COUNT,
 } ui_style_color_t;
-
-typedef struct ui_anim_t
-{
-	ui_id_t  id;
-	uint64_t last_touched_frame_index;
-
-	float c_t;
-	float c_v;
-	v4_t  t_target;
-	v4_t  t_current;
-	v4_t  t_velocity;
-} ui_anim_t;
 
 typedef struct ui_style_t
 {
@@ -281,13 +270,13 @@ typedef enum ui_text_op_t
 	UI_TEXT_OP_COUNT,
 } ui_text_op_t;
 
-DREAM_LOCAL rect2_t ui_text_op            (font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op);
-DREAM_LOCAL rect2_t ui_draw_text          (font_atlas_t *font, v2_t p, string_t text);
-DREAM_LOCAL rect2_t ui_draw_text_aligned  (font_atlas_t *font, rect2_t rect, string_t text, v2_t align);
-DREAM_LOCAL rect2_t ui_text_bounds        (font_atlas_t *font, v2_t p, string_t text);
-DREAM_LOCAL float   ui_text_width         (font_atlas_t *font, string_t text);
-DREAM_LOCAL float   ui_text_height        (font_atlas_t *font, string_t text);
-DREAM_LOCAL v2_t    ui_text_dim           (font_atlas_t *font, string_t text);
+DREAM_LOCAL rect2_t ui_text_op                      (font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op);
+DREAM_LOCAL rect2_t ui_draw_text                    (font_atlas_t *font, v2_t p, string_t text);
+DREAM_LOCAL rect2_t ui_draw_text_aligned            (font_atlas_t *font, rect2_t rect, string_t text, v2_t align);
+DREAM_LOCAL rect2_t ui_text_bounds                  (font_atlas_t *font, v2_t p, string_t text);
+DREAM_LOCAL float   ui_text_width                   (font_atlas_t *font, string_t text);
+DREAM_LOCAL float   ui_text_height                  (font_atlas_t *font, string_t text);
+DREAM_LOCAL v2_t    ui_text_dim                     (font_atlas_t *font, string_t text);
 
 DREAM_LOCAL void    ui_draw_rect                    (rect2_t rect, v4_t color);
 DREAM_LOCAL void    ui_draw_rect_roundedness        (rect2_t rect, v4_t color, v4_t roundness);
@@ -327,6 +316,20 @@ typedef struct ui_text_edit_state_t
 	int selection_end;
 	int cursor;
 } ui_text_edit_state_t;
+
+typedef struct ui_panel_state_t
+{
+	float scrollable_height_x;
+	float scrollable_height_y;
+	float scroll_offset_x;
+	float scroll_offset_y;
+} ui_panel_state_t;
+
+typedef enum ui_panel_flags_enum_t
+{
+	UI_PANEL_SCROLLABLE_HORZ = 0x1,
+	UI_PANEL_SCROLLABLE_VERT = 0x2,
+} ui_panel_flags_enum_t;
 
 DREAM_LOCAL void ui_panel_begin   (rect2_t rect);
 DREAM_LOCAL void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags);

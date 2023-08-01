@@ -869,8 +869,11 @@ static void lightmap_editor_proc(void *user_data)
 
 		ui_checkbox(S("Dynamic Sun Shadows"), &use_dynamic_sun_shadows);
 
+		ui_id_t bake_cancel_button = ui_id(S("Bake Lighting / Cancel"));
+
 		if (!map->lightmap_state)
 		{
+			ui_set_next_id(bake_cancel_button);
 			if (ui_button(S("Bake Lighting")))
 			{
 				// figure out the solid sky color from the fog
@@ -899,24 +902,28 @@ static void lightmap_editor_proc(void *user_data)
 				});
 			}
 		}
-		else if (ui_button(S("Cancel")))
+		else 
 		{
-			bake_cancel(map->lightmap_state);
-
-			for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
+			ui_set_next_id(bake_cancel_button);
+			if (ui_button(S("Cancel")))
 			{
-				map_poly_t *poly = &map->polys[poly_index];
-				if (RESOURCE_HANDLE_VALID(poly->lightmap))
+				bake_cancel(map->lightmap_state);
+
+				for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
 				{
-					render->destroy_texture(poly->lightmap);
-					poly->lightmap = NULL_RESOURCE_HANDLE;
+					map_poly_t *poly = &map->polys[poly_index];
+					if (RESOURCE_HANDLE_VALID(poly->lightmap))
+					{
+						render->destroy_texture(poly->lightmap);
+						poly->lightmap = NULL_RESOURCE_HANDLE;
+					}
 				}
+
+				render->destroy_texture(map->fogmap);
+				map->fogmap = NULL_RESOURCE_HANDLE;
+
+				map->lightmap_state = NULL;
 			}
-
-			render->destroy_texture(map->fogmap);
-			map->fogmap = NULL_RESOURCE_HANDLE;
-
-			map->lightmap_state = NULL;
 		}
 	}
 
