@@ -930,11 +930,11 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
 {
     uint32_t frame_index = d3d.frame_index;
 
+	AcquireSRWLockExclusive(&d3d.context_lock);
+
     d3d_queries_t *queries = &d3d.queries[d3d.query_frame];
     ID3D11DeviceContext_Begin(d3d.context, (ID3D11Asynchronous *)queries->disjoint);
     d3d_timestamp(RENDER_TS_BEGIN_FRAME);
-
-	AcquireSRWLockExclusive(&d3d.context_lock);
 
     d3d_ensure_swap_chain_size(width, height);
 

@@ -32,7 +32,7 @@ static void pool_init(pool_t *pool)
 {
     ASSERT_MSG(pool->item_size, "POOL INITIALIZATION FAILURE: ITEM SIZE IS ZERO"); // this needs to be initialized by the user
 
-	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_lock(pool->lock);
+	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_lock(&pool->lock);
 
     if (ALWAYS(!pool->buffer))
     {
@@ -42,7 +42,7 @@ static void pool_init(pool_t *pool)
         pool->watermark = pool_stride(pool); // first entry is the freelist sentinel
     }
 
-	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_unlock(pool->lock);
+	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_unlock(&pool->lock);
 }
 
 void *pool_add(pool_t *pool)
@@ -51,7 +51,7 @@ void *pool_add(pool_t *pool)
 
     void *result = NULL;
 
-	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_lock(pool->lock);
+	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_lock(&pool->lock);
 
     free_item_t *sentinel = pool_item_at_index(pool, 0);
     if (sentinel->next != 0)
@@ -90,7 +90,7 @@ void *pool_add(pool_t *pool)
 
 	pool->count += 1;
 
-	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_unlock(pool->lock);
+	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_unlock(&pool->lock);
 
     return result;
 }
@@ -129,7 +129,7 @@ bool pool_rem(pool_t *pool, resource_handle_t handle)
 
     bool result = false;
 
-	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_lock(pool->lock);
+	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_lock(&pool->lock);
 
     size_t stride = pool_stride(pool);
     size_t count  = pool->watermark / stride;
@@ -150,7 +150,7 @@ bool pool_rem(pool_t *pool, resource_handle_t handle)
 		pool->count -= 1;
     }
 
-	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_unlock(pool->lock);
+	if (pool->flags & POOL_FLAGS_CONCURRENT) mutex_unlock(&pool->lock);
 
     return result;
 }

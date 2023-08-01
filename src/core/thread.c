@@ -29,70 +29,70 @@ void wake_all_by_address(void *address)
 // mutex
 //
 
-void mutex_lock(mutex_t mutex)
+void mutex_lock(mutex_t *mutex)
 {
-	SRWLOCK internal = { .Ptr = mutex.opaque };
-	AcquireSRWLockExclusive(&internal);
+	SRWLOCK *srw_lock = (SRWLOCK *)mutex;
+	AcquireSRWLockExclusive(srw_lock);
 }
 
-void mutex_unlock(mutex_t mutex)
+void mutex_unlock(mutex_t *mutex)
 {
-	SRWLOCK internal = { .Ptr = mutex.opaque };
-	ReleaseSRWLockExclusive(&internal);
+	SRWLOCK *srw_lock = (SRWLOCK *)mutex;
+	ReleaseSRWLockExclusive(srw_lock);
 }
 
-bool mutex_try_lock(mutex_t mutex)
+bool mutex_try_lock(mutex_t *mutex)
 {
-	SRWLOCK internal = { .Ptr = mutex.opaque };
-	return TryAcquireSRWLockExclusive(&internal);
+	SRWLOCK *srw_lock = (SRWLOCK *)mutex;
+	return TryAcquireSRWLockExclusive(srw_lock);
 }
 
-void mutex_shared_lock(mutex_t mutex)
+void mutex_shared_lock(mutex_t *mutex)
 {
-	SRWLOCK internal = { .Ptr = mutex.opaque };
-	AcquireSRWLockShared(&internal);
+	SRWLOCK *srw_lock = (SRWLOCK *)mutex;
+	AcquireSRWLockShared(srw_lock);
 }
 
-void mutex_shared_unlock(mutex_t mutex)
+void mutex_shared_unlock(mutex_t *mutex)
 {
-	SRWLOCK internal = { .Ptr = mutex.opaque };
-	ReleaseSRWLockShared(&internal);
+	SRWLOCK *srw_lock = (SRWLOCK *)mutex;
+	ReleaseSRWLockShared(srw_lock);
 }
 
-bool mutex_try_shared_lock(mutex_t mutex)
+bool mutex_try_shared_lock(mutex_t *mutex)
 {
-	SRWLOCK internal = { .Ptr = mutex.opaque };
-	return TryAcquireSRWLockShared(&internal);
+	SRWLOCK *srw_lock = (SRWLOCK *)mutex;
+	return TryAcquireSRWLockShared(srw_lock);
 }
 
 //
 // condition variable
 //
 
-void cond_sleep(cond_t cond, mutex_t mutex)
+void cond_sleep(cond_t *cond, mutex_t *mutex)
 {
-	CONDITION_VARIABLE win32_cond  = { .Ptr = cond .opaque };
-	SRWLOCK            win32_mutex = { .Ptr = mutex.opaque };
-	SleepConditionVariableSRW(&win32_cond, &win32_mutex, INFINITE, 0);
+	CONDITION_VARIABLE *win32_cond  = (CONDITION_VARIABLE *)cond;
+	SRWLOCK            *win32_mutex = (SRWLOCK *)mutex;
+	SleepConditionVariableSRW(win32_cond, win32_mutex, INFINITE, 0);
 }
 
-void cond_sleep_shared(cond_t cond, mutex_t mutex)
+void cond_sleep_shared(cond_t *cond, mutex_t *mutex)
 {
-	CONDITION_VARIABLE win32_cond  = { .Ptr = cond .opaque };
-	SRWLOCK            win32_mutex = { .Ptr = mutex.opaque };
-	SleepConditionVariableSRW(&win32_cond, &win32_mutex, INFINITE, CONDITION_VARIABLE_LOCKMODE_SHARED);
+	CONDITION_VARIABLE *win32_cond  = (CONDITION_VARIABLE *)cond;
+	SRWLOCK            *win32_mutex = (SRWLOCK *)mutex;
+	SleepConditionVariableSRW(win32_cond, win32_mutex, INFINITE, CONDITION_VARIABLE_LOCKMODE_SHARED);
 }
 
-void cond_wake(cond_t cond)
+void cond_wake(cond_t *cond)
 {
-	CONDITION_VARIABLE win32_cond = { .Ptr = cond .opaque };
-	WakeConditionVariable(&win32_cond);
+	CONDITION_VARIABLE *win32_cond = (CONDITION_VARIABLE *)cond;
+	WakeConditionVariable(win32_cond);
 }
 
-void cond_wake_all(cond_t cond)
+void cond_wake_all(cond_t *cond)
 {
-	CONDITION_VARIABLE win32_cond = { .Ptr = cond .opaque };
-	WakeAllConditionVariable(&win32_cond);
+	CONDITION_VARIABLE *win32_cond = (CONDITION_VARIABLE *)cond;
+	WakeAllConditionVariable(win32_cond);
 }
 
 //
