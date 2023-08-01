@@ -222,7 +222,7 @@ typedef enum ui_style_color_t
 typedef struct ui_style_t
 {
 	pool_t animation_state;
-	hash_t animation_index;
+	table_t animation_index;
 
 	float base_scalars[UI_SCALAR_COUNT];
 	v4_t  base_colors [UI_COLOR_COUNT];
@@ -399,7 +399,7 @@ typedef struct ui_t
 	stack_t(ui_id_t, UI_ID_STACK_COUNT) id_stack;
 
 	pool_t state;
-	hash_t state_index;
+	table_t state_index;
 
 	ui_input_t   input;
 	ui_panels_t  panels;

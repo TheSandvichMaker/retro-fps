@@ -58,7 +58,7 @@ typedef struct asset_slot_t
 	alignas(64) uint32_t state;
 	PAD(60);
 
-	asset_hash_t hash;
+	asset_table_t hash;
 	asset_kind_t kind;
 
 	string_storage_t(256) path;
@@ -75,7 +75,7 @@ waveform_t missing_waveform;
 
 static arena_t asset_arena;
 static pool_t  asset_store = INIT_POOL(asset_slot_t);
-static hash_t  asset_index;
+static table_t  asset_index;
 static asset_config_t asset_config;
 
 typedef enum asset_job_kind_t
@@ -288,7 +288,7 @@ void initialize_asset_system(const asset_config_t *config)
 				asset->state = ASSET_STATE_ON_DISK;
 				string_into_storage(asset->path, entry->path);
 
-				hash_add_object(&asset_index, asset->hash.value, asset);
+				table_insert_object(&asset_index, asset->hash.value, asset);
 
 				preload_asset_info(asset); // stuff like image dimensions we'd like to know right away
 			}
@@ -296,15 +296,15 @@ void initialize_asset_system(const asset_config_t *config)
 	}
 }
 
-bool asset_exists(asset_hash_t hash, asset_kind_t kind)
+bool asset_exists(asset_table_t hash, asset_kind_t kind)
 {
-	asset_slot_t *asset = hash_find_object(&asset_index, hash.value);
+	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
 	return asset && asset->kind == kind;
 }
 
-static asset_slot_t *get_or_load_asset_async(asset_hash_t hash, asset_kind_t kind)
+static asset_slot_t *get_or_load_asset_async(asset_table_t hash, asset_kind_t kind)
 {
-	asset_slot_t *asset = hash_find_object(&asset_index, hash.value);
+	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
 	if (asset && asset->kind == kind)
 	{
 		int64_t state = asset->state;
@@ -327,9 +327,9 @@ static asset_slot_t *get_or_load_asset_async(asset_hash_t hash, asset_kind_t kin
 	return asset;
 }
 
-static asset_slot_t *get_or_load_asset_blocking(asset_hash_t hash, asset_kind_t kind)
+static asset_slot_t *get_or_load_asset_blocking(asset_table_t hash, asset_kind_t kind)
 {
-	asset_slot_t *asset = hash_find_object(&asset_index, hash.value);
+	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
 	if (asset && asset->kind == kind)
 	{
 		if (asset->state == ASSET_STATE_ON_DISK)
@@ -349,7 +349,7 @@ static asset_slot_t *get_or_load_asset_blocking(asset_hash_t hash, asset_kind_t 
 	return asset;
 }
 
-image_t *get_image(asset_hash_t hash)
+image_t *get_image(asset_table_t hash)
 {
 	image_t *image = &missing_image;
 
@@ -362,7 +362,7 @@ image_t *get_image(asset_hash_t hash)
 	return image;
 }
 
-image_t *get_image_blocking(asset_hash_t hash)
+image_t *get_image_blocking(asset_table_t hash)
 {
 	image_t *image = &missing_image;
 
@@ -375,7 +375,7 @@ image_t *get_image_blocking(asset_hash_t hash)
 	return image;
 }
 
-waveform_t *get_waveform(asset_hash_t hash)
+waveform_t *get_waveform(asset_table_t hash)
 {
 	waveform_t *waveform = &missing_waveform;
 
@@ -388,7 +388,7 @@ waveform_t *get_waveform(asset_hash_t hash)
 	return waveform;
 }
 
-waveform_t *get_waveform_blocking(asset_hash_t hash)
+waveform_t *get_waveform_blocking(asset_table_t hash)
 {
 	waveform_t *waveform = &missing_waveform;
 

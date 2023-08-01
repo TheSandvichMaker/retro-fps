@@ -109,7 +109,7 @@ typedef struct fade_t
 } fade_t;
 
 static pool_t playing_sounds = INIT_POOL(playing_sound_t);
-static hash_t playing_sounds_index;
+static table_t playing_sounds_index;
 
 static pool_t active_fades = INIT_POOL(fade_t);
 
@@ -184,7 +184,7 @@ static void stop_playing_sound_internal(playing_sound_t *playing)
 		pool_rem_item(&active_fades, fade);
 	}
 
-	hash_rem     (&playing_sounds_index, playing->id.value);
+	table_remove     (&playing_sounds_index, playing->id.value);
 	pool_rem_item(&playing_sounds, playing);
 }
 
@@ -232,14 +232,14 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 				playing->p            = command->play_sound.p;
 				playing->min_distance = command->play_sound.min_distance;
 
-                hash_add_object(&playing_sounds_index, playing->id.value, playing);
+                table_insert_object(&playing_sounds_index, playing->id.value, playing);
 			} break;
 
 			case MIX_STOP_SOUND:
 			{
 				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
 
-				playing_sound_t *playing = hash_find_object(&playing_sounds_index, command->id.value);
+				playing_sound_t *playing = table_find_object(&playing_sounds_index, command->id.value);
 
 				if (ALWAYS(playing))
 				{
@@ -251,7 +251,7 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 			{
 				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
 
-				playing_sound_t *playing = hash_find_object(&playing_sounds_index, command->id.value);
+				playing_sound_t *playing = table_find_object(&playing_sounds_index, command->id.value);
 
 				if (ALWAYS(playing))
 				{
@@ -280,7 +280,7 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 			{
 				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
 
-				playing_sound_t *playing = hash_find_object(&playing_sounds_index, command->id.value);
+				playing_sound_t *playing = table_find_object(&playing_sounds_index, command->id.value);
 
 				if (ALWAYS(playing))
 				{
@@ -292,7 +292,7 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 			{
 				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
 
-				playing_sound_t *playing = hash_find_object(&playing_sounds_index, command->id.value);
+				playing_sound_t *playing = table_find_object(&playing_sounds_index, command->id.value);
 
 				if (ALWAYS(playing))
 				{

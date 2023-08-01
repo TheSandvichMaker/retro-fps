@@ -1,46 +1,46 @@
-#ifndef HASHTABLE_H
-#define HASHTABLE_H
+#ifndef TABLE_H
+#define TABLE_H
 
 #include "api_types.h"
 
-enum { HASHTABLE_UNUSED_KEY_VALUE = 0 };
+enum { TABLE_UNUSED_KEY_VALUE = 0 };
 
-enum { HASHTABLE_RESERVE_CAPACITY = 1 << 20, HASHTABLE_HALF_CAPACITY = 1 << 19 }; // up to ~500k entries
-enum { HASHTABLE_SECONDARY_BUFFER = 1 << 0, HASHTABLE_EXTERNAL_MEMORY = 1 << 1 };
+enum { TABLE_RESERVE_CAPACITY = 1 << 20, TABLE_HALF_CAPACITY = 1 << 19 }; // up to ~500k entries
+enum { TABLE_SECONDARY_BUFFER = 1 << 0, TABLE_EXTERNAL_MEMORY = 1 << 1 };
 
-#define   HT_TAG_POINTER(pointer, tags) (void *)((uintptr_t)(pointer)|(tags))
-#define HT_UNTAG_POINTER(pointer)       (void *)((uintptr_t)(pointer) & ~(alignof(hash_entry_t) - 1))
-#define HT_POINTER_HAS_TAGS(pointer, tags) !!((uintptr_t)(pointer) & tags)
+#define   TABLE_TAG_POINTER(pointer, tags) (void *)((uintptr_t)(pointer)|(tags))
+#define TABLE_UNTAG_POINTER(pointer)       (void *)((uintptr_t)(pointer) & ~(alignof(table_entry_t) - 1))
+#define TABLE_POINTER_HAS_TAGS(pointer, tags) !!((uintptr_t)(pointer) & tags)
 
-typedef struct hash_entry_t
+typedef struct table_entry_t
 {
     uint64_t key;
     uint64_t value;
-} hash_entry_t;
+} table_entry_t;
 
-typedef struct hash_t
+typedef struct table_t
 {
     uint32_t mask;
     uint32_t load;
-    hash_entry_t *entries;
-} hash_t;
+    table_entry_t *entries;
+} table_t;
 
-DREAM_GLOBAL bool hash_find(const hash_t *table, uint64_t key, uint64_t *value);
-DREAM_GLOBAL void hash_add (      hash_t *table, uint64_t key, uint64_t  value);
-DREAM_GLOBAL bool hash_rem (      hash_t *table, uint64_t key);
+DREAM_GLOBAL bool table_find          (const table_t *table, uint64_t key, uint64_t *value);
+DREAM_GLOBAL void table_insert        (      table_t *table, uint64_t key, uint64_t  value);
+DREAM_GLOBAL bool table_remove        (      table_t *table, uint64_t key);
 
-DREAM_GLOBAL void *hash_find_object(const hash_t *table, uint64_t key);
-DREAM_GLOBAL void  hash_add_object (      hash_t *table, uint64_t key, void *value);
+DREAM_GLOBAL void *table_find_object  (const table_t *table, uint64_t key);
+DREAM_GLOBAL void  table_insert_object(      table_t *table, uint64_t key, void *value);
 
-DREAM_INLINE hash_entry_t *hash_get_entries(const hash_t *table)
+DREAM_INLINE table_entry_t *table_get_entries(const table_t *table)
 {
-	return HT_UNTAG_POINTER(table->entries);
+	return TABLE_UNTAG_POINTER(table->entries);
 }
 
-typedef struct hash_iter_t
+typedef struct table_iter_t
 {
     // internal state
-    const hash_t *table;
+    const table_t *table;
     uint64_t index;
 
     // iterator result
@@ -49,11 +49,11 @@ typedef struct hash_iter_t
         uint64_t value;
         void *ptr;
     };
-} hash_iter_t;
+} table_iter_t;
 
-DREAM_INLINE hash_iter_t hash_iter(const hash_t *table)
+DREAM_INLINE table_iter_t table_iter(const table_t *table)
 {
-    hash_iter_t it = {
+    table_iter_t it = {
         .table = table,
         .index = 0,
     };
@@ -61,20 +61,20 @@ DREAM_INLINE hash_iter_t hash_iter(const hash_t *table)
     return it;
 }
 
-DREAM_INLINE bool hash_iter_next(hash_iter_t *it)
+DREAM_INLINE bool table_iter_next(table_iter_t *it)
 {
     bool result = false;
 
-    const hash_t *table = it->table;
+    const table_t *table = it->table;
 
     if (!table->entries)
         return false;
 
-	hash_entry_t *entries = hash_get_entries(table);
+	table_entry_t *entries = table_get_entries(table);
 
     while (it->index <= table->mask)
     {
-        if (entries[it->index].key != HASHTABLE_UNUSED_KEY_VALUE)
+        if (entries[it->index].key != TABLE_UNUSED_KEY_VALUE)
         {
             result = true;
 
@@ -90,4 +90,4 @@ DREAM_INLINE bool hash_iter_next(hash_iter_t *it)
     return result;
 }
 
-#endif /* HASHTABLE_H */
+#endif /* TABLE_H */

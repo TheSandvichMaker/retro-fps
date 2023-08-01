@@ -3,72 +3,72 @@
 #include "assert.h"
 #include "vm.h"
 
-static void hash_init(hash_t *hash)
+static void table_init(table_t *table)
 {
-    ASSERT(!hash->entries);
+    ASSERT(!table->entries);
 
-    hash->entries = vm_reserve(NULL, sizeof(hash_entry_t)*HASHTABLE_RESERVE_CAPACITY);
-    vm_commit(hash->entries, sizeof(hash_entry_t)*256); // one page worth of entries
+    table->entries = vm_reserve(NULL, sizeof(table_entry_t)*TABLE_RESERVE_CAPACITY);
+    vm_commit(table->entries, sizeof(table_entry_t)*256); // one page worth of entries
 
-    hash->mask = 255;
-    hash->load = 0;
+    table->mask = 255;
+    table->load = 0;
 }
 
-static void hash_grow(hash_t *hash)
+static void table_grow(table_t *table)
 {
-    hash_entry_t *new_entries, *old_entries;
+    table_entry_t *new_entries, *old_entries;
 
-    if (HT_POINTER_HAS_TAGS(hash->entries, HASHTABLE_SECONDARY_BUFFER))
-        new_entries = (hash_entry_t *)HT_UNTAG_POINTER(hash->entries) - HASHTABLE_HALF_CAPACITY;
+    if (TABLE_POINTER_HAS_TAGS(table->entries, TABLE_SECONDARY_BUFFER))
+        new_entries = (table_entry_t *)TABLE_UNTAG_POINTER(table->entries) - TABLE_HALF_CAPACITY;
     else
-        new_entries = (hash_entry_t *)HT_UNTAG_POINTER(hash->entries) + HASHTABLE_HALF_CAPACITY;
+        new_entries = (table_entry_t *)TABLE_UNTAG_POINTER(table->entries) + TABLE_HALF_CAPACITY;
 
-    old_entries = HT_UNTAG_POINTER(hash->entries);
+    old_entries = TABLE_UNTAG_POINTER(table->entries);
 
-    uint32_t old_capacity = hash->mask + 1;
+    uint32_t old_capacity = table->mask + 1;
     uint32_t new_capacity = old_capacity*2;
 
-    vm_commit(new_entries, sizeof(hash_entry_t)*new_capacity);
+    vm_commit(new_entries, sizeof(table_entry_t)*new_capacity);
     zero_array(new_entries, old_capacity);
 
     if (new_entries > old_entries)
-        new_entries = HT_TAG_POINTER(new_entries, HASHTABLE_SECONDARY_BUFFER);
+        new_entries = TABLE_TAG_POINTER(new_entries, TABLE_SECONDARY_BUFFER);
 
-    hash_t new_hash = {
+    table_t new_table = {
         .mask    = new_capacity - 1,
         .entries = new_entries,
     };
 
     for (size_t i = 0; i < old_capacity; i++)
     {
-        hash_entry_t *old_entry = &old_entries[i];
+        table_entry_t *old_entry = &old_entries[i];
 
-        if (old_entry->key != HASHTABLE_UNUSED_KEY_VALUE)
-            hash_add(&new_hash, old_entry->key, old_entry->value);
+        if (old_entry->key != TABLE_UNUSED_KEY_VALUE)
+            table_insert(&new_table, old_entry->key, old_entry->value);
     }
 
-    copy_struct(hash, &new_hash);
+    copy_struct(table, &new_table);
 }
 
-static bool hash_find_slot(const hash_t *hash, uint64_t key, uint64_t *slot)
+static bool table_find_slot(const table_t *table, uint64_t key, uint64_t *slot)
 {
-    if (!hash->entries)
+    if (!table->entries)
         return false;
 
     bool result = false;
 
-    uint64_t      mask    = hash->mask;
-    hash_entry_t *entries = HT_UNTAG_POINTER(hash->entries);
+    uint64_t       mask    = table->mask;
+    table_entry_t *entries = TABLE_UNTAG_POINTER(table->entries);
 
-    if (key == HASHTABLE_UNUSED_KEY_VALUE)
+    if (key == TABLE_UNUSED_KEY_VALUE)
         key = 1;
 
     uint64_t probe = key & mask;
     for (;;)
     {
-        hash_entry_t *entry = &entries[probe];
+        table_entry_t *entry = &entries[probe];
 
-        if (entry->key == HASHTABLE_UNUSED_KEY_VALUE)
+        if (entry->key == TABLE_UNUSED_KEY_VALUE)
             break;
 
         if (entry->key == key)
@@ -84,14 +84,14 @@ static bool hash_find_slot(const hash_t *hash, uint64_t key, uint64_t *slot)
     return result;
 }
 
-bool hash_find(const hash_t *hash, uint64_t key, uint64_t *value)
+bool table_find(const table_t *table, uint64_t key, uint64_t *value)
 {
 	bool result = false;
 
 	uint64_t slot;
-	if (hash_find_slot(hash, key, &slot))
+	if (table_find_slot(table, key, &slot))
 	{
-		hash_entry_t *entries = HT_UNTAG_POINTER(hash->entries);
+		table_entry_t *entries = TABLE_UNTAG_POINTER(table->entries);
 
 		*value = entries[slot].value;
 		result = true;
@@ -100,29 +100,29 @@ bool hash_find(const hash_t *hash, uint64_t key, uint64_t *value)
 	return result;
 }
 
-void hash_add(hash_t *hash, uint64_t key, uint64_t value)
+void table_insert(table_t *table, uint64_t key, uint64_t value)
 {
-    if (!hash->entries)
-        hash_init(hash);
+    if (!table->entries)
+        table_init(table);
 
-    if (hash->load*4 >= (hash->mask + 1)*3)
-        hash_grow(hash);
+    if (table->load*4 >= (table->mask + 1)*3)
+        table_grow(table);
 
-    uint64_t      mask    = hash->mask;
-    hash_entry_t *entries = HT_UNTAG_POINTER(hash->entries);
+    uint64_t       mask    = table->mask;
+    table_entry_t *entries = TABLE_UNTAG_POINTER(table->entries);
 
-    if (key == HASHTABLE_UNUSED_KEY_VALUE)
+    if (key == TABLE_UNUSED_KEY_VALUE)
         key = 1;
 
     uint64_t probe = key & mask;
     for (;;)
     {
-        hash_entry_t *entry = &entries[probe];
+        table_entry_t *entry = &entries[probe];
 
-        if (entry->key == HASHTABLE_UNUSED_KEY_VALUE ||
+        if (entry->key == TABLE_UNUSED_KEY_VALUE ||
             entry->key == key)
         {
-            hash->load += (entry->key == HASHTABLE_UNUSED_KEY_VALUE);
+            table->load += (entry->key == TABLE_UNUSED_KEY_VALUE);
 
             entry->key   = key;
             entry->value = value;
@@ -137,27 +137,27 @@ void hash_add(hash_t *hash, uint64_t key, uint64_t value)
     }
 }
 
-bool hash_rem(hash_t *hash, uint64_t key)
+bool table_remove(table_t *table, uint64_t key)
 {
 	uint64_t i;
 
-	if (!hash_find_slot(hash, key, &i))
+	if (!table_find_slot(table, key, &i))
 		return false;
 
-    uint64_t      mask    = hash->mask;
-    hash_entry_t *entries = HT_UNTAG_POINTER(hash->entries);
+    uint64_t       mask    = table->mask;
+    table_entry_t *entries = TABLE_UNTAG_POINTER(table->entries);
 
-	if (entries[i].key == HASHTABLE_UNUSED_KEY_VALUE)
+	if (entries[i].key == TABLE_UNUSED_KEY_VALUE)
 		return false;
 
-	entries[i].key = HASHTABLE_UNUSED_KEY_VALUE;
+	entries[i].key = TABLE_UNUSED_KEY_VALUE;
 
 	uint64_t j = i;
 	for (;;)
 	{
 		j = (j + 1) & mask;
 
-		if (entries[j].key == HASHTABLE_UNUSED_KEY_VALUE)
+		if (entries[j].key == TABLE_UNUSED_KEY_VALUE)
 			break;
 
 		uint64_t k = entries[j].key & mask;
@@ -174,21 +174,21 @@ bool hash_rem(hash_t *hash, uint64_t key)
 		}
 
 		entries[i] = entries[j];
-		entries[j].key = HASHTABLE_UNUSED_KEY_VALUE;
+		entries[j].key = TABLE_UNUSED_KEY_VALUE;
 		i = j;
 	}
 
 	return true;
 }
 
-void *hash_find_object(const hash_t *table, uint64_t key)
+void *table_find_object(const table_t *table, uint64_t key)
 {
 	void *result = NULL;
-    hash_find(table, key, (uint64_t *)&result);
+    table_find(table, key, (uint64_t *)&result);
 	return result;
 }
 
-void hash_add_object(hash_t *table, uint64_t key, void *value)
+void table_insert_object(table_t *table, uint64_t key, void *value)
 {
-    hash_add(table, key, (uint64_t)value);
+    table_insert(table, key, (uint64_t)value);
 }

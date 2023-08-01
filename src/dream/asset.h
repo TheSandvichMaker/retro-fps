@@ -29,14 +29,14 @@ typedef enum asset_state_t
 	ASSET_STATE_COUNT,
 } asset_state_t;
 
-typedef struct asset_hash_t
+typedef struct asset_table_t
 {
 	uint64_t value;
-} asset_hash_t;
+} asset_table_t;
 
-DREAM_INLINE asset_hash_t asset_hash_from_string(string_t string)
+DREAM_INLINE asset_table_t asset_hash_from_string(string_t string)
 {
-	asset_hash_t result = {
+	asset_table_t result = {
 		.value = string_hash(string),
 	};
 	return result;
@@ -90,20 +90,20 @@ typedef struct asset_config_t
 } asset_config_t;
 
 DREAM_API void initialize_asset_system(const asset_config_t *config);
-DREAM_API void preload_asset(asset_hash_t hash);
+DREAM_API void preload_asset(asset_table_t hash);
 
 DREAM_API image_t    missing_image;
 DREAM_API waveform_t missing_waveform;
 
-DREAM_API bool        asset_exists         (asset_hash_t hash, asset_kind_t kind);
+DREAM_API bool        asset_exists         (asset_table_t hash, asset_kind_t kind);
 
-DREAM_API image_t    *get_image            (asset_hash_t hash);
+DREAM_API image_t    *get_image            (asset_table_t hash);
 DREAM_API image_t    *get_missing_image    (void);
-DREAM_API waveform_t *get_waveform         (asset_hash_t hash);
+DREAM_API waveform_t *get_waveform         (asset_table_t hash);
 DREAM_API image_t    *get_missing_waveform (void);
 
-DREAM_API image_t    *get_image_blocking   (asset_hash_t hash);
-DREAM_API waveform_t *get_waveform_blocking(asset_hash_t hash);
+DREAM_API image_t    *get_image_blocking   (asset_table_t hash);
+DREAM_API waveform_t *get_waveform_blocking(asset_table_t hash);
 
 DREAM_INLINE image_t *get_image_from_string(string_t string)
 {

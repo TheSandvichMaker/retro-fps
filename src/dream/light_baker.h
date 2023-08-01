@@ -1,5 +1,5 @@
-#ifndef LIGHT_BAKER_H
-#define LIGHT_BAKER_H
+#ifndef LIGTABLE_BAKER_H
+#define LIGTABLE_BAKER_H
 
 #include "core/api_types.h"
 
@@ -138,4 +138,4 @@ DREAM_INLINE float bake_progress(lum_bake_state_t *state)
 	return (float)state->jobs_completed / (float)state->job_count;
 }
 
-#endif /* LIGHT_BAKER_H */
+#endif /* LIGTABLE_BAKER_H */

@@ -511,7 +511,7 @@ void ui_process_windows(void)
 
 ui_anim_t *ui_get_anim(ui_id_t id, v4_t init_value)
 {
-	ui_anim_t *result = hash_find_object(&ui.style.animation_index, id.value);
+	ui_anim_t *result = table_find_object(&ui.style.animation_index, id.value);
 
 	if (!result)
 	{
@@ -519,7 +519,7 @@ ui_anim_t *ui_get_anim(ui_id_t id, v4_t init_value)
 		result->id        = id;
 		result->t_target  = init_value;
 		result->t_current = init_value;
-		hash_add_object(&ui.style.animation_index, id.value, result);
+		table_insert_object(&ui.style.animation_index, id.value, result);
 	}
 
 	result->length_limit = ui_scalar(UI_SCALAR_ANIMATION_LENGTH_LIMIT);
@@ -1851,14 +1851,14 @@ bool ui_id_has_focus(ui_id_t id)
 
 ui_state_t *ui_get_state(ui_id_t id)
 {
-	ui_state_t *result = hash_find_object(&ui.state_index, id.value);
+	ui_state_t *result = table_find_object(&ui.state_index, id.value);
 
 	if (!result)
 	{
 		result = pool_add(&ui.state);
 		result->id                  = id;
 		result->created_frame_index = ui.frame_index;
-		hash_add_object(&ui.state_index, id.value, result);
+		table_insert_object(&ui.state_index, id.value, result);
 	}
 
 	ASSERT(result->id.value == id.value);
@@ -1948,7 +1948,7 @@ bool ui_begin(float dt)
 
 		if (state->last_touched_frame_index < ui.frame_index)
 		{
-			hash_rem     (&ui.state_index, state->id.value);
+			table_remove     (&ui.state_index, state->id.value);
 			pool_rem_item(&ui.state, state);
 		}
 	}
@@ -1989,7 +1989,7 @@ bool ui_begin(float dt)
 		}
 		else
 		{
-			hash_rem     (&ui.style.animation_index, anim->id.value);
+			table_remove     (&ui.style.animation_index, anim->id.value);
 			pool_rem_item(&ui.style.animation_state, anim);
 		}
 	}
