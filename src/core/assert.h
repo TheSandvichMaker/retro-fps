@@ -6,6 +6,8 @@
 #define ASSERT(expr) ((expr) ? true : (fatal_error(__LINE__, strlit(__FILE__), "Assertion failed: " #expr), false))
 #define ASSERT_MSG(expr, msg, ...) ((expr) ? true : (fatal_error(__LINE__, strlit(__FILE__), msg, ##__VA_ARGS__), false))
 
+#define STATIC_ASSERT(expr, ...) _Static_assert(expr, ##__VA_ARGS__)
+
 // these can get compiled away so no side effects in the expression!!!
 #ifdef NDEBUG
 #define DEBUG_ASSERT(...)

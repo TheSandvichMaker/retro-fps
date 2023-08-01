@@ -23,6 +23,7 @@
 #define SUN_SHADOWMAP_RESOLUTION (1024)
 
 extern _declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
+// TODO: Add AMD version of this ---^ thing or just enumerate devices by performance
 
 pool_t d3d_models   = INIT_POOL_EX(d3d_model_t,   POOL_FLAGS_CONCURRENT);
 pool_t d3d_textures = INIT_POOL_EX(d3d_texture_t, POOL_FLAGS_CONCURRENT);
@@ -55,6 +56,8 @@ int init_d3d11(void *hwnd_)
 
         D3D_FEATURE_LEVEL picked_level = 0;
 
+		// TODO: Enumerate devices by high performance
+
         for (size_t i = 0; i < ARRAY_COUNT(driver_types); i++)
         {
             D3D_DRIVER_TYPE driver = driver_types[i];
@@ -73,7 +76,7 @@ int init_d3d11(void *hwnd_)
         }
     }
 
-    if (!device)   return -1;
+    if (!device)       return -1;
     if (!d3d.context)  return -1;
 
 	ID3D11Device1 *device1;
@@ -212,8 +215,10 @@ int init_d3d11(void *hwnd_)
 	static struct { r_immediate_shader_t shader; string_t path; } immediate_shaders[] = {
 		{ .shader = R_SHADER_FLAT,           .path = Sc("gamedata/shaders/immediate.hlsl")                },
 		{ .shader = R_SHADER_DEBUG_LIGHTING, .path = Sc("gamedata/shaders/immediate_debug_lighting.hlsl") },
-		{ .shader = R_SHADER_TEXT,           .path = Sc("gamedata/shaders/immediate_text.hlsl") },
+		{ .shader = R_SHADER_TEXT,           .path = Sc("gamedata/shaders/immediate_text.hlsl")           },
 	};
+
+	STATIC_ASSERT(ARRAY_COUNT(immediate_shaders) == R_SHADER_COUNT, "There's a new immediate shader kind that is not being loaded!");
 
 	for_array(i, immediate_shaders) m_scoped(temp)
 	{
@@ -1401,7 +1406,10 @@ done_with_sun_shadows:
         d3d_timestamp(RENDER_TS_UI);
     }
 
+	ReleaseSRWLockExclusive(&d3d.context_lock);
+
 	// TODO: Review thread-safety of this 
+	// and maybe replace it with a queue of destroy commands
 	for (pool_iter_t it = pool_iter(&d3d_textures);
 		 pool_iter_valid(&it);
 		 pool_iter_next(&it))
@@ -1435,8 +1443,6 @@ done_with_sun_shadows:
 			pool_rem_item(&d3d_textures, resource);
 		}
 	}
-
-	ReleaseSRWLockExclusive(&d3d.context_lock);
 
     d3d.frame_index++;
 }

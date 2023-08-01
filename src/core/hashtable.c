@@ -3,13 +3,6 @@
 #include "assert.h"
 #include "vm.h"
 
-enum { HASHTABLE_RESERVE_CAPACITY = 1 << 20, HASHTABLE_HALF_CAPACITY = 1 << 19 }; // up to ~500k entries
-enum { HASH_SECONDARY_BUFFER = 1 << 0, HASH_EXTERNAL_MEMORY = 1 << 1 };
-
-#define   TAG_POINTER(pointer, tags) (void *)((uintptr_t)(pointer)|(tags))
-#define UNTAG_POINTER(pointer)       (void *)((uintptr_t)(pointer) & ~(alignof(hash_entry_t) - 1))
-#define POINTER_HAS_TAGS(pointer, tags) !!((uintptr_t)(pointer) & tags)
-
 static void hash_init(hash_t *hash)
 {
     ASSERT(!hash->entries);
@@ -25,12 +18,12 @@ static void hash_grow(hash_t *hash)
 {
     hash_entry_t *new_entries, *old_entries;
 
-    if (POINTER_HAS_TAGS(hash->entries, HASH_SECONDARY_BUFFER))
-        new_entries = (hash_entry_t *)UNTAG_POINTER(hash->entries) - HASHTABLE_HALF_CAPACITY;
+    if (HT_POINTER_HAS_TAGS(hash->entries, HASHTABLE_SECONDARY_BUFFER))
+        new_entries = (hash_entry_t *)HT_UNTAG_POINTER(hash->entries) - HASHTABLE_HALF_CAPACITY;
     else
-        new_entries = (hash_entry_t *)UNTAG_POINTER(hash->entries) + HASHTABLE_HALF_CAPACITY;
+        new_entries = (hash_entry_t *)HT_UNTAG_POINTER(hash->entries) + HASHTABLE_HALF_CAPACITY;
 
-    old_entries = UNTAG_POINTER(hash->entries);
+    old_entries = HT_UNTAG_POINTER(hash->entries);
 
     uint32_t old_capacity = hash->mask + 1;
     uint32_t new_capacity = old_capacity*2;
@@ -39,7 +32,7 @@ static void hash_grow(hash_t *hash)
     zero_array(new_entries, old_capacity);
 
     if (new_entries > old_entries)
-        new_entries = TAG_POINTER(new_entries, HASH_SECONDARY_BUFFER);
+        new_entries = HT_TAG_POINTER(new_entries, HASHTABLE_SECONDARY_BUFFER);
 
     hash_t new_hash = {
         .mask    = new_capacity - 1,
@@ -50,7 +43,7 @@ static void hash_grow(hash_t *hash)
     {
         hash_entry_t *old_entry = &old_entries[i];
 
-        if (old_entry->key != UNUSED_KEY_VALUE)
+        if (old_entry->key != HASHTABLE_UNUSED_KEY_VALUE)
             hash_add(&new_hash, old_entry->key, old_entry->value);
     }
 
@@ -65,9 +58,9 @@ static bool hash_find_slot(const hash_t *hash, uint64_t key, uint64_t *slot)
     bool result = false;
 
     uint64_t      mask    = hash->mask;
-    hash_entry_t *entries = UNTAG_POINTER(hash->entries);
+    hash_entry_t *entries = HT_UNTAG_POINTER(hash->entries);
 
-    if (key == UNUSED_KEY_VALUE)
+    if (key == HASHTABLE_UNUSED_KEY_VALUE)
         key = 1;
 
     uint64_t probe = key & mask;
@@ -75,7 +68,7 @@ static bool hash_find_slot(const hash_t *hash, uint64_t key, uint64_t *slot)
     {
         hash_entry_t *entry = &entries[probe];
 
-        if (entry->key == UNUSED_KEY_VALUE)
+        if (entry->key == HASHTABLE_UNUSED_KEY_VALUE)
             break;
 
         if (entry->key == key)
@@ -98,7 +91,7 @@ bool hash_find(const hash_t *hash, uint64_t key, uint64_t *value)
 	uint64_t slot;
 	if (hash_find_slot(hash, key, &slot))
 	{
-		hash_entry_t *entries = UNTAG_POINTER(hash->entries);
+		hash_entry_t *entries = HT_UNTAG_POINTER(hash->entries);
 
 		*value = entries[slot].value;
 		result = true;
@@ -116,9 +109,9 @@ void hash_add(hash_t *hash, uint64_t key, uint64_t value)
         hash_grow(hash);
 
     uint64_t      mask    = hash->mask;
-    hash_entry_t *entries = UNTAG_POINTER(hash->entries);
+    hash_entry_t *entries = HT_UNTAG_POINTER(hash->entries);
 
-    if (key == UNUSED_KEY_VALUE)
+    if (key == HASHTABLE_UNUSED_KEY_VALUE)
         key = 1;
 
     uint64_t probe = key & mask;
@@ -126,10 +119,10 @@ void hash_add(hash_t *hash, uint64_t key, uint64_t value)
     {
         hash_entry_t *entry = &entries[probe];
 
-        if (entry->key == UNUSED_KEY_VALUE ||
+        if (entry->key == HASHTABLE_UNUSED_KEY_VALUE ||
             entry->key == key)
         {
-            hash->load += (entry->key == UNUSED_KEY_VALUE);
+            hash->load += (entry->key == HASHTABLE_UNUSED_KEY_VALUE);
 
             entry->key   = key;
             entry->value = value;
@@ -152,19 +145,19 @@ bool hash_rem(hash_t *hash, uint64_t key)
 		return false;
 
     uint64_t      mask    = hash->mask;
-    hash_entry_t *entries = UNTAG_POINTER(hash->entries);
+    hash_entry_t *entries = HT_UNTAG_POINTER(hash->entries);
 
-	if (entries[i].key == UNUSED_KEY_VALUE)
+	if (entries[i].key == HASHTABLE_UNUSED_KEY_VALUE)
 		return false;
 
-	entries[i].key = UNUSED_KEY_VALUE;
+	entries[i].key = HASHTABLE_UNUSED_KEY_VALUE;
 
 	uint64_t j = i;
 	for (;;)
 	{
 		j = (j + 1) & mask;
 
-		if (entries[j].key == UNUSED_KEY_VALUE)
+		if (entries[j].key == HASHTABLE_UNUSED_KEY_VALUE)
 			break;
 
 		uint64_t k = entries[j].key & mask;
@@ -181,7 +174,7 @@ bool hash_rem(hash_t *hash, uint64_t key)
 		}
 
 		entries[i] = entries[j];
-		entries[j].key = UNUSED_KEY_VALUE;
+		entries[j].key = HASHTABLE_UNUSED_KEY_VALUE;
 		i = j;
 	}
 
