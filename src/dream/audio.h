@@ -158,11 +158,11 @@ typedef struct mix_command_t
 // TODO: Not sure whether it's a good idea to expose the mix category volumes directly,
 // but I don't know what there's much harm in updating them from the main thread while
 // the mixer thread reads them.
-DREAM_API float         g_mix_category_volumes[SOUND_CATEGORY_COUNT];
-DREAM_API uint32_t      g_mixer_next_playing_sound_id;
-DREAM_API uint32_t      g_mixer_command_read_index;
-DREAM_API uint32_t      g_mixer_command_write_index;
-DREAM_API mix_command_t g_mixer_commands[MIXER_COMMAND_BUFFER_SIZE];
+DREAM_LOCAL float         g_mix_category_volumes[SOUND_CATEGORY_COUNT];
+DREAM_LOCAL uint32_t      g_mixer_next_playing_sound_id;
+DREAM_LOCAL uint32_t      g_mixer_command_read_index;
+DREAM_LOCAL uint32_t      g_mixer_command_write_index;
+DREAM_LOCAL mix_command_t g_mixer_commands[MIXER_COMMAND_BUFFER_SIZE];
 
 // TODO: Deduplicate with mix_command_play_sound_t
 typedef struct play_sound_t
@@ -303,6 +303,6 @@ DREAM_INLINE void update_playing_sound_flags(mixer_id_t id, uint32_t unset_flags
 	});
 }
 
-DREAM_API void mix_samples(uint32_t frames_to_mix, float *buffer);
+DREAM_LOCAL void mix_samples(uint32_t frames_to_mix, float *buffer);
 
 #endif

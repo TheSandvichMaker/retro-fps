@@ -11,11 +11,11 @@
 #include <stdlib.h>
 
 #ifdef SINGLE_TRANSLATION_UNIT_BUILD
-#define DREAM_API    extern  // deprecated
+#define DREAM_GLOBAL    extern  // deprecated
 #define DREAM_GLOBAL extern  // visible outside modules
 #define DREAM_LOCAL  static  // not visible outside modules
 #else
-#define DREAM_API    extern  // deprecated
+#define DREAM_GLOBAL    extern  // deprecated
 #define DREAM_GLOBAL extern 
 #define DREAM_LOCAL  extern 
 #endif

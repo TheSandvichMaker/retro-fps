@@ -58,7 +58,7 @@ v3_t player_view_origin(player_t *player);
 v3_t player_view_direction(player_t *player);
 
 // frown
-DREAM_API world_t *world;
-DREAM_API bool g_cursor_locked;
+DREAM_LOCAL world_t *world;
+DREAM_LOCAL bool g_cursor_locked;
 
 #endif /* RETRO_H */

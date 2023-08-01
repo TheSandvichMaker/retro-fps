@@ -287,7 +287,7 @@ triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *
 	return result;
 }
 
-DREAM_API void convex_hull_do_extended_diagnostics(triangle_mesh_t *mesh, hull_debug_t *debug)
+DREAM_LOCAL void convex_hull_do_extended_diagnostics(triangle_mesh_t *mesh, hull_debug_t *debug)
 {
 	if (NEVER(!mesh))  return;
 	if (NEVER(!debug)) return;

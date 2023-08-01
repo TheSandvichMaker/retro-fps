@@ -341,21 +341,21 @@ typedef struct r_command_immediate_t
     r_immediate_draw_t draw_call;
 } r_command_immediate_t;
 
-DREAM_API void     r_immediate_shader    (r_immediate_shader_t shader);
-DREAM_API void     r_immediate_topology  (r_topology_t topology);
-DREAM_API void     r_immediate_blend_mode(r_blend_mode_t blend_mode);
-DREAM_API void     r_immediate_cull_mode (r_cull_mode_t cull_mode);
-DREAM_API void     r_immediate_clip_rect (rect2_t clip_rect); // TODO: Why does this exist?
-DREAM_API void     r_immediate_texture   (resource_handle_t texture);
-DREAM_API void     r_immediate_use_depth (bool depth);
-DREAM_API void     r_immediate_depth_bias(float depth_bias);
+DREAM_LOCAL void     r_immediate_shader    (r_immediate_shader_t shader);
+DREAM_LOCAL void     r_immediate_topology  (r_topology_t topology);
+DREAM_LOCAL void     r_immediate_blend_mode(r_blend_mode_t blend_mode);
+DREAM_LOCAL void     r_immediate_cull_mode (r_cull_mode_t cull_mode);
+DREAM_LOCAL void     r_immediate_clip_rect (rect2_t clip_rect); // TODO: Why does this exist?
+DREAM_LOCAL void     r_immediate_texture   (resource_handle_t texture);
+DREAM_LOCAL void     r_immediate_use_depth (bool depth);
+DREAM_LOCAL void     r_immediate_depth_bias(float depth_bias);
 
-DREAM_API uint32_t r_immediate_vertex    (const vertex_immediate_t *vertex);
-DREAM_API void     r_immediate_index     (uint32_t index);
+DREAM_LOCAL uint32_t r_immediate_vertex    (const vertex_immediate_t *vertex);
+DREAM_LOCAL void     r_immediate_index     (uint32_t index);
 
-DREAM_API void     r_immediate_flush     (void);
+DREAM_LOCAL void     r_immediate_flush     (void);
 
-DREAM_API void     r_ui_rect(r_ui_rect_t rect);
+DREAM_LOCAL void     r_ui_rect(r_ui_rect_t rect);
 
 enum { R_MAX_VIEWS = 128 };
 typedef unsigned char r_view_index_t;

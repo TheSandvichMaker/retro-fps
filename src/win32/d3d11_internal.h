@@ -75,8 +75,8 @@ typedef struct d3d_texture_t
     ID3D11ShaderResourceView *srv;
 } d3d_texture_t;
 
-DREAM_API pool_t d3d_models;
-DREAM_API pool_t d3d_textures;
+DREAM_LOCAL pool_t d3d_models;
+DREAM_LOCAL pool_t d3d_textures;
 
 typedef enum d3d_sampler_t
 {
@@ -210,27 +210,27 @@ typedef struct d3d_state_t
     uint32_t frame_index;
 } d3d_state_t;
 
-DREAM_API d3d_state_t d3d;
+DREAM_LOCAL d3d_state_t d3d;
 
 DREAM_INLINE void d3d_timestamp(render_timestamp_t ts)
 {
 	ID3D11DeviceContext_End(d3d.context, (ID3D11Asynchronous *)d3d.queries[d3d.query_frame].ts[ts]);
 }
 
-DREAM_API resource_handle_t upload_texture(const upload_texture_t *params);
-DREAM_API void destroy_texture(resource_handle_t handle);
+DREAM_LOCAL resource_handle_t upload_texture(const upload_texture_t *params);
+DREAM_LOCAL void destroy_texture(resource_handle_t handle);
 
-DREAM_API resource_handle_t upload_model(const upload_model_t *params);
-DREAM_API void destroy_model(resource_handle_t model);
+DREAM_LOCAL resource_handle_t upload_model(const upload_model_t *params);
+DREAM_LOCAL void destroy_model(resource_handle_t model);
 
-DREAM_API ID3DBlob *compile_shader(string_t hlsl_file, string_t hlsl, const char *entry_point, const char *kind);
-DREAM_API ID3D11PixelShader *compile_ps(string_t hlsl_file, string_t hlsl, const char *entry_point);
-DREAM_API ID3D11VertexShader *compile_vs(string_t hlsl_file, string_t hlsl, const char *entry_point);
+DREAM_LOCAL ID3DBlob *compile_shader(string_t hlsl_file, string_t hlsl, const char *entry_point, const char *kind);
+DREAM_LOCAL ID3D11PixelShader *compile_ps(string_t hlsl_file, string_t hlsl, const char *entry_point);
+DREAM_LOCAL ID3D11VertexShader *compile_vs(string_t hlsl_file, string_t hlsl, const char *entry_point);
 
-DREAM_API void update_buffer(ID3D11Buffer *buffer, const void *data, size_t size);
-DREAM_API void set_model_buffers(d3d_model_t *model, DXGI_FORMAT index_format);
+DREAM_LOCAL void update_buffer(ID3D11Buffer *buffer, const void *data, size_t size);
+DREAM_LOCAL void set_model_buffers(d3d_model_t *model, DXGI_FORMAT index_format);
 
-DREAM_API void get_resolution(int *w, int *h);
+DREAM_LOCAL void get_resolution(int *w, int *h);
 
 typedef enum d3d_depth_test_t
 {
@@ -283,9 +283,9 @@ typedef struct d3d_post_pass_t
     D3D11_RECT     scissor_rect;
 } d3d_post_pass_t;
 
-DREAM_API void render_model(const render_pass_t *pass);
+DREAM_LOCAL void render_model(const render_pass_t *pass);
 
-DREAM_API d3d_rendertarget_t d3d_create_rendertarget(const d3d_create_rendertarget_t *params);
-DREAM_API void d3d_release_rendertarget(d3d_rendertarget_t *rt);
+DREAM_LOCAL d3d_rendertarget_t d3d_create_rendertarget(const d3d_create_rendertarget_t *params);
+DREAM_LOCAL void d3d_release_rendertarget(d3d_rendertarget_t *rt);
 
 #endif /* D3D11_INTERNAL_H */

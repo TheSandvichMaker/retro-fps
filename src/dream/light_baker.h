@@ -123,10 +123,10 @@ typedef struct lum_bake_state_t
 	} results; // results are only valid if the bake is done and bake_finalize was called and returned true
 } lum_bake_state_t;
 
-DREAM_API lum_bake_state_t *bake_lighting     (const lum_params_t *params);
-DREAM_API bool              bake_finalize     (lum_bake_state_t *state); // returns true if the bake completed successfully, can be called as much as you want until it returns true
-DREAM_API void              bake_cancel       (lum_bake_state_t *state); // will force all remaining jobs to skip and will release the bake state once they all exit
-DREAM_API bool              release_bake_state(lum_bake_state_t *state);
+DREAM_LOCAL lum_bake_state_t *bake_lighting     (const lum_params_t *params);
+DREAM_LOCAL bool              bake_finalize     (lum_bake_state_t *state); // returns true if the bake completed successfully, can be called as much as you want until it returns true
+DREAM_LOCAL void              bake_cancel       (lum_bake_state_t *state); // will force all remaining jobs to skip and will release the bake state once they all exit
+DREAM_LOCAL bool              release_bake_state(lum_bake_state_t *state);
 
 DREAM_INLINE bool bake_jobs_completed(lum_bake_state_t *state)
 {

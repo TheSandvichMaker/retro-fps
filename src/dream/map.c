@@ -829,8 +829,8 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
 			m_scoped(temp)
 			{
 				// TODO: pretty sad... handle file formats properly...
-				asset_table_t texture_png = asset_hash_from_string(string_format(temp, "gamedata/textures/%.*s.png", strexpand(plane->texture)));
-				asset_table_t texture_tga = asset_hash_from_string(string_format(temp, "gamedata/textures/%.*s.tga", strexpand(plane->texture)));
+				asset_hash_t texture_png = asset_hash_from_string(string_format(temp, "gamedata/textures/%.*s.png", strexpand(plane->texture)));
+				asset_hash_t texture_tga = asset_hash_from_string(string_format(temp, "gamedata/textures/%.*s.tga", strexpand(plane->texture)));
 				// TODO ALSO: String + formatting helper function for asset hashes
 
 				image_t *image = &missing_image;
