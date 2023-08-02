@@ -1151,7 +1151,7 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 	if (editor.bar_openness > 0.0001f)
 		collision_bar.min.y -= 128.0f;
 
-    bool mouse_hover = ui_hover_rect(collision_bar);
+    bool mouse_hover = ui_mouse_in_rect(collision_bar);
 	mouse_hover |= ui.input.mouse_p.y >= collision_bar.max.y;
 	mouse_hover |= editor.pin_bar;
 

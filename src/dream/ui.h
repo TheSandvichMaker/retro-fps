@@ -294,8 +294,7 @@ DREAM_LOCAL void    ui_draw_circle                  (v2_t p, float r, v4_t color
 // Widget Building Utilities
 //
 
-// NOTE: This naming is atrocious
-DREAM_LOCAL bool    ui_hover_rect              (rect2_t rect);
+DREAM_LOCAL bool    ui_mouse_in_rect           (rect2_t rect);
 DREAM_LOCAL float   ui_hover_lift              (ui_id_t id);
 DREAM_LOCAL float   ui_button_style_hover_lift (ui_id_t id);
 DREAM_LOCAL rect2_t ui_cut_widget_rect         (v2_t min_size);
@@ -401,7 +400,7 @@ typedef struct ui_t
 	hires_time_t current_time;
 	hires_time_t hover_time;
 
-	double hover_time_seconds;
+	float hover_time_seconds;
 
 	ui_id_t hot;
 	ui_id_t next_hot;
@@ -456,7 +455,9 @@ DREAM_LOCAL void ui_clear_active  (void);
 DREAM_LOCAL bool ui_has_focus     (void);
 DREAM_LOCAL bool ui_id_has_focus(ui_id_t id);
 
-DREAM_LOCAL void ui_hoverable(ui_id_t id, rect2_t rect);
+DREAM_LOCAL void ui_hoverable       (ui_id_t id, rect2_t rect);
+DREAM_LOCAL bool ui_is_hovered      (ui_id_t id);
+DREAM_LOCAL bool ui_is_hovered_delay(ui_id_t id, float delay);
 
 DREAM_LOCAL ui_state_t *ui_get_state(ui_id_t id);
 DREAM_LOCAL bool ui_state_is_new(ui_state_t *state);

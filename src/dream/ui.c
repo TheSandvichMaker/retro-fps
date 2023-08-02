@@ -412,7 +412,7 @@ void ui_process_windows(void)
 			rect2_t interact_total = rect2_extend(total, 0.5f*tray_width);
 			ui_interaction_t interaction = ui_default_widget_behaviour(id, interact_total);
 
-			if (ui_hover_rect(interact_total))
+			if (ui_mouse_in_rect(interact_total))
 			{
 				hovered_window = window;
 			}
@@ -869,7 +869,7 @@ void ui_draw_circle(v2_t p, float radius, v4_t color)
 // Widget Building Utilities
 //
 
-bool ui_hover_rect(rect2_t rect)
+bool ui_mouse_in_rect(rect2_t rect)
 {
 	return rect2_contains_point(rect, ui.input.mouse_p);
 }
@@ -994,7 +994,7 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 	{
 		ui_push_id(id);
 
-		if (ui_hover_rect(rect))
+		if (ui_mouse_in_rect(rect))
 		{
 			ui.next_hovered_panel = id;
 		}
@@ -1943,25 +1943,30 @@ bool ui_state_is_new(ui_state_t *state)
 
 void ui_hoverable(ui_id_t id, rect2_t rect)
 {
-	if (ui_hover_rect(rect))
+	if (ui_mouse_in_rect(rect))
 	{
 		ui.next_hovered_widget = id;
 	}
 
 	string_t next_tooltip = string_from_storage(ui.next_tooltip);
 
-	if (!string_empty(next_tooltip) &&
-		ui.hovered_widget.value == id.value)
+	if (!string_empty(next_tooltip) && 
+		ui_is_hovered_delay(id, ui_scalar(UI_SCALAR_TOOLTIP_DELAY)))
 	{
-		double hover_time = ui_scalar(UI_SCALAR_TOOLTIP_DELAY);
-
-		if (ui.hover_time_seconds >= hover_time)
-		{
-			ui_tooltip(next_tooltip);
-		}
+		ui_tooltip(next_tooltip);
 	}
 
 	ui.next_tooltip.count = 0;
+}
+
+bool ui_is_hovered(ui_id_t id)
+{
+	return ui.hovered_widget.value == id.value;
+}
+
+bool ui_is_hovered_delay(ui_id_t id, float delay)
+{
+	return ui_is_hovered(id) && (ui.hover_time_seconds >= delay);
 }
 
 static void ui_initialize(void)
@@ -2097,7 +2102,7 @@ bool ui_begin(float dt)
 		if (ui.next_hovered_widget.value &&
 			ui.next_hovered_widget.value != ui.hovered_widget.value)
 		{
-			ui.hover_time = os_hires_time();
+			ui.hover_time = ui.current_time;
 		}
 
 		ui.hot            = ui.next_hot;
@@ -2105,11 +2110,11 @@ bool ui_begin(float dt)
 		ui.hovered_widget = ui.next_hovered_widget;
 	}
 
-	ui.hover_time_seconds = 0.0;
+	ui.hover_time_seconds = 0.0f;
 
 	if (ui.hovered_widget.value)
 	{
-		ui.hover_time_seconds = os_seconds_elapsed(ui.hover_time, ui.current_time);
+		ui.hover_time_seconds = (float)os_seconds_elapsed(ui.hover_time, ui.current_time);
 	}
 
 	ui.next_hot            = UI_ID_NULL;
