@@ -1116,6 +1116,11 @@ DREAM_INLINE void ui_demo_proc(void *user_data)
 
 	ui_demo_panel_t *demo = &editor.ui_demo;
 
+	ui_hover_tooltip(S("This checkbox does nothing! GOOD DAY SIR!!"));
+
+	static bool check_me = false;
+	ui_checkbox(S("Checkbox That Does Nothing"), &check_me);
+
 	ui_slider    (S("Float Slider"), &demo->slider_f32, -1.0f, 1.0f);
 	ui_slider_int(S("Int Slider"), &demo->slider_i32, 0, 8);
 
@@ -1224,6 +1229,7 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
             ui_label(Sf("Mouse Position: %.02f x %.02f", ui.input.mouse_p.x, ui.input.mouse_p.y));
 			ui_label(Sf("Active UI Animation Count: %zu", ui.style.animation_state.count));
 			ui_label(Sf("Delta Time: %.02fms", 1000.0f*ui.input.dt));
+			ui_label(Sf("UI Hover Time: %.02f", ui.hover_time_seconds));
         }
     }
 }

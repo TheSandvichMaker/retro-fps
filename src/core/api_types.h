@@ -100,6 +100,10 @@ typedef struct dynamic_string_t
 #define stack_top(stack)                                                   \
 	(ASSERT(!stack_empty(stack)), (stack).values[(stack).at - 1])
 
+#define stack_add(stack) \
+	(ASSERT((stack).at < ARRAY_COUNT((stack).values)),                     \
+	 &(stack).values[(stack).at++])
+
 #define stack_push(stack, value)                                           \
 	(ASSERT((stack).at < ARRAY_COUNT((stack).values)),                     \
 	 (stack).values[(stack).at++] = (value))
@@ -160,6 +164,9 @@ typedef struct dynamic_string_t
 
 #define stack_pop_front(stack)                                             \
 	stack_remove(stack, 0)
+
+#define stack_reset(stack) \
+	((stack).at = 0)
 
 typedef struct string16_t
 {
@@ -311,25 +318,6 @@ typedef union resource_handle_t
 #define NULL_RESOURCE_HANDLE ((resource_handle_t) { 0, 0 })
 #define RESOURCE_HANDLE_VALID(x) ((x).index != 0)
 #define RESOURCE_HANDLES_EQUAL(a, b) ((a).value == (b).value)
-
-typedef struct node_t
-{
-    struct node_t *parent;
-    struct node_t *first_child, *last_child;
-    struct node_t *next, *prev;
-} node_t;
-
-#define NODE_STRUCTURE(type)               \
-    struct type *parent;                   \
-    struct type *first_child, *last_child; \
-    struct type *next, *prev;
-
-typedef enum axis2_t
-{
-    AXIS2_X,
-    AXIS2_Y,
-    AXIS2_COUNT,
-} axis2_t;
 
 typedef struct random_series_t
 {

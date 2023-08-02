@@ -168,6 +168,8 @@ typedef struct ui_anim_t
 
 typedef enum ui_style_scalar_t
 {
+	UI_SCALAR_TOOLTIP_DELAY,
+
     UI_SCALAR_ANIMATION_RATE,
 
 	UI_SCALAR_ANIMATION_STIFFNESS,
@@ -271,6 +273,9 @@ typedef enum ui_text_op_t
 } ui_text_op_t;
 
 DREAM_LOCAL rect2_t ui_text_op                      (font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op);
+DREAM_LOCAL v2_t    ui_text_align_p                 (font_atlas_t *font, rect2_t rect, string_t text, v2_t align);
+DREAM_LOCAL v2_t    ui_text_center_p                (font_atlas_t *font, rect2_t rect, string_t text);
+
 DREAM_LOCAL rect2_t ui_draw_text                    (font_atlas_t *font, v2_t p, string_t text);
 DREAM_LOCAL rect2_t ui_draw_text_aligned            (font_atlas_t *font, rect2_t rect, string_t text, v2_t align);
 DREAM_LOCAL rect2_t ui_text_bounds                  (font_atlas_t *font, v2_t p, string_t text);
@@ -289,7 +294,12 @@ DREAM_LOCAL void    ui_draw_circle                  (v2_t p, float r, v4_t color
 // Widget Building Utilities
 //
 
-DREAM_LOCAL bool ui_hover_rect(rect2_t rect);
+// NOTE: This naming is atrocious
+DREAM_LOCAL bool    ui_hover_rect              (rect2_t rect);
+DREAM_LOCAL float   ui_button_style_hover_lift (ui_id_t id);
+DREAM_LOCAL rect2_t ui_cut_widget_rect         (v2_t min_size);
+DREAM_LOCAL float   ui_roundedness_ratio       (rect2_t rect);
+DREAM_LOCAL float   ui_roundedness_ratio_to_abs(rect2_t rect, float ratio);
 
 typedef uint32_t ui_interaction_t;
 typedef enum ui_interaction_enum_t
@@ -301,10 +311,8 @@ typedef enum ui_interaction_enum_t
 	UI_HOVERED  = 0x10,
 } ui_interaction_enum_t;
 
-DREAM_LOCAL ui_interaction_t ui_widget_behaviour(ui_id_t id, rect2_t rect);
-
-DREAM_LOCAL v2_t ui_text_align_p (font_atlas_t *font, rect2_t rect, string_t text, v2_t align);
-DREAM_LOCAL v2_t ui_text_center_p(font_atlas_t *font, rect2_t rect, string_t text);
+// I still think this is a little odd
+DREAM_LOCAL ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect);
 
 //
 // Base Widgets
@@ -347,6 +355,8 @@ DREAM_LOCAL bool ui_option_buttons(string_t text, int *value, int count, string_
 DREAM_LOCAL bool ui_slider        (string_t text, float *value, float min, float max);
 DREAM_LOCAL bool ui_slider_int    (string_t text, int *value, int min, int max);
 DREAM_LOCAL void ui_text_edit     (string_t label, dynamic_string_t *buffer);
+DREAM_LOCAL void ui_tooltip       (string_t text);
+DREAM_LOCAL void ui_hover_tooltip (string_t text);
 
 //
 //
@@ -366,6 +376,14 @@ typedef struct ui_state_t
 	};
 } ui_state_t;
 
+#define UI_TOOLTIP_STACK_COUNT (16)
+#define UI_MAX_TOOLTIP_LENGTH  (256)
+
+typedef struct ui_tooltip_t
+{
+	string_storage_t(UI_MAX_TOOLTIP_LENGTH) text;
+} ui_tooltip_t;
+
 #define UI_ID_STACK_COUNT (32)
 
 typedef struct ui_t
@@ -379,6 +397,11 @@ typedef struct ui_t
 	bool has_focus;
 	bool hovered;
 
+	hires_time_t current_time;
+	hires_time_t hover_time;
+
+	double hover_time_seconds;
+
 	ui_id_t hot;
 	ui_id_t next_hot;
 	ui_id_t active;
@@ -390,15 +413,21 @@ typedef struct ui_t
 	ui_id_t next_hovered_panel;
 	ui_id_t hovered_panel;
 
+	ui_id_t next_hovered_widget;
+	ui_id_t hovered_widget;
+
 	ui_id_t focused_id;
 
 	v2_t    drag_anchor;
 	v2_t    drag_offset;
 	rect2_t resize_original_rect;
 
-	stack_t(ui_id_t, UI_ID_STACK_COUNT) id_stack;
+	string_storage_t(UI_MAX_TOOLTIP_LENGTH) next_tooltip;
 
-	pool_t state;
+	stack_t(ui_id_t, UI_ID_STACK_COUNT) id_stack;
+	stack_t(ui_tooltip_t, UI_TOOLTIP_STACK_COUNT) tooltip_stack;
+
+	pool_t  state;
 	table_t state_index;
 
 	ui_input_t   input;
@@ -425,6 +454,8 @@ DREAM_LOCAL void ui_clear_active  (void);
 
 DREAM_LOCAL bool ui_has_focus     (void);
 DREAM_LOCAL bool ui_id_has_focus(ui_id_t id);
+
+DREAM_LOCAL void ui_hoverable(ui_id_t id, rect2_t rect);
 
 DREAM_LOCAL ui_state_t *ui_get_state(ui_id_t id);
 DREAM_LOCAL bool ui_state_is_new(ui_state_t *state);

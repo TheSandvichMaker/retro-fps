@@ -410,7 +410,7 @@ void ui_process_windows(void)
 			float tray_width = 8.0f;
 
 			rect2_t interact_total = rect2_extend(total, 0.5f*tray_width);
-			ui_interaction_t interaction = ui_widget_behaviour(id, interact_total);
+			ui_interaction_t interaction = ui_default_widget_behaviour(id, interact_total);
 
 			if (ui_hover_rect(interact_total))
 			{
@@ -433,14 +433,14 @@ void ui_process_windows(void)
 			rect2_t tray_sw = rect2_cut_bottom(&tray_w,    tray_width);
 
 			ui_interaction_t tray_interaction = 0;
-			tray_interaction |= ui_widget_behaviour(id_n,  tray_n);
-			tray_interaction |= ui_widget_behaviour(id_e,  tray_e);
-			tray_interaction |= ui_widget_behaviour(id_s,  tray_s);
-			tray_interaction |= ui_widget_behaviour(id_w,  tray_w);
-			tray_interaction |= ui_widget_behaviour(id_ne, tray_ne);
-			tray_interaction |= ui_widget_behaviour(id_nw, tray_nw);
-			tray_interaction |= ui_widget_behaviour(id_se, tray_se);
-			tray_interaction |= ui_widget_behaviour(id_sw, tray_sw);
+			tray_interaction |= ui_default_widget_behaviour(id_n,  tray_n);
+			tray_interaction |= ui_default_widget_behaviour(id_e,  tray_e);
+			tray_interaction |= ui_default_widget_behaviour(id_s,  tray_s);
+			tray_interaction |= ui_default_widget_behaviour(id_w,  tray_w);
+			tray_interaction |= ui_default_widget_behaviour(id_ne, tray_ne);
+			tray_interaction |= ui_default_widget_behaviour(id_nw, tray_nw);
+			tray_interaction |= ui_default_widget_behaviour(id_se, tray_se);
+			tray_interaction |= ui_default_widget_behaviour(id_sw, tray_sw);
 
 			if (tray_interaction & UI_PRESSED)
 			{
@@ -734,6 +734,32 @@ v2_t ui_text_dim(font_atlas_t *font, string_t text)
 	return rect2_dim(rect);
 }
 
+v2_t ui_text_align_p(font_atlas_t *font, rect2_t rect, string_t text, v2_t align)
+{
+    float text_width  = ui_text_width(font, text);
+    float text_height = font->y_advance;
+
+    float rect_width  = rect2_width(rect);
+    float rect_height = rect2_height(rect);
+
+    v2_t result = {
+        .x = rect.min.x + align.x*rect_width  - align.x*text_width,
+        .y = rect.min.y + align.y*rect_height - align.y*text_height - font->descent,
+    };
+
+    return result;
+}
+
+v2_t ui_text_center_p(font_atlas_t *font, rect2_t rect, string_t text)
+{
+	return ui_text_align_p(font, rect, text, make_v2(0.5f, 0.5f));
+}
+
+v2_t ui_text_default_align_p(font_atlas_t *font, rect2_t rect, string_t text)
+{
+	return ui_text_align_p(font, rect, text, make_v2(ui_scalar(UI_SCALAR_TEXT_ALIGN_X), ui_scalar(UI_SCALAR_TEXT_ALIGN_Y)));
+}
+
 rect2_t ui_draw_text(font_atlas_t *font, v2_t p, string_t text)
 {
 	ui_text_op(font, add(p, make_v2(1.0f, -1.0f)), text, ui_color(UI_COLOR_TEXT_SHADOW), UI_TEXT_OP_DRAW);
@@ -848,7 +874,7 @@ bool ui_hover_rect(rect2_t rect)
 	return rect2_contains_point(rect, ui.input.mouse_p);
 }
 
-ui_interaction_t ui_widget_behaviour(ui_id_t id, rect2_t rect)
+ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect)
 {
 	uint32_t result = 0;
 
@@ -861,13 +887,20 @@ ui_interaction_t ui_widget_behaviour(ui_id_t id, rect2_t rect)
 	if (ui.panels.current_panel)
 		hit_rect = rect2_intersect(ui.panels.current_panel->rect_init, rect);
 
+	bool hovered = rect2_contains_point(hit_rect, ui.input.mouse_p);
+
+	if (hovered)
+	{
+        ui_set_next_hot(id);
+	}
+
 	if (ui_is_active(id))
 	{
 		result |= UI_HELD;
 
 		if (ui_mouse_buttons_released(PLATFORM_MOUSE_BUTTON_LEFT))
 		{
-			if (rect2_contains_point(hit_rect, ui.input.mouse_p))
+			if (hovered)
 			{
 				result |= UI_FIRED;
 			}
@@ -878,45 +911,61 @@ ui_interaction_t ui_widget_behaviour(ui_id_t id, rect2_t rect)
 		}
 	}
 
-	if (rect2_contains_point(hit_rect, ui.input.mouse_p))
+	if (ui_is_hot(id))
 	{
-        ui_set_next_hot(id);
-	}
+		result |= UI_HOVERED;
 
-	if (ui_is_hot(id) && ui_mouse_buttons_pressed(PLATFORM_MOUSE_BUTTON_LEFT))
-	{
-		result |= UI_PRESSED;
-		ui.drag_anchor = sub(ui.input.mouse_p, rect2_center(rect));
-		ui_set_active(id);
+		if (ui_mouse_buttons_pressed(PLATFORM_MOUSE_BUTTON_LEFT))
+		{
+			result |= UI_PRESSED;
+			ui.drag_anchor = sub(ui.input.mouse_p, rect2_center(rect));
+			ui_set_active(id);
+		}
 	}
 
 	return result;
 }
 
-v2_t ui_text_align_p(font_atlas_t *font, rect2_t rect, string_t text, v2_t align)
+float ui_roundedness_ratio(rect2_t rect)
 {
-    float text_width  = ui_text_width(font, text);
-    float text_height = font->y_advance;
-
-    float rect_width  = rect2_width(rect);
-    float rect_height = rect2_height(rect);
-
-    v2_t result = {
-        .x = rect.min.x + align.x*rect_width  - align.x*text_width,
-        .y = rect.min.y + align.y*rect_height - align.y*text_height - font->descent,
-    };
-
-    return result;
+	float w = rect2_width (rect);
+	float h = rect2_height(rect);
+	float c = 0.5f*min(w, h);
+	float ratio = ui_scalar(UI_SCALAR_ROUNDEDNESS) / c;
+	return ratio;
 }
 
-v2_t ui_text_center_p(font_atlas_t *font, rect2_t rect, string_t text)
+float ui_roundedness_ratio_to_abs(rect2_t rect, float ratio)
 {
-	return ui_text_align_p(font, rect, text, make_v2(0.5f, 0.5f));
+	float w = rect2_width (rect);
+	float h = rect2_height(rect);
+	float c = 0.5f*min(w, h);
+	float abs = c*ratio;
+	return abs;
 }
 
-v2_t ui_text_default_align_p(font_atlas_t *font, rect2_t rect, string_t text)
+rect2_t ui_cut_widget_rect(v2_t min_size)
 {
-	return ui_text_align_p(font, rect, text, make_v2(ui_scalar(UI_SCALAR_TEXT_ALIGN_X), ui_scalar(UI_SCALAR_TEXT_ALIGN_Y)));
+	rect2_t rect;
+	if (!ui_override_rect(&rect))
+	{
+		ui_panel_t *panel = ui_panel();
+
+		bool layout_is_horz = (panel->layout_direction == RECT2_CUT_LEFT ||
+							   panel->layout_direction == RECT2_CUT_RIGHT);
+
+		float a = ui_widget_padding() + (layout_is_horz ? min_size.x : min_size.y);
+		rect = rect2_do_cut((rect2_cut_t){ .side = panel->layout_direction, .rect = &panel->rect_layout }, a);
+	}
+	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+	return rect;
+}
+
+float ui_button_style_hover_lift(ui_id_t id)
+{
+	float hover_lift = ui_is_hot(id) && !ui_is_active(id) ? ui_scalar(UI_SCALAR_HOVER_LIFT) : 0.0f;
+	hover_lift = ui_interpolate_f32(ui_child_id(id, S("hover_lift")), hover_lift);
+	return hover_lift;
 }
 
 //
@@ -991,7 +1040,7 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 			rect2_t handle = rect2_cut_top(&scroll_area, handle_size);
 			rect2_t bot    = scroll_area;
 
-			ui_widget_behaviour(scrollbar_id, handle);
+			ui_default_widget_behaviour(scrollbar_id, handle);
 
 			v4_t color = ui_color(UI_COLOR_SLIDER_FOREGROUND);
 
@@ -1127,7 +1176,7 @@ DREAM_INLINE ui_widget_state_t ui_get_widget_state(ui_id_t id)
 	return result;
 }
 
-DREAM_INLINE v4_t ui_animate_colors(ui_id_t id, ui_widget_state_t state, uint32_t interaction, v4_t cold, v4_t hot, v4_t active, v4_t fired)
+DREAM_INLINE v4_t ui_animate_colors(ui_id_t id, uint32_t interaction, v4_t cold, v4_t hot, v4_t active, v4_t fired)
 {
 	ui_id_t color_id = ui_child_id(id, S("color"));
 
@@ -1136,18 +1185,17 @@ DREAM_INLINE v4_t ui_animate_colors(ui_id_t id, ui_widget_state_t state, uint32_
 		ui_set_v4(color_id, fired);
 	}
 
-	v4_t target = cold;
-	switch (state)
+	v4_t  target    = cold;
+	float stiffness = ui_scalar(UI_SCALAR_ANIMATION_STIFFNESS);
+
+	if (interaction & UI_HOVERED)
 	{
-		case UI_WIDGET_STATE_COLD:   target = cold;   break;
-		case UI_WIDGET_STATE_HOT:    target = hot;    break;
-		case UI_WIDGET_STATE_ACTIVE: target = active; break;
-		INVALID_DEFAULT_CASE;
+		target = hot;
 	}
 
-	float stiffness = ui_scalar(UI_SCALAR_ANIMATION_STIFFNESS);
-	if (state == UI_WIDGET_STATE_ACTIVE)
+	if (interaction & UI_PRESSED)
 	{
+		target = active;
 		stiffness *= 2.0f;
 	}
 
@@ -1173,12 +1221,10 @@ bool ui_button(string_t label)
 
 	rect2_t text_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
 
-	uint32_t interaction = ui_widget_behaviour(id, rect);
+	ui_interaction_t interaction = ui_default_widget_behaviour(id, rect);
 	result = interaction & UI_FIRED;
 
-	ui_widget_state_t state = ui_get_widget_state(id);
-
-	v4_t color = ui_animate_colors(id, state, interaction, 
+	v4_t color = ui_animate_colors(id, interaction, 
 								   ui_color(UI_COLOR_BUTTON_IDLE),
 								   ui_color(UI_COLOR_BUTTON_HOT),
 								   ui_color(UI_COLOR_BUTTON_ACTIVE),
@@ -1200,127 +1246,102 @@ bool ui_button(string_t label)
 	return result;
 }
 
-DREAM_INLINE float ui_roundedness_ratio(rect2_t rect)
-{
-	float w = rect2_width (rect);
-	float h = rect2_height(rect);
-	float c = 0.5f*min(w, h);
-	float ratio = ui_scalar(UI_SCALAR_ROUNDEDNESS) / c;
-	return ratio;
-}
-
-DREAM_INLINE float ui_roundedness_ratio_to_abs(rect2_t rect, float ratio)
-{
-	float w = rect2_width (rect);
-	float h = rect2_height(rect);
-	float c = 0.5f*min(w, h);
-	float abs = c*ratio;
-	return abs;
-}
-
-bool ui_checkbox(string_t label, bool *value)
+bool ui_checkbox(string_t label, bool *result_value)
 {
 	bool result = false;
 
 	if (NEVER(!ui.initialized)) 
 		return result;
 
-	if (NEVER(!value)) 
-		return result;
-
 	ui_id_t id = ui_id(label);
 
-	rect2_t rect;
-	if (!ui_override_rect(&rect))
+	float label_offset = ui_scalar(UI_SCALAR_TEXT_MARGIN);
+
+	v2_t min_widget_size;
+	min_widget_size.y = ui_font_height();
+	min_widget_size.x = ui_text_width(&ui.style.font, label) + min_widget_size.y + label_offset;
+
+	rect2_t rect = ui_cut_widget_rect(min_widget_size);
+	ui_hoverable(id, rect);
+
+	ui_interaction_t interaction = ui_default_widget_behaviour(id, rect);
+
+	if (result_value && (interaction & UI_FIRED))
 	{
-		ui_panel_t *panel = ui_panel();
-
-		float a = ui_widget_padding();
-
-		switch (panel->layout_direction)
-		{
-			case RECT2_CUT_LEFT:
-			case RECT2_CUT_RIGHT:
-			{
-				a += ui_text_width(&ui.style.font, label) + ui_font_height() + ui_widget_padding();
-			} break;
-
-			case RECT2_CUT_TOP:
-			case RECT2_CUT_BOTTOM:
-			{
-				a += ui_font_height();
-			} break;
-		}
-
-		rect = rect2_do_cut((rect2_cut_t){ .side = panel->layout_direction, .rect = &panel->rect_layout }, a);
+		*result_value = !*result_value;
 	}
 
-	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+	bool value = (result_value ? *result_value : false);
 
-	rect2_t outer_box_rect = rect2_cut_left(&rect, rect2_height(rect));
+	//
+	// --- draw checkbox ---
+	//
 
-	float outer_rect_rel_width = 0.15f;
-	float outer_rect_c = outer_rect_rel_width*min(rect2_width(outer_box_rect), rect2_height(outer_box_rect));
+	float h = rect2_height(rect);
 
-	rect2_t inner_box_rect = rect2_shrink(outer_box_rect, outer_rect_c*1.5f);
-	rect2_t label_rect = rect2_cut_left(&rect, ui_text_width(&ui.style.font, label));
-	label_rect = rect2_shrink(label_rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
+	float checkbox_thickness        = 0.15f;
+	float checkbox_thickness_pixels = checkbox_thickness*h;
 
-	rect2_t full_widget_rect = rect2_union(label_rect, outer_box_rect);
+	rect2_t checkbox_rect = rect2_cut_left(&rect, h);
+	rect2_t check_rect = rect2_shrink(checkbox_rect, 1.5f*checkbox_thickness_pixels);
 
-	uint32_t interaction = ui_widget_behaviour(id, full_widget_rect);
-	result = interaction & UI_FIRED;
+	// clamp roundedness to avoid the checkbox looking like a radio button and
+	// transfer roundedness of outer rect to inner rect so the countours match
+	float roundedness_ratio = min(0.66f, ui_roundedness_ratio(checkbox_rect));
+	float outer_roundedness = ui_roundedness_ratio_to_abs(checkbox_rect, roundedness_ratio);
+	float inner_roundedness = ui_roundedness_ratio_to_abs(check_rect, roundedness_ratio);
 
-	if (result)
+	float hover_lift = ui_button_style_hover_lift(id);
+
+	// fudge with the color animation
+	if (value && !interaction)
 	{
-		*value = !*value;
+		interaction |= UI_PRESSED;
 	}
 
-	ui_widget_state_t state = ui_get_widget_state(id);
-
-	if (*value && state == UI_WIDGET_STATE_COLD)
-		state = UI_WIDGET_STATE_ACTIVE;
-
-	v4_t color = ui_animate_colors(id, state, interaction, 
+	v4_t color = ui_animate_colors(id, interaction, 
 								   ui_color(UI_COLOR_BUTTON_IDLE),
 								   ui_color(UI_COLOR_BUTTON_HOT),
 								   ui_color(UI_COLOR_BUTTON_ACTIVE),
 								   ui_color(UI_COLOR_BUTTON_FIRED));
 
-	float hover_lift = ui_is_hot(id) && !ui_is_active(id) ? ui_scalar(UI_SCALAR_HOVER_LIFT) : 0.0f;
-	hover_lift = ui_interpolate_f32(ui_child_id(id, S("hover_lift")), hover_lift);
-
-	// clamp roundedness to avoid the checkbox looking like a radio button and
-	// transfer roundedness of outer rect to inner rect so the countours match
-	float roundedness_ratio = min(0.66f, ui_roundedness_ratio(outer_box_rect));
-	float outer_roundedness = ui_roundedness_ratio_to_abs(outer_box_rect, roundedness_ratio);
-	float inner_roundedness = ui_roundedness_ratio_to_abs(inner_box_rect, roundedness_ratio);
-
 	UI_SCALAR(UI_SCALAR_ROUNDEDNESS, outer_roundedness)
 	{
-		rect2_t outer_box_rect_shadow = outer_box_rect;
-		outer_box_rect = rect2_add_offset(outer_box_rect, make_v2(0, hover_lift));
+		rect2_t checkbox_shadow = checkbox_rect;
+		checkbox_rect = rect2_add_offset(checkbox_rect, make_v2(0, hover_lift));
 
-		ui_draw_rect_outline(outer_box_rect_shadow, ui_color(UI_COLOR_WIDGET_SHADOW), outer_rect_c);
-		ui_draw_rect_outline(outer_box_rect, color, outer_rect_c);
+		ui_draw_rect_outline(checkbox_shadow, ui_color(UI_COLOR_WIDGET_SHADOW), checkbox_thickness_pixels);
+		ui_draw_rect_outline(checkbox_rect, color, checkbox_thickness_pixels);
 	}
 
-	if (*value) 
+	if (value) 
 	{
 		UI_SCALAR(UI_SCALAR_ROUNDEDNESS, inner_roundedness)
 		{
-			rect2_t inner_box_rect_shadow = inner_box_rect;
-			inner_box_rect = rect2_add_offset(inner_box_rect, make_v2(0, hover_lift));
+			rect2_t check_shadow = check_rect;
+			check_rect = rect2_add_offset(check_rect, make_v2(0, hover_lift));
 
-			ui_draw_rect(inner_box_rect_shadow, ui_color(UI_COLOR_WIDGET_SHADOW));
-			ui_draw_rect(inner_box_rect, color);
+			ui_draw_rect(check_shadow, ui_color(UI_COLOR_WIDGET_SHADOW));
+			ui_draw_rect(check_rect, color);
 		}
 	}
 
-	float x = label_rect.min.x;
-	float y = ui_text_center_p(&ui.style.font, label_rect, label).y;
-	v2_t  p = make_v2(x, y + hover_lift);
+	//
+	// --- draw label ---
+	//
 
+	v2_t p = ui_text_align_p(&ui.style.font, rect, label, make_v2(0.0f, 0.5f));
+	p.x += label_offset;
+	p.y += hover_lift;
+
+	v4_t text_color = ui_color(UI_COLOR_TEXT);
+
+	if (!value)
+	{
+		text_color.xyz = mul(text_color.xyz, 0.75f);
+	}
+
+	UI_COLOR(UI_COLOR_TEXT, text_color)
 	ui_draw_text(&ui.style.font, p, label);
 
 	return result;
@@ -1446,10 +1467,9 @@ bool ui_slider(string_t label, float *v, float min, float max)
 	(void)left;
 	(void)right;
 
-	uint32_t interaction = ui_widget_behaviour(id, handle);
-	ui_widget_state_t state = ui_get_widget_state(id);
+	ui_interaction_t interaction = ui_default_widget_behaviour(id, handle);
 
-	v4_t color = ui_animate_colors(id, state, interaction, 
+	v4_t color = ui_animate_colors(id, interaction, 
 								   ui_color(UI_COLOR_SLIDER_FOREGROUND),
 								   ui_color(UI_COLOR_SLIDER_HOT),
 								   ui_color(UI_COLOR_SLIDER_ACTIVE),
@@ -1563,14 +1583,12 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 	rect2_t handle = rect2_cut_left(&rect, handle_width);
 	rect2_t right  = rect;
 
-	uint32_t interaction = ui_widget_behaviour(id, handle);
+	ui_interaction_t interaction = ui_default_widget_behaviour(id, handle);
 
 	rect2_t handle_no_offset = handle;
 	handle = rect2_add_offset(handle, make_v2(0, hover_lift));
 
-	ui_widget_state_t state = ui_get_widget_state(id);
-
-	v4_t color = ui_animate_colors(id, state, interaction, 
+	v4_t color = ui_animate_colors(id, interaction, 
 								   ui_color(UI_COLOR_SLIDER_FOREGROUND),
 								   ui_color(UI_COLOR_SLIDER_HOT),
 								   ui_color(UI_COLOR_SLIDER_ACTIVE),
@@ -1660,7 +1678,7 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 
 	ui_text_edit_state_t *state = &ui_get_state(id)->text_edit;
 
-	ui_interaction_t interaction = ui_widget_behaviour(id, rect);
+	ui_interaction_t interaction = ui_default_widget_behaviour(id, rect);
 
 	if (ui_is_hot(id))
 	{
@@ -1720,7 +1738,7 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 			float selection_start_p = cursor_p;
 			float selection_end_p   = buffer_rect.min.x + ui_text_edit__get_caret_x(&prep, state->selection_end);
 
-#if 1
+#if 0
 			UI_SCALAR(UI_SCALAR_ANIMATION_LENGTH_LIMIT, 16.0f)
 			{
 				if (!(interaction & UI_PRESSED))
@@ -1766,6 +1784,20 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 	}
 
 	ui_pop_id();
+}
+
+void ui_tooltip(string_t text)
+{
+	if (!stack_full(ui.tooltip_stack))
+	{
+		ui_tooltip_t *tooltip = stack_add(ui.tooltip_stack);
+		string_into_storage(tooltip->text, text);
+	}
+}
+
+void ui_hover_tooltip(string_t text)
+{
+	string_into_storage(ui.next_tooltip, text);
 }
 
 //
@@ -1872,6 +1904,29 @@ bool ui_state_is_new(ui_state_t *state)
 	return state->created_frame_index == ui.frame_index;
 }
 
+void ui_hoverable(ui_id_t id, rect2_t rect)
+{
+	if (ui_hover_rect(rect))
+	{
+		ui.next_hovered_widget = id;
+	}
+
+	string_t next_tooltip = string_from_storage(ui.next_tooltip);
+
+	if (!string_empty(next_tooltip) &&
+		ui.hovered_widget.value == id.value)
+	{
+		double hover_time = ui_scalar(UI_SCALAR_TOOLTIP_DELAY);
+
+		if (ui.hover_time_seconds >= hover_time)
+		{
+			ui_tooltip(next_tooltip);
+		}
+	}
+
+	ui.next_tooltip.count = 0;
+}
+
 static void ui_initialize(void)
 {
 	ASSERT(!ui.initialized);
@@ -1888,6 +1943,7 @@ static void ui_initialize(void)
 	v4_t active = make_v4(0.30f, 0.55f, 0.50f, 1.0f);
 	v4_t fired  = make_v4(0.45f, 0.65f, 0.55f, 1.0f);
 
+	ui.style.base_scalars[UI_SCALAR_TOOLTIP_DELAY         ] = 0.0f;
 	ui.style.base_scalars[UI_SCALAR_ANIMATION_RATE        ] = 40.0f;
 	ui.style.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS   ] = 512.0f;
 	ui.style.base_scalars[UI_SCALAR_ANIMATION_DAMPEN      ] = 32.0f;
@@ -1989,20 +2045,39 @@ bool ui_begin(float dt)
 		}
 		else
 		{
-			table_remove     (&ui.style.animation_index, anim->id.value);
+			table_remove (&ui.style.animation_index, anim->id.value);
 			pool_rem_item(&ui.style.animation_state, anim);
 		}
 	}
 
+
 	ui.frame_index += 1;
+
+	ui.current_time = os_hires_time();
+
     if (!ui.active.value)
 	{
-		ui.hot           = ui.next_hot;
-		ui.hovered_panel = ui.next_hovered_panel;
+		if (ui.next_hovered_widget.value &&
+			ui.next_hovered_widget.value != ui.hovered_widget.value)
+		{
+			ui.hover_time = os_hires_time();
+		}
+
+		ui.hot            = ui.next_hot;
+		ui.hovered_panel  = ui.next_hovered_panel;
+		ui.hovered_widget = ui.next_hovered_widget;
 	}
 
-	ui.next_hot           = UI_ID_NULL;
-	ui.next_hovered_panel = UI_ID_NULL;
+	ui.hover_time_seconds = 0.0;
+
+	if (ui.hovered_widget.value)
+	{
+		ui.hover_time_seconds = os_seconds_elapsed(ui.hover_time, ui.current_time);
+	}
+
+	ui.next_hot            = UI_ID_NULL;
+	ui.next_hovered_panel  = UI_ID_NULL;
+	ui.next_hovered_widget = UI_ID_NULL;
 
 	ui.hovered = false;
 	
@@ -2025,6 +2100,34 @@ bool ui_begin(float dt)
 
 void ui_end(void)
 {
+	r_push_view_screenspace();
+
+    int res_x, res_y;
+    render->get_resolution(&res_x, &res_y);
+
+	float font_height = ui_font_height();
+	float at_y = 32.0f;
+
+	for (size_t i = 0; i < stack_count(ui.tooltip_stack); i++)
+	{
+		ui_tooltip_t *tooltip = &ui.tooltip_stack.values[i];
+
+		string_t text = string_from_storage(tooltip->text);
+
+		float text_w = ui_text_width(&ui.style.font, text);
+
+		float center_x = 0.5f*(float)res_x;
+		rect2_t rect = rect2_center_dim(make_v2(center_x, at_y), make_v2(4.0f + text_w, font_height));
+
+		ui_draw_rect(rect, make_v4(0, 0, 0, 0.5f));
+		ui_draw_text_aligned(&ui.style.font, rect, text, make_v2(0.5f, 0.5f));
+		at_y += ui.style.font.y_advance;
+	}
+
+	stack_reset(ui.tooltip_stack);
+
+	r_pop_view();
+
 	if (ui_mouse_buttons_pressed(PLATFORM_MOUSE_BUTTON_ANY))
 	{
 		ui.has_focus = ui.hovered;

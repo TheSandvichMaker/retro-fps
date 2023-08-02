@@ -1,5 +1,5 @@
-#ifndef CORE_H
-#define CORE_H
+#ifndef DREAM_CORE_H
+#define DREAM_CORE_H
 
 #include "common.h"
 #include "atomics.h"
@@ -21,4 +21,4 @@
 #include "thread.h"
 #include "random.h"
 
-#endif /* CORE_H */
+#endif /* DREAM_CORE_H */

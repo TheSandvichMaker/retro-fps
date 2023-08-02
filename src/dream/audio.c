@@ -108,7 +108,7 @@ typedef struct fade_t
 	uint32_t     frame_duration;
 } fade_t;
 
-static pool_t playing_sounds = INIT_POOL(playing_sound_t);
+static pool_t  playing_sounds = INIT_POOL(playing_sound_t);
 static table_t playing_sounds_index;
 
 static pool_t active_fades = INIT_POOL(fade_t);
@@ -166,7 +166,7 @@ DREAM_INLINE channel_matrix_t spatialize_channel_matrix(playing_sound_t *playing
 
 static bool mixer_initialized;
 
-static void mixer_init(void)
+DREAM_INLINE void mixer_init(void)
 {
 	for (size_t i = 0; i < ARRAY_COUNT(g_mix_category_volumes); i++)
 	{
@@ -176,7 +176,7 @@ static void mixer_init(void)
 	mixer_initialized = true;
 }
 
-static void stop_playing_sound_internal(playing_sound_t *playing)
+DREAM_INLINE void stop_playing_sound_internal(playing_sound_t *playing)
 {
 	while (playing->first_fade)
 	{
@@ -184,7 +184,7 @@ static void stop_playing_sound_internal(playing_sound_t *playing)
 		pool_rem_item(&active_fades, fade);
 	}
 
-	table_remove     (&playing_sounds_index, playing->id.value);
+	table_remove (&playing_sounds_index, playing->id.value);
 	pool_rem_item(&playing_sounds, playing);
 }
 

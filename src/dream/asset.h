@@ -93,7 +93,9 @@ DREAM_LOCAL void initialize_asset_system(const asset_config_t *config);
 DREAM_LOCAL void preload_asset(asset_hash_t hash);
 
 // DREAM_GLOBAL from here on out because d3d11.c is using some of these.
-// Should I fix that?
+// Should I fix that? Yes I think so, I imagine the renderer should be
+// modular and really shouldn't have a (direct) dependency on this specific
+// game's asset system.
 
 DREAM_GLOBAL image_t    missing_image;
 DREAM_GLOBAL waveform_t missing_waveform;
