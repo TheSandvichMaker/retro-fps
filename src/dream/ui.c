@@ -956,9 +956,16 @@ rect2_t ui_cut_widget_rect(v2_t min_size)
 
 		float a = ui_widget_padding() + (layout_is_horz ? min_size.x : min_size.y);
 		rect = rect2_do_cut((rect2_cut_t){ .side = panel->layout_direction, .rect = &panel->rect_layout }, a);
+		rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 	}
-	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 	return rect;
+}
+
+float ui_hover_lift(ui_id_t id)
+{
+	float hover_lift = ui_is_hot(id) ? ui_scalar(UI_SCALAR_HOVER_LIFT) : 0.0f;
+	hover_lift = ui_interpolate_f32(ui_child_id(id, S("hover_lift")), hover_lift);
+	return hover_lift;
 }
 
 float ui_button_style_hover_lift(ui_id_t id)
@@ -1216,10 +1223,12 @@ bool ui_button(string_t label)
 
 	ui_id_t id = ui_id(label);
 
-	rect2_t rect = ui_default_label_rect(&ui.style.font, label);
-	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+	v2_t min_widget_size;
+	min_widget_size.x = ui_text_width(&ui.style.font, label);
+	min_widget_size.y = ui_font_height();
 
-	rect2_t text_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
+	rect2_t rect = ui_cut_widget_rect(min_widget_size);
+	ui_hoverable(id, rect);
 
 	ui_interaction_t interaction = ui_default_widget_behaviour(id, rect);
 	result = interaction & UI_FIRED;
@@ -1230,18 +1239,15 @@ bool ui_button(string_t label)
 								   ui_color(UI_COLOR_BUTTON_ACTIVE),
 								   ui_color(UI_COLOR_BUTTON_FIRED));
 
-	float hover_lift = ui_is_hot(id) && !ui_is_active(id) ? ui_scalar(UI_SCALAR_HOVER_LIFT) : 0.0f;
-	hover_lift = ui_interpolate_f32(ui_child_id(id, S("hover_lift")), hover_lift);
+	float hover_lift = ui_button_style_hover_lift(id);
 
 	rect2_t shadow = rect;
-
-	rect      = rect2_add_offset(rect,      make_v2(0.0f, hover_lift));
-	text_rect = rect2_add_offset(text_rect, make_v2(0.0f, hover_lift));
+	rect = rect2_add_offset(rect, make_v2(0.0f, hover_lift));
 
 	ui_draw_rect(shadow, ui_color(UI_COLOR_WIDGET_SHADOW));
 	ui_draw_rect(rect, color);
 
-	ui_draw_text(&ui.style.font, ui_text_center_p(&ui.style.font, text_rect, label), label);
+	ui_draw_text_aligned(&ui.style.font, rect, label, make_v2(0.5f, 0.5f));
 
 	return result;
 }
@@ -1256,15 +1262,28 @@ bool ui_checkbox(string_t label, bool *result_value)
 	ui_id_t id = ui_id(label);
 
 	float label_offset = ui_scalar(UI_SCALAR_TEXT_MARGIN);
+	float label_width  = ui_text_width(&ui.style.font, label);
 
 	v2_t min_widget_size;
 	min_widget_size.y = ui_font_height();
-	min_widget_size.x = ui_text_width(&ui.style.font, label) + min_widget_size.y + label_offset;
+	min_widget_size.x = label_width + label_offset + min_widget_size.y;
 
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
-	ui_hoverable(id, rect);
 
-	ui_interaction_t interaction = ui_default_widget_behaviour(id, rect);
+	float h = rect2_height(rect);
+
+	float checkbox_thickness        = 0.15f;
+	float checkbox_thickness_pixels = checkbox_thickness*h;
+
+	rect2_t checkbox_rect = rect2_cut_left(&rect, h);
+	rect2_t check_rect = rect2_shrink(checkbox_rect, 1.5f*checkbox_thickness_pixels);
+	rect2_t label_rect = rect2_cut_left(&rect, label_width + label_offset);
+
+	rect2_t interactive_rect = rect2_union(checkbox_rect, label_rect);
+
+	ui_hoverable(id, interactive_rect);
+
+	ui_interaction_t interaction = ui_default_widget_behaviour(id, interactive_rect);
 
 	if (result_value && (interaction & UI_FIRED))
 	{
@@ -1276,14 +1295,6 @@ bool ui_checkbox(string_t label, bool *result_value)
 	//
 	// --- draw checkbox ---
 	//
-
-	float h = rect2_height(rect);
-
-	float checkbox_thickness        = 0.15f;
-	float checkbox_thickness_pixels = checkbox_thickness*h;
-
-	rect2_t checkbox_rect = rect2_cut_left(&rect, h);
-	rect2_t check_rect = rect2_shrink(checkbox_rect, 1.5f*checkbox_thickness_pixels);
 
 	// clamp roundedness to avoid the checkbox looking like a radio button and
 	// transfer roundedness of outer rect to inner rect so the countours match
@@ -1330,7 +1341,7 @@ bool ui_checkbox(string_t label, bool *result_value)
 	// --- draw label ---
 	//
 
-	v2_t p = ui_text_align_p(&ui.style.font, rect, label, make_v2(0.0f, 0.5f));
+	v2_t p = ui_text_align_p(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
 	p.x += label_offset;
 	p.y += hover_lift;
 
@@ -1347,7 +1358,7 @@ bool ui_checkbox(string_t label, bool *result_value)
 	return result;
 }
 
-bool ui_option_buttons(string_t label, int *value, int count, string_t *labels)
+bool ui_option_buttons(string_t label, int *value, int count, string_t *options)
 {
     bool result = false;
 
@@ -1357,19 +1368,30 @@ bool ui_option_buttons(string_t label, int *value, int count, string_t *labels)
 	if (NEVER(!value))
 		return result;
 
-	if (NEVER(!labels || count == 0))
+	if (NEVER(!options || count == 0))
 		return result;
 
-	rect2_t rect;
-	if (!ui_override_rect(&rect))
+	ui_id_t id = ui_id(label);
+
+	float label_width   = ui_text_width(&ui.style.font, label);
+	float label_padding = 0.33f*ui_font_height();
+
+	float button_labels_width = 0.0f;
+	for (int i = 0; i < count; i++)
 	{
-		ui_panel_t *panel = ui_panel();
-		rect = rect2_cut_top(&panel->rect_layout, ui_font_height() + ui_widget_padding());
+		button_labels_width += ui_text_width(&ui.style.font, options[i]);
 	}
 
-	rect2_t label_rect = rect2_cut_left(&rect, ui_text_width(&ui.style.font, label) + ui_widget_padding());
+	v2_t min_widget_size = { label_width + label_padding + button_labels_width, ui_font_height() };
+
+	rect2_t rect = ui_cut_widget_rect(min_widget_size);
+
+	rect2_t label_rect = rect2_cut_left(&rect, label_width + label_padding);
 	label_rect = rect2_shrink(label_rect, 0.5f*ui_widget_padding());
 
+	ui_hoverable(id, label_rect);
+
+	ui_push_id(id);
     {
         float size = rect2_width(rect) / (float)count;
         for (int i = 0; i < count; i++)
@@ -1381,8 +1403,8 @@ bool ui_option_buttons(string_t label, int *value, int count, string_t *labels)
                 ui_push_color(UI_COLOR_BUTTON_IDLE, ui_color(UI_COLOR_BUTTON_ACTIVE));
             }
 
-            ui_set_next_rect(rect2_cut_left(&rect, size));
-            bool pressed = ui_button(labels[i]);
+            ui_set_next_rect(rect2_shrink(rect2_cut_left(&rect, size), ui_scalar(UI_SCALAR_WIDGET_MARGIN)));
+            bool pressed = ui_button(options[i]);
 
             result |= pressed;
 
@@ -1397,10 +1419,139 @@ bool ui_option_buttons(string_t label, int *value, int count, string_t *labels)
             }
         }
     }
+	ui_pop_id();
 
 	ui_draw_text_aligned(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
     return result;
+}
+
+typedef enum ui_slider__type_t
+{
+	UI_SLIDER__F32,
+	UI_SLIDER__I32,
+} ui_slider__type_t;
+
+typedef struct ui_slider__params_t
+{
+	ui_slider__type_t type;
+
+	union
+	{
+		struct
+		{
+			float *v;
+			float min;
+			float max;
+		} f32;
+
+		struct
+		{
+			int32_t *v;
+			int32_t min;
+			int32_t max;
+		} i32;
+	};
+} ui_slider__params_t;
+
+DREAM_INLINE void ui_slider__impl(ui_id_t id, rect2_t rect, ui_slider__params_t *p)
+{
+	if (NEVER(!ui.initialized)) 
+		return;
+
+	float slider_w           = rect2_width(rect);
+	float handle_w           = max(16.0f, slider_w*ui_scalar(UI_SCALAR_SLIDER_HANDLE_RATIO));
+	float slider_effective_w = slider_w - handle_w;
+
+	// TODO: This is needlessly confusing
+	float relative_x = CLAMP((ui.input.mouse_p.x - ui.drag_anchor.x) - rect.min.x - 0.5f*handle_w, 0.0f, slider_effective_w);
+
+	float slider_t = 0.0f;
+
+	if (ui_is_active(id))
+	{
+		slider_t = relative_x / slider_effective_w;
+		ui_set_f32(ui_child_id(id, S("slider_t")), slider_t);
+
+		switch (p->type)
+		{
+			case UI_SLIDER__F32:
+			{
+				float value       = p->f32.min + slider_t*(p->f32.max - p->f32.min);
+				float granularity = 0.01f;
+				*p->f32.v = granularity*roundf(value / granularity);
+			} break;
+
+			case UI_SLIDER__I32:
+			{
+				*p->i32.v = p->i32.min + (int32_t)roundf(slider_t*(float)(p->i32.max - p->i32.min));
+			} break;
+		}
+	}
+	else
+	{
+		switch (p->type)
+		{
+			case UI_SLIDER__F32:
+			{
+				slider_t = (*p->f32.v - p->f32.min) / (p->f32.max - p->f32.min);
+			} break;
+
+			case UI_SLIDER__I32:
+			{
+				slider_t = (float)(*p->i32.v - p->i32.min) / (float)(p->i32.max - p->i32.min);
+			} break;
+		}
+
+		slider_t = ui_interpolate_f32(ui_child_id(id, S("slider_t")), slider_t);
+	}
+
+	slider_t = saturate(slider_t);
+
+	float handle_t = slider_t*slider_effective_w;
+
+	rect2_t body   = rect;
+	rect2_t left   = rect2_cut_left(&rect, handle_t);
+	rect2_t handle = rect2_cut_left(&rect, handle_w);
+	rect2_t right  = rect;
+
+	(void)left;
+	(void)right;
+
+	ui_interaction_t interaction = ui_default_widget_behaviour(id, handle);
+
+	v4_t color = ui_animate_colors(id, interaction, 
+								   ui_color(UI_COLOR_SLIDER_FOREGROUND),
+								   ui_color(UI_COLOR_SLIDER_HOT),
+								   ui_color(UI_COLOR_SLIDER_ACTIVE),
+								   ui_color(UI_COLOR_SLIDER_ACTIVE));
+
+	float hover_lift = ui_hover_lift(id);
+
+	rect2_t shadow = handle;
+	handle = rect2_add_offset(handle, make_v2(0, hover_lift));
+
+	ui_draw_rect(body, ui_color(UI_COLOR_SLIDER_BACKGROUND));
+	ui_draw_rect(shadow, ui_color(UI_COLOR_WIDGET_SHADOW));
+	ui_draw_rect(handle, color);
+	ui_draw_rect(right, ui_color(UI_COLOR_SLIDER_BACKGROUND));
+
+	string_t value_text = {0};
+
+	switch (p->type)
+	{
+		case UI_SLIDER__F32:
+		{
+			value_text = Sf("%.02f", *p->f32.v);
+		} break;
+
+		case UI_SLIDER__I32:
+		{
+			value_text = Sf("%d", *p->i32.v);
+		} break;
+	}
+
+	ui_draw_text_aligned(&ui.style.font, body, value_text, make_v2(0.5f, 0.5f));
 }
 
 bool ui_slider(string_t label, float *v, float min, float max)
@@ -1415,84 +1566,27 @@ bool ui_slider(string_t label, float *v, float min, float max)
 
 	ui_id_t id = ui_id_pointer(v);
 
-	// TODO: Handle layout direction properly
-	rect2_t rect;
-	if (!ui_override_rect(&rect))
-	{
-		ui_panel_t *panel = ui_panel();
-		rect = rect2_cut_top(&panel->rect_layout, ui_font_height() + ui_widget_padding());
-	}
+	v2_t min_widget_size;
+	min_widget_size.x = ui_text_width(&ui.style.font, label) + 32.0f;
+	min_widget_size.y = ui_font_height();
 
-	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+	rect2_t rect = ui_cut_widget_rect(min_widget_size);
+	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
 
-	float w = rect2_width(rect);
-
-	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*w); // (float)label.count*ui.font.cw + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN));
-	label_rect = rect2_shrink(label_rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
-
-	rect2_t slider_body = rect;
-
-	float handle_width = max(16.0f, rect2_width(rect)*ui_scalar(UI_SCALAR_SLIDER_HANDLE_RATIO));
-	float handle_half_width = 0.5f*handle_width;
-	
-	float width = rect2_width(rect);
-	float relative_x = CLAMP((ui.input.mouse_p.x - ui.drag_anchor.x) - rect.min.x - handle_half_width, 0.0f, width - handle_width);
-
-	float pct = 0.0f;
-
-	if (ui_is_active(id))
-	{
-		float granularity = 0.01f;
-
-		pct = relative_x / (width - handle_width);
-		*v = granularity*roundf((min + pct*(max - min)) / granularity);
-		ui_set_f32(id, pct);
-	}
-	else
-	{
-		float value = *v;
-		pct = (value - min) / (max - min); // TODO: protect against division by zero, think about min > max case
-	}
-
-	pct = saturate(pct);
-	pct = ui_interpolate_f32(id, pct);
-
-	float width_exclusive = width - handle_width;
-	float handle_offset = pct*width_exclusive;
-
-	rect2_t left   = rect2_cut_left(&rect, handle_offset);
-	rect2_t handle = rect2_cut_left(&rect, handle_width);
-	rect2_t right  = rect;
-
-	(void)left;
-	(void)right;
-
-	ui_interaction_t interaction = ui_default_widget_behaviour(id, handle);
-
-	v4_t color = ui_animate_colors(id, interaction, 
-								   ui_color(UI_COLOR_SLIDER_FOREGROUND),
-								   ui_color(UI_COLOR_SLIDER_HOT),
-								   ui_color(UI_COLOR_SLIDER_ACTIVE),
-								   ui_color(UI_COLOR_SLIDER_ACTIVE));
-
-	float hover_lift = ui_is_hot(id) ? ui_scalar(UI_SCALAR_HOVER_LIFT) : 0.0f;
-	hover_lift = ui_interpolate_f32(ui_child_id(id, S("hover_lift")), hover_lift);
-
-	rect2_t shadow = handle;
-	handle = rect2_add_offset(handle, make_v2(0, hover_lift));
-
-	// r_immediate_clip_rect(slider_body); TODO: ui rect clip rects?
-	ui_draw_rect(slider_body, ui_color(UI_COLOR_SLIDER_BACKGROUND));
-	ui_draw_rect(shadow, ui_color(UI_COLOR_WIDGET_SHADOW));
-	ui_draw_rect(handle, color);
-	ui_draw_rect(right, ui_color(UI_COLOR_SLIDER_BACKGROUND));
+	ui_hoverable(id, label_rect);
 
 	ui_draw_text_aligned(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
-	string_t value_text = Sf("%.02f", *v);
+	ui_slider__params_t p = {
+		.type = UI_SLIDER__F32,
+		.f32 = {
+			.v   = v,
+			.min = min,
+			.max = max,
+		},
+	};
 
-	v2_t text_p = ui_text_center_p(&ui.style.font, slider_body, value_text);
-	ui_draw_text(&ui.style.font, text_p, value_text);
+	ui_slider__impl(id, rect, &p);
 
 	return *v != init_v;
 }
@@ -1509,108 +1603,51 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 
 	ui_id_t id = ui_id_pointer(v);
 
-	// TODO: Handle layout direction properly
-	rect2_t rect;
-	if (!ui_override_rect(&rect))
-	{
-		ui_panel_t *panel = ui_panel();
-		rect = rect2_cut_top(&panel->rect_layout, ui_font_height() + ui_widget_padding());
-	}
+	float widget_margin = ui_scalar(UI_SCALAR_WIDGET_MARGIN);
 
-	float w = rect2_width(rect);
+	v2_t min_widget_size;
+	min_widget_size.y = ui_font_height();
+	min_widget_size.x = ui_text_width(&ui.style.font, label) + 32.0f + 2.0f*min_widget_size.y + 2.0f*widget_margin;
 
-	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*w); // (float)label.count*ui.font.cw + ui_widget_padding());
-	label_rect = rect2_shrink(label_rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN) + ui_scalar(UI_SCALAR_TEXT_MARGIN));
+	rect2_t rect = ui_cut_widget_rect(min_widget_size);
+	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
 
-	rect2_t sub_rect = rect2_cut_left (&rect, rect2_height(rect));
-	rect2_t add_rect = rect2_cut_right(&rect, rect2_height(rect));
-
-	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
-
-	ui_id_t sub_id = ui_child_id(id, S("sub"));
-	ui_set_next_id  (sub_id);
-	ui_set_next_rect(sub_rect);
-	if (ui_button(S("-")))
-	{
-		if (*v > min) *v = *v - 1;
-	}
-
-	ui_id_t add_id = ui_child_id(id, S("add"));
-	ui_set_next_id  (add_id);
-	ui_set_next_rect(add_rect);
-	if (ui_button(S("+")))
-	{
-		if (*v < max) *v = *v + 1;
-	}
-
-	rect2_t slider_body = rect;
-
-	int   range = max - min;
-	float ratio = 1.0f / (float)range;
-
-	float handle_width = max(16.0f, 1.5f*rect2_width(rect)*ratio); // ui_scalar(UI_SCALAR_SLIDER_HANDLE_RATIO);
-	float handle_half_width = 0.5f*handle_width;
-	
-	float width = rect2_width(rect);
-	float relative_x = CLAMP((ui.input.mouse_p.x - ui.drag_anchor.x) - rect.min.x - handle_half_width, 0.0f, width - handle_width);
-
-	float pct = 0.0f;
-
-	if (ui_is_active(id))
-	{
-		pct = relative_x / (width - handle_width);
-		*v = (int)roundf((float)min + pct*(float)(range));
-		ui_set_f32(id, pct);
-	}
-	else
-	{
-		int value = *v;
-		pct = (float)(value - min) / (float)(range); // TODO: protect against division by zero, think about min > max case
-	}
-
-	pct = saturate(pct);
-
-	float hover_lift = ui_is_hot(id) ? ui_scalar(UI_SCALAR_HOVER_LIFT) : 0.0f;
-	hover_lift = ui_interpolate_f32(ui_child_id(id, S("hover_lift")), hover_lift);
-
-	UI_SCALAR(UI_SCALAR_ANIMATION_STIFFNESS, 4.0f*ui_scalar(UI_SCALAR_ANIMATION_STIFFNESS));
-	float pct_interp = ui_interpolate_f32(id, pct);
-
-	float width_exclusive = width - handle_width;
-	float handle_offset = pct_interp*width_exclusive;
-
-	rect2_t left   = rect2_cut_left(&rect, handle_offset);
-	rect2_t handle = rect2_cut_left(&rect, handle_width);
-	rect2_t right  = rect;
-
-	ui_interaction_t interaction = ui_default_widget_behaviour(id, handle);
-
-	rect2_t handle_no_offset = handle;
-	handle = rect2_add_offset(handle, make_v2(0, hover_lift));
-
-	v4_t color = ui_animate_colors(id, interaction, 
-								   ui_color(UI_COLOR_SLIDER_FOREGROUND),
-								   ui_color(UI_COLOR_SLIDER_HOT),
-								   ui_color(UI_COLOR_SLIDER_ACTIVE),
-								   ui_color(UI_COLOR_SLIDER_ACTIVE));
-
-	rect2_t slider_clip = slider_body;
-	slider_clip.max.y += 2.0f;
-
-	(void)left;
-	(void)right;
-
-	ui_draw_rect(slider_body, ui_color(UI_COLOR_SLIDER_BACKGROUND));
-
-	ui_draw_rect(handle_no_offset, ui_color(UI_COLOR_WIDGET_SHADOW));
-	ui_draw_rect(handle, color);
+	ui_hoverable(id, label_rect);
 
 	ui_draw_text_aligned(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
-	string_t value_text = Sf("%d", *v);
+	rect2_t sub_rect = rect2_cut_left(&rect, rect2_height(rect));
+	rect2_cut_left(&rect, widget_margin);
 
-	v2_t text_p = ui_text_center_p(&ui.style.font, slider_body, value_text);
-	ui_draw_text(&ui.style.font, text_p, value_text);
+	rect2_t add_rect = rect2_cut_right(&rect, rect2_height(rect));
+	rect2_cut_right(&rect, widget_margin);
+
+	ui_push_id(id);
+	{
+		ui_set_next_rect(sub_rect);
+		if (ui_button(S("-")))
+		{
+			if (*v > min) *v = *v - 1;
+		}
+
+		ui_set_next_rect(add_rect);
+		if (ui_button(S("+")))
+		{
+			if (*v < max) *v = *v + 1;
+		}
+	}
+	ui_pop_id();
+
+	ui_slider__params_t p = {
+		.type = UI_SLIDER__I32,
+		.i32 = {
+			.v   = v,
+			.min = min,
+			.max = max,
+		},
+	};
+
+	ui_slider__impl(id, rect, &p);
 
 	return *v != init_value;
 }

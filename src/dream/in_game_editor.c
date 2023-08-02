@@ -1116,9 +1116,8 @@ DREAM_INLINE void ui_demo_proc(void *user_data)
 
 	ui_demo_panel_t *demo = &editor.ui_demo;
 
-	ui_hover_tooltip(S("This checkbox does nothing! GOOD DAY SIR!!"));
-
 	static bool check_me = false;
+	ui_hover_tooltip(S("This checkbox does nothing! GOOD DAY SIR!!"));
 	ui_checkbox(S("Checkbox That Does Nothing"), &check_me);
 
 	ui_slider    (S("Float Slider"), &demo->slider_f32, -1.0f, 1.0f);

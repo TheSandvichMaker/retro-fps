@@ -296,6 +296,7 @@ DREAM_LOCAL void    ui_draw_circle                  (v2_t p, float r, v4_t color
 
 // NOTE: This naming is atrocious
 DREAM_LOCAL bool    ui_hover_rect              (rect2_t rect);
+DREAM_LOCAL float   ui_hover_lift              (ui_id_t id);
 DREAM_LOCAL float   ui_button_style_hover_lift (ui_id_t id);
 DREAM_LOCAL rect2_t ui_cut_widget_rect         (v2_t min_size);
 DREAM_LOCAL float   ui_roundedness_ratio       (rect2_t rect);
