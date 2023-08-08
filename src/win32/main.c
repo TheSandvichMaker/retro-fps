@@ -5,6 +5,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <dbghelp.h>
 
 #define COBJMACROS
 #define INITGUID
@@ -240,6 +241,26 @@ DREAM_INLINE v2_t convert_mouse_cursor(POINT cursor, int height)
 	return result;
 }
 
+BOOL CALLBACK enumerate_symbols_proc(SYMBOL_INFO *symbol_info, ULONG symbol_size, void *userdata)
+{
+	(void)userdata;
+
+	debug_print("%08X %4u %s\n", symbol_info->Address, symbol_size, symbol_info->Name);
+	return true;
+}
+
+DREAM_INLINE void enumerate_symbols(void)
+{
+	HANDLE process = GetCurrentProcess();
+
+	if (!SymInitialize(process, NULL, true))
+		return;
+
+	SymEnumSymbols(process, 0, "*!*", enumerate_symbols_proc, NULL);
+
+	SymCleanup(process);
+}
+
 int wWinMain(HINSTANCE instance, 
              HINSTANCE prev_instance, 
              PWSTR     command_line, 
@@ -247,6 +268,8 @@ int wWinMain(HINSTANCE instance,
 {
     IGNORED(instance);
     IGNORED(prev_instance);
+
+	// enumerate_symbols();
 
     int argc;
     wchar_t **argv_wide = CommandLineToArgvW(command_line, &argc);
@@ -595,6 +618,7 @@ int wWinMain(HINSTANCE instance,
 
 		hires_time_t end_time = os_hires_time();
 		dt = (float)os_seconds_elapsed(start_time, end_time);
+		dt = min(dt, 1.0f / 15.0f);
 
 		start_time = end_time;
     }

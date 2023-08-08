@@ -193,11 +193,24 @@ typedef struct arena_marker_t
     char *at;
 } arena_marker_t;
 
+//
+// mathy types
+//
+
 typedef union v2i_t
 {
-    struct { int x, y; };
-    int e[2];
+    struct { int32_t x, y; };
+    int32_t e[2];
 } v2i_t;
+
+typedef union v2i16_t
+{
+	struct
+	{
+		int16_t x, y;
+	};
+	int16_t e[2];
+} v2i16_t;
 
 typedef union v3i_t
 {
@@ -275,6 +288,22 @@ typedef union rect2i_t
         v2i_t max;
     };
 } rect2i_t;
+
+typedef struct rect2i16_t
+{
+	union
+	{
+		struct
+		{
+			v2i16_t min, max;
+		};
+
+		struct
+		{
+			int16_t x0, y0, x1, y1;
+		};
+	};
+} rect2i16_t;
 
 typedef union rect3_t
 {

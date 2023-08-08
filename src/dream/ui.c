@@ -24,7 +24,7 @@ ui_id_t ui_child_id(ui_id_t parent, string_t string)
 	if (ui.next_id.value)
 	{
 		result = ui.next_id;
-		ui.next_id.value = 0;
+		ui.next_id = UI_ID_NULL;
 	}
 	else
 	{
@@ -41,9 +41,14 @@ ui_id_t ui_child_id(ui_id_t parent, string_t string)
 
 ui_id_t ui_id_pointer(void *pointer)
 {
-	ui_id_t result = {
-		.value = (uintptr_t)pointer,
-	};
+	ui_id_t result = { (uint64_t)(uintptr_t)pointer };
+
+	if (ui.next_id.value)
+	{
+		result = ui.next_id;
+		ui.next_id = UI_ID_NULL;
+	}
+
 	return result;
 }
 
@@ -449,6 +454,9 @@ void ui_process_windows(void)
 
 			// draw window
 
+			rect2_t title_bar_minus_outline = title_bar;
+			title_bar_minus_outline.max.y -= 2.0f;
+
 			string_t title = string_from_storage(window->title);
 
 			bool has_focus = ui_has_focus() && (window == ui.windows.focus_window);
@@ -461,9 +469,6 @@ void ui_process_windows(void)
 			v4_t  title_bar_color_greyscale = make_v4(title_bar_luma, title_bar_luma, title_bar_luma, 1.0f);
 
 			v4_t  interpolated_title_bar_color = v4_lerps(title_bar_color_greyscale, title_bar_color, focus_t);
-
-			rect2_t title_bar_minus_outline = title_bar;
-			title_bar_minus_outline.max.y -= 2.0f;
 
 			ui_draw_rect_roundedness_shadow(rect2_shrink(total, 1.0f), make_v4(0, 0, 0, 0), make_v4(5, 5, 5, 5), shadow_amount, 32.0f);
 			ui_draw_rect_roundedness(title_bar, interpolated_title_bar_color, make_v4(2, 0, 2, 0));
@@ -786,6 +791,22 @@ void ui_draw_rect(rect2_t rect, v4_t color)
 		.color_10    = color_packed,
 		.color_11    = color_packed,
 		.color_01    = color_packed,
+	});
+}
+
+void ui_draw_rect_shadow(rect2_t rect, v4_t color, float shadow_amount, float shadow_radius)
+{
+	uint32_t color_packed = pack_color(color);
+
+	r_ui_rect((r_ui_rect_t){
+		.rect          = rect, 
+		.roundedness   = v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS)),
+		.color_00      = color_packed,
+		.color_10      = color_packed,
+		.color_11      = color_packed,
+		.color_01      = color_packed,
+		.shadow_amount = shadow_amount,
+		.shadow_radius = shadow_radius,
 	});
 }
 
@@ -1292,9 +1313,7 @@ bool ui_checkbox(string_t label, bool *result_value)
 
 	bool value = (result_value ? *result_value : false);
 
-	//
 	// --- draw checkbox ---
-	//
 
 	// clamp roundedness to avoid the checkbox looking like a radio button and
 	// transfer roundedness of outer rect to inner rect so the countours match
@@ -1337,9 +1356,7 @@ bool ui_checkbox(string_t label, bool *result_value)
 		}
 	}
 
-	//
 	// --- draw label ---
-	//
 
 	v2_t p = ui_text_align_p(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
 	p.x += label_offset;
@@ -1351,6 +1368,8 @@ bool ui_checkbox(string_t label, bool *result_value)
 	{
 		text_color.xyz = mul(text_color.xyz, 0.75f);
 	}
+
+	text_color = ui_interpolate_v4(ui_child_id(id, S("text_color")), text_color);
 
 	UI_COLOR(UI_COLOR_TEXT, text_color)
 	ui_draw_text(&ui.style.font, p, label);
@@ -1591,7 +1610,7 @@ bool ui_slider(string_t label, float *v, float min, float max)
 	return *v != init_v;
 }
 
-bool ui_slider_int(string_t label, int *v, int min, int max)
+bool ui_slider_int_ex(string_t label, int *v, int min, int max, ui_slider_flags_t flags)
 {
 	if (NEVER(!ui.initialized)) 
 		return false;
@@ -1616,27 +1635,30 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 
 	ui_draw_text_aligned(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
-	rect2_t sub_rect = rect2_cut_left(&rect, rect2_height(rect));
-	rect2_cut_left(&rect, widget_margin);
-
-	rect2_t add_rect = rect2_cut_right(&rect, rect2_height(rect));
-	rect2_cut_right(&rect, widget_margin);
-
-	ui_push_id(id);
+	if (flags & UI_SLIDER_FLAGS_INC_DEC_BUTTONS)
 	{
-		ui_set_next_rect(sub_rect);
-		if (ui_button(S("-")))
-		{
-			if (*v > min) *v = *v - 1;
-		}
+		rect2_t sub_rect = rect2_cut_left(&rect, rect2_height(rect));
+		rect2_cut_left(&rect, widget_margin);
 
-		ui_set_next_rect(add_rect);
-		if (ui_button(S("+")))
+		rect2_t add_rect = rect2_cut_right(&rect, rect2_height(rect));
+		rect2_cut_right(&rect, widget_margin);
+
+		ui_push_id(id);
 		{
-			if (*v < max) *v = *v + 1;
+			ui_set_next_rect(sub_rect);
+			if (ui_button(S("-")))
+			{
+				if (*v > min) *v = *v - 1;
+			}
+
+			ui_set_next_rect(add_rect);
+			if (ui_button(S("+")))
+			{
+				if (*v < max) *v = *v + 1;
+			}
 		}
+		ui_pop_id();
 	}
-	ui_pop_id();
 
 	ui_slider__params_t p = {
 		.type = UI_SLIDER__I32,
@@ -1650,6 +1672,11 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 	ui_slider__impl(id, rect, &p);
 
 	return *v != init_value;
+}
+
+bool ui_slider_int(string_t label, int *v, int min, int max)
+{
+	return ui_slider_int_ex(label, v, min, max, UI_SLIDER_FLAGS_INC_DEC_BUTTONS);
 }
 
 DREAM_INLINE size_t ui_text_edit__find_insert_point_from_offset(prepared_glyphs_t *prep, float x)
@@ -1774,22 +1801,6 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 
 			float selection_start_p = cursor_p;
 			float selection_end_p   = buffer_rect.min.x + ui_text_edit__get_caret_x(&prep, state->selection_end);
-
-#if 0
-			UI_SCALAR(UI_SCALAR_ANIMATION_LENGTH_LIMIT, 16.0f)
-			{
-				if (!(interaction & UI_PRESSED))
-				{
-					selection_start_p = ui_interpolate_snappy_f32(ui_id(S("sel_start")), selection_start_p);
-					selection_end_p   = ui_interpolate_snappy_f32(ui_id(S("sel_end")),   selection_end_p);
-
-					if (!inserted_character)
-					{
-						cursor_p = ui_interpolate_snappy_f32(ui_id(S("cursor")), cursor_p);
-					}
-				}
-			}
-#endif
 
 			if (selection_start_p > selection_end_p)
 			{
@@ -2161,7 +2172,7 @@ void ui_end(void)
 		float center_x = 0.5f*(float)res_x;
 		rect2_t rect = rect2_center_dim(make_v2(center_x, at_y), make_v2(4.0f + text_w, font_height));
 
-		ui_draw_rect(rect, make_v4(0, 0, 0, 0.5f));
+		ui_draw_rect_shadow(rect, make_v4(0, 0, 0, 0.5f), 0.20f, 32.0f);
 		ui_draw_text_aligned(&ui.style.font, rect, text, make_v2(0.5f, 0.5f));
 		at_y += ui.style.font.y_advance;
 	}

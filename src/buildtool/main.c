@@ -15,6 +15,7 @@
 
 // unity build
 arena_t static_arena;
+DREAM_INLINE string_t format_seconds(arena_t *arena, double seconds);
 
 #include "core/arena.c"
 #include "core/string.c"
@@ -70,6 +71,7 @@ int main(int argc, char **argv)
     bool build_all  = true;
     bool no_cache   = false;
     bool ndebug     = false;
+    bool debug      = true;
     bool release    = false;
     bool stub       = false;
 	bool nomodules  = false;
@@ -220,7 +222,8 @@ int main(int argc, char **argv)
 					S("ole32"),
 					S("ksuser"),
 					S("shell32"),
-					S("Synchronization")
+					S("Synchronization"),
+					S("DbgHelp")
 				)),
 			},
 		};
@@ -268,6 +271,8 @@ int main(int argc, char **argv)
 	}
 	else
 	{
+		bool build_failed = false;
+
 		for (int config = 0; config < 2; config++)
 		{
 			if (build_failed)
@@ -301,8 +306,6 @@ int main(int argc, char **argv)
 			}
 
 			string_t source_directory = S("src");
-
-			bool build_failed = false;
 
 			object_collection_t objects = {0};
 
@@ -394,7 +397,8 @@ int main(int argc, char **argv)
 						S("ole32"),
 						S("ksuser"),
 						S("shell32"),
-						S("Synchronization")
+						S("Synchronization"),
+						S("DbgHelp")
 					)),
 				};
 

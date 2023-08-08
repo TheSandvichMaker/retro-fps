@@ -265,6 +265,13 @@ DREAM_LOCAL float ui_header_font_height(void);
 // Draw
 //
 
+typedef enum ui_layer_t
+{
+	UI_LAYER_BASE,
+	UI_LAYER_OVERLAY,
+	UI_LAYER_COUNT,
+} ui_layer_t;
+
 typedef enum ui_text_op_t
 {
 	UI_TEXT_OP_BOUNDS,
@@ -284,6 +291,7 @@ DREAM_LOCAL float   ui_text_height                  (font_atlas_t *font, string_
 DREAM_LOCAL v2_t    ui_text_dim                     (font_atlas_t *font, string_t text);
 
 DREAM_LOCAL void    ui_draw_rect                    (rect2_t rect, v4_t color);
+DREAM_LOCAL void    ui_draw_rect_shadow             (rect2_t rect, v4_t color, float shadow_amount, float shadow_radius);
 DREAM_LOCAL void    ui_draw_rect_roundedness        (rect2_t rect, v4_t color, v4_t roundness);
 DREAM_LOCAL void    ui_draw_rect_roundedness_shadow (rect2_t rect, v4_t color, v4_t roundness, float shadow_amount, float shadow_radius);
 DREAM_LOCAL void    ui_draw_rect_roundedness_outline(rect2_t rect, v4_t color, v4_t roundedness, float width);
@@ -345,6 +353,12 @@ DREAM_LOCAL void ui_panel_end     (void);
 
 #define UI_PANEL(rect) DEFER_LOOP(ui_panel_begin(rect), ui_panel_end())
 
+typedef uint32_t ui_slider_flags_t;
+typedef enum ui_slider_flags_enum_t
+{
+	UI_SLIDER_FLAGS_INC_DEC_BUTTONS = 0x1,
+} ui_slider_flags_enum_t;
+
 DREAM_LOCAL void ui_seperator     (void);
 DREAM_LOCAL void ui_label         (string_t text);
 DREAM_LOCAL void ui_header        (string_t text);
@@ -354,6 +368,7 @@ DREAM_LOCAL bool ui_checkbox      (string_t text, bool *value);
 DREAM_LOCAL bool ui_option_buttons(string_t text, int *value, int count, string_t *names);
 DREAM_LOCAL bool ui_slider        (string_t text, float *value, float min, float max);
 DREAM_LOCAL bool ui_slider_int    (string_t text, int *value, int min, int max);
+DREAM_LOCAL bool ui_slider_int_ex (string_t text, int *value, int min, int max, ui_slider_flags_t flags);
 DREAM_LOCAL void ui_text_edit     (string_t label, dynamic_string_t *buffer);
 DREAM_LOCAL void ui_tooltip       (string_t text);
 DREAM_LOCAL void ui_hover_tooltip (string_t text);
@@ -406,7 +421,6 @@ typedef struct ui_t
 	ui_id_t next_hot;
 	ui_id_t active;
 
-	ui_id_t last_id;
 	ui_id_t next_id;
 	rect2_t next_rect;
 
