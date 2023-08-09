@@ -214,10 +214,26 @@ static link_error_t msvc_link(build_context_t *context, const link_params_t *par
 
 		string_t link_flags;
 		{
+			string_t ext = S("exe");
+			switch (params->kind)
+			{
+				case LINK_ARTEFACT_EXECUTABLE:
+				{
+					ext = S("exe");
+				} break;
+
+				case LINK_ARTEFACT_DYNAMIC_LIBRARY:
+				{
+					ext = S("dll");
+				} break;
+
+				INVALID_DEFAULT_CASE;
+			}
+
 			string_list_t link_flags_list = { 0 };
 			slist_appendf(&link_flags_list, temp, "/DEBUG:FULL");
 			slist_appendf(&link_flags_list, temp, "/SUBSYSTEM:WINDOWS");
-			slist_appendf(&link_flags_list, temp, "/OUT:\"%.*s.exe\"", Sx(params->output_exe));
+			slist_appendf(&link_flags_list, temp, "/OUT:\"%.*s.%.*s\"", Sx(params->output), Sx(ext));
 
 			for (string_node_t *lib = params->libraries.first; lib; lib = lib->next)
 			{
@@ -229,6 +245,11 @@ static link_error_t msvc_link(build_context_t *context, const link_params_t *par
 				slist_appends(&link_flags_list, temp, S("/NODEFAULTLIB"));
 				slist_appends(&link_flags_list, temp, S("/STACK:0x100000,0x100000"));
 				slist_appends(&link_flags_list, temp, S("kernel32.lib"));
+			}
+
+			if (params->kind == LINK_ARTEFACT_DYNAMIC_LIBRARY)
+			{
+				slist_appends(&link_flags_list, temp, S("/DLL"));
 			}
 
 			slist_interleaves(&link_flags_list, temp, S(" "));

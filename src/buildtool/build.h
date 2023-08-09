@@ -72,9 +72,18 @@ typedef struct compile_params_t
     string_t      additional_flags;
 } compile_params_t;
 
+typedef enum link_artefact_kind_t
+{
+	LINK_ARTEFACT_EXECUTABLE,
+	LINK_ARTEFACT_DYNAMIC_LIBRARY,
+	LINK_ARTEFACT_COUNT,
+} link_artefact_kind_t;
+
 typedef struct link_params_t
 {
-    string_t output_exe;
+	link_artefact_kind_t kind;
+
+    string_t output;
 	string_t run_dir;
 	bool copy_executables_to_run;
 

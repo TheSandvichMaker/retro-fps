@@ -1,8 +1,7 @@
 #ifndef D3D11_INTERNAL_H
 #define D3D11_INTERNAL_H
 
-#include "core/api_types.h"
-#include "core/thread.h"
+#include "core/core.h"
 #include "dream/render.h"
 #include "dream/asset.h"
 

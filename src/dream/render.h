@@ -1,7 +1,7 @@
 #ifndef RENDER_H
 #define RENDER_H
 
-#include "core/core.h"
+#include "core/api_types.h"
 
 typedef struct render_settings_t
 {

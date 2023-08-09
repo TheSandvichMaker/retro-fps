@@ -63,6 +63,50 @@ static void print_usage(void)
     fprintf(stderr, "\t-compiler [msvc/clang]   select compiler to use\n");
 }
 
+static build_error_t build_plugin(build_context_t *context, build_params_t *build, compile_params_t *compile, string_t name, string_list_t dependencies__remove_me)
+{
+	build_error_t result = BUILD_ERROR_NONE;
+
+	source_files_t dll_files = {0};
+
+	string_list_t directories = dependencies__remove_me;
+	slist_appends(&directories, temp, Sf("plugins/%.*s", Sx(name)));
+
+	for (string_node_t *node = directories.first;
+		 node;
+		 node = node->next)
+	{
+		string_t directory = node->string;
+		gather_source_files(temp, Sf("src/%.*s", Sx(directory)), compile, &dll_files);
+	}
+
+	object_collection_t dll_objects = {0};
+	compile_error_t compile_error = compile_files(context, dll_files, build, compile, &dll_objects);
+
+	if (compile_error)
+	{
+		result = BUILD_ERROR_COMPILATION;
+	}
+	else
+	{
+		link_params_t link_dll = {
+			.kind                    = LINK_ARTEFACT_DYNAMIC_LIBRARY,
+			.output                  = name,
+			.run_dir                 = S("run"),
+			.copy_executables_to_run = true,
+		};
+
+		link_error_t link_error = link_executable(context, &dll_objects, build, &link_dll);
+
+		if (link_error)
+		{
+			result = BUILD_ERROR_LINKER;
+		}
+	}
+
+	return result;
+}
+
 int main(int argc, char **argv)
 {
     // ==========================================================================================================================
@@ -159,117 +203,6 @@ int main(int argc, char **argv)
     // ==========================================================================================================================
     // build source
 
-	if (nomodules)
-	{		
-		printf("\n");
-		printf("=================================================\n");
-		printf("                  BUILDING SOURCE                \n");
-		printf("=================================================\n");
-		printf("\n");
-
-		build_error_t error = BUILD_ERROR_NONE;
-
-		all_params_t base_params = {
-			.build = {
-				.no_cache                = true, // incremental compilation is kaput
-
-				.configuration           = S("debug"),
-				.backend                 = backend,
-			},
-
-			.compile = {
-				.single_translation_unit = stub,
-				.stub_name               = S("dream"),
-
-				.address_sanitizer       = asan,
-
-				.warnings_are_errors     = true,
-				.warning_level           = W4,
-
-				.optimization_level      = O0,
-
-				.defines = slist_from_array(temp, array_expand(string_t,
-					S("_CRT_SECURE_NO_WARNINGS"),
-					S("UNICODE"),
-					ndebug   ? S("NDEBUG")       : S("DEBUG"),
-					not_slow ? S("DREAM_SLOW=0") : S("DREAM_SLOW=1"),
-				)),
-
-				.include_paths = slist_from_array(temp, array_expand(string_t,
-					S("src"),
-					S("external/include")
-				)),
-
-				.ignored_directories = slist_from_array(temp, array_expand(string_t,
-					S("buildtool"),
-					S("DONTBUILD")
-				)),
-			},
-
-			.link = {
-				.output_exe              = S("retro"),
-				.run_dir                 = S("run"),
-				.copy_executables_to_run = true,
-
-				.libraries = slist_from_array(temp, array_expand(string_t, 
-					S("user32"),
-					S("dxguid"),
-					S("d3d11"),
-					S("dxgi"),
-					S("d3dcompiler"),
-					S("gdi32"),
-					S("user32"),
-					S("ole32"),
-					S("ksuser"),
-					S("shell32"),
-					S("Synchronization"),
-					S("DbgHelp")
-				)),
-			},
-		};
-
-		build_context_t *context = m_alloc_struct(temp, build_context_t);
-		context->arena     = temp;
-		context->params    = &base_params.build;
-		context->build_dir = Sf("build/%.*s", Sx(base_params.build.configuration));
-
-		fs_create_directory(context->build_dir);
-
-		all_params_t release_params = base_params;
-		release_params.build.configuration = S("release");
-		release_params.compile.optimization_level = O2;
-
-		slist_appends(&base_params   .compile.defines, temp, S("DREAM_UNOPTIMIZED=1"));
-		slist_appends(&release_params.compile.defines, temp, S("DREAM_OPTIMIZED=1"));
-
-		if (!release || build_all)
-		{
-			error |= build_directory(context, S("src"), &base_params);
-
-			switch (error)
-			{
-				case BUILD_ERROR_NONE:          fprintf(stderr, "Build successful\n"); break;
-				case BUILD_ERROR_OTHER_FAILURE: fprintf(stderr, "Build failed for other reasons! Oh no!\n"); break;
-				case BUILD_ERROR_COMPILATION:   fprintf(stderr, "Build failed with compilation errors\n"); break;
-				case BUILD_ERROR_LINKER:        fprintf(stderr, "Build failed with linker errors\n"); break;
-			}
-		}
-
-		if ((release || build_all) && !error)
-		{
-			error |= build_directory(context, S("src"), &release_params);
-
-			switch (error)
-			{
-				case BUILD_ERROR_NONE:          fprintf(stderr, "Build successful\n"); break;
-				case BUILD_ERROR_OTHER_FAILURE: fprintf(stderr, "Build failed for other reasons! Oh no!\n"); break;
-				case BUILD_ERROR_COMPILATION:   fprintf(stderr, "Build failed with compilation errors\n"); break;
-				case BUILD_ERROR_LINKER:        fprintf(stderr, "Build failed with linker errors\n"); break;
-			}
-		}
-
-	}
-	else
 	{
 		bool build_failed = false;
 
@@ -307,8 +240,6 @@ int main(int argc, char **argv)
 
 			string_t source_directory = S("src");
 
-			object_collection_t objects = {0};
-
 			build_params_t build = {
 				.no_cache      = true, // incremental compilation is kaput
 
@@ -334,6 +265,7 @@ int main(int argc, char **argv)
 				.optimization_level      = is_debug ? O0 : O2,
 
 				.defines = slist_from_array(temp, array_expand(string_t,
+					S("DREAM_WIN32=1"),
 					S("_CRT_SECURE_NO_WARNINGS"),
 					S("UNICODE"),
 					ndebug   ? S("NDEBUG")       : S("DEBUG"),
@@ -341,7 +273,7 @@ int main(int argc, char **argv)
 				)),
 
 				.include_paths = slist_from_array(temp, array_expand(string_t,
-					S("src"),
+					source_directory,
 					S("external/include")
 				)),
 
@@ -354,23 +286,32 @@ int main(int argc, char **argv)
 			if (is_debug)   slist_appends(&compile.defines, temp, S("DREAM_UNOPTIMIZED=1"));
 			if (is_release) slist_appends(&compile.defines, temp, S("DREAM_OPTIMIZED=1"));
 
-			source_files_t module_files = {0};
+			source_files_t exe_files = {0};
 
-			for (fs_entry_t *entry = fs_scan_directory(temp, source_directory, 0);
-				 entry;
-				 entry = fs_entry_next(entry))
+			string_t exe_source_directories[] = {
+				S("core"),
+				S("dream"),
+				S("win32"),
+			};
+
+			for_array(i, exe_source_directories)
 			{
-				if (string_match_nocase(entry->name, S("buildtool")))
+				string_t directory = exe_source_directories[i];
+
+				if (NEVER(string_match_nocase(directory, S("buildtool"))))
 					continue;
 
 				source_files_t files = {0};
-				gather_source_files(temp, entry->path, &compile, &files);
-				transform_into_stub(context, &files, entry->name);
+				gather_source_files(temp, Sf("%.*s/%.*s", Sx(source_directory), Sx(directory)), &compile, &files);
+				transform_into_stub(context, &files, directory);
 
-				dll_push_back(module_files.first, module_files.last, files.first);
+				dll_push_back(exe_files.first, exe_files.last, files.first);
 			}
 
-			compile_error_t compile_error = compile_files(context, module_files, &build, &compile, &objects);
+			compile_error_t compile_error = COMPILE_ERROR_NONE;
+
+			object_collection_t exe_objects = {0};
+			compile_error |= compile_files(context, exe_files, &build, &compile, &exe_objects);
 
 			if (compile_error)
 			{
@@ -379,10 +320,10 @@ int main(int argc, char **argv)
 				build_failed = true;
 			}
 
-			if (!build_failed)
 			{
-				link_params_t link = {
-					.output_exe              = S("retro"),
+				link_params_t link_exe = {
+					.kind                    = LINK_ARTEFACT_EXECUTABLE,
+					.output                  = S("win32_retro"),
 					.run_dir                 = S("run"),
 					.copy_executables_to_run = true,
 
@@ -402,13 +343,27 @@ int main(int argc, char **argv)
 					)),
 				};
 
-				link_error_t link_error = link_executable(context, &objects, &build, &link);
+				link_error_t link_error = link_executable(context, &exe_objects, &build, &link_exe);
 
 				if (link_error)
 				{
 					fprintf(stderr, "Linking failed! TODO: More information\n");
 					build_failed = true;
 				}
+			}
+
+			//
+			// plugins
+			//
+
+			if (!build_plugin(context, &build, &compile, S("fs"), slist_from_array(temp, array_expand(string_t, S("core")))))
+			{
+				build_failed = true;
+			}
+
+			if (!build_plugin(context, &build, &compile, S("audio_output"), (string_list_t){0}))
+			{
+				build_failed = true;
 			}
 		}
 	}

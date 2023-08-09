@@ -151,11 +151,27 @@ link_error_t link_executable(build_context_t *context, const object_collection_t
 
 	if (result == BUILD_ERROR_NONE && link->copy_executables_to_run)
 	{
+		string_t ext = S("exe");
+		switch (link->kind)
+		{
+			case LINK_ARTEFACT_EXECUTABLE:
+			{
+				ext = S("exe");
+			} break;
+
+			case LINK_ARTEFACT_DYNAMIC_LIBRARY:
+			{
+				ext = S("dll");
+			} break;
+
+			INVALID_DEFAULT_CASE;
+		}
+
 		fs_create_directory(link->run_dir);
-		fs_copy(Sf("%.*s/%.*s.exe", Sx(context->build_dir), Sx(link->output_exe)),
-				Sf("%.*s/%.*s_%.*s.exe", Sx(link->run_dir), Sx(link->output_exe), Sx(build->configuration)));
-		fs_copy(Sf("%.*s/%.*s.pdb", Sx(context->build_dir), Sx(link->output_exe)),
-				Sf("%.*s/%.*s_%.*s.pdb", Sx(link->run_dir), Sx(link->output_exe), Sx(build->configuration)));
+		fs_copy(Sf("%.*s/%.*s.%.*s", Sx(context->build_dir), Sx(link->output), Sx(ext)),
+				Sf("%.*s/%.*s_%.*s.%.*s", Sx(link->run_dir), Sx(link->output), Sx(build->configuration), Sx(ext)));
+		fs_copy(Sf("%.*s/%.*s.pdb", Sx(context->build_dir), Sx(link->output)),
+				Sf("%.*s/%.*s_%.*s.pdb", Sx(link->run_dir), Sx(link->output), Sx(build->configuration)));
 	}
 
 	return result;

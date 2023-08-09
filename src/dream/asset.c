@@ -19,6 +19,8 @@ static void *stbi_realloc(void *ptr, size_t new_size);
 #include "core/fs.h"
 #include "core/pool.h"
 #include "core/hashtable.h"
+#include "core/math.h"
+#include "core/atomics.h"
 
 #include "dream/job_queues.h"
 #include "dream/render.h"

@@ -781,9 +781,9 @@ static void game_tick(platform_io_t *io)
 	r_immediate_flush();
 }
 
-static void game_mix_audio(platform_audio_io_t *audio_io)
+static void game_mix_audio(size_t frame_count, float *frames)
 {
-	mix_samples(audio_io->frames_to_mix, audio_io->buffer);
+	mix_samples((uint32_t)frame_count, frames);
 }
 
 void platform_init(size_t argc, string_t *argv, platform_hooks_t *hooks)

@@ -241,7 +241,7 @@ typedef struct platform_audio_io_t
 typedef struct platform_hooks_t
 {
 	void (*tick)      (platform_io_t       *io);
-	void (*tick_audio)(platform_audio_io_t *io);
+	void (*tick_audio)(size_t frame_count, float *frames);
 } platform_hooks_t;
 
 DREAM_DLLEXPORT void platform_init(size_t argc, string_t *argv, platform_hooks_t *hooks);

@@ -7,6 +7,8 @@
 
 #include <stdio.h>
 
+#pragma comment(lib, "synchronization.lib")
+
 #pragma warning(pop)
 
 #include "core.h"

@@ -6,17 +6,13 @@
 #define NOMINMAX
 #include <Windows.h>
 #include <dbghelp.h>
-
-#define COBJMACROS
-#define INITGUID
-#include <mmdeviceapi.h>
-#include <audioclient.h>
-
 #include <shellapi.h>
 
 #pragma warning(pop)
 
-#include "core/core.h"
+#include "core/arena.h"
+#include "core/string.h"
+#include "core/plug.h"
 
 #include "d3d11.h"
 #include "dream/render.h"
@@ -28,22 +24,6 @@ static platform_hooks_t hooks;
 static bool has_focus;
 static bool cursor_locked;
 static HWND window;
-
-const CLSID CLSID_MMDeviceEnumerator = {
-    0xbcde0395, 0xe52f, 0x467c, {0x8e, 0x3d, 0xc4, 0x57, 0x92, 0x91, 0x69, 0x2e}
-};
-const IID IID_IMMDeviceEnumerator = {
-    //MIDL_INTERFACE("A95664D2-9614-4F35-A746-DE8DB63617E6")
-    0xa95664d2, 0x9614, 0x4f35, {0xa7, 0x46, 0xde, 0x8d, 0xb6, 0x36, 0x17, 0xe6}
-};
-const IID IID_IAudioClient = {
-    //MIDL_INTERFACE("1CB9AD4C-DBFA-4c32-B178-C2F568A703B2")
-    0x1cb9ad4c, 0xdbfa, 0x4c32, {0xb1, 0x78, 0xc2, 0xf5, 0x68, 0xa7, 0x03, 0xb2}
-};
-const IID IID_IAudioRenderClient = {
-    //MIDL_INTERFACE("F294ACFC-3146-4483-A7BF-ADDCA7C260E2")
-    0xf294acfc, 0x3146, 0x4483, {0xa7, 0xbf, 0xad, 0xdc, 0xa7, 0xc2, 0x60, 0xe2}
-};
 
 static void lock_cursor(bool lock)
 {
@@ -114,124 +94,6 @@ LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
     return 0;
 }
 
-typedef struct win32_state_t
-{
-    HANDLE wasapi_thread;
-    uint32_t mix_sample_rate;
-} win32_state_t;
-
-static win32_state_t g_win32;
-
-static DWORD WINAPI wasapi_thread_proc(void *userdata)
-{
-    // TODO: What is COINIT_DISABLE_OLE1DDE doing for me?
-    CoInitializeEx(NULL, COINIT_DISABLE_OLE1DDE);
-
-    (void)userdata;
-
-    HRESULT hr;
-
-    // --------------------------------------------------------------------------------------------
-
-    IMMDeviceEnumerator *device_enumerator;
-
-    hr = CoCreateInstance(&CLSID_MMDeviceEnumerator, NULL, CLSCTX_INPROC_SERVER, &IID_IMMDeviceEnumerator, &device_enumerator);
-    ASSERT(SUCCEEDED(hr));
-
-    // --------------------------------------------------------------------------------------------
-
-    IMMDevice *audio_device;
-
-    hr = IMMDeviceEnumerator_GetDefaultAudioEndpoint(device_enumerator, eRender, eConsole, &audio_device);
-    ASSERT(SUCCEEDED(hr));
-
-    // --------------------------------------------------------------------------------------------
-
-    IAudioClient *audio_client;
-
-    hr = IMMDevice_Activate(audio_device, &IID_IAudioClient, CLSCTX_INPROC_SERVER, NULL, &audio_client);
-    ASSERT(SUCCEEDED(hr));
-
-    // --------------------------------------------------------------------------------------------
-
-    REFERENCE_TIME default_period;
-    REFERENCE_TIME minimum_period;
-
-    hr = IAudioClient_GetDevicePeriod(audio_client, &default_period, &minimum_period);
-    ASSERT(SUCCEEDED(hr));
-
-    WAVEFORMATEX *mix_format;
-
-    hr = IAudioClient_GetMixFormat(audio_client, &mix_format);
-    ASSERT(SUCCEEDED(hr));
-
-    WAVEFORMATEXTENSIBLE mix_format_ex;
-
-    copy_memory(&mix_format_ex, mix_format, sizeof(mix_format_ex));
-    
-    bool is_this_a_floating_point_format = !memcmp(&mix_format_ex.SubFormat, &KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, sizeof(GUID));
-    ASSERT(is_this_a_floating_point_format);
-    ASSERT(mix_format_ex.Samples.wValidBitsPerSample == 32);
-
-    g_win32.mix_sample_rate = mix_format_ex.Format.nSamplesPerSec;
-
-    CoTaskMemFree(mix_format);
-
-    hr = IAudioClient_Initialize(audio_client, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK, minimum_period, 0, (WAVEFORMATEX *)(&mix_format_ex), NULL);
-    ASSERT(SUCCEEDED(hr));
-
-    IAudioRenderClient *audio_render_client;
-
-    hr = IAudioClient_GetService(audio_client, &IID_IAudioRenderClient, &audio_render_client);
-    ASSERT(SUCCEEDED(hr));
-
-    UINT32 buffer_size;
-
-    IAudioClient_GetBufferSize(audio_client, &buffer_size);
-
-    HANDLE buffer_ready = CreateEventA(NULL, FALSE, FALSE, NULL);
-
-    IAudioClient_SetEventHandle(audio_client, buffer_ready);
-
-    // --------------------------------------------------------------------------------------------
-
-    hr = IAudioClient_Start(audio_client);
-    ASSERT(SUCCEEDED(hr));
-
-    while (WaitForSingleObject(buffer_ready, INFINITE) == WAIT_OBJECT_0)
-    {
-        UINT32 buffer_padding;
-
-        hr = IAudioClient_GetCurrentPadding(audio_client, &buffer_padding);
-        ASSERT(SUCCEEDED(hr));
-
-        UINT32 frame_count = buffer_size - buffer_padding;
-        float *buffer;
-
-        hr = IAudioRenderClient_GetBuffer(audio_render_client, frame_count, (BYTE **)&buffer);
-        ASSERT(SUCCEEDED(hr));
-
-        platform_audio_io_t io = {
-            .frames_to_mix   = frame_count,
-            .buffer          = buffer,
-        };
-
-		if (hooks.tick_audio)
-		{
-			hooks.tick_audio(&io);
-		}
-		else
-		{
-			zero_array(buffer, 2*frame_count);
-		}
-
-        hr = IAudioRenderClient_ReleaseBuffer(audio_render_client, frame_count, 0);
-        ASSERT(SUCCEEDED(hr));
-    }
-
-    return 0;
-}
-
 DREAM_INLINE v2_t convert_mouse_cursor(POINT cursor, int height)
 {
 	v2_t result = {
@@ -261,6 +123,40 @@ DREAM_INLINE void enumerate_symbols(void)
 	SymCleanup(process);
 }
 
+// typedef void *(*plug_load_t)(bool reload);
+
+void *load_plugin(string_t name, bool release)
+{
+	void *result = NULL;
+
+	string_t library_name = Sf("%.*s_%s.dll", Sx(name), release ? "release" : "debug");
+
+	HMODULE module = LoadLibraryA(library_name.data);
+
+	if (module)
+	{
+		plug_load_t load = (plug_load_t)GetProcAddress(module, Sf("plug_load__%.*s", Sx(name)).data);
+		if (load)
+		{
+			plug_io_t io = { .reload = false };
+			result = load(&io);
+		}
+		else
+		{
+			debug_print("Plug-in did not correctly export load function. Expected 'plug_load__%.*s'\n", Sx(name));
+		}
+	}
+	else
+	{
+		debug_print("Failed to load plugin: %.*s\n", Sx(name));
+	}
+
+	return result;
+}
+
+#include "plugins/fs/fs.h"
+#include "plugins/audio_output/audio_output.h"
+
 int wWinMain(HINSTANCE instance, 
              HINSTANCE prev_instance, 
              PWSTR     command_line, 
@@ -268,6 +164,18 @@ int wWinMain(HINSTANCE instance,
 {
     IGNORED(instance);
     IGNORED(prev_instance);
+
+	fs_i *fs = load_plugin(S("fs"), false);
+
+	if (fs)
+	{
+		for (fs_entry_t *entry = fs->scan_directory(temp, S("."), 0);
+			 entry;
+			 entry = fs_entry_next(entry))
+		{
+			debug_print("entry: %.*s\n", Sx(entry->name));
+		}
+	}
 
 	// enumerate_symbols();
 
@@ -287,7 +195,16 @@ int wWinMain(HINSTANCE instance,
 		FATAL_ERROR("No tick functions provided - can't do anything.");
 	}
 
+#if 0
     g_win32.wasapi_thread = CreateThread(NULL, 0, wasapi_thread_proc, NULL, 0, NULL);
+#endif
+
+	audio_output_i *audio = load_plugin(S("audio_output"), false);
+
+	if (audio)
+	{
+		audio->start_audio_thread(hooks.tick_audio);
+	}
 
     equip_render_api(d3d11_get_api());
 
