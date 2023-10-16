@@ -314,102 +314,6 @@ static void convex_hull_test_proc(ui_window_t *window)
 		triangle_has_no_area      = diagnostics->triangle_has_no_area;
 	}
 
-	if (debug->step_count > 0)
-	{
-		if (hull_test->show_points)
-		{
-			r_immediate_topology(R_TOPOLOGY_LINELIST);
-			r_immediate_use_depth(false);
-
-			for (size_t i = 0; i < debug->initial_points_count; i++)
-			{
-				v3_t p = debug->initial_points[i];
-
-				v4_t color = ((int)i == hull_test->test_tetrahedron_index ? COLORF_ORANGE : COLORF_RED);
-
-				if (point_fully_contained[i])
-				{
-					color.xyz = mul(color.xyz, 0.75f);
-				}
-
-				r_immediate_rect3_outline(rect3_center_radius(p, make_v3(1, 1, 1)), color);
-			}
-
-			r_immediate_flush();
-		}
-
-		//
-
-		r_immediate_topology (R_TOPOLOGY_TRIANGLELIST);
-		r_immediate_shader   (R_SHADER_DEBUG_LIGHTING);
-		r_immediate_use_depth(true);
-		r_immediate_cull_mode(R_CULL_BACK);
-
-		int step_index = 0;
-		for (hull_debug_step_t *step = hull_test->debug.first_step;
-			 step;
-			 step = step->next)
-		{
-			if (step_index == MIN(hull_test->current_step_index, (int)debug->step_count - 1))
-			{
-				bool final_step = (hull_test->current_step_index == (int)debug->step_count);
-
-				hull_render_debug_triangles(step, final_step, false, false);
-				hull_render_debug_triangles(step, final_step, true, false);
-			}
-
-			step_index++;
-		}
-
-		r_immediate_flush();
-
-		//
-
-		r_immediate_topology (R_TOPOLOGY_LINELIST);
-		r_immediate_shader   (R_SHADER_FLAT);
-		r_immediate_use_depth(true);
-
-		step_index = 0;
-		for (hull_debug_step_t *step = hull_test->debug.first_step;
-			 step;
-			 step = step->next)
-		{
-			if (step_index == MIN(hull_test->current_step_index, (int)debug->step_count - 1))
-			{
-				bool final_step = (hull_test->current_step_index == (int)debug->step_count);
-
-				if (hull_test->show_wireframe)
-				{
-					hull_render_debug_triangles(step, final_step, false, true);
-					hull_render_debug_triangles(step, final_step, true, true);
-				}
-
-				if (!final_step)
-				{
-					for (hull_debug_edge_t *edge = step->first_edge;
-						 edge;
-						 edge = edge->next)
-					{
-						bool show = false;
-
-						if (hull_test->show_processed_edge      &&  edge->processed_this_step) show = true;
-						if (hull_test->show_non_processed_edges && !edge->processed_this_step) show = true;
-						if (!show) continue;
-
-						v3_t a = edge->e.a;
-						v3_t b = edge->e.b;
-
-						r_immediate_line(a, b, (edge->processed_this_step ? COLORF_WHITE : COLORF_BLUE));
-					}
-				}
-			}
-
-			step_index++;
-		}
-
-		r_immediate_flush();
-	}
-
 	ui_header(S("Generate Random Hull"));
 
 	bool changed = false;
@@ -419,7 +323,7 @@ static void convex_hull_test_proc(ui_window_t *window)
 	ui_checkbox(S("Automatically Recalculate Hull"), &hull_test->automatically_recalculate_hull);
 
 	bool should_recalculate = ui_button(S("Calculate Random Convex Hull"));
-	if (hull_test->automatically_recalculate_hull && changed)               should_recalculate = true;
+	if (hull_test->automatically_recalculate_hull && changed)                 should_recalculate = true;
 	if (hull_test->automatically_recalculate_hull && !hull_test->initialized) should_recalculate = true;
 
 	if (should_recalculate)
@@ -578,12 +482,141 @@ static void convex_hull_test_proc(ui_window_t *window)
 	hull_test->initialized = true;
 }
 
+static void render_hull_test(void)
+{
+	hull_test_panel_t *hull_test = &editor.hull_test;
+
+	hull_debug_t *debug = &hull_test->debug;
+
+	bool degenerate_hull = false;
+
+	int uncontained_point_count   = 0;
+	int degenerate_triangle_count = 0;
+	int duplicate_triangle_count  = 0;
+	int no_area_triangle_count    = 0;
+
+	bool *point_fully_contained    = NULL;
+	bool *triangle_is_degenerate   = NULL;
+	int  *duplicate_triangle_index = NULL;
+	bool *triangle_has_no_area     = NULL;
+
+	if (debug->diagnostics)
+	{
+		hull_diagnostic_result_t *diagnostics = debug->diagnostics;
+
+		degenerate_hull           = diagnostics->degenerate_hull;
+		uncontained_point_count   = diagnostics->uncontained_point_count;
+		degenerate_triangle_count = diagnostics->degenerate_triangle_count;
+		duplicate_triangle_count  = diagnostics->duplicate_triangle_count; 
+		no_area_triangle_count    = diagnostics->no_area_triangle_count;
+		point_fully_contained     = diagnostics->point_fully_contained;
+		triangle_is_degenerate    = diagnostics->triangle_is_degenerate;
+		duplicate_triangle_index  = diagnostics->duplicate_triangle_index;
+		triangle_has_no_area      = diagnostics->triangle_has_no_area;
+	}
+
+	if (debug->step_count > 0)
+	{
+		if (hull_test->show_points)
+		{
+			r_immediate_topology(R_TOPOLOGY_LINELIST);
+			r_immediate_use_depth(true);
+
+			for (size_t i = 0; i < debug->initial_points_count; i++)
+			{
+				v3_t p = debug->initial_points[i];
+
+				v4_t color = ((int)i == hull_test->test_tetrahedron_index ? COLORF_ORANGE : COLORF_RED);
+
+				if (point_fully_contained[i])
+				{
+					color.xyz = mul(color.xyz, 0.75f);
+				}
+
+				r_immediate_rect3_outline(rect3_center_radius(p, make_v3(1, 1, 1)), color);
+			}
+
+			r_immediate_flush();
+		}
+
+		//
+
+		r_immediate_topology (R_TOPOLOGY_TRIANGLELIST);
+		r_immediate_shader   (R_SHADER_DEBUG_LIGHTING);
+		r_immediate_use_depth(true);
+		r_immediate_cull_mode(R_CULL_BACK);
+
+		int step_index = 0;
+		for (hull_debug_step_t *step = hull_test->debug.first_step;
+			 step;
+			 step = step->next)
+		{
+			if (step_index == MIN(hull_test->current_step_index, (int)debug->step_count - 1))
+			{
+				bool final_step = (hull_test->current_step_index == (int)debug->step_count);
+
+				hull_render_debug_triangles(step, final_step, false, false);
+				hull_render_debug_triangles(step, final_step, true, false);
+			}
+
+			step_index++;
+		}
+
+		r_immediate_flush();
+
+		//
+
+		r_immediate_topology (R_TOPOLOGY_LINELIST);
+		r_immediate_shader   (R_SHADER_FLAT);
+		r_immediate_use_depth(true);
+
+		step_index = 0;
+		for (hull_debug_step_t *step = hull_test->debug.first_step;
+			 step;
+			 step = step->next)
+		{
+			if (step_index == MIN(hull_test->current_step_index, (int)debug->step_count - 1))
+			{
+				bool final_step = (hull_test->current_step_index == (int)debug->step_count);
+
+				if (hull_test->show_wireframe)
+				{
+					hull_render_debug_triangles(step, final_step, false, true);
+					hull_render_debug_triangles(step, final_step, true, true);
+				}
+
+				if (!final_step)
+				{
+					for (hull_debug_edge_t *edge = step->first_edge;
+						 edge;
+						 edge = edge->next)
+					{
+						bool show = false;
+
+						if (hull_test->show_processed_edge      &&  edge->processed_this_step) show = true;
+						if (hull_test->show_non_processed_edges && !edge->processed_this_step) show = true;
+						if (!show) continue;
+
+						v3_t a = edge->e.a;
+						v3_t b = edge->e.b;
+
+						r_immediate_line(a, b, (edge->processed_this_step ? COLORF_WHITE : COLORF_BLUE));
+					}
+				}
+			}
+
+			step_index++;
+		}
+
+		r_immediate_flush();
+	}
+}
+
 static void lightmap_editor_proc(ui_window_t *window)
 {
 	(void)window;
 
-    player_t *player = world->player;
-    map_t    *map    = world->map;
+    map_t *map = world->map;
 
     map_entity_t *worldspawn = map->worldspawn;
 
@@ -596,218 +629,6 @@ static void lightmap_editor_proc(ui_window_t *window)
     ambient_color = mul(1.0f / 255.0f, ambient_color);
 
     lightmap_editor_state_t *lm_editor = &editor.lm_editor;
-
-    if (lm_editor->debug_lightmaps)
-    {
-        r_command_identifier(S("lightmap debug"));
-
-		r_immediate_topology(R_TOPOLOGY_LINELIST);
-		r_immediate_use_depth(!lm_editor->no_ray_depth_test);
-		//r_immediate_depth_bias(0.005f);
-		r_immediate_blend_mode(R_BLEND_ADDITIVE);
-
-        if (g_cursor_locked)
-        {
-            intersect_result_t intersect;
-            if (intersect_map(map, &(intersect_params_t) {
-                    .o = player_view_origin(player),
-                    .d = player_view_direction(player),
-                }, &intersect))
-            {
-                map_plane_t *plane = intersect.plane;
-
-                if (button_pressed(BUTTON_FIRE1))
-                {
-                    if (lm_editor->selected_plane == plane)
-                    {
-                        lm_editor->selected_brush = NULL;
-                        lm_editor->selected_plane = NULL;
-                        lm_editor->selected_poly  = NULL;
-                    }
-                    else
-                    {
-                        lm_editor->selected_brush = intersect.brush;
-                        lm_editor->selected_plane = plane;
-                        lm_editor->selected_poly  = intersect.poly;
-                    }
-                }
-
-                if (lm_editor->selected_poly != intersect.poly)
-                    push_poly_wireframe(map, intersect.poly, COLORF_RED);
-            }
-            else
-            {
-                if (button_pressed(BUTTON_FIRE1))
-                {
-                    lm_editor->selected_brush = NULL;
-                    lm_editor->selected_plane = NULL;
-                    lm_editor->selected_poly  = NULL;
-                }
-            }
-        }
-
-        if (lm_editor->selected_plane)
-        {
-            map_plane_t *plane = lm_editor->selected_plane;
-
-            float scale_x = plane->lm_scale_x;
-            float scale_y = plane->lm_scale_y;
-
-            push_poly_wireframe(map, lm_editor->selected_poly, make_v4(0.0f, 0.0f, 0.0f, 0.75f));
-
-            r_immediate_arrow(plane->lm_origin, add(plane->lm_origin, mul(scale_x, plane->lm_s)), make_v4(0.5f, 0.0f, 0.0f, 1.0f));
-            r_immediate_arrow(plane->lm_origin, add(plane->lm_origin, mul(scale_y, plane->lm_t)), make_v4(0.0f, 0.5f, 0.0f, 1.0f));
-
-            v3_t square_v0 = add(plane->lm_origin, mul(scale_x, plane->lm_s));
-            v3_t square_v1 = add(plane->lm_origin, mul(scale_y, plane->lm_t));
-            v3_t square_v2 = v3_add3(plane->lm_origin, mul(scale_x, plane->lm_s), mul(scale_y, plane->lm_t));
-
-            r_immediate_line(square_v0, square_v2, make_v4(0.5f, 0.0f, 0.5f, 1.0f));
-            r_immediate_line(square_v1, square_v2, make_v4(0.5f, 0.0f, 0.5f, 1.0f));
-
-            if (lm_editor->pixel_selection_active)
-            {
-                texture_desc_t desc;
-                render->describe_texture(lm_editor->selected_poly->lightmap, &desc);
-
-                float texscale_x = (float)desc.w;
-                float texscale_y = (float)desc.h;
-
-                v2_t selection_worldspace = {
-                    scale_x*((float)lm_editor->selected_pixels.min.x / texscale_x),
-                    scale_y*((float)lm_editor->selected_pixels.min.y / texscale_y),
-                };
-
-                v2i_t selection_dim = rect2i_get_dim(lm_editor->selected_pixels);
-
-                v2_t selection_dim_worldspace = {
-                    scale_x*(selection_dim.x / texscale_x),
-                    scale_y*(selection_dim.y / texscale_y),
-                };
-
-                v3_t pixel_v0 = v3_add3(plane->lm_origin,
-                                         mul(selection_worldspace.x, plane->lm_s),
-                                         mul(selection_worldspace.y, plane->lm_t));
-                v3_t pixel_v1 = add(pixel_v0, mul(selection_dim_worldspace.x, plane->lm_s));
-                v3_t pixel_v2 = add(pixel_v0, mul(selection_dim_worldspace.y, plane->lm_t));
-                v3_t pixel_v3 = v3_add3(pixel_v0, 
-                                        mul(selection_dim_worldspace.x, plane->lm_s), 
-                                        mul(selection_dim_worldspace.y, plane->lm_t));
-
-                r_immediate_line(pixel_v0, pixel_v1, COLORF_RED);
-                r_immediate_line(pixel_v0, pixel_v2, COLORF_RED);
-                r_immediate_line(pixel_v2, pixel_v3, COLORF_RED);
-                r_immediate_line(pixel_v1, pixel_v3, COLORF_RED);
-            }
-        }
-
-		if (map->lightmap_state && map->lightmap_state->finalized)
-		{
-			lum_debug_data_t *debug_data = &map->lightmap_state->results.debug;
-
-			if (lm_editor->show_indirect_light_rays)
-			{
-				for (lum_path_t *path = debug_data->first_path;
-					 path;
-					 path = path->next)
-				{
-					if (lm_editor->pixel_selection_active &&
-						!rect2i_contains_exclusive(lm_editor->selected_pixels, path->source_pixel))
-					{
-						continue;
-					}
-
-					if (path->first_vertex->poly != lm_editor->selected_poly)
-						continue;
-
-					int vertex_index = 0;
-					if ((int)path->vertex_count >= lm_editor->min_display_recursion &&
-						(int)path->vertex_count <= lm_editor->max_display_recursion)
-					{
-						for (lum_path_vertex_t *vertex = path->first_vertex;
-							 vertex;
-							 vertex = vertex->next)
-						{
-							if (lm_editor->show_direct_light_rays)
-							{
-								for (size_t sample_index = 0; sample_index < vertex->light_sample_count; sample_index++)
-								{
-									lum_light_sample_t *sample = &vertex->light_samples[sample_index];
-
-									if (sample->shadow_ray_t > 0.0f && sample->shadow_ray_t < FLT_MAX)
-									{
-										// r_immediate_line(vertex->o, add(vertex->o, mul(sample->shadow_ray_t, sample->d)), COLORF_RED);
-									}
-									else if (sample->shadow_ray_t == FLT_MAX && sample_index < map->light_count)
-									{
-										map_point_light_t *point_light = &map->lights[sample_index];
-
-										v3_t color = sample->contribution;
-
-										if (lm_editor->fullbright_rays)
-										{
-											color = normalize(color);
-										}
-
-#if 0
-										if (vertex == path->first_vertex)
-										{
-											r_immediate_arrow(point_light->p, vertex->o, 
-														 make_v4(color.x, color.y, color.z, 1.0f));
-										}
-#endif
-
-										if (!vertex->next || vertex_index + 2 == (int)path->vertex_count)
-										{
-											r_immediate_line(vertex->o, point_light->p, 
-															 make_v4(color.x, color.y, color.z, 1.0f));
-										}
-									}
-								}
-							}
-
-							if (vertex->next)
-							{
-								lum_path_vertex_t *next_vertex = vertex->next;
-
-								if (next_vertex->brush)
-								{
-									v4_t start_color = make_v4(vertex->contribution.x,
-															   vertex->contribution.y,
-															   vertex->contribution.z,
-															   1.0f);
-
-									v4_t end_color = make_v4(next_vertex->contribution.x,
-															 next_vertex->contribution.y,
-															 next_vertex->contribution.z,
-															 1.0f);
-
-									if (lm_editor->fullbright_rays)
-									{
-										start_color.xyz = normalize(start_color.xyz);
-										end_color.xyz = normalize(end_color.xyz);
-									}
-
-									if (vertex == path->first_vertex)
-									{
-										r_immediate_arrow_gradient(next_vertex->o, vertex->o, end_color, start_color);
-									}
-									else
-									{
-										r_immediate_line_gradient(vertex->o, next_vertex->o, start_color, end_color);
-									}
-								}
-							}
-
-							vertex_index += 1;
-						}
-					}
-				}
-			}
-		}
-
-        r_immediate_flush();
-    }
 
 	if (!map->lightmap_state || !map->lightmap_state->finalized)
 	{
@@ -1092,6 +913,236 @@ static void lightmap_editor_proc(ui_window_t *window)
 	}
 }
 
+static void render_lm_editor(void)
+{
+    player_t *player = world->player;
+    map_t    *map    = world->map;
+
+    map_entity_t *worldspawn = map->worldspawn;
+
+    v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
+    float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
+
+    sun_color = mul(sun_brightness, sun_color);
+
+    v3_t ambient_color = v3_from_key(map, worldspawn, S("ambient_color"));
+    ambient_color = mul(1.0f / 255.0f, ambient_color);
+
+    lightmap_editor_state_t *lm_editor = &editor.lm_editor;
+
+    if (lm_editor->debug_lightmaps)
+    {
+        r_command_identifier(S("lightmap debug"));
+
+		r_immediate_topology(R_TOPOLOGY_LINELIST);
+		r_immediate_use_depth(!lm_editor->no_ray_depth_test);
+		//r_immediate_depth_bias(0.005f);
+		r_immediate_blend_mode(R_BLEND_ADDITIVE);
+
+        if (g_cursor_locked)
+        {
+            intersect_result_t intersect;
+            if (intersect_map(map, &(intersect_params_t) {
+                    .o = player_view_origin(player),
+                    .d = player_view_direction(player),
+                }, &intersect))
+            {
+                map_plane_t *plane = intersect.plane;
+
+                if (button_pressed(BUTTON_FIRE1))
+                {
+                    if (lm_editor->selected_plane == plane)
+                    {
+                        lm_editor->selected_brush = NULL;
+                        lm_editor->selected_plane = NULL;
+                        lm_editor->selected_poly  = NULL;
+                    }
+                    else
+                    {
+                        lm_editor->selected_brush = intersect.brush;
+                        lm_editor->selected_plane = plane;
+                        lm_editor->selected_poly  = intersect.poly;
+                    }
+                }
+
+                if (lm_editor->selected_poly != intersect.poly)
+                    push_poly_wireframe(map, intersect.poly, COLORF_RED);
+            }
+            else
+            {
+                if (button_pressed(BUTTON_FIRE1))
+                {
+                    lm_editor->selected_brush = NULL;
+                    lm_editor->selected_plane = NULL;
+                    lm_editor->selected_poly  = NULL;
+                }
+            }
+        }
+
+        if (lm_editor->selected_plane)
+        {
+            map_plane_t *plane = lm_editor->selected_plane;
+
+            float scale_x = plane->lm_scale_x;
+            float scale_y = plane->lm_scale_y;
+
+            push_poly_wireframe(map, lm_editor->selected_poly, make_v4(0.0f, 0.0f, 0.0f, 0.75f));
+
+            r_immediate_arrow(plane->lm_origin, add(plane->lm_origin, mul(scale_x, plane->lm_s)), make_v4(0.5f, 0.0f, 0.0f, 1.0f));
+            r_immediate_arrow(plane->lm_origin, add(plane->lm_origin, mul(scale_y, plane->lm_t)), make_v4(0.0f, 0.5f, 0.0f, 1.0f));
+
+            v3_t square_v0 = add(plane->lm_origin, mul(scale_x, plane->lm_s));
+            v3_t square_v1 = add(plane->lm_origin, mul(scale_y, plane->lm_t));
+            v3_t square_v2 = v3_add3(plane->lm_origin, mul(scale_x, plane->lm_s), mul(scale_y, plane->lm_t));
+
+            r_immediate_line(square_v0, square_v2, make_v4(0.5f, 0.0f, 0.5f, 1.0f));
+            r_immediate_line(square_v1, square_v2, make_v4(0.5f, 0.0f, 0.5f, 1.0f));
+
+            if (lm_editor->pixel_selection_active)
+            {
+                texture_desc_t desc;
+                render->describe_texture(lm_editor->selected_poly->lightmap, &desc);
+
+                float texscale_x = (float)desc.w;
+                float texscale_y = (float)desc.h;
+
+                v2_t selection_worldspace = {
+                    scale_x*((float)lm_editor->selected_pixels.min.x / texscale_x),
+                    scale_y*((float)lm_editor->selected_pixels.min.y / texscale_y),
+                };
+
+                v2i_t selection_dim = rect2i_get_dim(lm_editor->selected_pixels);
+
+                v2_t selection_dim_worldspace = {
+                    scale_x*(selection_dim.x / texscale_x),
+                    scale_y*(selection_dim.y / texscale_y),
+                };
+
+                v3_t pixel_v0 = v3_add3(plane->lm_origin,
+                                         mul(selection_worldspace.x, plane->lm_s),
+                                         mul(selection_worldspace.y, plane->lm_t));
+                v3_t pixel_v1 = add(pixel_v0, mul(selection_dim_worldspace.x, plane->lm_s));
+                v3_t pixel_v2 = add(pixel_v0, mul(selection_dim_worldspace.y, plane->lm_t));
+                v3_t pixel_v3 = v3_add3(pixel_v0, 
+                                        mul(selection_dim_worldspace.x, plane->lm_s), 
+                                        mul(selection_dim_worldspace.y, plane->lm_t));
+
+                r_immediate_line(pixel_v0, pixel_v1, COLORF_RED);
+                r_immediate_line(pixel_v0, pixel_v2, COLORF_RED);
+                r_immediate_line(pixel_v2, pixel_v3, COLORF_RED);
+                r_immediate_line(pixel_v1, pixel_v3, COLORF_RED);
+            }
+        }
+
+		if (map->lightmap_state && map->lightmap_state->finalized)
+		{
+			lum_debug_data_t *debug_data = &map->lightmap_state->results.debug;
+
+			if (lm_editor->show_indirect_light_rays)
+			{
+				for (lum_path_t *path = debug_data->first_path;
+					 path;
+					 path = path->next)
+				{
+					if (lm_editor->pixel_selection_active &&
+						!rect2i_contains_exclusive(lm_editor->selected_pixels, path->source_pixel))
+					{
+						continue;
+					}
+
+					if (path->first_vertex->poly != lm_editor->selected_poly)
+						continue;
+
+					int vertex_index = 0;
+					if ((int)path->vertex_count >= lm_editor->min_display_recursion &&
+						(int)path->vertex_count <= lm_editor->max_display_recursion)
+					{
+						for (lum_path_vertex_t *vertex = path->first_vertex;
+							 vertex;
+							 vertex = vertex->next)
+						{
+							if (lm_editor->show_direct_light_rays)
+							{
+								for (size_t sample_index = 0; sample_index < vertex->light_sample_count; sample_index++)
+								{
+									lum_light_sample_t *sample = &vertex->light_samples[sample_index];
+
+									if (sample->shadow_ray_t > 0.0f && sample->shadow_ray_t < FLT_MAX)
+									{
+										// r_immediate_line(vertex->o, add(vertex->o, mul(sample->shadow_ray_t, sample->d)), COLORF_RED);
+									}
+									else if (sample->shadow_ray_t == FLT_MAX && sample_index < map->light_count)
+									{
+										map_point_light_t *point_light = &map->lights[sample_index];
+
+										v3_t color = sample->contribution;
+
+										if (lm_editor->fullbright_rays)
+										{
+											color = normalize(color);
+										}
+
+#if 0
+										if (vertex == path->first_vertex)
+										{
+											r_immediate_arrow(point_light->p, vertex->o, 
+														 make_v4(color.x, color.y, color.z, 1.0f));
+										}
+#endif
+
+										if (!vertex->next || vertex_index + 2 == (int)path->vertex_count)
+										{
+											r_immediate_line(vertex->o, point_light->p, 
+															 make_v4(color.x, color.y, color.z, 1.0f));
+										}
+									}
+								}
+							}
+
+							if (vertex->next)
+							{
+								lum_path_vertex_t *next_vertex = vertex->next;
+
+								if (next_vertex->brush)
+								{
+									v4_t start_color = make_v4(vertex->contribution.x,
+															   vertex->contribution.y,
+															   vertex->contribution.z,
+															   1.0f);
+
+									v4_t end_color = make_v4(next_vertex->contribution.x,
+															 next_vertex->contribution.y,
+															 next_vertex->contribution.z,
+															 1.0f);
+
+									if (lm_editor->fullbright_rays)
+									{
+										start_color.xyz = normalize(start_color.xyz);
+										end_color.xyz = normalize(end_color.xyz);
+									}
+
+									if (vertex == path->first_vertex)
+									{
+										r_immediate_arrow_gradient(next_vertex->o, vertex->o, end_color, start_color);
+									}
+									else
+									{
+										r_immediate_line_gradient(vertex->o, next_vertex->o, start_color, end_color);
+									}
+								}
+							}
+
+							vertex_index += 1;
+						}
+					}
+				}
+			}
+		}
+
+        r_immediate_flush();
+    }
+}
+
 DREAM_INLINE void fullscreen_show_timings(void)
 {
     UI_SCALAR(UI_SCALAR_TEXT_ALIGN_X, 0.5f)
@@ -1286,6 +1337,12 @@ void update_and_render_in_game_editor(void)
 	{
 		ui_toggle_window_openness(&editor.ui_demo.window);
 	}
+
+	if (&editor.lm_editor.window.open)
+		render_lm_editor();
+
+	if (&editor.hull_test.window.open)
+		render_hull_test();
 
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);

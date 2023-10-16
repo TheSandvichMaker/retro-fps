@@ -12,6 +12,8 @@
 #define LIGHTMAP_SCALE 4
 #endif
 
+typedef struct collision_geometry_t collision_geometry_t;
+
 typedef struct map_plane_t
 {
     v3_t a, b, c;
@@ -98,7 +100,7 @@ typedef struct map_entity_t
 typedef struct map_bvh_node_t 
 {
     rect3_t bounds;
-    uint32_t left_first;
+    uint32_t left_first; // points to brushes
     uint16_t count;
     uint16_t split_axis;
 } map_bvh_node_t;
@@ -142,6 +144,8 @@ typedef struct map_t
     map_poly_t        *polys;
 	// map_edge_t        *edges;
     map_point_light_t *lights;
+
+	collision_geometry_t *collision_player;
 
     uint16_t *indices;
     struct
