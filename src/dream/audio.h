@@ -155,45 +155,179 @@ typedef struct mix_command_t
 
 #define MIXER_COMMAND_BUFFER_SIZE 4096
 
-// TODO: Not sure whether it's a good idea to expose the mix category volumes directly,
-// but I don't know what there's much harm in updating them from the main thread while
-// the mixer thread reads them.
-DREAM_LOCAL float         g_mix_category_volumes[SOUND_CATEGORY_COUNT];
-DREAM_LOCAL uint32_t      g_mixer_next_playing_sound_id;
-DREAM_LOCAL uint32_t      g_mixer_command_read_index;
-DREAM_LOCAL uint32_t      g_mixer_command_write_index;
-DREAM_LOCAL mix_command_t g_mixer_commands[MIXER_COMMAND_BUFFER_SIZE];
+typedef struct channel_matrix_t
+{
+	float m[A_CHANNEL_COUNT][A_CHANNEL_COUNT]; // [src][dst]
+} channel_matrix_t;
+
+DREAM_INLINE channel_matrix_t channel_matrix_identity(void)
+{
+	channel_matrix_t result = {0};
+
+	for (size_t i = 0; i < A_CHANNEL_COUNT; i++)
+	{
+		result.m[i][i] = 1.0f;
+	}
+
+	return result;
+}
+
+DREAM_INLINE channel_matrix_t channel_matrix_mono(float value)
+{
+	channel_matrix_t result = {0};
+
+	for (size_t i = 0; i < A_CHANNEL_COUNT; i++)
+	{
+		for (size_t j = 0; j < A_CHANNEL_COUNT; j++)
+		{
+			result.m[i][j] = value;
+		}
+	}
+
+	return result;
+}
+
+DREAM_INLINE channel_matrix_t lerp_channel_matrix(channel_matrix_t a, channel_matrix_t b, float t)
+{
+	channel_matrix_t result;
+
+	for (size_t i = 0; i < A_CHANNEL_COUNT; i++)
+	{
+		for (size_t j = 0; j < A_CHANNEL_COUNT; j++)
+		{
+			result.m[i][j] = lerp(a.m[i][j], b.m[i][j], t);
+		}
+	}
+
+	return result;
+}
+
+typedef struct fade_t fade_t;
+
+typedef struct playing_sound_t
+{
+	waveform_t *waveform;
+	mixer_id_t id;
+
+	sound_category_t category;
+
+	uint32_t at_index;
+
+	float    volume;
+	uint32_t flags;
+
+	v3_t     p;
+	float    min_distance;
+
+	uint32_t fade_count;
+	fade_t  *first_fade;
+	fade_t  *last_fade;
+} playing_sound_t;
+
+typedef struct fade_t
+{
+	playing_sound_t *playing;
+	fade_t          *next;
+	fade_t          *prev;
+
+	uint32_t     flags;
+	fade_style_t style;
+
+	float        start;
+	float        target;
+	float        current;
+	uint32_t     frame_index;   
+	uint32_t     frame_duration;
+} fade_t;
+
+typedef struct delay_t
+{
+	float    feedback;
+	uint32_t index;
+	uint32_t delay_time;
+	float    buffer[WAVE_SAMPLE_RATE];
+} delay_t;
+
+typedef struct reverb_t
+{
+	float    feedback;
+	uint32_t index_l;
+	uint32_t index_r;
+	uint32_t delay_time_l;
+	uint32_t delay_time_r;
+	float    buffer_l[WAVE_SAMPLE_RATE];
+	float    buffer_r[WAVE_SAMPLE_RATE];
+	float    mix_matrix[2][2];
+} reverb_t;
+
+typedef struct mixer_t
+{
+	float             category_volumes[SOUND_CATEGORY_COUNT];
+	uint32_t          next_playing_sound_id;
+	volatile uint32_t command_read_index;
+	volatile uint32_t command_write_index;
+	mix_command_t     commands[MIXER_COMMAND_BUFFER_SIZE];
+
+	// don't touch these directly (unless you know what you're doing etc etc):
+
+	pool_t  playing_sounds; // @must-initialize
+	table_t playing_sounds_index;
+
+	pool_t active_fades; // @must-initialize
+
+	uint64_t frame_index;
+	v3_t listener_p;
+	v3_t listener_d;
+	v3_t listener_x;
+	v3_t listener_y;
+	v3_t listener_z;
+
+	reverb_t reverb;
+	float    reverb_amount;
+	float    reverb_feedback;
+	int      reverb_delay_time;
+	float    reverb_stereo_spread;
+	float    reverb_diffusion_angle;
+	float    filter_test;
+
+	float filter_store_l;
+	float filter_store_r;
+
+	bool initialized;
+} mixer_t;
+
+DREAM_LOCAL mixer_t mixer;
 
 // TODO: Deduplicate with mix_command_play_sound_t
 typedef struct play_sound_t
 {
-	waveform_t *waveform;
+	waveform_t      *waveform;
 	sound_category_t category;
-	float       volume;
-	uint32_t    flags;
-	v3_t        p;
-	float       min_distance;
+	float            volume;
+	uint32_t         flags;
+	v3_t             p;
+	float            min_distance;
 } play_sound_t;
 
 DREAM_INLINE mix_command_t *push_mix_command(const mix_command_t *command)
 {
 	// We should never be in a situation where we overwrite unprocessed mixer commands,
 	// but it's not catastrophic.
-	ASSERT(((g_mixer_command_write_index + 1) % MIXER_COMMAND_BUFFER_SIZE) != 
-		   ( g_mixer_command_read_index       % MIXER_COMMAND_BUFFER_SIZE));
+	ASSERT(((mixer.command_write_index + 1) % MIXER_COMMAND_BUFFER_SIZE) != 
+		   ( mixer.command_read_index       % MIXER_COMMAND_BUFFER_SIZE));
 
-	uint32_t command_index = g_mixer_command_write_index;
-	copy_struct(&g_mixer_commands[command_index % MIXER_COMMAND_BUFFER_SIZE], command);
+	uint32_t command_index = mixer.command_write_index;
+	copy_struct(&mixer.commands[command_index % MIXER_COMMAND_BUFFER_SIZE], command);
 
 	COMPILER_BARRIER;
 
-	atomic_increment_u32(&g_mixer_command_write_index);
-	return &g_mixer_commands[command_index];
+	atomic_increment_u32(&mixer.command_write_index);
+	return &mixer.commands[command_index];
 }
 
 DREAM_INLINE mixer_id_t play_sound(const play_sound_t *params)
 {
-	mixer_id_t id = make_mixer_id(MIXER_ID_TYPE_PLAYING_SOUND, g_mixer_next_playing_sound_id++);
+	mixer_id_t id = make_mixer_id(MIXER_ID_TYPE_PLAYING_SOUND, mixer.next_playing_sound_id++);
 
 	mix_command_t command = {
 		.kind = MIX_PLAY_SOUND,

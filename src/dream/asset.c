@@ -185,11 +185,11 @@ static void asset_job(job_context_t *context, void *userdata)
                                 if (x_i >= src_frame_count) 
                                     x_i = src_frame_count - 1;
 
-                                float s_1 = unorm_from_i16(src[x_i]);
-                                float s_2 = unorm_from_i16(src[x_i + 1]);
+                                float s_1 = snorm_from_s16(src[x_i]);
+                                float s_2 = snorm_from_s16(src[x_i + 1]);
                                 float s = lerp(s_1, s_2, x_f);
 
-                                *dst++ = i16_from_unorm(s);
+                                *dst++ = s16_from_snorm(s);
                             }
                         }
 

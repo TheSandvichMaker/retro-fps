@@ -37,6 +37,11 @@ static const m4x4_t m4x4_identity = M4X4_IDENTITY_INIT;
 
 #define PI32 3.1415926536f
 
+DREAM_INLINE float square(float x)
+{
+	return x*x;
+}
+
 DREAM_INLINE float to_radians(float deg)
 {
     return deg*(PI32 / 180.0f);
@@ -155,12 +160,12 @@ DREAM_INLINE float lanczos(float x, float a)
     return result;
 }
 
-DREAM_INLINE float unorm_from_i16(int16_t s)
+DREAM_INLINE float snorm_from_s16(int16_t s)
 {
     return (float)s / (float)INT16_MAX;
 }
 
-DREAM_INLINE int16_t i16_from_unorm(float s)
+DREAM_INLINE int16_t s16_from_snorm(float s)
 {
     if (s < -1.0f) s = -1.0f;
     if (s >  1.0f) s =  1.0f;

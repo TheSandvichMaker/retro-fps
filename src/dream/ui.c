@@ -485,9 +485,12 @@ void ui_process_windows(void)
 			// TODO: Custom scrollbar rendering for windows?
 			ui_panel_begin_ex(ui_id(S("panel")), rect, UI_PANEL_SCROLLABLE_VERT);
 
-			window->draw_proc(window->user_data);
+			window->focused = (window == ui.windows.last_window);
+			window->draw_proc(window);
 
 			ui_panel_end();
+
+			window->hovered = false;
 		}
 		ui_pop_id();
 	}
@@ -497,6 +500,7 @@ void ui_process_windows(void)
 	if (hovered_window)
 	{
 		ui.hovered = true;
+		hovered_window->hovered = true;
 	}
 
 	if (ui_mouse_buttons_pressed(PLATFORM_MOUSE_BUTTON_ANY))
@@ -1280,14 +1284,14 @@ bool ui_checkbox(string_t label, bool *result_value)
 	if (NEVER(!ui.initialized)) 
 		return result;
 
-	ui_id_t id = ui_id(label);
+	ui_id_t id = ui_id_pointer(result_value);
 
-	float label_offset = ui_scalar(UI_SCALAR_TEXT_MARGIN);
-	float label_width  = ui_text_width(&ui.style.font, label);
+	float label_width   = ui_text_width(&ui.style.font, label);
+	float label_padding = ui_scalar(UI_SCALAR_TEXT_MARGIN);
 
 	v2_t min_widget_size;
 	min_widget_size.y = ui_font_height();
-	min_widget_size.x = label_width + label_offset + min_widget_size.y;
+	min_widget_size.x = label_width + label_padding + min_widget_size.y;
 
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
 
@@ -1298,7 +1302,7 @@ bool ui_checkbox(string_t label, bool *result_value)
 
 	rect2_t checkbox_rect = rect2_cut_left(&rect, h);
 	rect2_t check_rect = rect2_shrink(checkbox_rect, 1.5f*checkbox_thickness_pixels);
-	rect2_t label_rect = rect2_cut_left(&rect, label_width + label_offset);
+	rect2_t label_rect = rect2_cut_left(&rect, label_width + label_padding);
 
 	rect2_t interactive_rect = rect2_union(checkbox_rect, label_rect);
 
@@ -1359,7 +1363,7 @@ bool ui_checkbox(string_t label, bool *result_value)
 	// --- draw label ---
 
 	v2_t p = ui_text_align_p(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
-	p.x += label_offset;
+	p.x += label_padding;
 	p.y += hover_lift;
 
 	v4_t text_color = ui_color(UI_COLOR_TEXT);
@@ -1590,9 +1594,9 @@ bool ui_slider(string_t label, float *v, float min, float max)
 	min_widget_size.y = ui_font_height();
 
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
-	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
+	ui_hoverable(id, rect);
 
-	ui_hoverable(id, label_rect);
+	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
 
 	ui_draw_text_aligned(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
@@ -1629,9 +1633,9 @@ bool ui_slider_int_ex(string_t label, int *v, int min, int max, ui_slider_flags_
 	min_widget_size.x = ui_text_width(&ui.style.font, label) + 32.0f + 2.0f*min_widget_size.y + 2.0f*widget_margin;
 
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
-	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
+	ui_hoverable(id, rect);
 
-	ui_hoverable(id, label_rect);
+	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
 
 	ui_draw_text_aligned(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
@@ -1725,6 +1729,7 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 	if (NEVER(!ui.initialized)) 
 		return;
 
+	// TODO: Use ui_cut_widget_rect 
 	rect2_t rect;
 	if (!ui_override_rect(&rect))
 	{
@@ -1732,13 +1737,15 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 		rect = rect2_cut_top(&panel->rect_layout, ui_font_height() + ui_widget_padding());
 	}
 
+	ui_id_t id = ui_id_pointer(buffer);
+	ui_push_id(id);
+
+	ui_hoverable(id, rect);
+
 	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
 	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
 	label_rect = rect2_shrink(label_rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
-
-	ui_id_t id = ui_id_pointer(buffer);
-	ui_push_id(id);
 
 	ui_text_edit_state_t *state = &ui_get_state(id)->text_edit;
 

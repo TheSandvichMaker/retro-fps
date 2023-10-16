@@ -47,9 +47,9 @@ typedef enum editor_kind_t
 	EDITOR_COUNT,
 } editor_kind_t;
 
-static void ui_demo_proc         (void *);
-static void lightmap_editor_proc (void *);
-static void convex_hull_test_proc(void *);
+static void ui_demo_proc         (ui_window_t *);
+static void lightmap_editor_proc (ui_window_t *);
+static void convex_hull_test_proc(ui_window_t *);
 
 typedef struct ui_demo_panel_t
 {
@@ -218,8 +218,8 @@ static void generate_new_random_convex_hull(size_t point_count, random_series_t 
 static void hull_render_debug_triangles(hull_debug_step_t *step, bool final_step, bool render_degenerate, bool render_wireframe)
 {
 	hull_test_panel_t        *hull_test = &editor.hull_test;
-	hull_debug_t             *debug   = &hull_test->debug;
-	hull_diagnostic_result_t *diag    = debug->diagnostics;
+	hull_debug_t             *debug     = &hull_test->debug;
+	hull_diagnostic_result_t *diag      = debug->diagnostics;
 
 	m_scoped(temp)
 	{
@@ -278,9 +278,9 @@ static void hull_render_debug_triangles(hull_debug_step_t *step, bool final_step
 	}
 }
 
-static void convex_hull_test_proc(void *user_data)
+static void convex_hull_test_proc(ui_window_t *window)
 {
-	(void *)user_data;
+	(void)window;
 
 	hull_test_panel_t *hull_test = &editor.hull_test;
 
@@ -578,9 +578,9 @@ static void convex_hull_test_proc(void *user_data)
 	hull_test->initialized = true;
 }
 
-static void lightmap_editor_proc(void *user_data)
+static void lightmap_editor_proc(ui_window_t *window)
 {
-	(void)user_data;
+	(void)window;
 
     player_t *player = world->player;
     map_t    *map    = world->map;
@@ -1110,9 +1110,12 @@ DREAM_INLINE void fullscreen_show_timings(void)
     }
 }
 
-DREAM_INLINE void ui_demo_proc(void *user_data)
+DREAM_INLINE void ui_demo_proc(ui_window_t *window)
 {
-	(void)user_data;
+	if (window->hovered)
+	{
+		ui_tooltip(S("Window for testing out various UI features."));
+	}
 
 	ui_demo_panel_t *demo = &editor.ui_demo;
 
@@ -1129,16 +1132,31 @@ DREAM_INLINE void ui_demo_proc(void *user_data)
 		ui_set_font_height((float)font_size);
 	}
 
+	ui_hover_tooltip(S("Size of the inner margin for windows"));
 	ui_slider(S("UI Window Margin"), &ui.style.base_scalars[UI_SCALAR_WINDOW_MARGIN], 0.0f, 8.0f);
+	ui_hover_tooltip(S("Size of the margin between widgets"));
 	ui_slider(S("UI Widget Margin"), &ui.style.base_scalars[UI_SCALAR_WIDGET_MARGIN], 0.0f, 8.0f);
+	ui_hover_tooltip(S("Size of the margin between widgets and their text contents (e.g. a button and its label)"));
 	ui_slider(S("UI Text Margin"), &ui.style.base_scalars[UI_SCALAR_TEXT_MARGIN], 0.0f, 8.0f);
+	ui_hover_tooltip(S("Roundedness of UI elements in pixel radius"));
 	ui_slider(S("UI Roundedness"), &ui.style.base_scalars[UI_SCALAR_ROUNDEDNESS], 0.0f, 12.0f);
+	ui_hover_tooltip(S("Spring stiffness coefficient for animations"));
 	ui_slider(S("UI Animation Stiffness"), &ui.style.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS], 1.0f, 1024.0f);
+	ui_hover_tooltip(S("Spring dampen coefficient for animations"));
 	ui_slider(S("UI Animation Dampen"), &ui.style.base_scalars[UI_SCALAR_ANIMATION_DAMPEN], 1.0f, 128.0f);
 
 	demo->edit_buffer.data     = demo->edit_buffer_storage;
 	demo->edit_buffer.capacity = ARRAY_COUNT(demo->edit_buffer_storage);
+	ui_hover_tooltip(S("Text edit demo box"));
 	ui_text_edit(S("Text Edit"), &demo->edit_buffer);
+
+	ui_slider(S("Reverb Amount"), &mixer.reverb_amount, 0.0f, 1.0f);
+	ui_slider(S("Reverb Feedback"), &mixer.reverb_feedback, -1.0f, 1.0f);
+	ui_slider_int(S("Delay Time"), &mixer.reverb_delay_time, 500, 2000);
+	ui_slider(S("Stereo Spread"), &mixer.reverb_stereo_spread, 0.0f, 2.0f);
+	ui_slider(S("Diffusion Angle"), &mixer.reverb_diffusion_angle, 0.0f, 90.0f);
+
+	ui_slider(S("Filter Test"), &mixer.filter_test, -1.0f, 1.0f);
 }
 
 DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)

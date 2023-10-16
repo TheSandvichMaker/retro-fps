@@ -405,7 +405,8 @@ void game_init(void)
     world->fade_t = 1.0f;
 
 	{
-		test_waveform = get_waveform_from_string(S("gamedata/audio/lego durbo.wav"));
+		test_waveform = get_waveform_from_string(S("gamedata/audio/SquareArp [excited mix (no clipping)].wav"));
+		// test_waveform = get_waveform_from_string(S("gamedata/audio/lego durbo.wav"));
 		short_sound   = get_waveform_from_string(S("gamedata/audio/menu_select.wav"));
 
 		music = play_sound(&(play_sound_t){

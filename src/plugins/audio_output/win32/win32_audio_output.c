@@ -73,22 +73,43 @@ static DWORD WINAPI wasapi_thread_proc(void *userdata)
     hr = IAudioClient_GetDevicePeriod(audio_client, &default_period, &minimum_period);
     // ASSERT(SUCCEEDED(hr));
 
+#if 0
     WAVEFORMATEX *mix_format;
 
     hr = IAudioClient_GetMixFormat(audio_client, &mix_format);
     // ASSERT(SUCCEEDED(hr));
 
     WAVEFORMATEXTENSIBLE mix_format_ex;
-
     memcpy(&mix_format_ex, mix_format, sizeof(mix_format_ex));
+#else
+	WAVEFORMATEXTENSIBLE mix_format_ex = { 0 };
+
+	mix_format_ex.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+	mix_format_ex.Format.nChannels = 2;          // Stereo
+	mix_format_ex.Format.nSamplesPerSec = 44100; // Sample rate (Hz)
+	mix_format_ex.Format.wBitsPerSample = 32;    // 32-bit float
+	mix_format_ex.Format.nBlockAlign = (mix_format_ex.Format.nChannels * mix_format_ex.Format.wBitsPerSample) / 8;
+	mix_format_ex.Format.nAvgBytesPerSec = mix_format_ex.Format.nSamplesPerSec * mix_format_ex.Format.nBlockAlign;
+	mix_format_ex.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE); // - sizeof(WAVEFORMATEX);
+
+	mix_format_ex.Samples.wValidBitsPerSample = 32;
+	mix_format_ex.dwChannelMask = KSAUDIO_SPEAKER_STEREO;
+	mix_format_ex.SubFormat = KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
+#endif
     
-    // bool is_this_a_floating_point_format = !memcmp(&mix_format_ex.SubFormat, &KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, sizeof(GUID));
-    // ASSERT(is_this_a_floating_point_format);
-    // ASSERT(mix_format_ex.Samples.wValidBitsPerSample == 32);
-
+#if 0
     CoTaskMemFree(mix_format);
+#endif
 
-    hr = IAudioClient_Initialize(audio_client, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK, minimum_period, 0, (WAVEFORMATEX *)(&mix_format_ex), NULL);
+    hr = IAudioClient_Initialize(audio_client, 
+                                 AUDCLNT_SHAREMODE_SHARED, 
+                                 (AUDCLNT_STREAMFLAGS_EVENTCALLBACK|
+                                  AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM|
+                                  AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY), 
+                                 minimum_period, 
+                                 0, 
+                                 (WAVEFORMATEX *)(&mix_format_ex), 
+                                 NULL);
     // ASSERT(SUCCEEDED(hr));
 
     IAudioRenderClient *audio_render_client;

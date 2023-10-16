@@ -113,9 +113,10 @@ typedef enum ui_rect_edge_enum_t
 // Windows
 //
 
-typedef void (*ui_window_proc_t)(void *userdata);
+typedef struct ui_window_t ui_window_t;
+typedef void (*ui_window_proc_t)(ui_window_t *window);
 
-typedef struct ui_window_t
+struct ui_window_t
 {
 	struct ui_window_t *next;
 	struct ui_window_t *prev;
@@ -124,10 +125,12 @@ typedef struct ui_window_t
 	rect2_t rect;
 
 	bool open;
+	bool hovered;
+	bool focused;
 
 	void            *user_data;
 	ui_window_proc_t draw_proc;
-} ui_window_t;
+};
 
 typedef struct ui_windows_t
 {
