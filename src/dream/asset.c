@@ -1,5 +1,10 @@
 #include "asset.h"
 
+// FIXME: Figure out threading for assets!!
+// FIXME: Figure out threading for assets!!
+// FIXME: Figure out threading for assets!!
+// FIXME: Figure out threading for assets!!
+
 static void *stbi_malloc(size_t size);
 static void *stbi_realloc(void *ptr, size_t new_size);
 
@@ -63,7 +68,7 @@ typedef struct asset_slot_t
 	asset_hash_t hash;
 	asset_kind_t kind;
 
-	string_storage_t(256) path;
+	string_storage_t(1024) path;
 
 	union
 	{
@@ -75,9 +80,9 @@ typedef struct asset_slot_t
 image_t    missing_image;
 waveform_t missing_waveform;
 
-static arena_t asset_arena;
-static pool_t  asset_store = INIT_POOL(asset_slot_t);
-static table_t  asset_index;
+static arena_t        asset_arena;
+static pool_t         asset_store = INIT_POOL(asset_slot_t);
+static table_t        asset_index;
 static asset_config_t asset_config;
 
 typedef enum asset_job_kind_t
@@ -302,6 +307,21 @@ bool asset_exists(asset_hash_t hash, asset_kind_t kind)
 {
 	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
 	return asset && asset->kind == kind;
+}
+
+string_t get_asset_path_on_disk(asset_hash_t hash)
+{
+    string_t result = {0};
+
+	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
+
+    int64_t state = asset->state;
+    if (state >= ASSET_STATE_ON_DISK) // not sure this greater than thing is a great(er than) idea
+    {
+        result = string_from_storage(asset->path);
+    }
+
+    return result;
 }
 
 static asset_slot_t *get_or_load_asset_async(asset_hash_t hash, asset_kind_t kind)

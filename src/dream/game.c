@@ -3,26 +3,28 @@
 #include "core/core.h"
 #include "core/random.h"
 
-#include "dream/platform.h"
-#include "dream/game.h"
-#include "dream/map.h"
-#include "dream/input.h"
-#include "dream/asset.h"
-#include "dream/intersect.h"
-#include "dream/ui.h"
-#include "dream/audio.h"
-#include "dream/in_game_editor.h"
-#include "dream/job_queues.h"
-#include "dream/mesh.h"
-#include "dream/light_baker.h"
-#include "dream/render.h"
-#include "dream/render_helpers.h"
+#include "platform.h"
+#include "game.h"
+#include "map.h"
+#include "input.h"
+#include "asset.h"
+#include "intersect.h"
+#include "ui.h"
+#include "audio.h"
+#include "in_game_editor.h"
+#include "job_queues.h"
+#include "mesh.h"
+#include "light_baker.h"
+#include "render.h"
+#include "render_helpers.h"
+#include "camera.h"
+#include "physics_playground.h"
 
 static bool initialized = false;
 
 bool g_cursor_locked;
 
-world_t *world;
+static world_t *g_world;
 static resource_handle_t skybox;
 static bitmap_font_t debug_font;
 static waveform_t *test_waveform;
@@ -31,18 +33,6 @@ static waveform_t *short_sound;
 static mixer_id_t music;
 
 static triangle_mesh_t test_convex_hull;
-
-v3_t forward_vector_from_pitch_yaw(float pitch, float yaw)
-{
-    rotor3_t r_pitch = rotor3_from_plane_angle(PLANE_ZX, DEG_TO_RAD*pitch);
-    rotor3_t r_yaw   = rotor3_from_plane_angle(PLANE_YZ, DEG_TO_RAD*yaw  );
-
-    v3_t forward = { 1, 0, 0 };
-    forward = rotor3_rotatev(r_pitch, forward);
-    forward = rotor3_rotatev(r_yaw,   forward);
-
-    return forward;
-}
 
 v3_t player_view_origin(player_t *player)
 {
@@ -67,32 +57,6 @@ v3_t player_view_direction(player_t *player)
     dir = rotor3_rotatev(r_yaw,   dir);
 
     return dir;
-}
-
-void compute_camera_axes(camera_t *camera)
-{
-    v3_t forward = forward_vector_from_pitch_yaw(camera->pitch, camera->yaw);
-    basis_vectors(forward, make_v3(0, 0, 1), &camera->computed_x, &camera->computed_y, &camera->computed_z);
-}
-
-void update_camera_rotation(camera_t *camera, float dt)
-{
-    int dxi, dyi;
-    get_mouse_delta(&dxi, &dyi);
-
-    float dx = (float)dxi;
-    float dy = (float)dyi;
-
-    float look_speed_x = 10.0f;
-    float look_speed_y = 10.0f;
-
-    camera->yaw   -= look_speed_x*dt*dx;
-    camera->pitch -= look_speed_y*dt*dy;
-
-    camera->yaw   = fmodf(camera->yaw, 360.0f);
-    camera->pitch = CLAMP(camera->pitch, -85.0f, 85.0f);
-
-    compute_camera_axes(camera);
 }
 
 void player_freecam(player_t *player, float dt)
@@ -401,9 +365,10 @@ void game_init(void)
         debug_font.texture = font_image->gpu;
     }
 
-    world = m_bootstrap(world_t, arena);
+    world_t *world = g_world = m_bootstrap(world_t, arena);
     world->fade_t = 1.0f;
 
+#if 0
 	{
 		test_waveform = get_waveform_from_string(S("gamedata/audio/SquareArp [excited mix (no clipping)].wav"));
 		// test_waveform = get_waveform_from_string(S("gamedata/audio/lego durbo.wav"));
@@ -417,7 +382,9 @@ void game_init(void)
 			.flags        = PLAY_SOUND_SPATIAL|PLAY_SOUND_FORCE_MONO|PLAY_SOUND_LOOPING,
 		});
 	}
+#endif
 
+#if 0
 	string_t startup_map = S("test");
 
     map_t    *map    = world->map    = load_map(&world->arena, Sf("gamedata/maps/%.*s.map", Sx(startup_map)));
@@ -470,6 +437,7 @@ void game_init(void)
 			player->p = v3_from_key(map, e, S("origin"));
 		}
 	}
+#endif
 
     initialized = true;
 }
@@ -482,6 +450,8 @@ static void game_tick(platform_io_t *io)
     {
         game_init();
     }
+
+    world_t *world = g_world;
 
 	// TODO: Totally redo input 
 	{
@@ -565,11 +535,6 @@ static void game_tick(platform_io_t *io)
 		update_input_state(&input);
 	}
 
-    int res_x, res_y;
-    render->get_resolution(&res_x, &res_y);
-
-    v2_t res = make_v2((float)res_x, (float)res_y);
-
 	ui.input.app_has_focus = io->has_focus;
 	io->cursor = ui.input.cursor;
 
@@ -585,7 +550,17 @@ static void game_tick(platform_io_t *io)
         g_cursor_locked = !g_cursor_locked;
 	}
 
-#if 1
+    io->lock_cursor = g_cursor_locked;
+
+    world->primary_camera = &g_camera;
+    update_and_render_physics_playground(world, dt);
+
+#if 0
+    int res_x, res_y;
+    render->get_resolution(&res_x, &res_y);
+
+    v2_t res = make_v2((float)res_x, (float)res_y);
+
     if (button_pressed(BUTTON_FIRE1))
 	{
 		static bool mono = true;
@@ -601,9 +576,6 @@ static void game_tick(platform_io_t *io)
 			update_playing_sound_flags(music, PLAY_SOUND_FORCE_MONO, 0);
 		}
 	}
-#endif
-
-    io->lock_cursor = g_cursor_locked;
 
     map_t *map = world->map;
 
@@ -753,6 +725,22 @@ static void game_tick(platform_io_t *io)
 
     update_and_render_in_game_editor();
 
+    static bool bad = true;
+    if (bad)
+    {
+        bad = false;
+
+        collision_geometry_t *geom = &map->collision;
+        collision_hull_t *hull = &geom->hulls[0];
+
+        triangle_mesh_t mesh = {
+            .triangle_count = hull->count / 3,
+            .points         = &geom->vertices[hull->first],
+        };
+
+        load_convex_hull_debug(&mesh, hull->debug);
+    }
+
     ui_end();
 
     {
@@ -773,6 +761,7 @@ static void game_tick(platform_io_t *io)
 
         r_pop_view();
     }
+#endif
 
     if (button_pressed(BUTTON_ESCAPE))
     {

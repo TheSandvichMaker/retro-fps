@@ -48,6 +48,9 @@ typedef struct rotor3_t
     };
 } rotor3_t;
 
+#define ROTOR3_IDENTITY_STATIC { .a = 1.0f, .b = { 0, 0, 0 } }
+#define ROTOR3_IDENTITY (rotor3_t) ROTOR3_IDENTITY_STATIC
+
 static inline biv3_t wedge3(v3_t a, v3_t b)
 {
     biv3_t result = {

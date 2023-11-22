@@ -769,11 +769,12 @@ static d3d_texture_t *d3d_get_texture_or(resource_handle_t handle, d3d_texture_t
 void d3d_do_post_pass(const d3d_post_pass_t *pass)
 {
     // set output merger state
-    ID3D11DeviceContext_OMSetBlendState(d3d.context, d3d.bs, NULL, ~0U);
+    ID3D11DeviceContext_OMSetBlendState(d3d.context, NULL, NULL, ~0U);
     ID3D11DeviceContext_OMSetDepthStencilState(d3d.context, d3d.dss_no_depth, 0);
     ID3D11DeviceContext_OMSetRenderTargets(d3d.context, 1, &pass->render_target, NULL);
 
     ID3D11DeviceContext_IASetInputLayout(d3d.context, NULL);
+    ID3D11DeviceContext_IASetPrimitiveTopology(d3d.context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // set vertex shader
     ID3D11DeviceContext_VSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);
@@ -1087,7 +1088,7 @@ done_with_sun_shadows:
                 0, 0, 0, 1,
             };
 
-            m4x4_t mvp = m4x4_identity;
+            m4x4_t mvp = M4X4_IDENTITY;
             mvp = mul(mvp, view->projection);
             mvp = mul(mvp, camera);
             mvp = mul(mvp, swizzle);
@@ -1160,7 +1161,7 @@ done_with_sun_shadows:
                         d3d_texture_t *texture  = d3d_get_texture_or(command->texture, d3d.missing_texture);
                         d3d_texture_t *lightmap = d3d_get_texture_or(command->lightmap, d3d.white_texture);
 
-                        m4x4_t camera_projection = m4x4_identity;
+                        m4x4_t camera_projection = M4X4_IDENTITY;
                         camera_projection = mul(camera_projection, view->projection);
                         camera_projection = mul(camera_projection, view->camera);
 
@@ -1217,7 +1218,7 @@ done_with_sun_shadows:
                         .proj_matrix     = view->projection,
                         .sun_matrix      = sun_matrix,
                         .light_direction = sun_direction,
-                        .model_matrix    = m4x4_identity,
+                        .model_matrix    = draw_call->params.transform,
                         .depth_bias      = draw_call->params.depth_bias,
                         .sun_direction   = sun_direction,
                         .fog_density     = view->fog_density,
@@ -1351,7 +1352,7 @@ done_with_sun_shadows:
                         d3d_cbuffer_t cbuffer = {
                             .view_matrix  = view->camera,
                             .proj_matrix  = view->projection,
-                            .model_matrix = m4x4_identity,
+                            .model_matrix = M4X4_IDENTITY,
                             .sun_matrix   = sun_matrix,
                             .frame_index  = frame_index,
                             .fog_offset   = view->fog_offset,

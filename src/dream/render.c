@@ -41,6 +41,7 @@ DREAM_INLINE void initialize_immediate_draw(r_immediate_draw_t *draw)
 	draw->params.cull_mode  = R_CULL_NONE;
 	draw->params.clip_rect  = (rect2_t){ 0, 0, 0, 0 };
 	draw->params.texture    = NULL_RESOURCE_HANDLE;
+    draw->params.transform  = M4X4_IDENTITY;
 	draw->params.depth_test = false;
 	draw->params.depth_bias = 0.0f;
 
@@ -89,7 +90,7 @@ void r_reset_command_list(void)
             0, 0, 1,  0,
             0, 0, 0,  1
         );
-        view.projection = m4x4_identity;
+        view.projection = M4X4_IDENTITY;
 
         r_push_view(&view);
     }
@@ -206,8 +207,8 @@ void r_default_view(r_view_t *view)
         .y1 = (float)h,
     };
 
-    view->camera     = m4x4_identity;
-    view->projection = m4x4_identity;
+    view->camera     = M4X4_IDENTITY;
+    view->projection = M4X4_IDENTITY;
 }
 
 static thread_local r_view_t g_null_view; // should never be necessary
@@ -377,6 +378,14 @@ void r_immediate_texture(resource_handle_t texture)
 
 	r_immediate_draw_t *draw = &g_list->curr_immediate;
 	draw->params.texture = texture;
+}
+
+void r_immediate_transform(m4x4_t transform)
+{
+    r_immediate_flush_pending();
+
+	r_immediate_draw_t *draw = &g_list->curr_immediate;
+	draw->params.transform = transform;
 }
 
 void r_immediate_use_depth(bool depth)

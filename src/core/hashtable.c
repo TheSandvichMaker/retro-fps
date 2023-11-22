@@ -181,6 +181,14 @@ bool table_remove(table_t *table, uint64_t key)
 	return true;
 }
 
+void table_release(table_t *table)
+{
+    table->mask = 0;
+    table->load = 0;
+    vm_release(table->entries);
+    table->entries = NULL;
+}
+
 void *table_find_object(const table_t *table, uint64_t key)
 {
 	void *result = NULL;

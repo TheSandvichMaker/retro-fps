@@ -164,6 +164,23 @@ void r_immediate_rect3_outline(rect3_t bounds, v4_t color)
     r_immediate_line(v110, v111, color);
 }
 
+void r_immediate_itriangle(uint32_t a, uint32_t b, uint32_t c)
+{
+    r_immediate_index(a);
+    r_immediate_index(b);
+    r_immediate_index(c);
+}
+
+void r_immediate_iquad(uint32_t a, uint32_t b, uint32_t c, uint32_t d)
+{
+    r_immediate_index(a);
+    r_immediate_index(b);
+    r_immediate_index(c);
+    r_immediate_index(a);
+    r_immediate_index(c);
+    r_immediate_index(d);
+}
+
 void r_immediate_triangle(triangle_t t, v4_t color)
 {
     uint32_t color_packed = pack_color(color);
@@ -289,4 +306,83 @@ void r_draw_text(const bitmap_font_t *font, v2_t p, v4_t color, string_t string)
     }
 
 	r_immediate_flush();
+}
+
+void r_immediate_sphere(v3_t p, float r, v4_t color_, size_t slices, size_t stacks)
+{
+    // source: https://www.danielsieger.com/blog/2021/03/27/generating-spheres.html
+
+    uint32_t color = pack_color(color_);
+
+    m_scoped(temp)
+    {
+        stretchy_buffer(uint32_t) indices = NULL;
+
+        // top vertex
+        uint32_t v0 = r_immediate_vertex(&(vertex_immediate_t) {
+            .pos = { p.x, p.y, p.z + r },
+            .col = color,
+            .normal = { 0, 0, 1 },
+        });
+        sb_push(indices, v0);
+
+        // vertices per stack/slice
+        for (size_t i = 0; i < stacks - 1; i++)
+        {
+            float phi = PI32*(float)(i + 1) / (float)stacks;
+            for (size_t j = 0; j < slices; j++)
+            {
+                float theta = 2.0f*PI32*(float)j / (float)slices;
+                v3_t offset = {
+                    .x = sin_ss(phi)*cos_ss(theta),
+                    .y = sin_ss(phi)*sin_ss(theta),
+                    .z = cos_ss(phi),
+                };
+                uint32_t index = r_immediate_vertex(&(vertex_immediate_t) {
+                    .pos = add(p, mul(r, offset)),
+                    .col = color,
+                    .normal = offset,
+                });
+                sb_push(indices, index);
+            }
+        }
+
+        // bottom vertex
+        uint32_t v1 = r_immediate_vertex(&(vertex_immediate_t) {
+            .pos = { p.x, p.y, p.z - r },
+            .col = color,
+            .normal = { 0, 0, -1 },
+        });
+        sb_push(indices, v1);
+
+        // top/bottom triangles
+        for (size_t i = 0; i < slices; i++)
+        {
+            size_t i0 =  i + 1;
+            size_t i1 = (i + 1) % slices + 1;
+            r_immediate_itriangle(v0, indices[i1], indices[i0]);
+            // TODO: FIX THIS. The bottom triangles of the sphere are wrong. Commented out here
+            // to avoid them wreaking havoc, but preferably they simply become not-wrong.
+#if 0
+            i0 =  i               + slices*(stacks - 2) + 1;
+            i1 = (i + 1) % slices + slices*(stacks - 2) + 1;
+            r_immediate_itriangle(v1, indices[i0], indices[i1]);
+#endif
+        }
+
+        // add quads
+        for (size_t j = 0; j < stacks - 2; j++)
+        {
+            size_t j0 =  j     *slices + 1;
+            size_t j1 = (j + 1)*slices + 1;
+            for (size_t i = 0; i < slices; i++)
+            {
+                size_t i0 = j0 + i;
+                size_t i1 = j0 + (i + 1) % slices;
+                size_t i2 = j1 + (i + 1) % slices;
+                size_t i3 = j1 + i;
+                r_immediate_iquad(indices[i0], indices[i1], indices[i2], indices[i3]);
+            }
+        }
+    }
 }

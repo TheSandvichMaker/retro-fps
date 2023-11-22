@@ -51,6 +51,7 @@ typedef enum fs_create_directory_result_t
 } fs_create_directory_result_t;
 
 fs_create_directory_result_t fs_create_directory(string_t directory);
+fs_create_directory_result_t fs_create_directory_recursive(string_t directory);
 
 string_t fs_full_path(arena_t *arena, string_t relative_path);
 

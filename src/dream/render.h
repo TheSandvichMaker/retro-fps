@@ -312,9 +312,11 @@ typedef enum r_immediate_shader_t
 typedef struct r_immediate_params_t
 {
 	r_immediate_shader_t shader;
-    r_topology_t   topology;
-    r_blend_mode_t blend_mode;
-	r_cull_mode_t  cull_mode;
+    r_topology_t         topology;
+    r_blend_mode_t       blend_mode;
+	r_cull_mode_t        cull_mode;
+
+    m4x4_t transform;
 
     rect2_t clip_rect;
 
@@ -347,6 +349,7 @@ DREAM_LOCAL void     r_immediate_blend_mode(r_blend_mode_t blend_mode);
 DREAM_LOCAL void     r_immediate_cull_mode (r_cull_mode_t cull_mode);
 DREAM_LOCAL void     r_immediate_clip_rect (rect2_t clip_rect); // TODO: Why does this exist?
 DREAM_LOCAL void     r_immediate_texture   (resource_handle_t texture);
+DREAM_LOCAL void     r_immediate_transform (m4x4_t transform);
 DREAM_LOCAL void     r_immediate_use_depth (bool depth);
 DREAM_LOCAL void     r_immediate_depth_bias(float depth_bias);
 

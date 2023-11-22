@@ -227,6 +227,48 @@ string_t string_path_leaf(string_t path)
     return substring(path, leaf_start, STRING_NPOS);
 }
 
+string_t string_path_directory(string_t path)
+{
+    size_t leaf_start = 0;
+    for (size_t i = 0; i < path.count; i++)
+    {
+        if (path.data[i] == '/' ||
+            path.data[i] == '\\')
+        {
+            leaf_start = i;
+        }
+    }
+
+    string_t result = substring(path, 0, leaf_start);
+    return result;
+}
+
+bool string_path_strip_root(string_t path, string_t *out_root, string_t *out_remainder)
+{
+    size_t root_end = STRING_NPOS;
+    for (size_t i = 0; i < path.count; i++)
+    {
+        if (path.data[i] == '/' ||
+            path.data[i] == '\\')
+        {
+            root_end = i;
+            break;
+        }
+    }
+
+    if (out_root)
+    {
+        *out_root = substring(path, 0, root_end);
+    }
+
+    if (out_remainder)
+    {
+        *out_remainder = substring(path, root_end + 1, STRING_NPOS) ;
+    }
+
+    return root_end != STRING_NPOS;
+}
+
 bool string_match(string_t a, string_t b)
 {
     if (a.count != b.count)  return false;

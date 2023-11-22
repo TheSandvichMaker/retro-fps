@@ -155,7 +155,7 @@ static editor_state_t editor = {
 			.draw_proc = convex_hull_test_proc,
 		},
 
-		.automatically_recalculate_hull = true,
+		.automatically_recalculate_hull = false,
 		.random_seed              = 1,
 		.point_count              = 12,
 		.show_points              = true,
@@ -276,6 +276,17 @@ static void hull_render_debug_triangles(hull_debug_step_t *step, bool final_step
 			}
 		}
 	}
+}
+
+void load_convex_hull_debug(triangle_mesh_t *mesh, hull_debug_t *debug)
+{
+    // FIXME:
+    // FIXME:
+    // FIXME:
+    // FIXME:
+	hull_test_panel_t *hull_test = &editor.hull_test;
+    hull_test->mesh = *mesh;
+    hull_test->debug = *debug;
 }
 
 static void convex_hull_test_proc(ui_window_t *window)
@@ -616,6 +627,7 @@ static void lightmap_editor_proc(ui_window_t *window)
 {
 	(void)window;
 
+    world_t *world = g_world;
     map_t *map = world->map;
 
     map_entity_t *worldspawn = map->worldspawn;
@@ -915,6 +927,7 @@ static void lightmap_editor_proc(ui_window_t *window)
 
 static void render_lm_editor(void)
 {
+    world_t *world = g_world;
     player_t *player = world->player;
     map_t    *map    = world->map;
 

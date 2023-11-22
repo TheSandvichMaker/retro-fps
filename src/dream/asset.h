@@ -100,7 +100,8 @@ DREAM_LOCAL void preload_asset(asset_hash_t hash);
 DREAM_GLOBAL image_t    missing_image;
 DREAM_GLOBAL waveform_t missing_waveform;
 
-DREAM_GLOBAL bool        asset_exists         (asset_hash_t hash, asset_kind_t kind);
+DREAM_GLOBAL bool        asset_exists          (asset_hash_t hash, asset_kind_t kind);
+DREAM_GLOBAL string_t    get_asset_path_on_disk(asset_hash_t hash); 
 
 DREAM_GLOBAL image_t    *get_image            (asset_hash_t hash);
 DREAM_GLOBAL image_t    *get_missing_image    (void);

@@ -186,6 +186,20 @@ float4 msaa_resolve_ps(PS_INPUT IN) : SV_TARGET
 
     uint2 co = IN.uv*dim;
 
+#if 0
+    float3 color = 0;
+
+    {for (uint i = 0; i < sample_count; i++)
+    {
+        float3 sample_color = msaa_rendertarget.Load(co, i).rgb;
+        color += sample_color; // msaa_tonemap(sample_color);
+    }}
+
+    color *= rcp(sample_count);
+    // color = msaa_tonemap_inverse(color);
+    color.x = 1;
+    color.y = IN.uv.y;
+#else
     bool require_full_multisampled_raymarch = false;
 
     float3 color_samples[8];
@@ -232,6 +246,7 @@ float4 msaa_resolve_ps(PS_INPUT IN) : SV_TARGET
     }
     color *= rcp(sample_count);
     color = msaa_tonemap_inverse(color);
+#endif
 
     return float4(color.rgb, 1);
 }

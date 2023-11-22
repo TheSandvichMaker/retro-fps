@@ -36,6 +36,11 @@ typedef struct mixer_id_t
 	uint64_t value;
 } mixer_id_t;
 
+DREAM_INLINE bool mixer_id_valid(mixer_id_t id)
+{
+    return id.value != 0;
+}
+
 DREAM_INLINE uint64_t mixer_id_index(mixer_id_t id)
 {
 	return id.value & MIXER_ID_INDEX_MASK;
@@ -425,6 +430,7 @@ DREAM_INLINE void set_sound_position(mixer_id_t id, v3_t p)
 
 DREAM_INLINE void update_playing_sound_flags(mixer_id_t id, uint32_t unset_flags, uint32_t set_flags)
 {
+    if (!mixer_id_valid(id)) return;
 	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
 
 	push_mix_command(&(mix_command_t){

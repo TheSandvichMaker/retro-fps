@@ -4,6 +4,7 @@
 #include "core/core.h"
 
 #include "dream/render.h"
+#include "dream/collision_geometry.h"
 #include "dream/asset.h"
 
 #if DEBUG
@@ -49,6 +50,7 @@ typedef struct map_poly_t
     image_t *image;
 
     resource_handle_t mesh;
+    asset_hash_t      texture_hash;
     resource_handle_t texture;
     resource_handle_t lightmap;
 } map_poly_t;
@@ -145,7 +147,8 @@ typedef struct map_t
 	// map_edge_t        *edges;
     map_point_light_t *lights;
 
-	collision_geometry_t *collision_player;
+	// collision_geometry_t *collision_player;
+    collision_geometry_t collision;
 
     uint16_t *indices;
     struct

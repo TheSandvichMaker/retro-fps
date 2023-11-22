@@ -838,10 +838,12 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
 				if (asset_exists(texture_png, ASSET_KIND_IMAGE))
 				{
 					image = get_image(texture_png);
+                    poly->texture_hash = texture_png;
 				}
 				else if (asset_exists(texture_tga, ASSET_KIND_IMAGE))
 				{
 					image = get_image(texture_tga);
+                    poly->texture_hash = texture_tga;
 				}
 
 				poly->image = image;
@@ -1139,7 +1141,7 @@ static void build_bvh(arena_t *arena, map_t *map)
         map->brush_edges[i] = (uint32_t)i;
     }
 
-    map->nodes = m_alloc_nozero(arena, max_nodes_count*sizeof(map_bvh_node_t), 64); 
+		map->nodes = m_alloc_nozero(arena, max_nodes_count*sizeof(map_bvh_node_t), 64); 
 
     map_bvh_node_t *root = &map->nodes[map->node_count++];
     map->node_count++; // leave a gap after the root to make pairs of nodes end up on the same cache line
@@ -1306,6 +1308,8 @@ map_t *load_map(arena_t *arena, string_t path)
                 break;
             }
         }
+
+        map->collision = collision_geometry_from_map(arena, map);
     }
 
 	hires_time_t end_time = os_hires_time();
@@ -1315,6 +1319,36 @@ map_t *load_map(arena_t *arena, string_t path)
 	{
 		debug_print("Map '%.*s' loaded in %.02f seconds.\n", strexpand(path), time);
 	}
+
+    // write out map texture manifest
+
+#if 0
+    m_scoped(temp)
+    {
+        table_t texture_table = {0};
+
+        fs_create_directory(S("texture_dump"));
+
+        for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
+        {
+            map_poly_t *poly = &map->polys[poly_index];
+
+            string_t texture_path = get_asset_path_on_disk(poly->texture_hash);
+            string_t texture_name = string_path_leaf(texture_path);
+
+            string_t directory = string_path_directory(texture_path);
+            directory = Sf("texture_dump/%.*s", Sx(directory));
+
+            fs_create_directory_recursive(directory);
+
+            string_t copy_dst = Sf("%.*s/%.*s", Sx(directory), Sx(texture_name));
+
+            fs_copy(texture_path, copy_dst);
+        }
+
+        table_release(&texture_table);
+    }
+#endif
 
     return map;
 }

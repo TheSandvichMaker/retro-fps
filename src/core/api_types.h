@@ -232,6 +232,9 @@ typedef union v3_t
     float e[3];
 } v3_t;
 
+#define V3_ZERO_STATIC { 0, 0, 0 }
+#define V3_ZERO (v3_t) V3_ZERO_STATIC
+
 typedef union v4_t
 {
     struct { float x, y, z, w; };
@@ -240,12 +243,45 @@ typedef union v4_t
 } v4_t;
 
 typedef v4_t quat_t;
+#define QUAT_IDENTITY_STATIC { 0, 0, 0, 1 }
+#define QUAT_IDENTITY (quat_t) QUAT_IDENTITY_STATIC
+
+typedef union m2x2_t
+{
+    float e[2][2];
+    v2_t col[2]; // col as in column, not color...
+} m2x2_t;
+
+#define M2X2_IDENTITY_STATIC \
+    { 1, 0, \
+      0, 1, }
+#define M2X2_IDENTITY (m2x2_t) M2X2_IDENTITY_STATIC
+
+typedef union m3x3_t
+{
+    float e[3][3];
+    v3_t col[3]; // col as in column, not color...
+} m3x3_t;
+
+#define M3X3_IDENTITY_STATIC \
+    { 1, 0, 0, \
+      0, 1, 0, \
+      0, 0, 1, }
+#define M3X3_IDENTITY m3x3_t M3X3_IDENTITY_STATIC
 
 typedef union m4x4_t
 {
     float e[4][4];
     v4_t col[4];
 } m4x4_t;
+
+#define M4X4_IDENTITY_STATIC { \
+    1, 0, 0, 0,  \
+    0, 1, 0, 0,  \
+    0, 0, 1, 0,  \
+    0, 0, 0, 1,  \
+}
+#define M4X4_IDENTITY (m4x4_t) M4X4_IDENTITY_STATIC
 
 typedef struct mat_t
 {

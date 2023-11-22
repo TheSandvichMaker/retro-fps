@@ -64,6 +64,8 @@ string_t string_extension(string_t string);
 string_t string_strip_extension(string_t string);
 
 string_t string_path_leaf(string_t path);
+string_t string_path_directory(string_t path);
+DREAM_GLOBAL bool string_path_strip_root(string_t path, string_t *out_root, string_t *out_remainder);
 
 bool string_match(string_t a, string_t b);
 bool string_match_nocase(string_t a, string_t b);

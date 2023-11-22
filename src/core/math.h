@@ -15,14 +15,6 @@
 
 typedef __m128 v4sf;  // vector of 4 float (sse1)
 
-#define M4X4_IDENTITY_INIT { \
-    1, 0, 0, 0,  \
-    0, 1, 0, 0,  \
-    0, 0, 1, 0,  \
-    0, 0, 0, 1,  \
-}
-static const m4x4_t m4x4_identity = M4X4_IDENTITY_INIT;
-
 // allows for row-major creation of matrices
 #define make_m4x4(e00, e01, e02, e03, \
                   e10, e11, e12, e13, \
@@ -522,6 +514,11 @@ DECLARE_VECTOR3_OP(sub, -)
 DECLARE_VECTOR3_OP(mul, *)
 DECLARE_VECTOR3_OP(div, /)
 
+DREAM_INLINE v3_t v3_from_scalar(float x)
+{
+    return (v3_t){x, x, x};
+}
+
 DREAM_INLINE v3_t make_v3(float x, float y, float z)
 {
     return (v3_t){x,y,z};
@@ -859,7 +856,145 @@ DREAM_INLINE v4_t v4_add4(v4_t a, v4_t b, v4_t c, v4_t d)
 	return result;
 }
 
+//
+// m2x2_t
+//
+
+DREAM_INLINE float m2x2_determinant(m2x2_t mat)
+{
+    float result = mat.e[0][0]*mat.e[1][1] - mat.e[1][0]*mat.e[0][1];
+    return result;
+}
+
+//
+// m3x3_t
+//
+
+DREAM_INLINE m3x3_t m3x3_mul(m3x3_t b, m3x3_t a)
+{
+    m3x3_t result;
+    result.e[0][0] = a.e[0][0]*b.e[0][0] + a.e[0][1]*b.e[1][0] + a.e[0][2]*b.e[2][0];
+    result.e[0][1] = a.e[0][0]*b.e[0][1] + a.e[0][1]*b.e[1][1] + a.e[0][2]*b.e[2][1];
+    result.e[0][2] = a.e[0][0]*b.e[0][2] + a.e[0][1]*b.e[1][2] + a.e[0][2]*b.e[2][2];
+    result.e[1][0] = a.e[1][0]*b.e[0][0] + a.e[1][1]*b.e[1][0] + a.e[1][2]*b.e[2][0];
+    result.e[1][1] = a.e[1][0]*b.e[0][1] + a.e[1][1]*b.e[1][1] + a.e[1][2]*b.e[2][1];
+    result.e[1][2] = a.e[1][0]*b.e[0][2] + a.e[1][1]*b.e[1][2] + a.e[1][2]*b.e[2][2];
+    result.e[2][0] = a.e[2][0]*b.e[0][0] + a.e[2][1]*b.e[1][0] + a.e[2][2]*b.e[2][0];
+    result.e[2][1] = a.e[2][0]*b.e[0][1] + a.e[2][1]*b.e[1][1] + a.e[2][2]*b.e[2][1];
+    result.e[2][2] = a.e[2][0]*b.e[0][2] + a.e[2][1]*b.e[1][2] + a.e[2][2]*b.e[2][2];
+    return result;
+}
+
+DREAM_INLINE v3_t m3x3_mulv(m3x3_t a, v3_t b)
+{
+    v3_t result;
+    result.x = a.e[0][0]*b.x + a.e[1][0]*b.y + a.e[2][0]*b.z;
+    result.y = a.e[0][1]*b.x + a.e[1][1]*b.y + a.e[2][1]*b.z;
+    result.z = a.e[0][2]*b.x + a.e[1][2]*b.y + a.e[2][2]*b.z;
+    return result;
+}
+
+DREAM_INLINE void m3x3_apply_scale(m3x3_t *mat, float scale)
+{
+    mat->e[0][0] *= scale;
+    mat->e[0][1] *= scale;
+    mat->e[0][2] *= scale;
+
+    mat->e[1][0] *= scale;
+    mat->e[1][1] *= scale;
+    mat->e[1][2] *= scale;
+
+    mat->e[2][0] *= scale;
+    mat->e[2][1] *= scale;
+    mat->e[2][2] *= scale;
+}
+
+DREAM_INLINE float m3x3_determinant(m3x3_t mat)
+{
+    float i = mat.e[0][0]*(mat.e[1][1]*mat.e[2][2] - mat.e[1][1]);
+    float j = mat.e[1][0]*(mat.e[0][1]*mat.e[2][2] - mat.e[0][1]);
+    float k = mat.e[2][0]*(mat.e[0][1]*mat.e[1][2] - mat.e[0][1]);
+    return (i - j + k);
+}
+
+DREAM_INLINE float m3x3_trace(m3x3_t mat)
+{
+    float xx = mat.e[0][0]*mat.e[0][0];
+    float yy = mat.e[1][1]*mat.e[1][1];
+    float zz = mat.e[2][2]*mat.e[2][2];
+    return (xx + yy + zz);
+}
+
+DREAM_INLINE m2x2_t m3x3_minor(m3x3_t mat, size_t i, size_t j)
+{
+    m2x2_t minor = M2X2_IDENTITY_STATIC;
+
+    size_t yy = 0;
+    for (size_t y = 0; y < 3; y++)
+    {
+        if (y == j)
+        {
+            continue;
+        }
+
+        size_t xx = 0;
+        for (size_t x = 0; x < 3; x++)
+        {
+            if (x == i)
+            {
+                continue;
+            }
+
+            minor.e[yy][xx] = mat.e[y][x];
+            xx++;
+        }
+
+        yy++;
+    }
+
+    return minor;
+}
+
+DREAM_INLINE float m3x3_cofactor(m3x3_t mat, size_t i, size_t j)
+{
+    m2x2_t minor = m3x3_minor(mat, i, j);
+    float c = (float)(powf(-1.0f, i + 1.0f + j + 1.0f))*m2x2_determinant(minor);
+    return c;
+}
+
+DREAM_INLINE m3x3_t m3x3_inverse(m3x3_t mat)
+{
+    float det = m3x3_determinant(mat);
+    float rcp_det = 1.0f / det;
+
+    m3x3_t result;
+    for (size_t i = 0; i < 3; i++)
+    {
+        for (size_t j = 0; j < 3; j++)
+        {
+            result.e[i][j] = rcp_det*m3x3_cofactor(mat, i, j);
+        }
+    }
+
+    return result;
+}
+
+DREAM_INLINE m3x3_t m3x3_transpose(m3x3_t mat)
+{
+    m3x3_t result;
+    for (size_t i = 0; i < 3; i++)
+    {
+        for (size_t j = 0; j < 3; j++)
+        {
+            result.e[j][i] = mat.e[i][j];
+        }
+    }
+    return result;
+}
+
+//
 // m4x4
+//
 
 DREAM_INLINE m4x4_t m4x4_mul(m4x4_t b, m4x4_t a)
 {
@@ -893,6 +1028,34 @@ DREAM_INLINE v4_t m4x4_mulv(m4x4_t a, v4_t b)
     return result;
 }
 
+DREAM_INLINE m4x4_t m4x4_from_m3x3(m3x3_t mat)
+{
+    m4x4_t result;
+
+    result.e[0][0] = mat.e[0][0];
+    result.e[0][1] = mat.e[0][1];
+    result.e[0][2] = mat.e[0][2];
+
+    result.e[1][0] = mat.e[1][0];
+    result.e[1][1] = mat.e[1][1];
+    result.e[1][2] = mat.e[1][2];
+
+    result.e[2][0] = mat.e[2][0];
+    result.e[2][1] = mat.e[2][1];
+    result.e[2][2] = mat.e[2][2];
+
+    result.e[3][0] = 0.0f;
+    result.e[3][1] = 0.0f;
+    result.e[3][2] = 0.0f;
+
+    result.e[0][3] = 0.0f;
+    result.e[1][3] = 0.0f;
+    result.e[2][3] = 0.0f;
+    result.e[3][3] = 1.0f;
+
+    return result;
+}
+
 // generic matrix stuff
 
 // m: augmented matrix
@@ -918,13 +1081,14 @@ bool solve_system_of_equations(mat_t *m, float *x);
 #define normalize_or_zero(v) GENERIC_VECTOR_OP(normalize_or_zero, v)
 #define negate(v)            GENERIC_VECTOR_OP(negate, v)
 
-#define GENERIC_VECTOR_BINARY_OP(name, l, r)                                                                                \
-    _Generic((l),                                                                                                           \
-        float  : _Generic((r), float: flt_##name,   v2_t: v2_s##name, v3_t: v3_s##name, v4_t: v4_s##name, m4x4_t: NULL),    \
-        v2_t   : _Generic((r), float: v2_##name##s, v2_t: v2_##name,  v3_t: NULL,       v4_t: NULL      , m4x4_t: NULL),    \
-        v3_t   : _Generic((r), float: v3_##name##s, v2_t: NULL,       v3_t: v3_##name,  v4_t: NULL      , m4x4_t: NULL),    \
-        v4_t   : _Generic((r), float: v4_##name##s, v2_t: NULL,       v3_t: NULL,       v4_t: v4_##name , m4x4_t: NULL),    \
-        m4x4_t : _Generic((r), float: NULL,         v2_t: NULL,       v3_t: NULL,       v4_t: m4x4_mulv , m4x4_t: m4x4_mul) \
+#define GENERIC_VECTOR_BINARY_OP(name, l, r)                                                                                                  \
+    _Generic((l),                                                                                                                             \
+        float  : _Generic((r), float: flt_##name,   v2_t: v2_s##name, v3_t: v3_s##name, v4_t: v4_s##name, m3x3_t: NULL,     m4x4_t: NULL),    \
+        v2_t   : _Generic((r), float: v2_##name##s, v2_t: v2_##name,  v3_t: NULL,       v4_t: NULL      , m3x3_t: NULL,     m4x4_t: NULL),    \
+        v3_t   : _Generic((r), float: v3_##name##s, v2_t: NULL,       v3_t: v3_##name,  v4_t: NULL      , m3x3_t: NULL,     m4x4_t: NULL),    \
+        v4_t   : _Generic((r), float: v4_##name##s, v2_t: NULL,       v3_t: NULL,       v4_t: v4_##name , m3x3_t: NULL,     m4x4_t: NULL),    \
+        m3x3_t : _Generic((r), float: NULL,         v2_t: NULL,       v3_t: m3x3_mulv,  v4_t: NULL      , m3x3_t: m3x3_mul, m4x4_t: NULL),    \
+        m4x4_t : _Generic((r), float: NULL,         v2_t: NULL,       v3_t: NULL,       v4_t: m4x4_mulv , m3x3_t: NULL,     m4x4_t: m4x4_mul) \
     )(l, r)
 
 // please stdlib.h don't do it windows.h don't do it
@@ -955,9 +1119,9 @@ DREAM_INLINE quat_t make_quat(v3_t imag, float real)
     return (quat_t){ imag.x, imag.y, imag.z, real };
 }
 
-DREAM_INLINE quat_t make_quat_axis_angle(v3_t axis, float angle)
+DREAM_INLINE quat_t quat_from_axis_angle(v3_t axis, float angle)
 {
-    axis = normalize(axis);
+    axis = normalize_or_zero(axis);
 
     float s, c;
     sincos_ss(0.5f*angle, &s, &c);
@@ -1002,20 +1166,9 @@ DREAM_INLINE v3_t quat_rotatev(quat_t q, v3_t v)
     return quat_imag(r);
 }
 
-DREAM_INLINE m4x4_t m4x4_from_quat(quat_t q)
+DREAM_INLINE m3x3_t m3x3_from_quat(quat_t q)
 {
-    m4x4_t result;
-
-    // Clear translation to 0, 0, 0
-    result.e[3][0] = 0.0f;
-    result.e[3][1] = 0.0f;
-    result.e[3][2] = 0.0f;
-
-    // Clear bottom row to 0, 0, 0, 1
-    result.e[0][3] = 0.0f;
-    result.e[1][3] = 0.0f;
-    result.e[2][3] = 0.0f;
-    result.e[3][3] = 1.0f;
+    m3x3_t result;
 
     float qx   = 2.0f*q.x*q.x;
     float qy   = 2.0f*q.y*q.y;
@@ -1043,7 +1196,15 @@ DREAM_INLINE m4x4_t m4x4_from_quat(quat_t q)
     return result;
 }
 
+DREAM_INLINE m4x4_t m4x4_from_quat(quat_t q)
+{
+    m4x4_t result = m4x4_from_m3x3(m3x3_from_quat(q));
+    return result;
+}
+
+//
 // m4x4_t
+//
 
 DREAM_INLINE m4x4_t transpose(m4x4_t mat)
 {
@@ -1066,12 +1227,39 @@ DREAM_INLINE m4x4_t translate(m4x4_t mat, v3_t p)
     return mat;
 }
 
+DREAM_INLINE m4x4_t m4x4_from_translation(v3_t p)
+{
+    m4x4_t mat = M4X4_IDENTITY_STATIC;
+    mat.col[3].x = p.x;
+    mat.col[3].y = p.y;
+    mat.col[3].z = p.z;
+    return mat;
+}
+
+DREAM_INLINE m4x4_t m4x4_from_scale(v3_t scale)
+{
+    m4x4_t mat = M4X4_IDENTITY_STATIC;
+    mat.e[0][0] = scale.x;
+    mat.e[1][1] = scale.y;
+    mat.e[2][2] = scale.z;
+    return mat;
+}
+
+DREAM_INLINE m4x4_t m4x4_from_sscale(float scale)
+{
+    m4x4_t mat = M4X4_IDENTITY_STATIC;
+    mat.e[0][0] = scale;
+    mat.e[1][1] = scale;
+    mat.e[2][2] = scale;
+    return mat;
+}
+
 DREAM_INLINE m4x4_t make_view_matrix(v3_t p, v3_t d, v3_t up)
 {
     v3_t x, y, z;
     basis_vectors(d, up, &x, &y, &z);
 
-    m4x4_t mat = m4x4_identity;
+    m4x4_t mat = M4X4_IDENTITY;
 
     mat.e[0][0] = x.x;
     mat.e[1][0] = x.y;
@@ -2321,5 +2509,19 @@ void sincos_ps(v4sf x, v4sf *s, v4sf *c) {
 }
 
 // #pragma optimize("", on)
+
+#include "geometric_algebra.h"
+
+DREAM_INLINE v3_t forward_vector_from_pitch_yaw(float pitch, float yaw)
+{
+    rotor3_t r_pitch = rotor3_from_plane_angle(PLANE_ZX, DEG_TO_RAD*pitch);
+    rotor3_t r_yaw   = rotor3_from_plane_angle(PLANE_YZ, DEG_TO_RAD*yaw  );
+
+    v3_t forward = { 1, 0, 0 };
+    forward = rotor3_rotatev(r_pitch, forward);
+    forward = rotor3_rotatev(r_yaw,   forward);
+
+    return forward;
+}
 
 #endif /* CORE_MATH_H */

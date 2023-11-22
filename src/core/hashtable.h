@@ -32,6 +32,8 @@ DREAM_GLOBAL bool table_remove        (      table_t *table, uint64_t key);
 DREAM_GLOBAL void *table_find_object  (const table_t *table, uint64_t key);
 DREAM_GLOBAL void  table_insert_object(      table_t *table, uint64_t key, void *value);
 
+DREAM_GLOBAL void table_release(table_t *table);
+
 DREAM_INLINE table_entry_t *table_get_entries(const table_t *table)
 {
 	return TABLE_UNTAG_POINTER(table->entries);

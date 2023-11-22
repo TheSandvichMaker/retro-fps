@@ -1,5 +1,7 @@
 #include "common.hlsl"
 
+#define DRAW_NORMALS 1
+
 struct PS_INPUT
 {
     float4 pos          : SV_POSITION;
@@ -11,16 +13,18 @@ struct PS_INPUT
 
 Texture2D texture0 : register(t0);
 
+// make model matrix part of immediate draw calls...
+
 PS_INPUT vs(VS_INPUT_IMMEDIATE IN)
 {
-	float4x4 mvp = mul(proj_matrix, view_matrix);
+	float4x4 mvp = mul(mul(proj_matrix, view_matrix), model_matrix);
 
     PS_INPUT OUT;
     OUT.pos          = mul(mvp, float4(IN.pos, 1));
     OUT.pos.z       += depth_bias;
 	OUT.pos_world    = IN.pos;
     OUT.uv           = IN.uv;
-	OUT.normal_world = IN.normal;
+	OUT.normal_world = normalize(mul(model_matrix, float4(IN.normal, 0)).xyz); // NOTE: not handling non-uniform scale
 
     OUT.col = float4((float)((IN.col >>  0) & 0xFF) / 255.0f,
                      (float)((IN.col >>  8) & 0xFF) / 255.0f,
@@ -61,6 +65,10 @@ float4 ps(PS_INPUT IN) : SV_TARGET
 
     float4 result = IN.col*tex;
 	result.rgb   *= lighting;
+
+#if DRAW_NORMALS
+    result.rgb *= 0.5f + 0.5f*(IN.normal_world);
+#endif
 
     return result;
 }

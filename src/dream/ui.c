@@ -1489,25 +1489,25 @@ DREAM_INLINE void ui_slider__impl(ui_id_t id, rect2_t rect, ui_slider__params_t 
 	// TODO: This is needlessly confusing
 	float relative_x = CLAMP((ui.input.mouse_p.x - ui.drag_anchor.x) - rect.min.x - 0.5f*handle_w, 0.0f, slider_effective_w);
 
-	float slider_t = 0.0f;
+	float t_slider = 0.0f;
 
 	if (ui_is_active(id))
 	{
-		slider_t = relative_x / slider_effective_w;
-		ui_set_f32(ui_child_id(id, S("slider_t")), slider_t);
+		t_slider = relative_x / slider_effective_w;
+		ui_set_f32(ui_child_id(id, S("t_slider")), t_slider);
 
 		switch (p->type)
 		{
 			case UI_SLIDER__F32:
 			{
-				float value       = p->f32.min + slider_t*(p->f32.max - p->f32.min);
+				float value       = p->f32.min + t_slider*(p->f32.max - p->f32.min);
 				float granularity = 0.01f;
 				*p->f32.v = granularity*roundf(value / granularity);
 			} break;
 
 			case UI_SLIDER__I32:
 			{
-				*p->i32.v = p->i32.min + (int32_t)roundf(slider_t*(float)(p->i32.max - p->i32.min));
+				*p->i32.v = p->i32.min + (int32_t)roundf(t_slider*(float)(p->i32.max - p->i32.min));
 			} break;
 		}
 	}
@@ -1517,21 +1517,21 @@ DREAM_INLINE void ui_slider__impl(ui_id_t id, rect2_t rect, ui_slider__params_t 
 		{
 			case UI_SLIDER__F32:
 			{
-				slider_t = (*p->f32.v - p->f32.min) / (p->f32.max - p->f32.min);
+				t_slider = (*p->f32.v - p->f32.min) / (p->f32.max - p->f32.min);
 			} break;
 
 			case UI_SLIDER__I32:
 			{
-				slider_t = (float)(*p->i32.v - p->i32.min) / (float)(p->i32.max - p->i32.min);
+				t_slider = (float)(*p->i32.v - p->i32.min) / (float)(p->i32.max - p->i32.min);
 			} break;
 		}
 
-		slider_t = ui_interpolate_f32(ui_child_id(id, S("slider_t")), slider_t);
+		t_slider = ui_interpolate_f32(ui_child_id(id, S("t_slider")), t_slider);
 	}
 
-	slider_t = saturate(slider_t);
+	t_slider = saturate(t_slider);
 
-	float handle_t = slider_t*slider_effective_w;
+	float handle_t = t_slider*slider_effective_w;
 
 	rect2_t body   = rect;
 	rect2_t left   = rect2_cut_left(&rect, handle_t);
@@ -2064,7 +2064,7 @@ bool ui_begin(float dt)
 
 		if (state->last_touched_frame_index < ui.frame_index)
 		{
-			table_remove     (&ui.state_index, state->id.value);
+			table_remove(&ui.state_index, state->id.value);
 			pool_rem_item(&ui.state, state);
 		}
 	}

@@ -447,6 +447,49 @@ fs_create_directory_result_t fs_create_directory(string_t directory)
     return result;
 }
 
+fs_create_directory_result_t fs_create_directory_recursive(string_t directory)
+{
+    fs_create_directory_result_t result = CREATE_DIRECTORY_SUCCESS;
+
+    size_t at = 0;
+
+    while (at < directory.count)
+    {
+        string_t sub_directory = {0};
+
+        while (at < directory.count)
+        {
+            if (directory.data[at] == '/' ||
+                directory.data[at] == '\\')
+            {
+                sub_directory = substring(directory, 0, at);
+
+                at += 1;
+                break;
+            }
+            else
+            {
+                at += 1;
+            }
+        }
+
+        if (sub_directory.count == 0)
+        {
+            sub_directory = directory;
+        }
+
+        result = fs_create_directory(sub_directory);
+
+        if (result != CREATE_DIRECTORY_SUCCESS &&
+            result != CREATE_DIRECTORY_ALREADY_EXISTS)
+        {
+            break;
+        }
+    }
+
+    return result;
+}
+
 string_t fs_full_path(arena_t *arena, string_t relative_path)
 {
     string_t result = strnull;
