@@ -10,33 +10,32 @@
 
 #define D3D_SAFE_RELEASE(x) if (x) { IUnknown_Release((IUnknown *)(x)); (x) = NULL; }
 
-typedef struct d3d_cbuffer_t
+#define PADF(n) float PASTE(pad__, __LINE__)[n]
+
+typedef struct d3d_cbuf_view_t
 {
-    m4x4_t view_matrix;
-    m4x4_t proj_matrix;
-    m4x4_t model_matrix;
-    m4x4_t sun_matrix;
+    m4x4_t   view_matrix;
+    m4x4_t   proj_matrix;
+    m4x4_t   sun_matrix;
+    v3_t     sun_direction;   PADF(1); // TODO: What's the deal with padding?
+    v3_t     sun_color;       PADF(1);
+    v3_t     light_direction; PADF(1); // TODO: What's light direction and why is it seperate from sun direction?
+    v3_t     fog_offset;      PADF(1);
+    v3_t     fog_dim;         PADF(1);
 	v2_t     screen_dim;
-	uint32_t instance_offset;
-	float    pad1;
-    v3_t     light_direction;
-    float    pad2;
-    uint32_t frame_index;
-    float    depth_bias;
-    float    pad3;
-    float    pad4;
-    v3_t     fog_offset;
-    float    pad5;
-    v3_t     fog_dim;
-    float    pad6;
-    v3_t     sun_color;
-    float    pad7;
-    v3_t     sun_direction;
     float    fog_density;
     float    fog_absorption;
     float    fog_scattering;
     float    fog_phase_k;
-} d3d_cbuffer_t;
+    uint32_t frame_index;
+} d3d_cbuf_view_t;
+
+typedef struct d3d_cbuf_model_t
+{
+    m4x4_t   model_matrix;
+	uint32_t instance_offset;
+    float    depth_bias;
+} d3d_cbuf_model_t;
 
 typedef struct d3d_model_t
 {
@@ -189,7 +188,8 @@ typedef struct d3d_state_t
 
     ID3D11InputLayout        *layouts[VERTEX_FORMAT_COUNT];
 
-    ID3D11Buffer             *ubuffer;
+    ID3D11Buffer             *cbuf_view;
+    ID3D11Buffer             *cbuf_model;
     ID3D11VertexShader       *shadowmap_vs;
     ID3D11VertexShader       *world_vs;
     ID3D11PixelShader        *world_ps;
@@ -222,9 +222,9 @@ DREAM_LOCAL void destroy_texture(resource_handle_t handle);
 DREAM_LOCAL resource_handle_t upload_model(const upload_model_t *params);
 DREAM_LOCAL void destroy_model(resource_handle_t model);
 
-DREAM_LOCAL ID3DBlob *compile_shader(string_t hlsl_file, string_t hlsl, const char *entry_point, const char *kind);
-DREAM_LOCAL ID3D11PixelShader *compile_ps(string_t hlsl_file, string_t hlsl, const char *entry_point);
-DREAM_LOCAL ID3D11VertexShader *compile_vs(string_t hlsl_file, string_t hlsl, const char *entry_point);
+DREAM_LOCAL ID3DBlob *d3d_compile_shader(string_t hlsl_file, string_t hlsl, const char *entry_point, const char *kind);
+DREAM_LOCAL ID3D11PixelShader *d3d_compile_ps(string_t hlsl_file, string_t hlsl, const char *entry_point);
+DREAM_LOCAL ID3D11VertexShader *d3d_compile_vs(string_t hlsl_file, string_t hlsl, const char *entry_point);
 
 DREAM_LOCAL void update_buffer(ID3D11Buffer *buffer, const void *data, size_t size);
 DREAM_LOCAL void set_model_buffers(d3d_model_t *model, DXGI_FORMAT index_format);

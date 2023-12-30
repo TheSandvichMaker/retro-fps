@@ -30,6 +30,21 @@ pool_t d3d_textures = INIT_POOL_EX(d3d_texture_t, POOL_FLAGS_CONCURRENT);
 
 d3d_state_t d3d;
 
+DREAM_INLINE ID3D11Buffer *d3d_make_cbuf(size_t size)
+{
+    ID3D11Buffer *result = NULL;
+
+    D3D11_BUFFER_DESC desc = {
+        .ByteWidth      = (UINT)align_forward(size, 16),
+        .Usage          = D3D11_USAGE_DYNAMIC,
+        .BindFlags      = D3D11_BIND_CONSTANT_BUFFER,
+        .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
+    };
+
+    ID3D11Device_CreateBuffer(d3d.device, &desc, NULL, &result);
+    return result;
+}
+
 int init_d3d11(void *hwnd_)
 {
     HWND hwnd = hwnd_;
@@ -180,9 +195,9 @@ int init_d3d11(void *hwnd_)
         string_t hlsl_file = S("gamedata/shaders/input_layout_nonsense.hlsl");
         string_t hlsl = fs_read_entire_file(temp, hlsl_file);
 
-        ID3DBlob *vs_pos       = compile_shader(hlsl_file, hlsl, "pos", "vs_5_0");
-        ID3DBlob *vs_immediate = compile_shader(hlsl_file, hlsl, "immediate", "vs_5_0");
-        ID3DBlob *vs_brush     = compile_shader(hlsl_file, hlsl, "brush", "vs_5_0");
+        ID3DBlob *vs_pos       = d3d_compile_shader(hlsl_file, hlsl, "pos", "vs_5_0");
+        ID3DBlob *vs_immediate = d3d_compile_shader(hlsl_file, hlsl, "immediate", "vs_5_0");
+        ID3DBlob *vs_brush     = d3d_compile_shader(hlsl_file, hlsl, "brush", "vs_5_0");
 
         ID3D11Device_CreateInputLayout(d3d.device, layout_pos, ARRAY_COUNT(layout_pos), 
                                        ID3D10Blob_GetBufferPointer(vs_pos), ID3D10Blob_GetBufferSize(vs_pos), 
@@ -208,8 +223,8 @@ int init_d3d11(void *hwnd_)
         string_t hlsl_file = S("gamedata/shaders/brushmodel.hlsl");
         string_t hlsl = fs_read_entire_file(temp, hlsl_file);
 
-        d3d.world_vs = compile_vs(hlsl_file, hlsl, "vs");
-        d3d.world_ps = compile_ps(hlsl_file, hlsl, "ps");
+        d3d.world_vs = d3d_compile_vs(hlsl_file, hlsl, "vs");
+        d3d.world_ps = d3d_compile_ps(hlsl_file, hlsl, "ps");
     }
 
 	static struct { r_immediate_shader_t shader; string_t path; } immediate_shaders[] = {
@@ -224,16 +239,16 @@ int init_d3d11(void *hwnd_)
 	{
 		string_t path = immediate_shaders[i].path;
 		string_t file = fs_read_entire_file(temp, path);
-		d3d.immediate_shaders[immediate_shaders[i].shader].vs = compile_vs(path, file, "vs");
-		d3d.immediate_shaders[immediate_shaders[i].shader].ps = compile_ps(path, file, "ps");
+		d3d.immediate_shaders[immediate_shaders[i].shader].vs = d3d_compile_vs(path, file, "vs");
+		d3d.immediate_shaders[immediate_shaders[i].shader].ps = d3d_compile_ps(path, file, "ps");
 	}
 
 	m_scoped(temp)
 	{
 		string_t path = S("gamedata/shaders/ui_rect.hlsl");
 		string_t file = fs_read_entire_file(temp, path);
-		d3d.ui_rect_vs = compile_vs(path, file, "vs");
-		d3d.ui_rect_ps = compile_ps(path, file, "ps");
+		d3d.ui_rect_vs = d3d_compile_vs(path, file, "vs");
+		d3d.ui_rect_ps = d3d_compile_ps(path, file, "ps");
 	}
 
     m_scoped(temp)
@@ -241,8 +256,8 @@ int init_d3d11(void *hwnd_)
         string_t hlsl_file = S("gamedata/shaders/skybox.hlsl");
         string_t hlsl = fs_read_entire_file(temp, hlsl_file);
 
-        d3d.skybox_vs = compile_vs(hlsl_file, hlsl, "vs");
-        d3d.skybox_ps = compile_ps(hlsl_file, hlsl, "ps");
+        d3d.skybox_vs = d3d_compile_vs(hlsl_file, hlsl, "vs");
+        d3d.skybox_ps = d3d_compile_ps(hlsl_file, hlsl, "ps");
     }
 
     m_scoped(temp)
@@ -250,9 +265,9 @@ int init_d3d11(void *hwnd_)
         string_t hlsl_file = S("gamedata/shaders/postprocess.hlsl");
         string_t hlsl = fs_read_entire_file(temp, hlsl_file);
 
-        d3d.postprocess_vs  = compile_vs(hlsl_file, hlsl, "postprocess_vs");
-        d3d.msaa_resolve_ps = compile_ps(hlsl_file, hlsl, "msaa_resolve_ps");
-        d3d.hdr_resolve_ps  = compile_ps(hlsl_file, hlsl, "hdr_resolve_ps");
+        d3d.postprocess_vs  = d3d_compile_vs(hlsl_file, hlsl, "postprocess_vs");
+        d3d.msaa_resolve_ps = d3d_compile_ps(hlsl_file, hlsl, "msaa_resolve_ps");
+        d3d.hdr_resolve_ps  = d3d_compile_ps(hlsl_file, hlsl, "hdr_resolve_ps");
     }
 
     m_scoped(temp)
@@ -260,20 +275,13 @@ int init_d3d11(void *hwnd_)
         string_t hlsl_file = S("gamedata/shaders/shadowmap.hlsl");
         string_t hlsl = fs_read_entire_file(temp, hlsl_file);
 
-        d3d.shadowmap_vs = compile_vs(hlsl_file, hlsl, "shadowmap_vs");
+        d3d.shadowmap_vs = d3d_compile_vs(hlsl_file, hlsl, "shadowmap_vs");
     }
 
     // create constant buffers
 
-    {
-        D3D11_BUFFER_DESC desc = {
-            .ByteWidth      = (UINT)align_forward(sizeof(d3d_cbuffer_t), 16),
-            .Usage          = D3D11_USAGE_DYNAMIC,
-            .BindFlags      = D3D11_BIND_CONSTANT_BUFFER,
-            .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
-        };
-        ID3D11Device_CreateBuffer(d3d.device, &desc, NULL, &d3d.ubuffer);
-    }
+    d3d.cbuf_view  = d3d_make_cbuf(sizeof(d3d_cbuf_view_t));
+    d3d.cbuf_model = d3d_make_cbuf(sizeof(d3d_cbuf_model_t));
 
     // create samplers
 
@@ -777,7 +785,7 @@ void d3d_do_post_pass(const d3d_post_pass_t *pass)
     ID3D11DeviceContext_IASetPrimitiveTopology(d3d.context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // set vertex shader
-    ID3D11DeviceContext_VSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);
+    ID3D11DeviceContext_VSSetConstantBuffers(d3d.context, 0, 1, &d3d.cbuf_view);
     ID3D11DeviceContext_VSSetShader(d3d.context, d3d.postprocess_vs, NULL, 0);
 
     // set rasterizer state
@@ -786,7 +794,7 @@ void d3d_do_post_pass(const d3d_post_pass_t *pass)
     ID3D11DeviceContext_RSSetScissorRects(d3d.context, 1, (&(D3D11_RECT){ 0, 0, d3d.current_width, d3d.current_height }));
 
     // set pixel shader
-    ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);
+    ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 1, &d3d.cbuf_view);
     ID3D11DeviceContext_PSSetSamplers(d3d.context, 0, D3D_SAMPLER_COUNT, d3d.samplers);
     ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, pass->srv_count, pass->srvs);
     ID3D11DeviceContext_PSSetShader(d3d.context, pass->ps, NULL, 0);
@@ -978,6 +986,29 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
         m4x4_t sun_ortho  = make_orthographic_matrix(2048, 2048, 512);
         m4x4_t sun_matrix = mul(sun_ortho, sun_view);
 
+        //
+        // update scene constant buffer
+        //
+
+        const d3d_cbuf_view_t cbuf_view = {
+            .view_matrix     = view->camera,
+            .proj_matrix     = view->projection,
+            .sun_matrix      = sun_matrix,
+            .sun_direction   = sun_direction,
+            .sun_color       = view->sun_color,
+            .light_direction = sun_direction,
+            .fog_offset      = view->fog_offset,
+            .fog_dim         = view->fog_dim,
+            .screen_dim      = { (float)d3d.current_width, (float)d3d.current_height },
+            .fog_density     = view->fog_density,
+            .fog_absorption  = view->fog_absorption,
+            .fog_scattering  = view->fog_scattering,
+            .fog_phase_k     = view->fog_phase_k,
+            .frame_index     = frame_index,
+        };
+
+        update_buffer(d3d.cbuf_view, &cbuf_view, sizeof(cbuf_view));
+
         for (char *at = list->command_list_base; at < list->command_list_at;)
         {
             r_command_base_t *base = (r_command_base_t *)at;
@@ -992,14 +1023,11 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                     d3d_model_t *model = pool_get(&d3d_models, command->model);
                     if (model)
                     {
-                        d3d_cbuffer_t cbuffer = {
-                            .sun_matrix   = sun_matrix,
-                            .light_direction = sun_direction,
+                        d3d_cbuf_model_t cbuf_model = {
                             .model_matrix = command->transform,
-                            .frame_index  = frame_index,
                         };
 
-                        update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
+                        update_buffer(d3d.cbuf_model, &cbuf_model, sizeof(cbuf_model));
 
                         render_model(&(render_pass_t) {
                             .render_target = NULL,
@@ -1012,8 +1040,8 @@ void d3d11_draw_list(r_list_t *list, int width, int height)
                             .vs = d3d.shadowmap_vs,
                             .ps = NULL,
 
-                            .cbuffer_count = 1,
-                            .cbuffers      = (ID3D11Buffer *[]) { d3d.ubuffer },
+                            .cbuffer_count = 2,
+                            .cbuffers      = (ID3D11Buffer *[]) { d3d.cbuf_view, d3d.cbuf_model },
 
                             .depth         = D3D_DEPTH_TEST_GREATER,
                             .cull          = R_CULL_BACK,
@@ -1075,6 +1103,9 @@ done_with_sun_shadows:
             if (!RESOURCE_HANDLE_VALID(view->skybox))
                 continue;
 
+#if 0
+            // TODO: Revisit this
+
             m4x4_t camera = view->camera;
 
             camera.e[3][0] = 0.0f;
@@ -1100,9 +1131,9 @@ done_with_sun_shadows:
             };
 
             update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
+#endif
 
             d3d_model_t   *model   = d3d.skybox_model;
-
             d3d_texture_t *texture = d3d_get_texture_or(view->skybox, d3d.missing_texture_cubemap);
 
             render_model(&(render_pass_t) {
@@ -1117,7 +1148,7 @@ done_with_sun_shadows:
                 .index_format = DXGI_FORMAT_R16_UINT,
 
                 .cbuffer_count = 1,
-                .cbuffers      = (ID3D11Buffer *[]) { d3d.ubuffer },
+                .cbuffers      = (ID3D11Buffer *[]) { d3d.cbuf_view },
                 .srv_count     = 1,
                 .srvs          = (ID3D11ShaderResourceView *[]) { texture->srv, },
 
@@ -1165,22 +1196,11 @@ done_with_sun_shadows:
                         camera_projection = mul(camera_projection, view->projection);
                         camera_projection = mul(camera_projection, view->camera);
 
-                        d3d_cbuffer_t cbuffer = {
-                            .view_matrix     = view->camera,
-                            .proj_matrix     = view->projection,
-                            .sun_matrix      = sun_matrix,
-                            .light_direction = sun_direction,
-                            .model_matrix    = command->transform,
-                            .frame_index     = frame_index,
-                            .sun_color       = view->sun_color,
-                            .sun_direction   = sun_direction,
-                            .fog_density     = view->fog_density,
-                            .fog_absorption  = view->fog_absorption,
-                            .fog_scattering  = view->fog_scattering,
-                            .fog_phase_k     = view->fog_phase_k,
+                        const d3d_cbuf_model_t cbuf_model = {
+                            .model_matrix = command->transform,
                         };
 
-                        update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
+                        update_buffer(d3d.cbuf_model, &cbuf_model, sizeof(cbuf_model));
 
                         render_model(&(render_pass_t) {
                             .render_target = current_render_target->color_rtv,
@@ -1193,8 +1213,8 @@ done_with_sun_shadows:
                             .vs = d3d.world_vs,
                             .ps = d3d.world_ps,
 
-                            .cbuffer_count = 1,
-                            .cbuffers      = (ID3D11Buffer *[]) { d3d.ubuffer },
+                            .cbuffer_count = 2,
+                            .cbuffers      = (ID3D11Buffer *[]) { d3d.cbuf_view, d3d.cbuf_model },
                             .srv_count     = 3,
                             .srvs          = (ID3D11ShaderResourceView *[]) { texture->srv, lightmap->srv, d3d.sun_shadowmap.depth_srv, },
 
@@ -1213,21 +1233,12 @@ done_with_sun_shadows:
 
                     r_immediate_draw_t *draw_call = &command->draw_call;
 
-                    d3d_cbuffer_t cbuffer = {
-                        .view_matrix     = view->camera,
-                        .proj_matrix     = view->projection,
-                        .sun_matrix      = sun_matrix,
-                        .light_direction = sun_direction,
+                    const d3d_cbuf_model_t cbuf_model = {
                         .model_matrix    = draw_call->params.transform,
                         .depth_bias      = draw_call->params.depth_bias,
-                        .sun_direction   = sun_direction,
-                        .fog_density     = view->fog_density,
-                        .fog_absorption  = view->fog_absorption,
-                        .fog_scattering  = view->fog_scattering,
-                        .fog_phase_k     = view->fog_phase_k,
                     };
 
-                    update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
+                    update_buffer(d3d.cbuf_model, &cbuf_model, sizeof(cbuf_model));
 
                     D3D11_PRIMITIVE_TOPOLOGY topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
                     switch (draw_call->params.topology)
@@ -1269,8 +1280,8 @@ done_with_sun_shadows:
                         .ioffset = draw_call->ioffset,
                         .voffset = draw_call->voffset,
 
-                        .cbuffer_count = 1,
-                        .cbuffers      = (ID3D11Buffer *[]) { d3d.ubuffer },
+                        .cbuffer_count = 2,
+                        .cbuffers      = (ID3D11Buffer *[]) { d3d.cbuf_view, d3d.cbuf_model },
                         .srv_count     = 1,
                         .srvs          = (ID3D11ShaderResourceView *[]) { texture->srv },
 
@@ -1292,12 +1303,11 @@ done_with_sun_shadows:
                     r_command_ui_rects_t *command = (r_command_ui_rects_t *)base;
                     at = align_address(at + sizeof(*command), RENDER_COMMAND_ALIGN);
 
-					d3d_cbuffer_t cbuffer = {
-						.screen_dim      = { (float)d3d.current_width, (float)d3d.current_height },
+                    const d3d_cbuf_model_t cbuf_model = {
 						.instance_offset = command->first,
 					};
 
-					update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
+					update_buffer(d3d.cbuf_model, &cbuf_model, sizeof(cbuf_model));
 
 					rect2_t clip_rect = view->clip_rect;
 
@@ -1318,7 +1328,7 @@ done_with_sun_shadows:
 					ID3D11DeviceContext_IASetPrimitiveTopology(d3d.context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
 					// set vertex shader
-					ID3D11DeviceContext_VSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);
+					ID3D11DeviceContext_VSSetConstantBuffers(d3d.context, 0, 1, &d3d.cbuf_view);
 					ID3D11DeviceContext_VSSetShaderResources(d3d.context, 0, 1, (ID3D11ShaderResourceView *[]){ d3d.ui_rect_srv });
 					ID3D11DeviceContext_VSSetShader(d3d.context, d3d.ui_rect_vs, NULL, 0);
 
@@ -1328,7 +1338,7 @@ done_with_sun_shadows:
 					ID3D11DeviceContext_RSSetScissorRects(d3d.context, 1, &scissor_rect);
 
 					// set pixel shader
-					ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 1, &d3d.ubuffer);
+                    ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 2, (ID3D11Buffer *p[]){ &d3d.cbuf_view, &d3d.cbuf_model });
 					ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 1, (ID3D11ShaderResourceView *[]){ d3d.ui_rect_srv });
 					ID3D11DeviceContext_PSSetShader(d3d.context, d3d.ui_rect_ps, NULL, 0);
 
@@ -1348,24 +1358,6 @@ done_with_sun_shadows:
                         d3d_texture_t *fogmap = d3d_get_texture_or(view->fogmap, NULL);
 
                         ID3D11ShaderResourceView *fogmap_srv = fogmap ? fogmap->srv : NULL;
-
-                        d3d_cbuffer_t cbuffer = {
-                            .view_matrix  = view->camera,
-                            .proj_matrix  = view->projection,
-                            .model_matrix = M4X4_IDENTITY,
-                            .sun_matrix   = sun_matrix,
-                            .frame_index  = frame_index,
-                            .fog_offset   = view->fog_offset,
-                            .fog_dim      = view->fog_dim,
-                            .sun_color    = view->sun_color,
-                            .sun_direction = sun_direction,
-                            .fog_density     = view->fog_density,
-                            .fog_absorption  = view->fog_absorption,
-                            .fog_scattering  = view->fog_scattering,
-                            .fog_phase_k     = view->fog_phase_k,
-                        };
-
-                        update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
 
                         d3d_do_post_pass(&(d3d_post_pass_t){
                             .render_target = d3d.post_target.color_rtv,
@@ -1837,7 +1829,7 @@ void destroy_model(resource_handle_t model)
     FATAL_ERROR("TODO: Implement");
 }
 
-ID3DBlob *compile_shader(string_t hlsl_file, string_t hlsl, const char *entry_point, const char *kind)
+ID3DBlob *d3d_compile_shader(string_t hlsl_file, string_t hlsl, const char *entry_point, const char *kind)
 {
     UINT flags = D3DCOMPILE_PACK_MATRIX_COLUMN_MAJOR|D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_WARNINGS_ARE_ERRORS;
 #if defined(DEBUG_RENDERER)
@@ -1860,9 +1852,9 @@ ID3DBlob *compile_shader(string_t hlsl_file, string_t hlsl, const char *entry_po
     return blob;
 }
 
-ID3D11PixelShader *compile_ps(string_t hlsl_file, string_t hlsl, const char *entry_point)
+ID3D11PixelShader *d3d_compile_ps(string_t hlsl_file, string_t hlsl, const char *entry_point)
 {
-    ID3DBlob* blob = compile_shader(hlsl_file, hlsl, entry_point, "ps_5_0");
+    ID3DBlob* blob = d3d_compile_shader(hlsl_file, hlsl, entry_point, "ps_5_0");
 
     if (!blob)
         return NULL;
@@ -1875,9 +1867,9 @@ ID3D11PixelShader *compile_ps(string_t hlsl_file, string_t hlsl, const char *ent
     return result;
 }
 
-ID3D11VertexShader *compile_vs(string_t hlsl_file, string_t hlsl, const char *entry_point)
+ID3D11VertexShader *d3d_compile_vs(string_t hlsl_file, string_t hlsl, const char *entry_point)
 {
-    ID3DBlob* blob = compile_shader(hlsl_file, hlsl, entry_point, "vs_5_0");
+    ID3DBlob* blob = d3d_compile_shader(hlsl_file, hlsl, entry_point, "vs_5_0");
 
     if (!blob)
         return NULL;

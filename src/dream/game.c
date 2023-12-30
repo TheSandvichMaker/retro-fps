@@ -368,7 +368,7 @@ void game_init(void)
     world_t *world = g_world = m_bootstrap(world_t, arena);
     world->fade_t = 1.0f;
 
-#if 0
+#if 1
 	{
 		test_waveform = get_waveform_from_string(S("gamedata/audio/SquareArp [excited mix (no clipping)].wav"));
 		// test_waveform = get_waveform_from_string(S("gamedata/audio/lego durbo.wav"));
@@ -384,7 +384,7 @@ void game_init(void)
 	}
 #endif
 
-#if 0
+#if 1
 	string_t startup_map = S("test");
 
     map_t    *map    = world->map    = load_map(&world->arena, Sf("gamedata/maps/%.*s.map", Sx(startup_map)));
@@ -553,9 +553,9 @@ static void game_tick(platform_io_t *io)
     io->lock_cursor = g_cursor_locked;
 
     world->primary_camera = &g_camera;
-    update_and_render_physics_playground(world, dt);
+    // update_and_render_physics_playground(world, dt);
 
-#if 0
+#if 1
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);
 
@@ -640,7 +640,7 @@ static void game_tick(platform_io_t *io)
     for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
     {
         map_poly_t *poly = &map->polys[poly_index];
-        r_draw_model(m4x4_identity, poly->mesh, poly->texture, poly->lightmap);
+        r_draw_model(M4X4_IDENTITY, poly->mesh, poly->texture, poly->lightmap);
     }
 
 	//
@@ -691,7 +691,7 @@ static void game_tick(platform_io_t *io)
 
     map_poly_t *poly = &map->polys[27];
 
-    m4x4_t transform = translate(m4x4_identity, make_v3(-70.0f + sinf(timer)*40.0f, 250.0f + 25.0f*cosf(0.5f*timer), -170.0f));
+    m4x4_t transform = translate(M4X4_IDENTITY, make_v3(-70.0f + sinf(timer)*40.0f, 250.0f + 25.0f*cosf(0.5f*timer), -170.0f));
     transform.e[0][0] *= 2.0f; transform.e[1][1] *= 2.0f; transform.e[2][2] *= 2.0f;
     r_draw_model(transform, poly->mesh, poly->texture, poly->lightmap);
 
@@ -725,7 +725,7 @@ static void game_tick(platform_io_t *io)
 
     update_and_render_in_game_editor();
 
-    static bool bad = true;
+    static bool bad = false;
     if (bad)
     {
         bad = false;

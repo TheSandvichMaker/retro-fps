@@ -531,14 +531,13 @@ ui_anim_t *ui_get_anim(ui_id_t id, v4_t init_value)
 		table_insert_object(&ui.style.animation_index, id.value, result);
 	}
 
+	ASSERT(result->id.value == id.value);
+
 	result->length_limit = ui_scalar(UI_SCALAR_ANIMATION_LENGTH_LIMIT);
 	result->c_t = ui_scalar(UI_SCALAR_ANIMATION_STIFFNESS);
 	result->c_v = ui_scalar(UI_SCALAR_ANIMATION_DAMPEN);
 
 	result->last_touched_frame_index = ui.frame_index;
-
-	ASSERT(result->id.value == id.value);
-	result->id = id;
 
 	return result;
 }
@@ -2081,27 +2080,27 @@ bool ui_begin(float dt)
 			float c_t = anim->c_t;
 			float c_v = anim->c_v;
 
-			v4_t t_target   = anim->t_target;
-			v4_t t_current  = anim->t_current;
-			v4_t t_velocity = anim->t_velocity;
+			v4_t target   = anim->t_target;
+			v4_t current  = anim->t_current;
+			v4_t velocity = anim->t_velocity;
 
 			if (length_limit != FLT_MAX)
 			{
-				v4_t t_min = sub(t_target, length_limit);
-				v4_t t_max = add(t_target, length_limit);
-				t_current = v4_min(t_current, t_max);
-				t_current = v4_max(t_current, t_min);
+				v4_t min = sub(target, length_limit);
+				v4_t max = add(target, length_limit);
+				current = v4_min(current, max);
+				current = v4_max(current, min);
 			}
 
-			v4_t accel_t = mul( c_t, sub(t_target, t_current));
-			v4_t accel_v = mul(-c_v, t_velocity);
+			v4_t accel_t = mul( c_t, sub(target, current));
+			v4_t accel_v = mul(-c_v, velocity);
 			v4_t accel = add(accel_t, accel_v);
 
-			t_velocity = add(t_velocity, mul(ui.input.dt, accel));
-			t_current  = add(t_current,  mul(ui.input.dt, t_velocity));
+			velocity = add(velocity, mul(ui.input.dt, accel));
+			current  = add(current,  mul(ui.input.dt, velocity));
 
-			anim->t_current  = t_current;
-			anim->t_velocity = t_velocity;
+			anim->t_current  = current;
+			anim->t_velocity = velocity;
 		}
 		else
 		{

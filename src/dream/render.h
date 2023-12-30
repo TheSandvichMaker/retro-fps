@@ -220,18 +220,19 @@ extern const render_api_i *const render;
 
 typedef struct r_view_t
 {
-    v3_t camera_p;
-    rect2_t clip_rect;
-    m4x4_t camera, projection;
+    v3_t              camera_p;
+    rect2_t           clip_rect;
+    m4x4_t            camera;
+    m4x4_t            projection;
     resource_handle_t skybox;
     resource_handle_t fogmap;
-    v3_t fog_offset;
-    v3_t fog_dim;
-    v3_t sun_color;
-    float fog_density;
-    float fog_absorption;
-    float fog_scattering;
-    float fog_phase_k;
+    v3_t              fog_offset;
+    v3_t              fog_dim;
+    v3_t              sun_color;
+    float             fog_density;
+    float             fog_absorption;
+    float             fog_scattering;
+    float             fog_phase_k;
 } r_view_t;
 
 typedef enum r_command_kind_t

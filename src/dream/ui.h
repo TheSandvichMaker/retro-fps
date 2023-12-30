@@ -252,11 +252,17 @@ DREAM_LOCAL float ui_scalar            (ui_style_scalar_t scalar);
 DREAM_LOCAL void  ui_push_scalar       (ui_style_scalar_t scalar, float value);
 DREAM_LOCAL float ui_pop_scalar        (ui_style_scalar_t scalar);
 
+DREAM_LOCAL void  ui_push_scalar2      (ui_style_scalar_t scalar, float value);
+DREAM_LOCAL float ui_pop_scalar2       (void);
+
 #define UI_SCALAR(scalar, value) DEFER_LOOP(ui_push_scalar(scalar, value), ui_pop_scalar(scalar))
 
 DREAM_LOCAL v4_t  ui_color             (ui_style_color_t color);
 DREAM_LOCAL void  ui_push_color        (ui_style_color_t color, v4_t value);
 DREAM_LOCAL v4_t  ui_pop_color         (ui_style_color_t color);
+
+DREAM_LOCAL void  ui_push_color2       (ui_style_color_t color, v4_t value);
+DREAM_LOCAL v4_t  ui_pop_color2        (void);
 
 #define UI_COLOR(color, value) DEFER_LOOP(ui_push_color(color, value), ui_pop_color(color))
 

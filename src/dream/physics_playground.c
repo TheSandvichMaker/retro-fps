@@ -65,8 +65,6 @@ bool phys_intersect(phys_body_t *body_a, phys_body_t *body_b, phys_contact_t *co
     float radius_ab = sphere_a->radius + sphere_b->radius;
     float length_sq = vlen_sq(ab);
 
-    bool result = length_sq <= radius_ab*radius_ab;
-
     contact->body_a = body_a;
     contact->body_b = body_b;
     contact->normal = normal;
@@ -77,6 +75,7 @@ bool phys_intersect(phys_body_t *body_a, phys_body_t *body_b, phys_contact_t *co
     contact->p_on_a_world = add(body_a->position, p_on_a_local);
     contact->p_on_b_world = add(body_b->position, p_on_b_local);
 
+    bool result = length_sq <= radius_ab*radius_ab;
     return result;
 }
 
