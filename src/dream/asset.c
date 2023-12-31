@@ -135,16 +135,16 @@ static void asset_job(job_context_t *context, void *userdata)
 			{
 				case ASSET_KIND_IMAGE:
 				{
-					resource_handle_t idiot_code = asset->image.gpu;
+					texture_handle_t idiot_code = asset->image.gpu;
 
 					asset->image = load_image_from_disk(arena, string_from_storage(asset->path), 4);
 					asset->image.gpu = idiot_code;
 
-					render->populate_texture(asset->image.gpu, &(upload_texture_t){
-						.upload_flags = UPLOAD_TEXTURE_GEN_MIPMAPS,
+					render->populate_texture(asset->image.gpu, &(r_upload_texture_t){
+						.upload_flags = R_UPLOAD_TEXTURE_GEN_MIPMAPS,
 						.desc = {
-							.type   = TEXTURE_TYPE_2D,
-							.format = PIXEL_FORMAT_SRGB8_A8,
+							.type   = R_TEXTURE_TYPE_2D,
+							.format = R_PIXEL_FORMAT_SRGB8_A8,
 							.w      = asset->image.w,
 							.h      = asset->image.h,
 						},

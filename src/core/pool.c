@@ -102,7 +102,7 @@ resource_handle_t pool_add_item(pool_t *pool, const void *item)
     return pool_get_handle(pool, result);
 }
 
-void *pool_get(pool_t *pool, resource_handle_t handle)
+void *pool_get_impl(pool_t *pool, resource_handle_t handle)
 {
     if (NEVER(!pool->buffer))  FATAL_ERROR("Pool not initialized!");
 

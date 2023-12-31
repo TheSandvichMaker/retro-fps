@@ -200,7 +200,7 @@ DREAM_INLINE void initialize_phys_scene(phys_scene_t *scene, world_t *world)
     g_phys_scene_initialized = true;
 }
 
-void update_and_render_physics_playground(world_t *world, float dt)
+void update_and_render_physics_playground(r_context_t *rc, world_t *world, float dt)
 {
     phys_scene_t *scene = &g_phys_scene;
 
@@ -271,34 +271,34 @@ void update_and_render_physics_playground(world_t *world, float dt)
     };
 
     r_view_t view;
-    view_for_camera(camera, viewport, &view);
+    init_view_for_camera(camera, viewport, &view);
 
-    r_push_view(&view);
+    r_view_index_t view_index = r_make_view(rc, &view);
+    r_push_view(rc, view_index);
 
     for (size_t body_index = 0; body_index < scene->bodies_count; body_index++)
     {
-        phys_body_t *body = &scene->bodies[body_index];
-        phys_sphere_t *sphere = (phys_sphere_t *)body->shape;
-
         // NOTE: immediate flushing in the loop because of the transform
         // transform is only there to show rotation.
 
-        r_immediate_topology(R_TOPOLOGY_TRIANGLELIST);
-        r_immediate_shader(R_SHADER_DEBUG_LIGHTING);
-        r_immediate_use_depth(true);
+        R_IMMEDIATE(rc, imm)
+        {
+            phys_body_t   *body   = &scene->bodies[body_index];
+            phys_sphere_t *sphere = (phys_sphere_t *)body->shape;
 
-        m4x4_t translation = m4x4_from_translation(body->position);
-        m4x4_t rotation    = m4x4_from_quat(body->orientation);
-        m4x4_t scale       = m4x4_from_sscale(sphere->radius);
-        m4x4_t transform   = mul(translation, mul(rotation, scale));
-        r_immediate_transform(transform);
+            imm->topology  = R_TOPOLOGY_TRIANGLELIST;
+            imm->shader    = R_SHADER_DEBUG_LIGHTING;
+            imm->use_depth = true;
 
-        r_immediate_sphere(V3_ZERO, 1.0f, COLORF_WHITE, 64, 64);
+            m4x4_t translation = m4x4_from_translation(body->position);
+            m4x4_t rotation    = m4x4_from_quat(body->orientation);
+            m4x4_t scale       = m4x4_from_sscale(sphere->radius);
+            m4x4_t transform   = mul(translation, mul(rotation, scale));
+            imm->transform = transform;
 
-        r_immediate_flush();
+            r_immediate_sphere(rc, V3_ZERO, 1.0f, COLORF_WHITE, 64, 64);
+        }
     }
 
-    r_pop_view();
-
-    r_end_scene_pass();
+    r_pop_view(rc);
 }

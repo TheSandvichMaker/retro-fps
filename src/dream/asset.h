@@ -50,7 +50,7 @@ typedef struct image_t
 	uint32_t channel_count;
 	void    *pixels;
 
-	resource_handle_t gpu;
+	texture_handle_t gpu;
 } image_t;
 
 typedef struct cubemap_t
@@ -61,7 +61,7 @@ typedef struct cubemap_t
 	uint32_t channel_count;
 	void    *pixels[6];
 
-	resource_handle_t gpu;
+	texture_handle_t gpu;
 } cubemap_t;
 
 typedef struct waveform_t

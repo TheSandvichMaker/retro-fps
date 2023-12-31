@@ -337,8 +337,6 @@ void ui_process_windows(void)
 {
 	ui_window_t *hovered_window = NULL;
 
-	r_push_view_screenspace();
-
 	for (ui_window_t *window = ui.windows.first_window;
 		 window;
 		 window = window->next)
@@ -495,8 +493,6 @@ void ui_process_windows(void)
 		ui_pop_id();
 	}
 
-	r_pop_view();
-
 	if (hovered_window)
 	{
 		ui.hovered = true;
@@ -652,15 +648,21 @@ float ui_header_font_height(void)
 
 rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op)
 {
+    // TODO: UI render commands
+    r_context_t *rc = ui.rc;
+
 	rect2_t result = rect2_inverted_infinity();
 
 	uint32_t color_packed = pack_color(color);
 
+    r_immediate_t *imm = NULL;
+
 	if (op == UI_TEXT_OP_DRAW)
 	{
-		r_immediate_texture(font->texture);
-		r_immediate_shader(R_SHADER_TEXT);
-		r_immediate_blend_mode(R_BLEND_PREMUL_ALPHA);
+        imm = r_immediate_begin(rc);
+        imm->texture    = font->texture;
+		imm->shader     = R_SHADER_TEXT;
+		imm->blend_mode = R_BLEND_PREMUL_ALPHA;
 	}
 
 	p.x = roundf(p.x);
@@ -682,38 +684,38 @@ rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_tex
 
 				rect = rect2_add_offset(rect, p);
 
-				vertex_immediate_t q0 = {
+				r_vertex_immediate_t q0 = {
 					.pos = { rect   .min.x, rect   .min.y, 0.0f },
 					.tex = { rect_uv.min.x, rect_uv.min.y       },
 					.col = color_packed,
 				};
 
-				vertex_immediate_t q1 = {
+				r_vertex_immediate_t q1 = {
 					.pos = { rect   .max.x, rect   .min.y, 0.0f },
 					.tex = { rect_uv.max.x, rect_uv.min.y       },
 					.col = color_packed,
 				};
 
-				vertex_immediate_t q2 = {
+				r_vertex_immediate_t q2 = {
 					.pos = { rect   .max.x, rect   .max.y, 0.0f },
 					.tex = { rect_uv.max.x, rect_uv.max.y       },
 					.col = color_packed,
 				};
 
-				vertex_immediate_t q3 = {
+				r_vertex_immediate_t q3 = {
 					.pos = { rect   .min.x, rect   .max.y, 0.0f },
 					.tex = { rect_uv.min.x, rect_uv.max.y       },
 					.col = color_packed,
 				};
 
-				r_immediate_quad(q0, q1, q2, q3);
+				r_immediate_quad(rc, q0, q1, q2, q3);
 			}
 		}
 	}
 
 	if (op == UI_TEXT_OP_DRAW)
 	{
-		r_immediate_flush();
+        r_immediate_end(rc, imm);
 	}
 
 	return result;
@@ -787,7 +789,7 @@ void ui_draw_rect(rect2_t rect, v4_t color)
 {
 	uint32_t color_packed = pack_color(color);
 
-	r_ui_rect((r_ui_rect_t){
+	r_ui_rect(ui.rc, (r_ui_rect_t){
 		.rect        = rect, 
 		.roundedness = v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS)),
 		.color_00    = color_packed,
@@ -801,7 +803,7 @@ void ui_draw_rect_shadow(rect2_t rect, v4_t color, float shadow_amount, float sh
 {
 	uint32_t color_packed = pack_color(color);
 
-	r_ui_rect((r_ui_rect_t){
+	r_ui_rect(ui.rc, (r_ui_rect_t){
 		.rect          = rect, 
 		.roundedness   = v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS)),
 		.color_00      = color_packed,
@@ -817,7 +819,7 @@ void ui_draw_rect_roundedness(rect2_t rect, v4_t color, v4_t roundness)
 {
 	uint32_t color_packed = pack_color(color);
 
-	r_ui_rect((r_ui_rect_t){
+	r_ui_rect(ui.rc, (r_ui_rect_t){
 		.rect        = rect, 
 		.roundedness = mul(roundness, v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS))),
 		.color_00    = color_packed,
@@ -831,7 +833,7 @@ void ui_draw_rect_roundedness_shadow(rect2_t rect, v4_t color, v4_t roundness, f
 {
 	uint32_t color_packed = pack_color(color);
 
-	r_ui_rect((r_ui_rect_t){
+	r_ui_rect(ui.rc, (r_ui_rect_t){
 		.rect        = rect, 
 		.roundedness = mul(roundness, v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS))),
 		.color_00    = color_packed,
@@ -847,7 +849,7 @@ void ui_draw_rect_outline(rect2_t rect, v4_t color, float width)
 {
 	uint32_t color_packed = pack_color(color);
 
-	r_ui_rect((r_ui_rect_t){
+	r_ui_rect(ui.rc, (r_ui_rect_t){
 		.rect         = rect, 
 		.roundedness  = v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS)),
 		.color_00     = color_packed,
@@ -862,7 +864,7 @@ void ui_draw_rect_roundedness_outline(rect2_t rect, v4_t color, v4_t roundedness
 {
 	uint32_t color_packed = pack_color(color);
 
-	r_ui_rect((r_ui_rect_t){
+	r_ui_rect(ui.rc, (r_ui_rect_t){
 		.rect         = rect, 
 		.roundedness  = mul(roundedness, v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS))),
 		.color_00     = color_packed,
@@ -879,7 +881,7 @@ void ui_draw_circle(v2_t p, float radius, v4_t color)
 
 	rect2_t rect = rect2_center_radius(p, make_v2(radius, radius));
 
-	r_ui_rect((r_ui_rect_t){
+	r_ui_rect(ui.rc, (r_ui_rect_t){
 		.rect        = rect, 
 		.roundedness = v4_from_scalar(radius),
 		.color_00    = color_packed,
@@ -1012,8 +1014,6 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 {
 	ASSERT(ui.initialized);
 
-	r_push_view_screenspace_clip_rect(rect);
-
 	if (id.value) 
 	{
 		ui_push_id(id);
@@ -1116,7 +1116,6 @@ void ui_panel_end(void)
 		}
 	}
 
-	r_pop_view();
 	ui_pop_panel();
 }
 
@@ -2046,13 +2045,14 @@ static void ui_initialize(void)
 	ui.initialized = true;
 }
 
-bool ui_begin(float dt)
+bool ui_begin(r_context_t *rc, float dt)
 {
 	if (!ui.initialized)
 	{
 		ui_initialize();
 	}
 
+    ui.rc = rc;
 	ui.input.dt = dt;
 
 	for (pool_iter_t it = pool_iter(&ui.state); 
@@ -2159,8 +2159,6 @@ bool ui_begin(float dt)
 
 void ui_end(void)
 {
-	r_push_view_screenspace();
-
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);
 
@@ -2184,8 +2182,6 @@ void ui_end(void)
 	}
 
 	stack_reset(ui.tooltip_stack);
-
-	r_pop_view();
 
 	if (ui_mouse_buttons_pressed(PLATFORM_MOUSE_BUTTON_ANY))
 	{

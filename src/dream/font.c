@@ -132,11 +132,11 @@ font_atlas_t make_font_atlas_from_memory(string_t font_data, size_t range_count,
 			// TODO: Log failure
 		}
 
-		result.texture = render->upload_texture(&(upload_texture_t){
+		result.texture = render->upload_texture(&(r_upload_texture_t){
 			.debug_name = S("font atlas"),
 			.desc = {
-				.type   = TEXTURE_TYPE_2D,
-				.format = PIXEL_FORMAT_R8,
+				.type   = R_TEXTURE_TYPE_2D,
+				.format = R_PIXEL_FORMAT_R8,
 				.w      = w,
 				.h      = h,
 			},

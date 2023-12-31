@@ -25,7 +25,7 @@ static bool initialized = false;
 bool g_cursor_locked;
 
 static world_t *g_world;
-static resource_handle_t skybox;
+static texture_handle_t skybox;
 static bitmap_font_t debug_font;
 static waveform_t *test_waveform;
 static waveform_t *short_sound;
@@ -326,10 +326,8 @@ static camera_t g_camera = {
     .vfov = 60.0f,
 };
 
-static void view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
+static void init_view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
 {
-    r_default_view(view);
-
     view->clip_rect = viewport;
     view->camera_p  = camera->p;
 
@@ -411,12 +409,12 @@ void game_init(void)
 					load_image_from_disk(temp, Sf("gamedata/textures/sky/%.*s/negz.jpg", Sx(skytex)), 4),
 				};
 
-				skybox = render->upload_texture(&(upload_texture_t){
+				skybox = render->upload_texture(&(r_upload_texture_t){
 					.desc = {
-						.format = PIXEL_FORMAT_SRGB8_A8,
+						.format = R_PIXEL_FORMAT_SRGB8_A8,
 						.w     = faces[0].w,
 						.h     = faces[0].h,
-						.flags = TEXTURE_FLAG_CUBEMAP,
+						.flags = R_TEXTURE_FLAG_CUBEMAP,
 					},
 					.data = {
 						.pitch = faces[0].pitch,
@@ -442,6 +440,137 @@ void game_init(void)
     initialized = true;
 }
 
+DREAM_INLINE void render_map(r_context_t *rc, camera_t *camera, map_t *map)
+{
+    map_entity_t *worldspawn = map->worldspawn;
+
+    int res_x, res_y;
+    render->get_resolution(&res_x, &res_y);
+
+    rect2_t viewport = {
+        0, 0, (float)res_x, (float)res_y,
+    };
+
+    r_view_t view = {0};
+    init_view_for_camera(camera, viewport, &view);
+
+    v3_t sun_color = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
+    float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
+    sun_color = mul(sun_brightness, sun_color);
+
+    view.skybox          = skybox;
+    view.fogmap          = map->fogmap;
+    view.fog_offset      = rect3_center(map->bounds);
+    view.fog_dim         = rect3_dim(map->bounds);
+    view.sun_color       = sun_color;
+    view.fog_absorption  = map->fog_absorption;
+    view.fog_density     = map->fog_density;
+    view.fog_scattering  = map->fog_scattering;
+    view.fog_phase_k     = map->fog_phase_k;
+    view.compute_shadows = true;
+
+    r_view_index_t game_view = r_make_view(rc, &view);
+
+    R_VIEW(rc, game_view)
+    {
+        //
+        // render map
+        //
+
+        for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
+        {
+            map_poly_t *poly = &map->polys[poly_index];
+
+            r_material_brush_t *material = r_allocate_command_data(rc, sizeof(r_material_brush_t));
+            material->kind     = R_MATERIAL_BRUSH,
+            material->texture  = poly->texture,
+            material->lightmap = poly->lightmap,
+
+            r_draw_mesh(rc, M4X4_IDENTITY, poly->mesh, &material->base);
+        }
+
+        //
+        // render map point lights
+        //
+
+        R_IMMEDIATE(rc, imm)
+        {
+            imm->topology  = R_TOPOLOGY_LINELIST;
+            imm->use_depth = true;
+
+            for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
+            {
+                map_entity_t *entity = &map->entities[entity_index];
+
+                if (is_class(map, entity, strlit("point_light")))
+                {
+                    v3_t origin = v3_from_key(map, entity, strlit("origin"));
+                    r_immediate_rect3_outline(rc, rect3_center_radius(origin, make_v3(8, 8, 8)), COLORF_YELLOW);
+                }
+            }
+        }
+
+        //
+        // draw random moving thing to show dynamic shadows and volumetric fog
+        //
+
+        {
+            static float timer = 0.0f;
+            timer += 1.0f / 60.0f;
+
+            map_poly_t *poly = &map->polys[27];
+
+            m4x4_t transform = translate(M4X4_IDENTITY, make_v3(-70.0f + sinf(timer)*40.0f, 250.0f + 25.0f*cosf(0.5f*timer), -170.0f));
+            transform.e[0][0] *= 2.0f; transform.e[1][1] *= 2.0f; transform.e[2][2] *= 2.0f;
+
+            r_material_brush_t *material = r_allocate_command_data(rc, sizeof(r_material_brush_t));
+            material->kind     = R_MATERIAL_BRUSH,
+            material->texture  = poly->texture,
+            material->lightmap = poly->lightmap,
+
+            r_draw_mesh(rc, transform, poly->mesh, &material->base);
+        }
+    }
+}
+
+DREAM_INLINE void render_game_ui(r_context_t *rc, world_t *world)
+{
+    int res_x, res_y;
+    render->get_resolution(&res_x, &res_y);
+
+    v2_t res = make_v2((float)res_x, (float)res_y);
+
+    R_LAYER    (rc, R_SCREEN_LAYER_UI)
+    R_VIEW     (rc, rc->screenspace) 
+    R_IMMEDIATE(rc, imm)
+    {
+        if (g_cursor_locked)
+        {
+            //
+            // reticle 
+            //
+
+            v2_t center = mul(0.5f, res);
+            v2_t dim    = make_v2(4, 4);
+
+            rect2_t inner_rect = rect2_center_dim(center, dim);
+            rect2_t outer_rect = rect2_add_radius(inner_rect, make_v2(1, 1));
+
+            r_immediate_rect2_filled(rc, outer_rect, make_v4(0, 0, 0, 0.85f));
+            r_immediate_rect2_filled(rc, inner_rect, COLORF_WHITE);
+        }
+
+        //
+        // fade
+        //
+
+        float fade_t = world->fade_t;
+
+        rect2_t rect = { 0, 0, (float)res_x, (float)res_y, };
+        r_immediate_rect2_filled(rc, rect, make_v4(0, 0, 0, fade_t));
+    }
+}
+
 static void game_tick(platform_io_t *io)
 {
 	float dt = io->dt;
@@ -450,6 +579,9 @@ static void game_tick(platform_io_t *io)
     {
         game_init();
     }
+
+    r_context_t *rc = &(r_context_t){0};
+    r_init_render_context(rc, io->r_commands);
 
     world_t *world = g_world;
 
@@ -538,7 +670,7 @@ static void game_tick(platform_io_t *io)
 	ui.input.app_has_focus = io->has_focus;
 	io->cursor = ui.input.cursor;
 
-	bool ui_focused = ui_begin(dt);
+	bool ui_focused = ui_begin(rc, dt);
 
     if (ui_focused)
     {
@@ -556,11 +688,6 @@ static void game_tick(platform_io_t *io)
     // update_and_render_physics_playground(world, dt);
 
 #if 1
-    int res_x, res_y;
-    render->get_resolution(&res_x, &res_y);
-
-    v2_t res = make_v2((float)res_x, (float)res_y);
-
     if (button_pressed(BUTTON_FIRE1))
 	{
 		static bool mono = true;
@@ -603,128 +730,19 @@ static void game_tick(platform_io_t *io)
 
 	mixer_set_listener(camera->p, negate(camera->computed_z));
 
-    rect2_t viewport = {
-        0, 0, (float)res_x, (float)res_y,
-    };
-
-    map_entity_t *worldspawn = map->worldspawn;
-
-    v3_t sun_color = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
-    float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
-    sun_color = mul(sun_brightness, sun_color);
-
-    r_view_t view;
-    view_for_camera(camera, viewport, &view);
-
     map->fog_absorption = 0.002f;
     map->fog_density    = 0.02f;
     map->fog_scattering = 0.04f;
     map->fog_phase_k    = 0.6f;
 
-    view.skybox         = skybox;
-    view.fogmap         = map->fogmap;
-    view.fog_offset     = rect3_center(map->bounds);
-    view.fog_dim        = rect3_dim(map->bounds);
-    view.sun_color      = sun_color;
-    view.fog_absorption = map->fog_absorption;
-    view.fog_density    = map->fog_density;
-    view.fog_scattering = map->fog_scattering;
-    view.fog_phase_k    = map->fog_phase_k;
+    render_map(rc, camera, map);
 
-    r_push_view(&view);
+    world->fade_t += 0.45f*dt*(world->fade_target_t - world->fade_t);
+    render_game_ui(rc, world);
 
-	//
-	// render map
-	//
+    update_and_render_in_game_editor(rc);
 
-    for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
-    {
-        map_poly_t *poly = &map->polys[poly_index];
-        r_draw_model(M4X4_IDENTITY, poly->mesh, poly->texture, poly->lightmap);
-    }
-
-	//
-	// render test convex hull
-	//
-
-	r_immediate_topology(R_TOPOLOGY_LINELIST);
-	r_immediate_use_depth(true);
-
-    for (size_t triangle_index = 0; triangle_index < test_convex_hull.triangle_count; triangle_index++)
-    {
-		triangle_t t = test_convex_hull.triangles[triangle_index];
-
-		r_immediate_line(t.a, t.b, COLORF_WHITE);
-		r_immediate_line(t.a, t.c, COLORF_WHITE);
-		r_immediate_line(t.b, t.c, COLORF_WHITE);
-	}
-
-	r_immediate_flush();
-
-    //
-    // render map point lights
-    //
-
-#if 1
-	r_immediate_topology(R_TOPOLOGY_LINELIST);
-	r_immediate_use_depth(true);
-
-    for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
-    {
-        map_entity_t *entity = &map->entities[entity_index];
-
-        if (is_class(map, entity, strlit("point_light")))
-        {
-            r_immediate_rect3_outline(rect3_center_radius(v3_from_key(map, entity, strlit("origin")), make_v3(8, 8, 8)), COLORF_YELLOW);
-        }
-    }
-
-	r_immediate_flush();
-#endif
-
-	//
-	// make random moving thing to show dynamic shadows and volumetric fog
-	//
-
-    static float timer = 0.0f;
-    timer += 1.0f / 60.0f;
-
-    map_poly_t *poly = &map->polys[27];
-
-    m4x4_t transform = translate(M4X4_IDENTITY, make_v3(-70.0f + sinf(timer)*40.0f, 250.0f + 25.0f*cosf(0.5f*timer), -170.0f));
-    transform.e[0][0] *= 2.0f; transform.e[1][1] *= 2.0f; transform.e[2][2] *= 2.0f;
-    r_draw_model(transform, poly->mesh, poly->texture, poly->lightmap);
-
-    // ---------------------------------------------------------------------
-    // end scene render
-
-    r_end_scene_pass();
-
-    // ---
-
-    if (g_cursor_locked)
-    {
-        //
-        // reticle 
-        //
-
-        r_push_view_screenspace();
-
-        v2_t center = mul(0.5f, res);
-        v2_t dim    = make_v2(4, 4);
-
-        rect2_t inner_rect = rect2_center_dim(center, dim);
-        rect2_t outer_rect = rect2_add_radius(inner_rect, make_v2(1, 1));
-
-        r_immediate_rect2_filled(outer_rect, make_v4(0, 0, 0, 0.85f));
-        r_immediate_rect2_filled(inner_rect, COLORF_WHITE);
-		r_immediate_flush();
-
-        r_pop_view();
-    }
-
-    update_and_render_in_game_editor();
-
+#if 0
     static bool bad = false;
     if (bad)
     {
@@ -740,35 +758,15 @@ static void game_tick(platform_io_t *io)
 
         load_convex_hull_debug(&mesh, hull->debug);
     }
+#endif
 
     ui_end();
-
-    {
-        //
-        // fade
-        //
-
-        world->fade_t += 0.45f*dt*(world->fade_target_t - world->fade_t);
-        float fade_t = world->fade_t;
-
-        r_push_view_screenspace();
-
-        rect2_t rect = {
-            0, 0, (float)res_x, (float)res_y,
-        };
-        r_immediate_rect2_filled(rect, make_v4(0, 0, 0, fade_t));
-		r_immediate_flush();
-
-        r_pop_view();
-    }
 #endif
 
     if (button_pressed(BUTTON_ESCAPE))
     {
         io->request_exit = true;
     }
-
-	r_immediate_flush();
 }
 
 static void game_mix_audio(size_t frame_count, float *frames)

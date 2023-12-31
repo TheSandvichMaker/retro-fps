@@ -10,6 +10,9 @@
 #include <stdalign.h>
 #include <stdlib.h>
 
+// TODO: Cursed? DON'T DO IT??
+#define USING(type, name) union { type; type name; }
+
 #ifdef SINGLE_TRANSLATION_UNIT_BUILD
 #define DREAM_API    extern  // deprecated
 #define DREAM_GLOBAL extern  // visible outside modules
@@ -94,8 +97,14 @@ typedef struct dynamic_string_t
 #define stack_empty(stack)                                                 \
 	((stack).at == 0)
 
+#define stack_nonempty(stack)                                              \
+    !stack_empty(stack)
+
 #define stack_full(stack)                                                  \
 	((stack).at == ARRAY_COUNT((stack).values))
+
+#define stack_nonfull(stack)                                               \
+	!stack_full(stack)
 
 #define stack_top(stack)                                                   \
 	(ASSERT(!stack_empty(stack)), (stack).values[(stack).at - 1])
@@ -380,7 +389,26 @@ typedef union resource_handle_t
     uint64_t value;
 } resource_handle_t;
 
-#define NULL_RESOURCE_HANDLE ((resource_handle_t) { 0, 0 })
+#define DEFINE_HANDLE_TYPE(type)        \
+    typedef union type                  \
+    {                                   \
+        resource_handle_t base;         \
+        struct                          \
+        {                               \
+            uint32_t index, generation; \
+        };                              \
+        uint64_t value;                 \
+    } type;
+
+#define CAST_HANDLE(type, handle) (type){ .value = (handle).value }
+
+DEFINE_HANDLE_TYPE(texture_handle_t);
+DEFINE_HANDLE_TYPE(mesh_handle_t);
+
+#define NULL_RESOURCE_HANDLE ((resource_handle_t){0})
+#define NULL_TEXTURE_HANDLE ((texture_handle_t){0})
+#define NULL_MESH_HANDLE ((mesh_handle_t){0})
+#define NULLIFY_HANDLE(handle) ((handle).value = 0)
 #define RESOURCE_HANDLE_VALID(x) ((x).index != 0)
 #define RESOURCE_HANDLES_EQUAL(a, b) ((a).value == (b).value)
 

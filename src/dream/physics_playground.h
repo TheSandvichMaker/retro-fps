@@ -69,6 +69,6 @@ typedef struct phys_scene_t
     phys_body_t bodies[MAX_PHYS_BODIES];
 } phys_scene_t;
 
-DREAM_LOCAL void update_and_render_physics_playground(struct world_t *world, float dt);
+DREAM_LOCAL void update_and_render_physics_playground(struct r_context_t *rc, struct world_t *world, float dt);
 
 #endif

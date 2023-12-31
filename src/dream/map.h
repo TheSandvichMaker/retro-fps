@@ -49,10 +49,10 @@ typedef struct map_poly_t
 
     image_t *image;
 
-    resource_handle_t mesh;
-    asset_hash_t      texture_hash;
-    resource_handle_t texture;
-    resource_handle_t lightmap;
+    mesh_handle_t    mesh;
+    asset_hash_t     texture_hash;
+    texture_handle_t texture;
+    texture_handle_t lightmap;
 } map_poly_t;
 
 typedef struct map_lightmap_t
@@ -115,7 +115,7 @@ typedef struct map_t
     uint32_t fogmap_w;
     uint32_t fogmap_h;
     uint32_t fogmap_d;
-    resource_handle_t fogmap;
+    texture_handle_t fogmap;
 
     map_entity_t *worldspawn;
 

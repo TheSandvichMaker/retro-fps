@@ -37,7 +37,8 @@ typedef struct pool_t
 
 DREAM_GLOBAL void             *pool_add       (pool_t *pool);
 DREAM_GLOBAL resource_handle_t pool_add_item  (pool_t *pool, const void *item);
-DREAM_GLOBAL void             *pool_get       (pool_t *pool, resource_handle_t handle);
+DREAM_GLOBAL void             *pool_get_impl  (pool_t *pool, resource_handle_t handle);
+#define pool_get(pool, handle) pool_get_impl(pool, CAST_HANDLE(resource_handle_t, handle))
 DREAM_GLOBAL bool              pool_rem       (pool_t *pool, resource_handle_t handle);
 DREAM_GLOBAL bool              pool_rem_item  (pool_t *pool, void *item);
 DREAM_GLOBAL resource_handle_t pool_get_handle(pool_t *pool, void *item);

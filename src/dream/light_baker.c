@@ -474,10 +474,10 @@ static void lum_job(job_context_t *job_context, void *userdata)
         render->destroy_texture(poly->lightmap);
     }
 
-    poly->lightmap = render->upload_texture(&(upload_texture_t){
-        .upload_flags = UPLOAD_TEXTURE_GEN_MIPMAPS,
+    poly->lightmap = render->upload_texture(&(r_upload_texture_t){
+        .upload_flags = R_UPLOAD_TEXTURE_GEN_MIPMAPS,
         .desc = {
-            .format = PIXEL_FORMAT_R11G11B10F,
+            .format = R_PIXEL_FORMAT_R11G11B10F,
             .w      = w,
             .h      = h,
         },
@@ -631,10 +631,10 @@ static void trace_volumetric_lighting_job(job_context_t *job_context, void *user
         render->destroy_texture(map->fogmap);
     }
 
-    map->fogmap = render->upload_texture(&(upload_texture_t) {
+    map->fogmap = render->upload_texture(&(r_upload_texture_t) {
         .desc = {
-            .type        = TEXTURE_TYPE_3D,
-            .format      = PIXEL_FORMAT_R32G32B32A32F,
+            .type        = R_TEXTURE_TYPE_3D,
+            .format      = R_PIXEL_FORMAT_R32G32B32A32F,
             .w           = width,
             .h           = height,
             .d           = depth,

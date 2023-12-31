@@ -821,8 +821,8 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
             map_plane_t *plane = &planes[plane_index];
             map_poly_t  *poly  = &polys [plane_index];
 
-            float texscale_x = MISSING_TEXTURE_SIZE;
-            float texscale_y = MISSING_TEXTURE_SIZE;
+            float texscale_x = R_MISSING_TEXTURE_SIZE;
+            float texscale_y = R_MISSING_TEXTURE_SIZE;
 
             // load texture
 
@@ -880,13 +880,13 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
                 float t_offset = plane->t.w;
 
                 uint32_t triangulated_vertex_count = sb_count(plane_indices); // See note above, the index count is the vertex count (for the triangulated geometry).
-                vertex_brush_t *triangulated_vertices = m_alloc_array_nozero(arena, triangulated_vertex_count, vertex_brush_t);
+                r_vertex_brush_t *triangulated_vertices = m_alloc_array_nozero(arena, triangulated_vertex_count, r_vertex_brush_t);
 
                 for (size_t vertex_index = 0; vertex_index < triangulated_vertex_count; vertex_index++)
                 {
                     v3_t pos = brush_positions[plane_indices[vertex_index]];
 
-                    triangulated_vertices[vertex_index] = (vertex_brush_t) {
+                    triangulated_vertices[vertex_index] = (r_vertex_brush_t) {
                         .pos = pos,
                         .tex = {
                             .x = (dot(pos, s_vec) + s_offset) / texscale_x / plane->scale_x,
@@ -934,8 +934,8 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
                 poly->index_count  = triangulated_index_count;
                 poly->vertex_count = triangulated_vertex_count;
 
-                poly->mesh = render->upload_model(&(upload_model_t) {
-                    .vertex_format = VERTEX_FORMAT_BRUSH,
+                poly->mesh = render->upload_mesh(&(r_upload_mesh_t) {
+                    .vertex_format = R_VERTEX_FORMAT_BRUSH,
                     .index_count   = triangulated_index_count,
                     .indices       = triangulated_indices,
                     .vertex_count  = triangulated_vertex_count,

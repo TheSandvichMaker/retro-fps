@@ -210,11 +210,15 @@ typedef struct platform_gamepad_t
 	platform_gamepad_buttons_t buttons_down;
 } platform_gamepad_t;
 
+typedef struct r_command_buffer_t r_command_buffer_t;
+
 typedef struct platform_io_t
 {
 	bool has_focus;
 
 	float dt;
+
+    r_command_buffer_t *r_commands;
 
 	v2_t  mouse_p;
 	v2_t  mouse_dp;

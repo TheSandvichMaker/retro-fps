@@ -11,65 +11,46 @@ v3_t g_debug_colors[] = {
     { 0, 1, 1 },
 };
 
-static render_api_i inst;
-const render_api_i *const render = &inst;
-
-void equip_render_api(render_api_i *api)
+DREAM_INLINE void r_init_immediate(r_context_t *rc, r_immediate_t *imm)
 {
-    inst = *api;
+	imm->shader     = R_SHADER_FLAT;
+	imm->topology   = R_TOPOLOGY_TRIANGLELIST;
+	imm->blend_mode = R_BLEND_PREMUL_ALPHA;
+	imm->cull_mode  = R_CULL_NONE;
+	imm->clip_rect  = (rect2_t){ 0, 0, 0, 0 };
+	imm->texture    = NULL_TEXTURE_HANDLE;
+    imm->transform  = M4X4_IDENTITY;
+	imm->use_depth  = false;
+	imm->depth_bias = 0.0f;
+
+	imm->icount  = 0;
+	imm->vcount  = 0;
+	imm->ioffset = rc->commands->imm_indices_count;
+	imm->voffset = rc->commands->imm_vertices_count;
 }
 
-uint32_t vertex_format_size[VERTEX_FORMAT_COUNT] = {
-    [VERTEX_FORMAT_POS]       = sizeof(vertex_pos_t),
-    [VERTEX_FORMAT_IMMEDIATE] = sizeof(vertex_immediate_t),
-    [VERTEX_FORMAT_BRUSH]     = sizeof(vertex_brush_t),
-};
-
-static r_list_t *g_list;
-
-void r_set_command_list(r_list_t *new_list)
+void r_init_render_context(r_context_t *rc, r_command_buffer_t *commands)
 {
-    g_list = new_list;
-    r_reset_command_list();
-}
+    zero_struct(rc);
 
-DREAM_INLINE void initialize_immediate_draw(r_immediate_draw_t *draw)
-{
-	draw->params.shader     = R_SHADER_FLAT;
-	draw->params.topology   = R_TOPOLOGY_TRIANGLELIST;
-	draw->params.blend_mode = R_BLEND_PREMUL_ALPHA;
-	draw->params.cull_mode  = R_CULL_NONE;
-	draw->params.clip_rect  = (rect2_t){ 0, 0, 0, 0 };
-	draw->params.texture    = NULL_RESOURCE_HANDLE;
-    draw->params.transform  = M4X4_IDENTITY;
-	draw->params.depth_test = false;
-	draw->params.depth_bias = 0.0f;
+    rc->commands = commands;
+    r_init_immediate(rc, rc->current_immediate);
 
-	draw->icount  = 0;
-	draw->vcount  = 0;
-	draw->ioffset = g_list->immediate_icount;
-	draw->voffset = g_list->immediate_vcount;
-}
+    rc->commands->views_count        = 0;
+    rc->commands->commands_count     = 0;
+    rc->commands->data_at            = 0;
+    rc->commands->imm_indices_count  = 0;
+    rc->commands->imm_vertices_count = 0;
+    rc->commands->ui_rects_count     = 0;
 
-void r_reset_command_list(void)
-{
-    g_list->command_list_at = g_list->command_list_base;
-    g_list->view_count    = 0;
-    g_list->view_stack_at = 0;
+    rc->layers_stack.at = 0;
+    stack_push(rc->layers_stack, R_SCREEN_LAYER_SCENE);
 
-    g_list->immediate_icount = 0;
-    g_list->immediate_vcount = 0;
-	g_list->ui_rect_count = 0;
+    rc->views_stack.at = 0;
 
-	initialize_immediate_draw(&g_list->curr_immediate);
-
-    r_view_t default_view;
-    r_default_view(&default_view);
-    r_push_view(&default_view);
-
-    // TODO: This view situation is a disaster
+    // make screenspace view
     {
-        r_view_t view = { 0 };
+        r_view_t view = {0};
 
         int w, h;
         render->get_resolution(&w, &h);
@@ -92,162 +73,93 @@ void r_reset_command_list(void)
         );
         view.projection = M4X4_IDENTITY;
 
-        r_push_view(&view);
+        rc->screenspace = r_make_view(rc, &view);
     }
 }
 
-static string_storage_t(64) g_next_command_identifier;
-
-void r_command_identifier(string_t identifier)
+void r_command_identifier(r_context_t *rc, string_t identifier)
 {
-    string_into_storage(g_next_command_identifier, identifier);
+    // TODO: reimplement
+    (void)rc;
+    (void)identifier;
 }
 
-static void *r_submit_command(r_command_kind_t kind, size_t command_size)
+void r_push_command(r_context_t *rc, r_command_t command)
 {
-    ASSERT(g_list);
+    ASSERT(command.key.view < rc->views_stack.at);
 
+    r_command_buffer_t *commands = rc->commands;
+
+    if (ALWAYS(commands->commands_count < commands->commands_capacity))
+    {
+        commands->commands[commands->commands_count++] = command;
+    }
+}
+
+void *r_allocate_command_data(r_context_t *rc, size_t size)
+{
     void *result = NULL;
 
-    if (ALWAYS(kind > R_COMMAND_NONE && kind < R_COMMAND_COUNT))
+    size_t at_aligned = align_forward(rc->commands->data_at, R_RENDER_COMMAND_ALIGN);
+    size_t size_left  = rc->commands->data_capacity - at_aligned;
+
+    if (ALWAYS(size_left <= size))
     {
-        size_t size_used = align_forward(g_list->command_list_at - g_list->command_list_base, RENDER_COMMAND_ALIGN);
-        size_t size_left = g_list->command_list_size - size_used;
-        if (ALWAYS(size_left >= command_size))
-        {
-            char *at = align_address(g_list->command_list_at, RENDER_COMMAND_ALIGN);
-            zero_memory(at, command_size);
-
-            r_command_base_t *base = (void *)at;
-            base->kind = kind;
-
-            if (ALWAYS(g_list->view_stack_at > 0))
-                base->view = g_list->view_stack[g_list->view_stack_at-1];
-            else
-                base->view = 0;
-
-#ifndef NDEBUG
-            if (g_next_command_identifier.count > 0)
-                base->identifier = string_copy(temp, string_from_storage(g_next_command_identifier));
-
-            g_next_command_identifier.count = 0;
-#endif
-
-            g_list->command_list_at = at + command_size;
-
-            result = at;
-        }
+        result = &rc->commands->data[at_aligned];
+        rc->commands->data_at = (uint32_t)(at_aligned + size);
     }
 
     return result;
 }
 
-void r_push_view(const r_view_t *view)
+r_view_index_t r_make_view(r_context_t *rc, const r_view_t *view)
 {
-    if (ALWAYS(g_list->view_count < R_MAX_VIEWS))
-    {
-        r_view_index_t index = g_list->view_count++;
-        copy_struct(&g_list->views[index], view);
+    r_view_index_t result = 0;
 
-        if (ALWAYS(g_list->view_stack_at < R_MAX_VIEWS))
-        {
-            g_list->view_stack[g_list->view_stack_at++] = index;
-        }
+    if (ALWAYS(rc->commands->views_count < rc->commands->views_capacity))
+    {
+        result = rc->commands->views_count++;
+
+        r_view_t *result_view = &rc->commands->views[result];
+        copy_struct(result_view, view);
+    }
+
+    return result;
+}
+
+void r_push_view(r_context_t *rc, r_view_index_t index)
+{
+    if (ALWAYS(stack_nonfull(rc->views_stack)))
+    {
+        stack_push(rc->views_stack, index);
     }
 }
 
-void r_push_view_screenspace(void)
+void r_pop_view(r_context_t *rc)
 {
-    if (ALWAYS(g_list->view_count < R_MAX_VIEWS))
+    if (ALWAYS(stack_nonempty(rc->views_stack)))
     {
-        r_view_index_t index = SCREENSPACE_VIEW_INDEX;
-
-        if (ALWAYS(g_list->view_stack_at < R_MAX_VIEWS))
-        {
-            g_list->view_stack[g_list->view_stack_at++] = index;
-        }
+        stack_pop(rc->views_stack);
     }
 }
 
-void r_push_view_screenspace_clip_rect(rect2_t clip_rect)
-{
-	r_view_t view;
-	r_default_view(&view);
-
-    int w, h;
-    render->get_resolution(&w, &h);
-
-	float a = 2.0f / (float)w;
-	float b = 2.0f / (float)h;
-
-	view.camera = make_m4x4(
-		a, 0, 0, -1,
-		0, b, 0, -1,
-		0, 0, 1,  0,
-		0, 0, 0,  1
-	);
-
-	r_view_t *parent = r_get_top_view();
-
-	view.clip_rect = rect2_intersect(clip_rect, parent->clip_rect);
-	r_push_view(&view);
-}
-
-void r_default_view(r_view_t *view)
-{
-    zero_struct(view);
-
-    int w, h;
-    render->get_resolution(&w, &h);
-
-    view->clip_rect = (rect2_t) {
-        .x0 = 0.0f,
-        .y0 = 0.0f,
-        .x1 = (float)w,
-        .y1 = (float)h,
-    };
-
-    view->camera     = M4X4_IDENTITY;
-    view->projection = M4X4_IDENTITY;
-}
-
-static thread_local r_view_t g_null_view; // should never be necessary
-
-r_view_t *r_get_top_view(void)
+r_view_t *r_get_view(r_context_t *rc)
 {
     r_view_t *result = NULL; 
 
-    if (ALWAYS(g_list->view_stack_at > 0))
+    if (ALWAYS(stack_nonempty(rc->views_stack)))
     {
-        result = &g_list->views[g_list->view_stack[g_list->view_stack_at-1]];
+        r_view_index_t index = stack_top(rc->views_stack);
+        result = &rc->commands->views[index];
     }
     else
     {
-        result = &g_null_view;
-        r_default_view(result);
+        // who knows what you will find, funny man...
+        static r_view_t null_view = {0};
+        result = &null_view;
     }
 
     return result;
-}
-
-void r_copy_top_view(r_view_t *view)
-{
-    if (ALWAYS(g_list->view_stack_at > 0))
-    {
-        *view = g_list->views[g_list->view_stack[g_list->view_stack_at-1]];
-    }
-    else
-    {
-        r_default_view(view);
-    }
-}
-
-void r_pop_view(void)
-{
-    if (ALWAYS(g_list->view_stack_at > 1))
-    {
-        g_list->view_stack_at--;
-    }
 }
 
 v3_t r_to_view_space(const r_view_t *view, v3_t p, float w)
@@ -269,196 +181,111 @@ v3_t r_to_view_space(const r_view_t *view, v3_t p, float w)
     return pw.xyz;
 }
 
-void r_draw_model(m4x4_t transform, resource_handle_t model, resource_handle_t texture, resource_handle_t lightmap)
+void r_push_layer(r_context_t *rc, r_screen_layer_t layer)
 {
-    r_command_model_t *command = r_submit_command(R_COMMAND_MODEL, sizeof(r_command_model_t));
-    command->transform = transform;
-    command->model     = model;
-    command->texture   = texture;
-    command->lightmap  = lightmap;
+    if (ALWAYS(stack_nonfull(rc->layers_stack)))
+    {
+        stack_push(rc->layers_stack, layer);
+    }
 }
 
-void r_immediate_flush(void)
+void r_pop_layer(r_context_t *rc)
 {
-	r_immediate_draw_t *draw = &g_list->curr_immediate;
-
-	if (draw->icount > 0 ||
-		draw->vcount > 0)
-	{
-		r_command_immediate_t *command = r_submit_command(R_COMMAND_IMMEDIATE, sizeof(r_command_immediate_t));
-		copy_struct(&command->draw_call, draw);
-
-		if (command->draw_call.params.clip_rect.min.x == 0 &&
-			command->draw_call.params.clip_rect.min.y == 0 &&
-			command->draw_call.params.clip_rect.max.x == 0 &&
-			command->draw_call.params.clip_rect.max.y == 0)
-		{
-			int w, h;
-			render->get_resolution(&w, &h);
-
-			command->draw_call.params.clip_rect.max = make_v2((float)w, (float)h);
-		}
-
-	}
-
-	initialize_immediate_draw(draw);
-	g_list->current_ui_rects = NULL;
+    if (ALWAYS(stack_nonempty(rc->layers_stack)))
+    {
+        stack_pop(rc->layers_stack);
+    }
 }
 
-// TODO: Weirdly subtle and annoying function?
-DREAM_INLINE void r_immediate_flush_pending(void)
+void r_draw_mesh(r_context_t *rc, m4x4_t transform, mesh_handle_t mesh, const r_material_t *material)
 {
-	r_immediate_draw_t *draw = &g_list->curr_immediate;
+    r_command_t command = {
+        .key = {
+            .screen_layer = R_SCREEN_LAYER_SCENE,
+            .view         = stack_top(rc->views_stack),
+            .cmd          = false,
+            .depth        = 0, // TODO
+            .material_id  = 0, // TODO
+        },
+        .data = r_allocate_command_data(rc, sizeof(r_command_model_t)),
+    };
 
-	if (draw->icount > 0 ||
-		draw->vcount > 0)
-	{
-		r_command_immediate_t *command = r_submit_command(R_COMMAND_IMMEDIATE, sizeof(r_command_immediate_t));
-		copy_struct(&command->draw_call, draw);
+    r_command_model_t *data = command.data;
+    data->transform = transform;
+    data->mesh      = mesh;
+    data->material  = material;
 
-		if (command->draw_call.params.clip_rect.min.x == 0 &&
-			command->draw_call.params.clip_rect.min.y == 0 &&
-			command->draw_call.params.clip_rect.max.x == 0 &&
-			command->draw_call.params.clip_rect.max.y == 0)
-		{
-			int w, h;
-			render->get_resolution(&w, &h);
-
-			command->draw_call.params.clip_rect.max = make_v2((float)w, (float)h);
-		}
-
-		initialize_immediate_draw(draw);
-		g_list->current_ui_rects = NULL;
-	}
+    r_push_command(rc, command);
 }
 
-void r_immediate_shader(r_immediate_shader_t shader)
+r_immediate_t *r_immediate_begin(r_context_t *rc)
 {
-	r_immediate_flush_pending();
+    ASSERT(rc->current_immediate == NULL);
 
-	r_immediate_draw_t *draw = &g_list->curr_immediate;
-	draw->params.shader = shader;
+    r_immediate_t *imm = r_allocate_command_data(rc, sizeof(r_immediate_t));
+    r_init_immediate(rc, imm);
+
+    return imm;
 }
 
-void r_immediate_topology(r_topology_t topology)
+void r_immediate_end(r_context_t *rc, r_immediate_t *imm)
 {
-	r_immediate_flush_pending();
+    ASSERT(rc->current_immediate == imm);
 
-	r_immediate_draw_t *draw = &g_list->curr_immediate;
-	draw->params.topology = topology;
+    r_command_t command = {
+        .key = {
+            .screen_layer = stack_top(rc->layers_stack),
+            .view         = stack_top(rc->views_stack),
+            .cmd          = true,
+            .command = {
+                .kind = R_COMMAND_IMMEDIATE,
+            },
+        },
+        .data = imm,
+    };
+
+    r_push_command(rc, command);
+
+    rc->current_immediate = NULL;
 }
 
-void r_immediate_blend_mode(r_blend_mode_t blend_mode)
+uint32_t r_immediate_vertex(r_context_t *rc, r_vertex_immediate_t vertex)
 {
-	r_immediate_flush_pending();
-
-	r_immediate_draw_t *draw = &g_list->curr_immediate;
-	draw->params.blend_mode = blend_mode;
-}
-
-void r_immediate_cull_mode(r_cull_mode_t cull_mode)
-{
-	r_immediate_flush_pending();
-
-	r_immediate_draw_t *draw = &g_list->curr_immediate;
-	draw->params.cull_mode = cull_mode;
-}
-
-void r_immediate_clip_rect(rect2_t clip_rect)
-{
-	r_immediate_flush_pending();
-
-	r_immediate_draw_t *draw = &g_list->curr_immediate;
-	draw->params.clip_rect = clip_rect;
-}
-
-void r_immediate_texture(resource_handle_t texture)
-{
-	r_immediate_flush_pending();
-
-	r_immediate_draw_t *draw = &g_list->curr_immediate;
-	draw->params.texture = texture;
-}
-
-void r_immediate_transform(m4x4_t transform)
-{
-    r_immediate_flush_pending();
-
-	r_immediate_draw_t *draw = &g_list->curr_immediate;
-	draw->params.transform = transform;
-}
-
-void r_immediate_use_depth(bool depth)
-{
-	r_immediate_flush_pending();
-
-	r_immediate_draw_t *draw = &g_list->curr_immediate;
-	draw->params.depth_test = depth;
-}
-
-void r_immediate_depth_bias(float depth_bias)
-{
-	r_immediate_flush_pending();
-
-	r_immediate_draw_t *draw = &g_list->curr_immediate;
-	draw->params.depth_bias = depth_bias;
-}
-
-void r_end_scene_pass(void)
-{
-    r_submit_command(R_COMMAND_END_SCENE_PASS, sizeof(r_command_base_t));
-}
-
-uint32_t r_immediate_vertex(const vertex_immediate_t *vertex)
-{
-	r_immediate_draw_t *draw = &g_list->curr_immediate;
-
     uint32_t result = UINT16_MAX;
 
-    if (ALWAYS(g_list->immediate_vcount < g_list->max_immediate_vcount))
+    if (ALWAYS(rc->commands->imm_vertices_count < rc->commands->imm_vertices_capacity))
     {
-        draw->vcount += 1;
+        if (ALWAYS(rc->current_immediate))
+        {
+            rc->current_immediate->vcount += 1;
+        }
 
-        result = (uint32_t)g_list->immediate_vcount++;
-        g_list->immediate_vertices[result] = *vertex;
+        result = rc->commands->imm_vertices_count++;
+        rc->commands->imm_vertices[result] = vertex;
     }
 
     return result;
 }
 
-void r_immediate_index(uint32_t index)
+void r_immediate_index(r_context_t *rc, uint32_t index)
 {
-	r_immediate_draw_t *draw = &g_list->curr_immediate;
-
-    if (ALWAYS(g_list->immediate_icount < g_list->max_immediate_icount))
+    if (ALWAYS(rc->commands->imm_indices_count < rc->commands->imm_indices_capacity))
     {
-        draw->icount += 1;
+        if (ALWAYS(rc->current_immediate))
+        {
+            rc->current_immediate->icount += 1;
+        }
 
-        g_list->immediate_indices[g_list->immediate_icount++] = index;
+        rc->commands->imm_indices[rc->commands->imm_indices_count++] = index;
     }
 }
 
-void r_ui_rect(r_ui_rect_t rect)
+void r_ui_rect(r_context_t *rc, r_ui_rect_t rect)
 {
-	r_immediate_flush_pending();
-
-	if (ALWAYS(g_list->ui_rect_count < g_list->max_ui_rect_count))
+    // TODO: But when do we even submit the command? dfbkdmgbdgr
+	if (ALWAYS(rc->commands->ui_rects_count < rc->commands->ui_rects_capacity))
 	{
-
-		r_command_ui_rects_t *command = g_list->current_ui_rects;
-
-		uint32_t rect_index = g_list->ui_rect_count++;
-
-		if (!command)
-		{
-			command = r_submit_command(R_COMMAND_UI_RECTS, sizeof(r_command_ui_rects_t));
-			command->first = rect_index;
-			command->count = 0;
-
-			g_list->current_ui_rects = command;
-		}
-
-		v2_t dim = rect2_dim(rect.rect);
+		v2_t  dim   = rect2_dim(rect.rect);
 		float limit = 0.5f*min(dim.x, dim.y);
 
 		rect.roundedness.x = CLAMP(rect.roundedness.x, 0.0f, limit);
@@ -466,9 +293,28 @@ void r_ui_rect(r_ui_rect_t rect)
 		rect.roundedness.y = CLAMP(rect.roundedness.y, 0.0f, limit);
 		rect.roundedness.w = CLAMP(rect.roundedness.w, 0.0f, limit);
 
-		r_ui_rect_t *ui_rect = &g_list->ui_rects[rect_index];
-		*ui_rect = rect;
-
-		command->count += 1;
+        rc->commands->ui_rects[rc->commands->ui_rects_count++] = rect;
+        rc->current_ui_rect_count += 1;
 	}
+}
+
+void r_flush_ui_rects(r_context_t *rc)
+{
+    r_push_command(rc, (r_command_t){
+        .key = {
+            .screen_layer = stack_top(rc->layers_stack),
+            .view         = stack_top(rc->views_stack),
+            .cmd = true,
+            .command = {
+                .kind = R_COMMAND_UI_RECTS,
+                .ui_rects = {
+                    .first = rc->current_first_ui_rect,
+                    .count = rc->current_ui_rect_count,
+                },
+            },
+        },
+    });
+
+    rc->current_first_ui_rect = rc->commands->ui_rects_count;
+    rc->current_ui_rect_count = 0;
 }

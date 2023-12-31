@@ -269,16 +269,22 @@ int wWinMain(HINSTANCE instance,
     GetCursorPos(&prev_cursor_point);
     ScreenToClient(window, &prev_cursor_point);
 
-    r_list_t r_list = { 0 };
-    r_list.command_list_size    = MB(16),
-    r_list.command_list_base    = m_alloc_nozero(&win32_arena, r_list.command_list_size, 16);
-    r_list.max_immediate_icount = R_MAX_IMMEDIATE_INDICES;
-    r_list.immediate_indices    = m_alloc_array_nozero(&win32_arena, r_list.max_immediate_icount, uint32_t);
-    r_list.max_immediate_vcount = R_MAX_IMMEDIATE_VERTICES;
-    r_list.immediate_vertices   = m_alloc_array_nozero(&win32_arena, r_list.max_immediate_vcount, vertex_immediate_t);
-	r_list.max_ui_rect_count    = R_MAX_UI_RECTS;
-	r_list.ui_rects             = m_alloc_array_nozero(&win32_arena, r_list.max_ui_rect_count, r_ui_rect_t);
-    r_set_command_list(&r_list);
+    r_command_buffer_t r_commands = {
+        .views_capacity        = R_VIEWS_CAPACITY,
+        .views                 = m_alloc_array_nozero(&win32_arena, R_VIEWS_CAPACITY, r_view_t),
+
+        .commands_capacity     = R_COMMANDS_CAPACITY,
+        .commands              = m_alloc_array_nozero(&win32_arena, R_COMMANDS_CAPACITY, r_command_t),
+
+        .data_capacity         = R_COMMANDS_DATA_CAPACITY,
+        .data                  = m_alloc_nozero(&win32_arena, R_COMMANDS_DATA_CAPACITY, 16),
+
+        .imm_indices_capacity  = R_IMMEDIATE_INDICES_CAPACITY,
+        .imm_indices           = m_alloc_array_nozero(&win32_arena, R_IMMEDIATE_INDICES_CAPACITY, uint32_t),
+
+        .imm_vertices_capacity = R_IMMEDIATE_VERTICES_CAPACITY,
+        .imm_vertices          = m_alloc_array_nozero(&win32_arena, R_IMMEDIATE_VERTICES_CAPACITY, r_vertex_immediate_t),
+    };
 
 	platform_cursor_t cursor      = PLATFORM_CURSOR_ARROW;
 	platform_cursor_t last_cursor = cursor;
@@ -468,12 +474,12 @@ int wWinMain(HINSTANCE instance,
 
         prev_cursor_point = cursor_point;
 
-        r_reset_command_list();
-
 		platform_io_t tick_io = {
 			.has_focus   = has_focus,
 
 			.dt          = dt,
+
+            .r_commands  = &r_commands,
 
 			.mouse_p     = mouse_p,
 			.mouse_dp    = mouse_dp,
@@ -523,7 +529,7 @@ int wWinMain(HINSTANCE instance,
 		}
 		last_cursor = cursor;
 
-        d3d11_draw_list(&r_list, width, height);
+        d3d11_execute_command_buffer(&r_commands, width, height);
         d3d11_present();
 
         if (tick_io.request_exit)

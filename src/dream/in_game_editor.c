@@ -12,7 +12,7 @@
 #include "dream/audio.h"
 #include "dream/mesh.h"
 
-static void push_poly_wireframe(map_t *map, map_poly_t *poly, v4_t color)
+static void push_poly_wireframe(r_context_t *rc, map_t *map, map_poly_t *poly, v4_t color)
 {
     uint16_t *indices   = map->indices          + poly->first_index;
     v3_t     *positions = map->vertex.positions + poly->first_vertex;
@@ -23,18 +23,18 @@ static void push_poly_wireframe(map_t *map, map_poly_t *poly, v4_t color)
         v3_t b = positions[indices[3*triangle_index + 1]];
         v3_t c = positions[indices[3*triangle_index + 2]];
 
-        r_immediate_line(a, b, color);
-        r_immediate_line(a, c, color);
-        r_immediate_line(b, c, color);
+        r_immediate_line(rc, a, b, color);
+        r_immediate_line(rc, a, c, color);
+        r_immediate_line(rc, b, c, color);
     }
 }
 
-static void push_brush_wireframe(map_t *map, map_brush_t *brush, v4_t color)
+static void push_brush_wireframe(r_context_t *rc, map_t *map, map_brush_t *brush, v4_t color)
 {
     for (size_t poly_index = 0; poly_index < brush->plane_poly_count; poly_index++)
     {
         map_poly_t *poly = &map->polys[brush->first_plane_poly + poly_index];
-        push_poly_wireframe(map, poly, color);
+        push_poly_wireframe(rc, map, poly, color);
     }
 }
 
@@ -215,7 +215,7 @@ static void generate_new_random_convex_hull(size_t point_count, random_series_t 
 	}
 }
 
-static void hull_render_debug_triangles(hull_debug_step_t *step, bool final_step, bool render_degenerate, bool render_wireframe)
+static void hull_render_debug_triangles(r_context_t *rc, hull_debug_step_t *step, bool final_step, bool render_degenerate, bool render_wireframe)
 {
 	hull_test_panel_t        *hull_test = &editor.hull_test;
 	hull_debug_t             *debug     = &hull_test->debug;
@@ -265,14 +265,14 @@ static void hull_render_debug_triangles(hull_debug_step_t *step, bool final_step
 
 			if (render_wireframe)
 			{
-				r_immediate_line(a, b, color);
-				r_immediate_line(a, c, color);
-				r_immediate_line(b, c, color);
+				r_immediate_line(rc, a, b, color);
+				r_immediate_line(rc, a, c, color);
+				r_immediate_line(rc, b, c, color);
 			}
 			else
 			{
 				triangle_t t = { a, b, c };
-				r_immediate_triangle(t, color);
+				r_immediate_triangle(rc, t, color);
 			}
 		}
 	}
@@ -493,7 +493,7 @@ static void convex_hull_test_proc(ui_window_t *window)
 	hull_test->initialized = true;
 }
 
-static void render_hull_test(void)
+static void render_hull_test(r_context_t *rc)
 {
 	hull_test_panel_t *hull_test = &editor.hull_test;
 
@@ -530,96 +530,101 @@ static void render_hull_test(void)
 	{
 		if (hull_test->show_points)
 		{
-			r_immediate_topology(R_TOPOLOGY_LINELIST);
-			r_immediate_use_depth(true);
+            R_IMMEDIATE(rc, imm)
+            {
+                imm->topology  = R_TOPOLOGY_LINELIST;
+                imm->use_depth = true;
 
-			for (size_t i = 0; i < debug->initial_points_count; i++)
-			{
-				v3_t p = debug->initial_points[i];
+                for (size_t i = 0; i < debug->initial_points_count; i++)
+                {
+                    v3_t p = debug->initial_points[i];
 
-				v4_t color = ((int)i == hull_test->test_tetrahedron_index ? COLORF_ORANGE : COLORF_RED);
+                    v4_t color = ((int)i == hull_test->test_tetrahedron_index ? COLORF_ORANGE : COLORF_RED);
 
-				if (point_fully_contained[i])
-				{
-					color.xyz = mul(color.xyz, 0.75f);
-				}
+                    if (point_fully_contained[i])
+                    {
+                        color.xyz = mul(color.xyz, 0.75f);
+                    }
 
-				r_immediate_rect3_outline(rect3_center_radius(p, make_v3(1, 1, 1)), color);
-			}
-
-			r_immediate_flush();
+                    r_immediate_rect3_outline(rc, rect3_center_radius(p, make_v3(1, 1, 1)), color);
+                }
+            }
 		}
 
 		//
 
-		r_immediate_topology (R_TOPOLOGY_TRIANGLELIST);
-		r_immediate_shader   (R_SHADER_DEBUG_LIGHTING);
-		r_immediate_use_depth(true);
-		r_immediate_cull_mode(R_CULL_BACK);
+        R_IMMEDIATE(rc, imm)
+        {
+            imm->topology  = R_TOPOLOGY_TRIANGLELIST;
+            imm->shader    = R_SHADER_DEBUG_LIGHTING;
+            imm->use_depth = true;
+            imm->cull_mode = R_CULL_BACK;
 
-		int step_index = 0;
-		for (hull_debug_step_t *step = hull_test->debug.first_step;
-			 step;
-			 step = step->next)
-		{
-			if (step_index == MIN(hull_test->current_step_index, (int)debug->step_count - 1))
-			{
-				bool final_step = (hull_test->current_step_index == (int)debug->step_count);
+            int step_index = 0;
 
-				hull_render_debug_triangles(step, final_step, false, false);
-				hull_render_debug_triangles(step, final_step, true, false);
-			}
+            for (hull_debug_step_t *step = hull_test->debug.first_step;
+                 step;
+                 step = step->next)
+            {
+                if (step_index == MIN(hull_test->current_step_index, (int)debug->step_count - 1))
+                {
+                    bool final_step = (hull_test->current_step_index == (int)debug->step_count);
 
-			step_index++;
-		}
+                    hull_render_debug_triangles(rc, step, final_step, false, false);
+                    hull_render_debug_triangles(rc, step, final_step, true, false);
+                }
 
-		r_immediate_flush();
+                step_index++;
+            }
+        }
 
 		//
 
-		r_immediate_topology (R_TOPOLOGY_LINELIST);
-		r_immediate_shader   (R_SHADER_FLAT);
-		r_immediate_use_depth(true);
+        R_IMMEDIATE(rc, imm)
+        {
+            imm->topology  = R_TOPOLOGY_LINELIST;
+            imm->shader    = R_SHADER_FLAT;
+		    imm->use_depth = true;
 
-		step_index = 0;
-		for (hull_debug_step_t *step = hull_test->debug.first_step;
-			 step;
-			 step = step->next)
-		{
-			if (step_index == MIN(hull_test->current_step_index, (int)debug->step_count - 1))
-			{
-				bool final_step = (hull_test->current_step_index == (int)debug->step_count);
+            int step_index = 0;
 
-				if (hull_test->show_wireframe)
-				{
-					hull_render_debug_triangles(step, final_step, false, true);
-					hull_render_debug_triangles(step, final_step, true, true);
-				}
+            for (hull_debug_step_t *step = hull_test->debug.first_step;
+                 step;
+                 step = step->next)
+            {
+                if (step_index == MIN(hull_test->current_step_index, (int)debug->step_count - 1))
+                {
+                    bool final_step = (hull_test->current_step_index == (int)debug->step_count);
 
-				if (!final_step)
-				{
-					for (hull_debug_edge_t *edge = step->first_edge;
-						 edge;
-						 edge = edge->next)
-					{
-						bool show = false;
+                    if (hull_test->show_wireframe)
+                    {
+                        hull_render_debug_triangles(rc, step, final_step, false, true);
+                        hull_render_debug_triangles(rc, step, final_step, true, true);
+                    }
 
-						if (hull_test->show_processed_edge      &&  edge->processed_this_step) show = true;
-						if (hull_test->show_non_processed_edges && !edge->processed_this_step) show = true;
-						if (!show) continue;
+                    if (!final_step)
+                    {
+                        for (hull_debug_edge_t *edge = step->first_edge;
+                             edge;
+                             edge = edge->next)
+                        {
+                            bool show = false;
 
-						v3_t a = edge->e.a;
-						v3_t b = edge->e.b;
+                            if (hull_test->show_processed_edge      &&  edge->processed_this_step) show = true;
+                            if (hull_test->show_non_processed_edges && !edge->processed_this_step) show = true;
+                            if (!show) continue;
 
-						r_immediate_line(a, b, (edge->processed_this_step ? COLORF_WHITE : COLORF_BLUE));
-					}
-				}
-			}
+                            v3_t a = edge->e.a;
+                            v3_t b = edge->e.b;
 
-			step_index++;
-		}
+                            r_immediate_line(rc, a, b, (edge->processed_this_step ? COLORF_WHITE : COLORF_BLUE));
+                        }
+                    }
+                }
 
-		r_immediate_flush();
+                step_index++;
+            }
+        }
 	}
 }
 
@@ -748,12 +753,12 @@ static void lightmap_editor_proc(ui_window_t *window)
 					if (RESOURCE_HANDLE_VALID(poly->lightmap))
 					{
 						render->destroy_texture(poly->lightmap);
-						poly->lightmap = NULL_RESOURCE_HANDLE;
+                        NULLIFY_HANDLE(poly->lightmap);
 					}
 				}
 
 				render->destroy_texture(map->fogmap);
-				map->fogmap = NULL_RESOURCE_HANDLE;
+                NULLIFY_HANDLE(map->fogmap);
 
 				map->lightmap_state = NULL;
 			}
@@ -785,12 +790,12 @@ static void lightmap_editor_proc(ui_window_t *window)
 				if (RESOURCE_HANDLE_VALID(poly->lightmap))
 				{
 					render->destroy_texture(poly->lightmap);
-					poly->lightmap = NULL_RESOURCE_HANDLE;
+					NULLIFY_HANDLE(poly->lightmap);
 				}
 			}
 
 			render->destroy_texture(map->fogmap);
-			map->fogmap = NULL_RESOURCE_HANDLE;
+			NULLIFY_HANDLE(map->fogmap);
 
 			release_bake_state(map->lightmap_state);
 			map->lightmap_state = NULL;
@@ -818,7 +823,7 @@ static void lightmap_editor_proc(ui_window_t *window)
 			{
 				map_poly_t *poly = lm_editor->selected_poly;
 
-				texture_desc_t desc;
+				r_texture_desc_t desc;
 				render->describe_texture(poly->lightmap, &desc);
 
 				ui_push_scalar(UI_SCALAR_TEXT_ALIGN_X, 0.0f);
@@ -847,6 +852,8 @@ static void lightmap_editor_proc(ui_window_t *window)
 
 				ui_pop_scalar(UI_SCALAR_TEXT_ALIGN_X);
 
+#if 0
+                // TODO: Reimplement with UI draw commands
 				float aspect = (float)desc.h / (float)desc.w;
 
 				rect2_t *layout = ui_layout_rect();
@@ -858,6 +865,7 @@ static void lightmap_editor_proc(ui_window_t *window)
 				r_immediate_texture(poly->lightmap);
 				r_immediate_rect2_filled(image_rect, make_v4(1, 1, 1, 1));
 				r_immediate_flush();
+#endif
 
 #if 0
 				ui_interaction_t interaction = ui_interaction_from_box(image_viewer);
@@ -925,7 +933,7 @@ static void lightmap_editor_proc(ui_window_t *window)
 	}
 }
 
-static void render_lm_editor(void)
+static void render_lm_editor(r_context_t *rc)
 {
     world_t *world = g_world;
     player_t *player = world->player;
@@ -945,12 +953,12 @@ static void render_lm_editor(void)
 
     if (lm_editor->debug_lightmaps)
     {
-        r_command_identifier(S("lightmap debug"));
+        r_command_identifier(rc, S("lightmap debug"));
 
-		r_immediate_topology(R_TOPOLOGY_LINELIST);
-		r_immediate_use_depth(!lm_editor->no_ray_depth_test);
-		//r_immediate_depth_bias(0.005f);
-		r_immediate_blend_mode(R_BLEND_ADDITIVE);
+        r_immediate_t *imm = r_immediate_begin(rc);
+        imm->topology   = R_TOPOLOGY_LINELIST;
+        imm->blend_mode = R_BLEND_ADDITIVE;
+		imm->use_depth  = lm_editor->no_ray_depth_test;
 
         if (g_cursor_locked)
         {
@@ -979,7 +987,7 @@ static void render_lm_editor(void)
                 }
 
                 if (lm_editor->selected_poly != intersect.poly)
-                    push_poly_wireframe(map, intersect.poly, COLORF_RED);
+                    push_poly_wireframe(rc, map, intersect.poly, COLORF_RED);
             }
             else
             {
@@ -999,21 +1007,21 @@ static void render_lm_editor(void)
             float scale_x = plane->lm_scale_x;
             float scale_y = plane->lm_scale_y;
 
-            push_poly_wireframe(map, lm_editor->selected_poly, make_v4(0.0f, 0.0f, 0.0f, 0.75f));
+            push_poly_wireframe(rc, map, lm_editor->selected_poly, make_v4(0.0f, 0.0f, 0.0f, 0.75f));
 
-            r_immediate_arrow(plane->lm_origin, add(plane->lm_origin, mul(scale_x, plane->lm_s)), make_v4(0.5f, 0.0f, 0.0f, 1.0f));
-            r_immediate_arrow(plane->lm_origin, add(plane->lm_origin, mul(scale_y, plane->lm_t)), make_v4(0.0f, 0.5f, 0.0f, 1.0f));
+            r_immediate_arrow(rc, plane->lm_origin, add(plane->lm_origin, mul(scale_x, plane->lm_s)), make_v4(0.5f, 0.0f, 0.0f, 1.0f));
+            r_immediate_arrow(rc, plane->lm_origin, add(plane->lm_origin, mul(scale_y, plane->lm_t)), make_v4(0.0f, 0.5f, 0.0f, 1.0f));
 
             v3_t square_v0 = add(plane->lm_origin, mul(scale_x, plane->lm_s));
             v3_t square_v1 = add(plane->lm_origin, mul(scale_y, plane->lm_t));
             v3_t square_v2 = v3_add3(plane->lm_origin, mul(scale_x, plane->lm_s), mul(scale_y, plane->lm_t));
 
-            r_immediate_line(square_v0, square_v2, make_v4(0.5f, 0.0f, 0.5f, 1.0f));
-            r_immediate_line(square_v1, square_v2, make_v4(0.5f, 0.0f, 0.5f, 1.0f));
+            r_immediate_line(rc, square_v0, square_v2, make_v4(0.5f, 0.0f, 0.5f, 1.0f));
+            r_immediate_line(rc, square_v1, square_v2, make_v4(0.5f, 0.0f, 0.5f, 1.0f));
 
             if (lm_editor->pixel_selection_active)
             {
-                texture_desc_t desc;
+                r_texture_desc_t desc;
                 render->describe_texture(lm_editor->selected_poly->lightmap, &desc);
 
                 float texscale_x = (float)desc.w;
@@ -1040,10 +1048,10 @@ static void render_lm_editor(void)
                                         mul(selection_dim_worldspace.x, plane->lm_s), 
                                         mul(selection_dim_worldspace.y, plane->lm_t));
 
-                r_immediate_line(pixel_v0, pixel_v1, COLORF_RED);
-                r_immediate_line(pixel_v0, pixel_v2, COLORF_RED);
-                r_immediate_line(pixel_v2, pixel_v3, COLORF_RED);
-                r_immediate_line(pixel_v1, pixel_v3, COLORF_RED);
+                r_immediate_line(rc, pixel_v0, pixel_v1, COLORF_RED);
+                r_immediate_line(rc, pixel_v0, pixel_v2, COLORF_RED);
+                r_immediate_line(rc, pixel_v2, pixel_v3, COLORF_RED);
+                r_immediate_line(rc, pixel_v1, pixel_v3, COLORF_RED);
             }
         }
 
@@ -1105,7 +1113,7 @@ static void render_lm_editor(void)
 
 										if (!vertex->next || vertex_index + 2 == (int)path->vertex_count)
 										{
-											r_immediate_line(vertex->o, point_light->p, 
+											r_immediate_line(rc, vertex->o, point_light->p, 
 															 make_v4(color.x, color.y, color.z, 1.0f));
 										}
 									}
@@ -1136,11 +1144,11 @@ static void render_lm_editor(void)
 
 									if (vertex == path->first_vertex)
 									{
-										r_immediate_arrow_gradient(next_vertex->o, vertex->o, end_color, start_color);
+										r_immediate_arrow_gradient(rc, next_vertex->o, vertex->o, end_color, start_color);
 									}
 									else
 									{
-										r_immediate_line_gradient(vertex->o, next_vertex->o, start_color, end_color);
+										r_immediate_line_gradient(rc, vertex->o, next_vertex->o, start_color, end_color);
 									}
 								}
 							}
@@ -1152,7 +1160,7 @@ static void render_lm_editor(void)
 			}
 		}
 
-        r_immediate_flush();
+        r_immediate_end(rc, imm);
     }
 }
 
@@ -1160,13 +1168,13 @@ DREAM_INLINE void fullscreen_show_timings(void)
 {
     UI_SCALAR(UI_SCALAR_TEXT_ALIGN_X, 0.5f)
     {
-        render_timings_t timings;
+        r_timings_t timings;
         render->get_timings(&timings);
 
         float total = 0.0f;
         for (int i = 1; i < RENDER_TS_COUNT; i++)
         {
-            ui_label(Sf("%s: %.02fms", render_timestamp_names[i], 1000.0*timings.dt[i]));
+            ui_label(Sf("%s: %.02fms", r_timestamp_names[i], 1000.0*timings.dt[i]));
             total += timings.dt[i];
         }
 
@@ -1245,8 +1253,11 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 
         bar = rect2_add_offset(bar, make_v2(0.0f, (1.0f - editor.bar_openness)*height));
 
+#if 0
+        // TODO: Replace with UI draw calls
         r_immediate_rect2_filled(bar, ui_color(UI_COLOR_WINDOW_BACKGROUND));
         r_immediate_flush();
+#endif
 
         rect2_t inner_bar = rect2_shrink(bar, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
@@ -1315,7 +1326,7 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
     }
 }
 
-void update_and_render_in_game_editor(void)
+void update_and_render_in_game_editor(r_context_t *rc)
 {
 	if (!editor.initialized)
 	{
@@ -1352,10 +1363,10 @@ void update_and_render_in_game_editor(void)
 	}
 
 	if (&editor.lm_editor.window.open)
-		render_lm_editor();
+		render_lm_editor(rc);
 
 	if (&editor.hull_test.window.open)
-		render_hull_test();
+		render_hull_test(rc);
 
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);

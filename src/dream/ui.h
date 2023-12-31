@@ -412,6 +412,9 @@ typedef struct ui_tooltip_t
 
 typedef struct ui_t
 {
+    // FIXME: Remove this
+    r_context_t *rc;
+
 	bool initialized;
 
 	arena_t arena;
@@ -485,7 +488,7 @@ DREAM_LOCAL bool ui_is_hovered_delay(ui_id_t id, float delay);
 DREAM_LOCAL ui_state_t *ui_get_state(ui_id_t id);
 DREAM_LOCAL bool ui_state_is_new(ui_state_t *state);
 
-DREAM_LOCAL bool ui_begin(float dt);
+DREAM_LOCAL bool ui_begin(r_context_t *rc, float dt);
 DREAM_LOCAL void ui_end(void);
 
 //

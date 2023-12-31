@@ -39,7 +39,7 @@ typedef struct d3d_cbuf_model_t
 
 typedef struct d3d_model_t
 {
-    vertex_format_t vertex_format;
+    r_vertex_format_t vertex_format;
 
     D3D11_PRIMITIVE_TOPOLOGY primitive_topology;
 
@@ -61,7 +61,7 @@ typedef enum d3d_texture_state_t
 
 typedef struct d3d_texture_t
 {
-    texture_desc_t desc;
+    r_texture_desc_t desc;
 
 	uint32_t state;
 
@@ -114,9 +114,9 @@ typedef struct d3d_gen_mipmaps_t
 {
 	struct d3d_gen_mipmaps_t *next;
 
-	resource_handle_t handle;
-    texture_desc_t    desc;
-    texture_data_t    data;
+	texture_handle_t  handle;
+    r_texture_desc_t    desc;
+    r_texture_data_t    data;
 } d3d_gen_mipmaps_t;
 
 typedef struct d3d_queries_t
@@ -132,6 +132,11 @@ typedef struct d3d_shader_pair_t
 	ID3D11VertexShader *vs;
 	ID3D11PixelShader  *ps;
 } d3d_shader_pair_t;
+
+typedef struct d3d_view_data_t
+{
+    d3d_rendertarget_t sun_shadowmap;
+} d3d_view_data_t;
 
 typedef struct d3d_state_t
 {
@@ -161,7 +166,7 @@ typedef struct d3d_state_t
     d3d_queries_t             queries[D3D_QUERY_FRAME_COUNT];
     int                       query_frame;
     int                       query_collect_frame;
-    render_timings_t          timings;
+    r_timings_t               timings;
 
     ID3D11SamplerState       *samplers[D3D_SAMPLER_COUNT];
 
@@ -186,7 +191,7 @@ typedef struct d3d_state_t
 
     d3d_rendertarget_t        sun_shadowmap;
 
-    ID3D11InputLayout        *layouts[VERTEX_FORMAT_COUNT];
+    ID3D11InputLayout        *layouts[R_VERTEX_FORMAT_COUNT];
 
     ID3D11Buffer             *cbuf_view;
     ID3D11Buffer             *cbuf_model;
@@ -211,16 +216,16 @@ typedef struct d3d_state_t
 
 DREAM_LOCAL d3d_state_t d3d;
 
-DREAM_INLINE void d3d_timestamp(render_timestamp_t ts)
+DREAM_INLINE void d3d_timestamp(r_timestamp_t ts)
 {
 	ID3D11DeviceContext_End(d3d.context, (ID3D11Asynchronous *)d3d.queries[d3d.query_frame].ts[ts]);
 }
 
-DREAM_LOCAL resource_handle_t upload_texture(const upload_texture_t *params);
-DREAM_LOCAL void destroy_texture(resource_handle_t handle);
+DREAM_LOCAL texture_handle_t  upload_texture(const r_upload_texture_t *params);
+DREAM_LOCAL void destroy_texture(texture_handle_t  handle);
 
-DREAM_LOCAL resource_handle_t upload_model(const upload_model_t *params);
-DREAM_LOCAL void destroy_model(resource_handle_t model);
+DREAM_LOCAL mesh_handle_t upload_mesh(const r_upload_mesh_t *params);
+DREAM_LOCAL void destroy_mesh(mesh_handle_t mesh);
 
 DREAM_LOCAL ID3DBlob *d3d_compile_shader(string_t hlsl_file, string_t hlsl, const char *entry_point, const char *kind);
 DREAM_LOCAL ID3D11PixelShader *d3d_compile_ps(string_t hlsl_file, string_t hlsl, const char *entry_point);

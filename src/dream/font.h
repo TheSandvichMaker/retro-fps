@@ -29,7 +29,7 @@ typedef struct font_atlas_t
 
 	uint32_t texture_w;
 	uint32_t texture_h;
-	resource_handle_t texture;
+	texture_handle_t texture;
 
 	font_glyph_t  null_glyph;
 
