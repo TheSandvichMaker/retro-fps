@@ -33,31 +33,37 @@ struct VS_INPUT_BRUSH
     float3 normal      : NORMAL;
 };
 
-cbuffer cbuffer0 : register(b0)
+#define PADF(n) float PASTE(pad__, __LINE__)[n]
+
+cbuffer cbuf_view : register(b0)
 {
-    float4x4 view_matrix;
-    float4x4 proj_matrix;
+    float4x4   view_matrix;
+    float4x4   proj_matrix;
+    float4x4   sun_matrix;
+    float4x4   skybox_matrix;
+    float3     sun_direction;   
+    float3     sun_color;       
+    float3     light_direction; 
+    float3     fog_offset;      
+    float3     fog_dim;         
+	float2     screen_dim;
+    float      fog_density;
+    float      fog_absorption;
+    float      fog_scattering;
+    float      fog_phase_k;
+    uint       frame_index;
+}
+
+cbuffer cbuf_model : register(b1)
+{
     float4x4 model_matrix;
-    float4x4 sun_matrix;
-	float2   screen_dim;
 	uint     instance_offset;
-    float3   light_direction;
-    float    pad1;
-    uint     frame_index;
     float    depth_bias;
-    float    pad2;
-    float    pad3;
-    float3   fog_offset;
-    float    pad4;
-    float3   fog_dim;
-    float    pad5;
-    float3   sun_color;
-    float    pad6;
-    float3   sun_direction;
-    float    fog_density;
-    float    fog_absorption;
-    float    fog_scattering;
-    float    fog_phase_k;
+}
+
+cbuffer cbuf_immediate : register(b2)
+{
+    float4x4 imm_mvp_matrix;
 }
 
 float square(float x)

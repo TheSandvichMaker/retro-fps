@@ -17,7 +17,7 @@ TextureCube cubemap         : register(t0);
 PS_INPUT vs(VS_INPUT IN)
 {
     PS_INPUT OUT;
-    OUT.pos      = mul(view_matrix, float4(IN.pos, 1));
+    OUT.pos      = mul(skybox_matrix, float4(IN.pos, 1));
     OUT.texcoord = IN.pos;
     return OUT;
 }

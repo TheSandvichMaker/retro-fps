@@ -659,6 +659,9 @@ rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_tex
 
 	if (op == UI_TEXT_OP_DRAW)
 	{
+        r_push_view(rc, rc->screenspace);
+        r_push_layer(rc, R_SCREEN_LAYER_UI);
+
         imm = r_immediate_begin(rc);
         imm->texture    = font->texture;
 		imm->shader     = R_SHADER_TEXT;
@@ -716,6 +719,8 @@ rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_tex
 	if (op == UI_TEXT_OP_DRAW)
 	{
         r_immediate_end(rc, imm);
+        r_pop_layer(rc);
+        r_pop_view(rc);
 	}
 
 	return result;

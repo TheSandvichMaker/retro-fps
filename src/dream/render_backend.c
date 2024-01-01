@@ -8,7 +8,7 @@ void equip_render_api(render_api_i *api)
     inst = *api;
 }
 
-uint32_t vertex_format_size[R_VERTEX_FORMAT_COUNT] = {
+uint32_t r_vertex_format_size[R_VERTEX_FORMAT_COUNT] = {
     [R_VERTEX_FORMAT_POS]       = sizeof(r_vertex_pos_t),
     [R_VERTEX_FORMAT_IMMEDIATE] = sizeof(r_vertex_immediate_t),
     [R_VERTEX_FORMAT_BRUSH]     = sizeof(r_vertex_brush_t),

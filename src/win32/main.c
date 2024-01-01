@@ -284,6 +284,9 @@ int wWinMain(HINSTANCE instance,
 
         .imm_vertices_capacity = R_IMMEDIATE_VERTICES_CAPACITY,
         .imm_vertices          = m_alloc_array_nozero(&win32_arena, R_IMMEDIATE_VERTICES_CAPACITY, r_vertex_immediate_t),
+
+        .ui_rects_capacity     = R_UI_RECTS_CAPACITY,
+        .ui_rects              = m_alloc_array_nozero(&win32_arena, R_UI_RECTS_CAPACITY, r_ui_rect_t),
     };
 
 	platform_cursor_t cursor      = PLATFORM_CURSOR_ARROW;

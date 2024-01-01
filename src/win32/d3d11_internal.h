@@ -17,6 +17,7 @@ typedef struct d3d_cbuf_view_t
     m4x4_t   view_matrix;
     m4x4_t   proj_matrix;
     m4x4_t   sun_matrix;
+    m4x4_t   skybox_matrix;
     v3_t     sun_direction;   PADF(1); // TODO: What's the deal with padding?
     v3_t     sun_color;       PADF(1);
     v3_t     light_direction; PADF(1); // TODO: What's light direction and why is it seperate from sun direction?
@@ -36,6 +37,11 @@ typedef struct d3d_cbuf_model_t
 	uint32_t instance_offset;
     float    depth_bias;
 } d3d_cbuf_model_t;
+
+typedef struct d3d_cbuf_imm_t
+{
+    m4x4_t mvp_matrix;
+} d3d_cbuf_imm_t;
 
 typedef struct d3d_model_t
 {
@@ -195,6 +201,7 @@ typedef struct d3d_state_t
 
     ID3D11Buffer             *cbuf_view;
     ID3D11Buffer             *cbuf_model;
+    ID3D11Buffer             *cbuf_imm;
     ID3D11VertexShader       *shadowmap_vs;
     ID3D11VertexShader       *world_vs;
     ID3D11PixelShader        *world_ps;

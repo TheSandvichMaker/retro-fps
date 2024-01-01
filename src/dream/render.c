@@ -34,7 +34,6 @@ void r_init_render_context(r_context_t *rc, r_command_buffer_t *commands)
     zero_struct(rc);
 
     rc->commands = commands;
-    r_init_immediate(rc, rc->current_immediate);
 
     rc->commands->views_count        = 0;
     rc->commands->commands_count     = 0;
@@ -86,7 +85,7 @@ void r_command_identifier(r_context_t *rc, string_t identifier)
 
 void r_push_command(r_context_t *rc, r_command_t command)
 {
-    ASSERT(command.key.view < rc->views_stack.at);
+    ASSERT(command.key.view < rc->commands->views_count);
 
     r_command_buffer_t *commands = rc->commands;
 
@@ -103,7 +102,7 @@ void *r_allocate_command_data(r_context_t *rc, size_t size)
     size_t at_aligned = align_forward(rc->commands->data_at, R_RENDER_COMMAND_ALIGN);
     size_t size_left  = rc->commands->data_capacity - at_aligned;
 
-    if (ALWAYS(size_left <= size))
+    if (ALWAYS(size <= size_left))
     {
         result = &rc->commands->data[at_aligned];
         rc->commands->data_at = (uint32_t)(at_aligned + size);
@@ -203,7 +202,7 @@ void r_draw_mesh(r_context_t *rc, m4x4_t transform, mesh_handle_t mesh, const r_
         .key = {
             .screen_layer = R_SCREEN_LAYER_SCENE,
             .view         = stack_top(rc->views_stack),
-            .cmd          = false,
+            .kind         = R_COMMAND_MODEL,
             .depth        = 0, // TODO
             .material_id  = 0, // TODO
         },
@@ -225,6 +224,8 @@ r_immediate_t *r_immediate_begin(r_context_t *rc)
     r_immediate_t *imm = r_allocate_command_data(rc, sizeof(r_immediate_t));
     r_init_immediate(rc, imm);
 
+    rc->current_immediate = imm;
+
     return imm;
 }
 
@@ -236,10 +237,7 @@ void r_immediate_end(r_context_t *rc, r_immediate_t *imm)
         .key = {
             .screen_layer = stack_top(rc->layers_stack),
             .view         = stack_top(rc->views_stack),
-            .cmd          = true,
-            .command = {
-                .kind = R_COMMAND_IMMEDIATE,
-            },
+            .kind         = R_COMMAND_IMMEDIATE,
         },
         .data = imm,
     };
@@ -300,19 +298,17 @@ void r_ui_rect(r_context_t *rc, r_ui_rect_t rect)
 
 void r_flush_ui_rects(r_context_t *rc)
 {
+    r_command_ui_rects_t *data = r_allocate_command_data(rc, sizeof(r_command_ui_rects_t));
+    data->first = rc->current_first_ui_rect;
+    data->count = rc->current_ui_rect_count;
+
     r_push_command(rc, (r_command_t){
         .key = {
             .screen_layer = stack_top(rc->layers_stack),
             .view         = stack_top(rc->views_stack),
-            .cmd = true,
-            .command = {
-                .kind = R_COMMAND_UI_RECTS,
-                .ui_rects = {
-                    .first = rc->current_first_ui_rect,
-                    .count = rc->current_ui_rect_count,
-                },
-            },
+            .kind = R_COMMAND_UI_RECTS,
         },
+        .data = data,
     });
 
     rc->current_first_ui_rect = rc->commands->ui_rects_count;

@@ -1328,6 +1328,9 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 
 void update_and_render_in_game_editor(r_context_t *rc)
 {
+    r_push_view(rc, rc->screenspace);
+    r_push_layer(rc, R_SCREEN_LAYER_UI);
+
 	if (!editor.initialized)
 	{
 		editor.initialized = true;
@@ -1400,4 +1403,9 @@ void update_and_render_in_game_editor(r_context_t *rc)
 	ui_panel_end();
 
 	ui_process_windows();
+
+    r_flush_ui_rects(rc);
+
+    r_pop_layer(rc);
+    r_pop_view(rc);
 }

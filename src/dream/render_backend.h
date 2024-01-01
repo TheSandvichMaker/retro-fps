@@ -139,7 +139,6 @@ typedef struct r_upload_mesh_t
     _(RENDER_TS_CLEAR_SHADOWMAP, "clear shadowmap")             \
     _(RENDER_TS_RENDER_SHADOWMAP, "render shadowmap")           \
     _(RENDER_TS_CLEAR_MAIN, "clear main")                       \
-    _(RENDER_TS_RENDER_SKYBOX, "render skybox")                 \
     _(RENDER_TS_UPLOAD_IMMEDIATE_DATA, "upload immediate data") \
     _(RENDER_TS_SCENE, "render scene")                          \
     _(RENDER_TS_MSAA_RESOLVE, "msaa resolve")                   \
@@ -191,6 +190,7 @@ typedef struct r_view_t
     texture_handle_t  fogmap;
     v3_t              fog_offset;
     v3_t              fog_dim;
+    v3_t              sun_direction;
     v3_t              sun_color;
     float             fog_density;
     float             fog_absorption;
@@ -239,10 +239,9 @@ typedef enum r_command_kind_t
 {
     R_COMMAND_NONE,
 
-    // R_COMMAND_MODEL,
+    R_COMMAND_MODEL,
     R_COMMAND_IMMEDIATE,
 	R_COMMAND_UI_RECTS,
-    // R_COMMAND_END_SCENE_PASS,
     
     R_COMMAND_COUNT,
 } r_command_kind_t;
@@ -280,13 +279,11 @@ typedef struct r_ui_rect_t
 	float    pad2;              // 80
 } r_ui_rect_t;
 
-/*
 typedef struct r_command_ui_rects_t
 {
 	uint32_t first;
 	uint32_t count;
 } r_command_ui_rects_t;
-*/
 
 typedef enum r_blend_mode_t
 {
@@ -312,32 +309,10 @@ typedef union r_command_key_t
 {
     struct
     {
-        union
-        {
-            // normal draw call
-            struct
-            {
-                uint64_t material_id  : 32;
-                uint64_t depth        : 24;
-            };
-            // commands
-            struct
-            {
-                union
-                {
-                    struct
-                    {
-                        uint64_t first : 28;
-                        uint64_t count : 24;
-                    } ui_rects;
-
-                    uint64_t parameters : 52;
-                };
-                uint64_t kind : 4;
-            } command;
-        };
-        uint64_t cmd          : 1;
-        uint64_t view         : 5;
+        uint64_t material_id  : 32;
+        uint64_t depth        : 20;
+        uint64_t kind         : 4;
+        uint64_t view         : 6;
         uint64_t screen_layer : 2;
     };
     uint64_t value;

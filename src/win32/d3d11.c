@@ -284,6 +284,7 @@ int init_d3d11(void *hwnd_)
 
     d3d.cbuf_view  = d3d_make_cbuf(sizeof(d3d_cbuf_view_t));
     d3d.cbuf_model = d3d_make_cbuf(sizeof(d3d_cbuf_model_t));
+    d3d.cbuf_imm   = d3d_make_cbuf(sizeof(d3d_cbuf_imm_t));
 
     // create samplers
 
@@ -978,10 +979,89 @@ DREAM_INLINE void radix_sort_commands(r_command_t *array, size_t count)
     }
 }
 
+DREAM_INLINE void d3d_update_view_constants(r_view_t *view)
+{
+    v3_t sun_direction = view->sun_direction;
+
+    m4x4_t sun_view   = make_view_matrix(add(view->camera_p, mul(-256.0f, sun_direction)), 
+                                         negate(sun_direction), 
+                                         make_v3(0, 0, 1));
+
+    m4x4_t sun_ortho  = make_orthographic_matrix(2048, 2048, 512);
+    m4x4_t sun_matrix = mul(sun_ortho, sun_view);
+
+    m4x4_t skybox_view = view->camera;
+
+    skybox_view.e[3][0] = 0.0f;
+    skybox_view.e[3][1] = 0.0f;
+    skybox_view.e[3][2] = 0.0f;
+
+    m4x4_t swizzle = {
+        1, 0, 0, 0,
+        0, 0, 1, 0,
+        0, 1, 0, 0,
+        0, 0, 0, 1,
+    };
+
+    m4x4_t skybox_matrix = M4X4_IDENTITY;
+    skybox_matrix = mul(skybox_matrix, view->projection);
+    skybox_matrix = mul(skybox_matrix, skybox_view);
+    skybox_matrix = mul(skybox_matrix, swizzle);
+
+    const d3d_cbuf_view_t cbuf_view = {
+        .view_matrix     = view->camera,
+        .proj_matrix     = view->projection,
+        .sun_matrix      = sun_matrix,
+        .skybox_matrix   = skybox_matrix,
+        .sun_direction   = view->sun_direction,
+        .sun_color       = view->sun_color,
+        .light_direction = sun_direction,
+        .fog_offset      = view->fog_offset,
+        .fog_dim         = view->fog_dim,
+        .screen_dim      = { (float)d3d.current_width, (float)d3d.current_height },
+        .fog_density     = view->fog_density,
+        .fog_absorption  = view->fog_absorption,
+        .fog_scattering  = view->fog_scattering,
+        .fog_phase_k     = view->fog_phase_k,
+        .frame_index     = d3d.frame_index,
+    };
+
+    update_buffer(d3d.cbuf_view, &cbuf_view, sizeof(cbuf_view));
+}
+
+DREAM_INLINE void d3d_render_skybox(r_view_t *view, D3D11_VIEWPORT viewport)
+{
+    if (!RESOURCE_HANDLE_VALID(view->skybox))
+        return;
+
+    d3d_model_t   *model   = d3d.skybox_model;
+    d3d_texture_t *texture = d3d_get_texture_or(view->skybox, d3d.missing_texture_cubemap);
+
+    render_model(&(render_pass_t) {
+        .render_target = d3d.scene_target.color_rtv,
+        .depth_stencil = d3d.scene_target.depth_dsv,
+
+        .model = model,
+
+        .vs = d3d.skybox_vs,
+        .ps = d3d.skybox_ps,
+
+        .index_format = DXGI_FORMAT_R16_UINT,
+
+        .cbuffer_count = 1,
+        .cbuffers      = (ID3D11Buffer *[]) { d3d.cbuf_view },
+        .srv_count     = 1,
+        .srvs          = (ID3D11ShaderResourceView *[]) { texture->srv, },
+
+        .depth         = D3D_DEPTH_TEST_NONE,
+        .cull          = R_CULL_NONE,
+        .sample_linear = true,
+        .viewport      = viewport,
+    });
+}
+
 void d3d11_execute_command_buffer(r_command_buffer_t *commands, int width, int height)
 {
-    // uint32_t frame_index = d3d.frame_index;
-
 	AcquireSRWLockExclusive(&d3d.context_lock);
 
     d3d_queries_t *queries = &d3d.queries[d3d.query_frame];
@@ -992,52 +1072,19 @@ void d3d11_execute_command_buffer(r_command_buffer_t *commands, int width, int h
 
     radix_sort_commands(commands->commands, commands->commands_count);
 
-#if 0
-    for (size_t command_index = 0; command_index < commands->commands_count; command_index++)
-    {
-        r_command_t *command = &commands->commands[command_index];
-        r_command_key_t *key = &command->key;
-
-        bool cmd = command->cmd;
-
-        if (cmd)
-        {
-            r_command_kind_t kind = key->command.kind;
-
-            switch (kind)
-            {
-                case R_COMMAND_IMMEDIATE:
-                {
-                    r_immediate_t *imm = command->value;
-                } break;
-
-                case R_COMMAND_UI_RECTS:
-                {
-                    uint32_t first = key->command.ui_rects.first;
-                    uint32_t count = key->command.ui_rects.count;
-                } break;
-
-                INVALID_DEFAULT_CASE;
-            }
-        }
-        else
-        {
-        }
-    }
-#endif
-
-#if 0
-
     if (d3d.backbuffer.color_rtv)
     {
+        r_view_t *view = NULL;
+        r_screen_layer_t layer = R_SCREEN_LAYER_SCENE;
+
         //
-        // Render Sun Shadows
+        // sun shadows
         //
 
-        ID3D11DeviceContext_ClearDepthStencilView(d3d.context, d3d.sun_shadowmap.depth_dsv, D3D11_CLEAR_DEPTH, 0.0f, 0);
+        ID3D11DeviceContext_ClearDepthStencilView(d3d.context, d3d.sun_shadowmap.depth_dsv, 
+                                                  D3D11_CLEAR_DEPTH, 0.0f, 0);
         d3d_timestamp(RENDER_TS_CLEAR_SHADOWMAP);
 
-        v3_t camera_p = make_v3(0, 0, 0);
 
         D3D11_VIEWPORT sun_viewport =
         {
@@ -1049,54 +1096,40 @@ void d3d11_execute_command_buffer(r_command_buffer_t *commands, int width, int h
             .MaxDepth = 1.0f,
         };
 
-        static float timer = 0.0f;
-        v3_t sun_direction = normalize(make_v3(0.25f, 0.75f, 1));
+        D3D11_RECT sun_scissor_rect = { 0, 0, SUN_SHADOWMAP_RESOLUTION, SUN_SHADOWMAP_RESOLUTION };
 
-        timer += 1.0f / 60.0f;
-
-        m4x4_t sun_view   = make_view_matrix(add(camera_p, mul(-256.0f, sun_direction)), negate(sun_direction), make_v3(0, 0, 1));
-        m4x4_t sun_ortho  = make_orthographic_matrix(2048, 2048, 512);
-        m4x4_t sun_matrix = mul(sun_ortho, sun_view);
-
-        //
-        // update scene constant buffer
-        //
-
-        const d3d_cbuf_view_t cbuf_view = {
-            .view_matrix     = view->camera,
-            .proj_matrix     = view->projection,
-            .sun_matrix      = sun_matrix,
-            .sun_direction   = sun_direction,
-            .sun_color       = view->sun_color,
-            .light_direction = sun_direction,
-            .fog_offset      = view->fog_offset,
-            .fog_dim         = view->fog_dim,
-            .screen_dim      = { (float)d3d.current_width, (float)d3d.current_height },
-            .fog_density     = view->fog_density,
-            .fog_absorption  = view->fog_absorption,
-            .fog_scattering  = view->fog_scattering,
-            .fog_phase_k     = view->fog_phase_k,
-            .frame_index     = frame_index,
-        };
-
-        update_buffer(d3d.cbuf_view, &cbuf_view, sizeof(cbuf_view));
-
-        for (char *at = list->command_list_base; at < list->command_list_at;)
+        for (size_t command_index = 0; command_index < commands->commands_count; command_index++)
         {
-            r_command_base_t *base = (r_command_base_t *)at;
+            r_command_t *command = &commands->commands[command_index];
+            r_command_key_t *key = &command->key;
 
-            switch (base->kind)
+            r_view_t *new_view = &commands->views[key->view];
+            if (view != new_view)
+            {
+                view = new_view;
+                d3d_update_view_constants(view);
+            }
+            
+            r_screen_layer_t new_layer = key->screen_layer;
+            if (new_layer != R_SCREEN_LAYER_SCENE)
+            {
+                break;
+            }
+
+            r_command_kind_t kind = key->kind;
+
+            switch (kind)
             {
                 case R_COMMAND_MODEL:
                 {
-                    r_command_model_t *command = (r_command_model_t *)base;
-                    at = align_address(at + sizeof(*command), RENDER_COMMAND_ALIGN);
+                    r_command_model_t *data = command->data;
 
-                    d3d_model_t *model = pool_get(&d3d_models, command->model);
+                    d3d_model_t *model = pool_get(&d3d_models, data->mesh);
+
                     if (model)
                     {
                         d3d_cbuf_model_t cbuf_model = {
-                            .model_matrix = command->transform,
+                            .model_matrix = data->transform,
                         };
 
                         update_buffer(d3d.cbuf_model, &cbuf_model, sizeof(cbuf_model));
@@ -1119,37 +1152,29 @@ void d3d11_execute_command_buffer(r_command_buffer_t *commands, int width, int h
                             .cull          = R_CULL_BACK,
                             .viewport      = sun_viewport,
                             .scissor       = true,
-                            .scissor_rect  = (D3D11_RECT){ 0, 0, SUN_SHADOWMAP_RESOLUTION, SUN_SHADOWMAP_RESOLUTION },
+                            .scissor_rect  = sun_scissor_rect,
                         });
                     }
                 } break;
 
                 case R_COMMAND_IMMEDIATE:
                 {
-                    r_command_immediate_t *command = (r_command_immediate_t *)base;
-                    at = align_address(at + sizeof(*command), RENDER_COMMAND_ALIGN);
+                    /* skip */
                 } break;
 
                 case R_COMMAND_UI_RECTS:
                 {
-                    r_command_ui_rects_t *command = (r_command_ui_rects_t *)base;
-                    at = align_address(at + sizeof(*command), RENDER_COMMAND_ALIGN);
-                } break;
-
-                case R_COMMAND_END_SCENE_PASS:
-                {
-                    goto done_with_sun_shadows;
+                    /* skip */
                 } break;
 
                 INVALID_DEFAULT_CASE;
             }
         }
-done_with_sun_shadows:
 
         d3d_timestamp(RENDER_TS_RENDER_SHADOWMAP);
 
         //
-        // Actually Render Scene
+        // render scene
         //
 
         D3D11_VIEWPORT viewport =
@@ -1168,108 +1193,95 @@ done_with_sun_shadows:
 
         d3d_timestamp(RENDER_TS_CLEAR_MAIN);
 
-        for (size_t i = 1; i < list->view_count; i++)
-        {
-            r_view_t *view = &list->views[i];
-
-            if (!RESOURCE_HANDLE_VALID(view->skybox))
-                continue;
-
-#if 0
-            // TODO: Revisit this
-
-            m4x4_t camera = view->camera;
-
-            camera.e[3][0] = 0.0f;
-            camera.e[3][1] = 0.0f;
-            camera.e[3][2] = 0.0f;
-
-            m4x4_t swizzle = {
-                1, 0, 0, 0,
-                0, 0, 1, 0,
-                0, 1, 0, 0,
-                0, 0, 0, 1,
-            };
-
-            m4x4_t mvp = M4X4_IDENTITY;
-            mvp = mul(mvp, view->projection);
-            mvp = mul(mvp, camera);
-            mvp = mul(mvp, swizzle);
-
-            d3d_cbuffer_t cbuffer = {
-                .view_matrix = mvp,
-                .frame_index = frame_index,
-                .sun_color   = view->sun_color,
-            };
-
-            update_buffer(d3d.ubuffer, &cbuffer, sizeof(cbuffer));
-#endif
-
-            d3d_model_t   *model   = d3d.skybox_model;
-            d3d_texture_t *texture = d3d_get_texture_or(view->skybox, d3d.missing_texture_cubemap);
-
-            render_model(&(render_pass_t) {
-                .render_target = d3d.scene_target.color_rtv,
-                .depth_stencil = d3d.scene_target.depth_dsv,
-
-                .model = model,
-
-                .vs = d3d.skybox_vs,
-                .ps = d3d.skybox_ps,
-
-                .index_format = DXGI_FORMAT_R16_UINT,
-
-                .cbuffer_count = 1,
-                .cbuffers      = (ID3D11Buffer *[]) { d3d.cbuf_view },
-                .srv_count     = 1,
-                .srvs          = (ID3D11ShaderResourceView *[]) { texture->srv, },
-
-                .depth         = D3D_DEPTH_TEST_NONE,
-                .cull          = R_CULL_NONE,
-                .sample_linear = true,
-                .viewport      = viewport,
-            });
-        }
-
-        d3d_timestamp(RENDER_TS_RENDER_SKYBOX);
-
         // update immediate index/vertex buffer
-        update_buffer(d3d.immediate_ibuffer, list->immediate_indices,  sizeof(list->immediate_indices[0])*list->immediate_icount);
-        update_buffer(d3d.immediate_vbuffer, list->immediate_vertices, sizeof(list->immediate_vertices[0])*list->immediate_vcount);
+        update_buffer(d3d.immediate_ibuffer, commands->imm_indices,  sizeof(commands->imm_indices[0])*commands->imm_indices_count);
+        update_buffer(d3d.immediate_vbuffer, commands->imm_vertices, sizeof(commands->imm_vertices[0])*commands->imm_vertices_count);
 
         // update ui rect buffer
-        update_buffer(d3d.ui_rect_buffer, list->ui_rects,  sizeof(list->ui_rects[0])*list->ui_rect_count);
+        update_buffer(d3d.ui_rect_buffer, commands->ui_rects, sizeof(commands->ui_rects[0])*commands->ui_rects_count);
 
         d3d_timestamp(RENDER_TS_UPLOAD_IMMEDIATE_DATA);
 
-        bool resolved_scene = false;
-
         d3d_rendertarget_t *current_render_target = &d3d.scene_target;
 
-        for (char *at = list->command_list_base; at < list->command_list_at;)
+        for (size_t command_index = 0; command_index < commands->commands_count; command_index++)
         {
-            r_command_base_t *base = (r_command_base_t *)at;
-            r_view_t *view = &list->views[base->view];
+            r_command_t *command = &commands->commands[command_index];
+            r_command_key_t *key = &command->key;
 
-            switch (base->kind)
+            r_screen_layer_t new_layer = key->screen_layer;
+            if (layer != new_layer)
+            {
+                if (layer == R_SCREEN_LAYER_SCENE)
+                {
+                    d3d_timestamp(RENDER_TS_SCENE);
+
+                    d3d_texture_t *fogmap = d3d_get_texture_or(view->fogmap, NULL);
+
+                    ID3D11ShaderResourceView *fogmap_srv = fogmap ? fogmap->srv : NULL;
+
+                    d3d_do_post_pass(&(d3d_post_pass_t){
+                        .render_target = d3d.post_target.color_rtv,
+                        .ps            = d3d.msaa_resolve_ps,
+                        .srv_count     = 5,
+                        .srvs          = (ID3D11ShaderResourceView *[]){ d3d.scene_target.color_srv, d3d.scene_target.depth_srv, d3d.blue_noise->srv, fogmap_srv, d3d.sun_shadowmap.depth_srv },
+                        .viewport      = viewport,
+                    });
+
+                    d3d_timestamp(RENDER_TS_MSAA_RESOLVE);
+
+                    // Generate mipmaps for bloom
+                    ID3D11DeviceContext_GenerateMips(d3d.context, d3d.post_target.color_srv);
+
+                    d3d_timestamp(RENDER_TS_BLOOM);
+
+                    //
+                    // Post processing, resolve HDR
+                    //
+
+                    d3d_do_post_pass(&(d3d_post_pass_t){
+                        .render_target = d3d.backbuffer.color_rtv,
+                        .ps            = d3d.hdr_resolve_ps,
+                        .srv_count     = 3,
+                        .srvs          = (ID3D11ShaderResourceView *[]){ d3d.post_target.color_srv, NULL, d3d.blue_noise->srv },
+                        .viewport      = viewport,
+                    });
+
+                    d3d_timestamp(RENDER_TS_POST_PASS);
+
+                    current_render_target = &d3d.backbuffer;
+                }
+
+                layer = new_layer;
+            }
+
+            r_view_t *new_view = &commands->views[key->view];
+            if (view != new_view)
+            {
+                view = new_view;
+
+                d3d_render_skybox(view, viewport);
+                d3d_update_view_constants(view);
+            }
+
+            r_command_kind_t kind = key->kind;
+
+            switch (kind)
             {
                 case R_COMMAND_MODEL:
                 {
-                    r_command_model_t *command = (r_command_model_t *)base;
-                    at = align_address(at + sizeof(*command), RENDER_COMMAND_ALIGN);
+                    r_command_model_t *data = command->data;
 
-                    d3d_model_t *model = pool_get(&d3d_models, command->model);
+                    d3d_model_t *model = pool_get(&d3d_models, data->mesh);
                     if (model)
                     {
-                        d3d_texture_t *texture  = d3d_get_texture_or(command->texture, d3d.missing_texture);
-                        d3d_texture_t *lightmap = d3d_get_texture_or(command->lightmap, d3d.white_texture);
-
-                        m4x4_t camera_projection = M4X4_IDENTITY;
-                        camera_projection = mul(camera_projection, view->projection);
-                        camera_projection = mul(camera_projection, view->camera);
+                        ASSERT(data->material->kind == R_MATERIAL_BRUSH);
+                        const r_material_brush_t *material = (void *)data->material;
+                        d3d_texture_t *texture  = d3d_get_texture_or(material->texture, d3d.missing_texture);
+                        d3d_texture_t *lightmap = d3d_get_texture_or(material->lightmap, d3d.white_texture);
 
                         const d3d_cbuf_model_t cbuf_model = {
-                            .model_matrix = command->transform,
+                            .model_matrix = data->transform,
                         };
 
                         update_buffer(d3d.cbuf_model, &cbuf_model, sizeof(cbuf_model));
@@ -1300,20 +1312,17 @@ done_with_sun_shadows:
 
                 case R_COMMAND_IMMEDIATE:
                 {
-                    r_command_immediate_t *command = (r_command_immediate_t *)base;
-                    at = align_address(at + sizeof(*command), RENDER_COMMAND_ALIGN);
-
-                    r_immediate_draw_t *draw_call = &command->draw_call;
+                    r_immediate_t *data = command->data;
 
                     const d3d_cbuf_model_t cbuf_model = {
-                        .model_matrix    = draw_call->params.transform,
-                        .depth_bias      = draw_call->params.depth_bias,
+                        .model_matrix    = data->transform,
+                        .depth_bias      = data->depth_bias,
                     };
 
                     update_buffer(d3d.cbuf_model, &cbuf_model, sizeof(cbuf_model));
 
                     D3D11_PRIMITIVE_TOPOLOGY topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-                    switch (draw_call->params.topology)
+                    switch (data->topology)
                     {
                         case R_TOPOLOGY_TRIANGLELIST:  topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST; break;
                         case R_TOPOLOGY_TRIANGLESTRIP: topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP; break;
@@ -1327,15 +1336,15 @@ done_with_sun_shadows:
                     d3d_model_t immediate_model = {
                         .vertex_format      = R_VERTEX_FORMAT_IMMEDIATE,
                         .primitive_topology = topology,
-                        .icount             = draw_call->icount,
+                        .icount             = data->icount,
                         .ibuffer            = d3d.immediate_ibuffer,
-                        .vcount             = draw_call->vcount,
+                        .vcount             = data->vcount,
                         .vbuffer            = d3d.immediate_vbuffer,
                     };
 
-                    d3d_texture_t *texture = d3d_get_texture_or(draw_call->params.texture, d3d.white_texture);
+                    d3d_texture_t *texture = d3d_get_texture_or(data->texture, d3d.white_texture);
 
-					rect2_t clip_rect = rect2_intersect(draw_call->params.clip_rect, view->clip_rect);
+					rect2_t clip_rect = rect2_intersect(data->clip_rect, view->clip_rect);
 
                     render_model(&(render_pass_t) {
                         .render_target = current_render_target->color_rtv,
@@ -1343,22 +1352,22 @@ done_with_sun_shadows:
 
                         .model = &immediate_model,
 
-                        .vs = d3d.immediate_shaders[draw_call->params.shader].vs,
-                        .ps = d3d.immediate_shaders[draw_call->params.shader].ps,
+                        .vs = d3d.immediate_shaders[data->shader].vs,
+                        .ps = d3d.immediate_shaders[data->shader].ps,
 
-                        .blend_mode   = draw_call->params.blend_mode,
+                        .blend_mode   = data->blend_mode,
                         .index_format = DXGI_FORMAT_R32_UINT,
 
-                        .ioffset = draw_call->ioffset,
-                        .voffset = draw_call->voffset,
+                        .ioffset = data->ioffset,
+                        .voffset = data->voffset,
 
                         .cbuffer_count = 2,
                         .cbuffers      = (ID3D11Buffer *[]) { d3d.cbuf_view, d3d.cbuf_model },
                         .srv_count     = 1,
                         .srvs          = (ID3D11ShaderResourceView *[]) { texture->srv },
 
-                        .depth    = draw_call->params.depth_test ? D3D_DEPTH_TEST_GREATER : D3D_DEPTH_TEST_NONE,
-                        .cull     = draw_call->params.cull_mode,
+                        .depth    = data->use_depth ? D3D_DEPTH_TEST_GREATER : D3D_DEPTH_TEST_NONE,
+                        .cull     = data->cull_mode,
                         .viewport = viewport,
                         .scissor  = true,
                         .scissor_rect = {
@@ -1370,13 +1379,12 @@ done_with_sun_shadows:
                     });
                 } break;
 
-				case R_COMMAND_UI_RECTS:
-				{
-                    r_command_ui_rects_t *command = (r_command_ui_rects_t *)base;
-                    at = align_address(at + sizeof(*command), RENDER_COMMAND_ALIGN);
+                case R_COMMAND_UI_RECTS:
+                {
+                    r_command_ui_rects_t *data = command->data;
 
                     const d3d_cbuf_model_t cbuf_model = {
-						.instance_offset = command->first,
+						.instance_offset = data->first,
 					};
 
 					update_buffer(d3d.cbuf_model, &cbuf_model, sizeof(cbuf_model));
@@ -1410,58 +1418,11 @@ done_with_sun_shadows:
 					ID3D11DeviceContext_RSSetScissorRects(d3d.context, 1, &scissor_rect);
 
 					// set pixel shader
-                    ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 2, (ID3D11Buffer *p[]){ &d3d.cbuf_view, &d3d.cbuf_model });
+                    ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 2, ((ID3D11Buffer *[]){ d3d.cbuf_view, d3d.cbuf_model }));
 					ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 1, (ID3D11ShaderResourceView *[]){ d3d.ui_rect_srv });
 					ID3D11DeviceContext_PSSetShader(d3d.context, d3d.ui_rect_ps, NULL, 0);
 
-					ID3D11DeviceContext_DrawInstanced(d3d.context, 4, command->count, 0, 0);
-				} break;
-
-                case R_COMMAND_END_SCENE_PASS:
-                {
-                    at = align_address(at + sizeof(*base), RENDER_COMMAND_ALIGN);
-
-                    if (ALWAYS(!resolved_scene))
-                    {
-                        d3d_timestamp(RENDER_TS_SCENE);
-
-                        resolved_scene = true;
-
-                        d3d_texture_t *fogmap = d3d_get_texture_or(view->fogmap, NULL);
-
-                        ID3D11ShaderResourceView *fogmap_srv = fogmap ? fogmap->srv : NULL;
-
-                        d3d_do_post_pass(&(d3d_post_pass_t){
-                            .render_target = d3d.post_target.color_rtv,
-                            .ps            = d3d.msaa_resolve_ps,
-                            .srv_count     = 5,
-                            .srvs          = (ID3D11ShaderResourceView *[]){ d3d.scene_target.color_srv, d3d.scene_target.depth_srv, d3d.blue_noise->srv, fogmap_srv, d3d.sun_shadowmap.depth_srv },
-                            .viewport      = viewport,
-                        });
-
-                        d3d_timestamp(RENDER_TS_MSAA_RESOLVE);
-
-                        // Generate mipmaps for bloom
-                        ID3D11DeviceContext_GenerateMips(d3d.context, d3d.post_target.color_srv);
-
-                        d3d_timestamp(RENDER_TS_BLOOM);
-
-                        //
-                        // Post processing, resolve HDR
-                        //
-
-                        d3d_do_post_pass(&(d3d_post_pass_t){
-                            .render_target = d3d.backbuffer.color_rtv,
-                            .ps            = d3d.hdr_resolve_ps,
-                            .srv_count     = 3,
-                            .srvs          = (ID3D11ShaderResourceView *[]){ d3d.post_target.color_srv, NULL, d3d.blue_noise->srv },
-                            .viewport      = viewport,
-                        });
-
-                        d3d_timestamp(RENDER_TS_POST_PASS);
-
-                        current_render_target = &d3d.backbuffer;
-                    }
+					ID3D11DeviceContext_DrawInstanced(d3d.context, 4, data->count, 0, 0);
                 } break;
 
                 INVALID_DEFAULT_CASE;
@@ -1470,7 +1431,6 @@ done_with_sun_shadows:
 
         d3d_timestamp(RENDER_TS_UI);
     }
-#endif
 
 	ReleaseSRWLockExclusive(&d3d.context_lock);
 

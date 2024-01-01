@@ -462,6 +462,7 @@ DREAM_INLINE void render_map(r_context_t *rc, camera_t *camera, map_t *map)
     view.fogmap          = map->fogmap;
     view.fog_offset      = rect3_center(map->bounds);
     view.fog_dim         = rect3_dim(map->bounds);
+    view.sun_direction   = normalize(make_v3(0.25f, 0.75f, 1));
     view.sun_color       = sun_color;
     view.fog_absorption  = map->fog_absorption;
     view.fog_density     = map->fog_density;
