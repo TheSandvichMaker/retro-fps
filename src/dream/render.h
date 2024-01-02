@@ -40,8 +40,9 @@ typedef struct r_context_t
     uint32_t current_first_ui_rect;
     uint32_t current_ui_rect_count;
 
-    stack_t(r_screen_layer_t, 8) layers_stack;
-    stack_t(r_view_index_t, 64) views_stack;
+    stack_t(r_screen_layer_t, 8) screen_layers_stack;
+    stack_t(r_view_index_t,  64) views_stack;
+    stack_t(r_view_layer_t,   8) view_layers_stack;
     
     r_view_index_t        screenspace;
 } r_context_t;
@@ -70,8 +71,11 @@ DREAM_LOCAL void           r_pop_view            (r_context_t *rc);
 DREAM_LOCAL r_view_t      *r_get_view            (r_context_t *rc); // gets current view
 DREAM_LOCAL r_view_t      *r_get_view_from_index (r_context_t *rc, r_view_index_t index);
 DREAM_LOCAL v3_t           r_to_view_space       (const r_view_t *view, v3_t p, float w);
+DREAM_LOCAL void           r_push_view_layer     (r_context_t *rc, r_view_layer_t layer);
+DREAM_LOCAL void           r_pop_view_layer      (r_context_t *rc);
 
-#define R_VIEW(rc, view_index) DEFER_LOOP(r_push_view(rc, view_index), r_pop_view(rc))
+#define R_VIEW(rc, view_index)  DEFER_LOOP(r_push_view(rc, view_index), r_pop_view(rc))
+#define R_VIEW_LAYER(rc, layer) DEFER_LOOP(r_push_view_layer(rc, layer), r_pop_view_layer(rc))
 
 DREAM_LOCAL void r_push_layer(r_context_t *rc, r_screen_layer_t layer);
 DREAM_LOCAL void r_pop_layer(r_context_t *rc);

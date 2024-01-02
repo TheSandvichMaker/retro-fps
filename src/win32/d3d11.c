@@ -981,7 +981,7 @@ DREAM_INLINE void radix_sort_commands(r_command_t *array, size_t count)
 
 DREAM_INLINE void d3d_update_view_constants(r_view_t *view)
 {
-    v3_t sun_direction = view->sun_direction;
+    v3_t sun_direction = view->scene.sun_direction;
 
     m4x4_t sun_view   = make_view_matrix(add(view->camera_p, mul(-256.0f, sun_direction)), 
                                          negate(sun_direction), 
@@ -990,7 +990,7 @@ DREAM_INLINE void d3d_update_view_constants(r_view_t *view)
     m4x4_t sun_ortho  = make_orthographic_matrix(2048, 2048, 512);
     m4x4_t sun_matrix = mul(sun_ortho, sun_view);
 
-    m4x4_t skybox_view = view->camera;
+    m4x4_t skybox_view = view->view_matrix;
 
     skybox_view.e[3][0] = 0.0f;
     skybox_view.e[3][1] = 0.0f;
@@ -1004,25 +1004,27 @@ DREAM_INLINE void d3d_update_view_constants(r_view_t *view)
     };
 
     m4x4_t skybox_matrix = M4X4_IDENTITY;
-    skybox_matrix = mul(skybox_matrix, view->projection);
+    skybox_matrix = mul(skybox_matrix, view->proj_matrix);
     skybox_matrix = mul(skybox_matrix, skybox_view);
     skybox_matrix = mul(skybox_matrix, swizzle);
 
+    const r_scene_parameters_t *scene = &view->scene;
+
     const d3d_cbuf_view_t cbuf_view = {
-        .view_matrix     = view->camera,
-        .proj_matrix     = view->projection,
+        .view_matrix     = view->view_matrix,
+        .proj_matrix     = view->proj_matrix,
         .sun_matrix      = sun_matrix,
         .skybox_matrix   = skybox_matrix,
-        .sun_direction   = view->sun_direction,
-        .sun_color       = view->sun_color,
+        .sun_direction   = scene->sun_direction,
+        .sun_color       = scene->sun_color,
         .light_direction = sun_direction,
-        .fog_offset      = view->fog_offset,
-        .fog_dim         = view->fog_dim,
+        .fog_offset      = scene->fog_offset,
+        .fog_dim         = scene->fog_dim,
         .screen_dim      = { (float)d3d.current_width, (float)d3d.current_height },
-        .fog_density     = view->fog_density,
-        .fog_absorption  = view->fog_absorption,
-        .fog_scattering  = view->fog_scattering,
-        .fog_phase_k     = view->fog_phase_k,
+        .fog_density     = scene->fog_density,
+        .fog_absorption  = scene->fog_absorption,
+        .fog_scattering  = scene->fog_scattering,
+        .fog_phase_k     = scene->fog_phase_k,
         .frame_index     = d3d.frame_index,
     };
 
@@ -1031,11 +1033,13 @@ DREAM_INLINE void d3d_update_view_constants(r_view_t *view)
 
 DREAM_INLINE void d3d_render_skybox(r_view_t *view, D3D11_VIEWPORT viewport)
 {
-    if (!RESOURCE_HANDLE_VALID(view->skybox))
+    const r_scene_parameters_t *scene = &view->scene;
+
+    if (!RESOURCE_HANDLE_VALID(scene->skybox))
         return;
 
     d3d_model_t   *model   = d3d.skybox_model;
-    d3d_texture_t *texture = d3d_get_texture_or(view->skybox, d3d.missing_texture_cubemap);
+    d3d_texture_t *texture = d3d_get_texture_or(scene->skybox, d3d.missing_texture_cubemap);
 
     render_model(&(render_pass_t) {
         .render_target = d3d.scene_target.color_rtv,
@@ -1060,6 +1064,250 @@ DREAM_INLINE void d3d_render_skybox(r_view_t *view, D3D11_VIEWPORT viewport)
     });
 }
 
+DREAM_INLINE size_t d3d_render_view(D3D11_VIEWPORT viewport, r_command_buffer_t *commands, size_t first_command_index)
+{
+    r_command_t          *first_command = &commands->commands[first_command_index];
+    r_command_key_t      *first_key     = &first_command->key;
+    r_view_index_t        view_index    = (r_view_index_t)first_key->view;
+    r_view_t             *view          = &commands->views[view_index];
+    r_scene_parameters_t *scene         = &view->scene;
+
+    d3d_update_view_constants(view);
+
+    // TODO: Should render skybox last for efficiency (can reject anything not at infinite Z)
+    d3d_render_skybox(view, viewport);
+
+    r_view_layer_t prev_view_layer = first_key->view_layer;
+
+    size_t command_index = first_command_index;
+    for (; command_index < commands->commands_count; command_index++)
+    {
+        r_command_t *command = &commands->commands[command_index];
+        r_command_key_t *key = &command->key;
+
+        r_view_layer_t view_layer = key->view_layer;
+        bool is_scene  = (view_layer      == R_VIEW_LAYER_SCENE);
+        bool was_scene = (prev_view_layer == R_VIEW_LAYER_SCENE);
+        bool done_with_view = (key->view != view_index);
+
+        d3d_rendertarget_t *rt = is_scene ? &d3d.scene_target : &d3d.backbuffer;
+
+        bool should_resolve = (was_scene && !is_scene) || done_with_view;
+        if (should_resolve)
+        {
+            // Done rendering scene view, apply post processing / MSAA resolve
+
+            d3d_timestamp(RENDER_TS_SCENE);
+
+            d3d_texture_t *fogmap = d3d_get_texture_or(scene->fogmap, NULL);
+
+            ID3D11ShaderResourceView *fogmap_srv = fogmap ? fogmap->srv : NULL;
+
+            d3d_do_post_pass(&(d3d_post_pass_t){
+                .render_target = d3d.post_target.color_rtv,
+                .ps            = d3d.msaa_resolve_ps,
+                .srv_count     = 5,
+                .srvs          = (ID3D11ShaderResourceView *[]){ d3d.scene_target.color_srv, d3d.scene_target.depth_srv, d3d.blue_noise->srv, fogmap_srv, d3d.sun_shadowmap.depth_srv },
+                .viewport      = viewport,
+            });
+
+            d3d_timestamp(RENDER_TS_MSAA_RESOLVE);
+
+            // Generate mipmaps for bloom
+            ID3D11DeviceContext_GenerateMips(d3d.context, d3d.post_target.color_srv);
+
+            d3d_timestamp(RENDER_TS_BLOOM);
+
+            //
+            // Post processing, resolve HDR
+            //
+
+            d3d_do_post_pass(&(d3d_post_pass_t){
+                .render_target = d3d.backbuffer.color_rtv,
+                .ps            = d3d.hdr_resolve_ps,
+                .srv_count     = 3,
+                .srvs          = (ID3D11ShaderResourceView *[]){ d3d.post_target.color_srv, NULL, d3d.blue_noise->srv },
+                .viewport      = viewport,
+            });
+
+            d3d_timestamp(RENDER_TS_POST_PASS);
+        }
+
+        if (key->view != view_index)
+        {
+            break;
+        }
+
+        r_command_kind_t kind = key->kind;
+
+        switch (kind)
+        {
+            case R_COMMAND_MODEL:
+            {
+                r_command_model_t *data = command->data;
+
+                d3d_model_t *model = pool_get(&d3d_models, data->mesh);
+                if (model)
+                {
+                    ASSERT(data->material->kind == R_MATERIAL_BRUSH);
+                    const r_material_brush_t *material = (void *)data->material;
+                    d3d_texture_t *texture  = d3d_get_texture_or(material->texture, d3d.missing_texture);
+                    d3d_texture_t *lightmap = d3d_get_texture_or(material->lightmap, d3d.white_texture);
+
+                    const d3d_cbuf_model_t cbuf_model = {
+                        .model_matrix = data->transform,
+                    };
+
+                    update_buffer(d3d.cbuf_model, &cbuf_model, sizeof(cbuf_model));
+
+                    render_model(&(render_pass_t) {
+                        .render_target = rt->color_rtv,
+                        .depth_stencil = rt->depth_dsv,
+
+                        .model = model,
+
+                        .index_format = DXGI_FORMAT_R16_UINT,
+
+                        .vs = d3d.world_vs,
+                        .ps = d3d.world_ps,
+
+                        .cbuffer_count = 2,
+                        .cbuffers      = (ID3D11Buffer *[]) { d3d.cbuf_view, d3d.cbuf_model },
+                        .srv_count     = 3,
+                        .srvs          = (ID3D11ShaderResourceView *[]) { texture->srv, lightmap->srv, d3d.sun_shadowmap.depth_srv, },
+
+                        .depth         = D3D_DEPTH_TEST_GREATER,
+                        .cull          = R_CULL_BACK,
+                        .sample_linear = false,
+                        .viewport      = viewport,
+                    });
+                }
+            } break;
+
+            case R_COMMAND_IMMEDIATE:
+            {
+                r_immediate_t *data = command->data;
+
+                const d3d_cbuf_model_t cbuf_model = {
+                    .model_matrix    = data->transform,
+                    .depth_bias      = data->depth_bias,
+                };
+
+                update_buffer(d3d.cbuf_model, &cbuf_model, sizeof(cbuf_model));
+
+                D3D11_PRIMITIVE_TOPOLOGY topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+                switch (data->topology)
+                {
+                    case R_TOPOLOGY_TRIANGLELIST:  topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST; break;
+                    case R_TOPOLOGY_TRIANGLESTRIP: topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP; break;
+                    case R_TOPOLOGY_LINELIST:      topology = D3D11_PRIMITIVE_TOPOLOGY_LINELIST; break;
+                    case R_TOPOLOGY_LINESTRIP:     topology = D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP; break;
+                    case R_TOPOLOGY_POINTLIST:     topology = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST; break;
+                    INVALID_DEFAULT_CASE;
+                }
+
+                // TODO: index/vertex count is specified here, but the offset is in the pass. feels a bit janky.
+                d3d_model_t immediate_model = {
+                    .vertex_format      = R_VERTEX_FORMAT_IMMEDIATE,
+                    .primitive_topology = topology,
+                    .icount             = data->icount,
+                    .ibuffer            = d3d.immediate_ibuffer,
+                    .vcount             = data->vcount,
+                    .vbuffer            = d3d.immediate_vbuffer,
+                };
+
+                d3d_texture_t *texture = d3d_get_texture_or(data->texture, d3d.white_texture);
+
+                rect2_t clip_rect = rect2_intersect(data->clip_rect, view->clip_rect);
+
+                render_model(&(render_pass_t) {
+                    .render_target = rt->color_rtv,
+                    .depth_stencil = rt->depth_dsv,
+
+                    .model = &immediate_model,
+
+                    .vs = d3d.immediate_shaders[data->shader].vs,
+                    .ps = d3d.immediate_shaders[data->shader].ps,
+
+                    .blend_mode   = data->blend_mode,
+                    .index_format = DXGI_FORMAT_R32_UINT,
+
+                    .ioffset = data->ioffset,
+                    .voffset = data->voffset,
+
+                    .cbuffer_count = 2,
+                    .cbuffers      = (ID3D11Buffer *[]) { d3d.cbuf_view, d3d.cbuf_model },
+                    .srv_count     = 1,
+                    .srvs          = (ID3D11ShaderResourceView *[]) { texture->srv },
+
+                    .depth    = data->use_depth ? D3D_DEPTH_TEST_GREATER : D3D_DEPTH_TEST_NONE,
+                    .cull     = data->cull_mode,
+                    .viewport = viewport,
+                    .scissor  = true,
+                    .scissor_rect = {
+                        .left   = (LONG)clip_rect.min.x,
+                        .right  = (LONG)clip_rect.max.x,
+                        .bottom = (LONG)viewport.Height - (LONG)clip_rect.min.y,
+                        .top    = (LONG)viewport.Height - (LONG)clip_rect.max.y,
+                    },
+                });
+            } break;
+
+            case R_COMMAND_UI_RECTS:
+            {
+                r_command_ui_rects_t *data = command->data;
+
+                const d3d_cbuf_model_t cbuf_model = {
+                    .instance_offset = data->first,
+                };
+
+                update_buffer(d3d.cbuf_model, &cbuf_model, sizeof(cbuf_model));
+
+                rect2_t clip_rect = view->clip_rect;
+
+                D3D11_RECT scissor_rect = {
+                    .left   = (LONG)clip_rect.min.x,
+                    .right  = (LONG)clip_rect.max.x,
+                    .bottom = (LONG)viewport.Height - (LONG)clip_rect.min.y,
+                    .top    = (LONG)viewport.Height - (LONG)clip_rect.max.y,
+                };
+
+                // set output merger state
+                ID3D11DeviceContext_OMSetBlendState(d3d.context, d3d.bs, NULL, ~0U);
+                ID3D11DeviceContext_OMSetDepthStencilState(d3d.context, d3d.dss_no_depth, 0);
+                ID3D11DeviceContext_OMSetRenderTargets(d3d.context, 1, &rt->color_rtv, NULL);
+
+                // input assembly
+                ID3D11DeviceContext_IASetInputLayout(d3d.context, NULL);
+                ID3D11DeviceContext_IASetPrimitiveTopology(d3d.context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+
+                // set vertex shader
+                ID3D11DeviceContext_VSSetConstantBuffers(d3d.context, 0, 1, &d3d.cbuf_view);
+                ID3D11DeviceContext_VSSetShaderResources(d3d.context, 0, 1, (ID3D11ShaderResourceView *[]){ d3d.ui_rect_srv });
+                ID3D11DeviceContext_VSSetShader(d3d.context, d3d.ui_rect_vs, NULL, 0);
+
+                // set rasterizer state
+                ID3D11DeviceContext_RSSetViewports(d3d.context, 1, &viewport);
+                ID3D11DeviceContext_RSSetState(d3d.context, (ID3D11RasterizerState *)d3d.rs_no_cull);
+                ID3D11DeviceContext_RSSetScissorRects(d3d.context, 1, &scissor_rect);
+
+                // set pixel shader
+                ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 2, ((ID3D11Buffer *[]){ d3d.cbuf_view, d3d.cbuf_model }));
+                ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 1, (ID3D11ShaderResourceView *[]){ d3d.ui_rect_srv });
+                ID3D11DeviceContext_PSSetShader(d3d.context, d3d.ui_rect_ps, NULL, 0);
+
+                ID3D11DeviceContext_DrawInstanced(d3d.context, 4, data->count, 0, 0);
+            } break;
+
+            INVALID_DEFAULT_CASE;
+        }
+
+        prev_view_layer = view_layer;
+    }
+
+    return command_index;
+}
+
 void d3d11_execute_command_buffer(r_command_buffer_t *commands, int width, int height)
 {
 	AcquireSRWLockExclusive(&d3d.context_lock);
@@ -1075,7 +1323,6 @@ void d3d11_execute_command_buffer(r_command_buffer_t *commands, int width, int h
     if (d3d.backbuffer.color_rtv)
     {
         r_view_t *view = NULL;
-        r_screen_layer_t layer = R_SCREEN_LAYER_SCENE;
 
         //
         // sun shadows
@@ -1114,6 +1361,12 @@ void d3d11_execute_command_buffer(r_command_buffer_t *commands, int width, int h
             if (new_layer != R_SCREEN_LAYER_SCENE)
             {
                 break;
+            }
+
+            r_view_layer_t view_layer = key->view_layer;
+            if (view_layer != R_VIEW_LAYER_SCENE)
+            {
+                continue;
             }
 
             r_command_kind_t kind = key->kind;
@@ -1202,231 +1455,10 @@ void d3d11_execute_command_buffer(r_command_buffer_t *commands, int width, int h
 
         d3d_timestamp(RENDER_TS_UPLOAD_IMMEDIATE_DATA);
 
-        d3d_rendertarget_t *current_render_target = &d3d.scene_target;
-
-        for (size_t command_index = 0; command_index < commands->commands_count; command_index++)
+        size_t command_index = 0;
+        while (command_index < commands->commands_count)
         {
-            r_command_t *command = &commands->commands[command_index];
-            r_command_key_t *key = &command->key;
-
-            r_screen_layer_t new_layer = key->screen_layer;
-            if (layer != new_layer)
-            {
-                if (layer == R_SCREEN_LAYER_SCENE)
-                {
-                    d3d_timestamp(RENDER_TS_SCENE);
-
-                    d3d_texture_t *fogmap = d3d_get_texture_or(view->fogmap, NULL);
-
-                    ID3D11ShaderResourceView *fogmap_srv = fogmap ? fogmap->srv : NULL;
-
-                    d3d_do_post_pass(&(d3d_post_pass_t){
-                        .render_target = d3d.post_target.color_rtv,
-                        .ps            = d3d.msaa_resolve_ps,
-                        .srv_count     = 5,
-                        .srvs          = (ID3D11ShaderResourceView *[]){ d3d.scene_target.color_srv, d3d.scene_target.depth_srv, d3d.blue_noise->srv, fogmap_srv, d3d.sun_shadowmap.depth_srv },
-                        .viewport      = viewport,
-                    });
-
-                    d3d_timestamp(RENDER_TS_MSAA_RESOLVE);
-
-                    // Generate mipmaps for bloom
-                    ID3D11DeviceContext_GenerateMips(d3d.context, d3d.post_target.color_srv);
-
-                    d3d_timestamp(RENDER_TS_BLOOM);
-
-                    //
-                    // Post processing, resolve HDR
-                    //
-
-                    d3d_do_post_pass(&(d3d_post_pass_t){
-                        .render_target = d3d.backbuffer.color_rtv,
-                        .ps            = d3d.hdr_resolve_ps,
-                        .srv_count     = 3,
-                        .srvs          = (ID3D11ShaderResourceView *[]){ d3d.post_target.color_srv, NULL, d3d.blue_noise->srv },
-                        .viewport      = viewport,
-                    });
-
-                    d3d_timestamp(RENDER_TS_POST_PASS);
-
-                    current_render_target = &d3d.backbuffer;
-                }
-
-                layer = new_layer;
-            }
-
-            r_view_t *new_view = &commands->views[key->view];
-            if (view != new_view)
-            {
-                view = new_view;
-
-                d3d_render_skybox(view, viewport);
-                d3d_update_view_constants(view);
-            }
-
-            r_command_kind_t kind = key->kind;
-
-            switch (kind)
-            {
-                case R_COMMAND_MODEL:
-                {
-                    r_command_model_t *data = command->data;
-
-                    d3d_model_t *model = pool_get(&d3d_models, data->mesh);
-                    if (model)
-                    {
-                        ASSERT(data->material->kind == R_MATERIAL_BRUSH);
-                        const r_material_brush_t *material = (void *)data->material;
-                        d3d_texture_t *texture  = d3d_get_texture_or(material->texture, d3d.missing_texture);
-                        d3d_texture_t *lightmap = d3d_get_texture_or(material->lightmap, d3d.white_texture);
-
-                        const d3d_cbuf_model_t cbuf_model = {
-                            .model_matrix = data->transform,
-                        };
-
-                        update_buffer(d3d.cbuf_model, &cbuf_model, sizeof(cbuf_model));
-
-                        render_model(&(render_pass_t) {
-                            .render_target = current_render_target->color_rtv,
-                            .depth_stencil = current_render_target->depth_dsv,
-
-                            .model = model,
-
-                            .index_format = DXGI_FORMAT_R16_UINT,
-
-                            .vs = d3d.world_vs,
-                            .ps = d3d.world_ps,
-
-                            .cbuffer_count = 2,
-                            .cbuffers      = (ID3D11Buffer *[]) { d3d.cbuf_view, d3d.cbuf_model },
-                            .srv_count     = 3,
-                            .srvs          = (ID3D11ShaderResourceView *[]) { texture->srv, lightmap->srv, d3d.sun_shadowmap.depth_srv, },
-
-                            .depth         = D3D_DEPTH_TEST_GREATER,
-                            .cull          = R_CULL_BACK,
-                            .sample_linear = false,
-                            .viewport      = viewport,
-                        });
-                    }
-                } break;
-
-                case R_COMMAND_IMMEDIATE:
-                {
-                    r_immediate_t *data = command->data;
-
-                    const d3d_cbuf_model_t cbuf_model = {
-                        .model_matrix    = data->transform,
-                        .depth_bias      = data->depth_bias,
-                    };
-
-                    update_buffer(d3d.cbuf_model, &cbuf_model, sizeof(cbuf_model));
-
-                    D3D11_PRIMITIVE_TOPOLOGY topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-                    switch (data->topology)
-                    {
-                        case R_TOPOLOGY_TRIANGLELIST:  topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST; break;
-                        case R_TOPOLOGY_TRIANGLESTRIP: topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP; break;
-                        case R_TOPOLOGY_LINELIST:      topology = D3D11_PRIMITIVE_TOPOLOGY_LINELIST; break;
-                        case R_TOPOLOGY_LINESTRIP:     topology = D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP; break;
-                        case R_TOPOLOGY_POINTLIST:     topology = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST; break;
-                        INVALID_DEFAULT_CASE;
-                    }
-
-                    // TODO: index/vertex count is specified here, but the offset is in the pass. feels a bit janky.
-                    d3d_model_t immediate_model = {
-                        .vertex_format      = R_VERTEX_FORMAT_IMMEDIATE,
-                        .primitive_topology = topology,
-                        .icount             = data->icount,
-                        .ibuffer            = d3d.immediate_ibuffer,
-                        .vcount             = data->vcount,
-                        .vbuffer            = d3d.immediate_vbuffer,
-                    };
-
-                    d3d_texture_t *texture = d3d_get_texture_or(data->texture, d3d.white_texture);
-
-					rect2_t clip_rect = rect2_intersect(data->clip_rect, view->clip_rect);
-
-                    render_model(&(render_pass_t) {
-                        .render_target = current_render_target->color_rtv,
-                        .depth_stencil = current_render_target->depth_dsv,
-
-                        .model = &immediate_model,
-
-                        .vs = d3d.immediate_shaders[data->shader].vs,
-                        .ps = d3d.immediate_shaders[data->shader].ps,
-
-                        .blend_mode   = data->blend_mode,
-                        .index_format = DXGI_FORMAT_R32_UINT,
-
-                        .ioffset = data->ioffset,
-                        .voffset = data->voffset,
-
-                        .cbuffer_count = 2,
-                        .cbuffers      = (ID3D11Buffer *[]) { d3d.cbuf_view, d3d.cbuf_model },
-                        .srv_count     = 1,
-                        .srvs          = (ID3D11ShaderResourceView *[]) { texture->srv },
-
-                        .depth    = data->use_depth ? D3D_DEPTH_TEST_GREATER : D3D_DEPTH_TEST_NONE,
-                        .cull     = data->cull_mode,
-                        .viewport = viewport,
-                        .scissor  = true,
-                        .scissor_rect = {
-                            .left   = (LONG)clip_rect.min.x,
-                            .right  = (LONG)clip_rect.max.x,
-                            .bottom = height - (LONG)clip_rect.min.y,
-                            .top    = height - (LONG)clip_rect.max.y,
-                        },
-                    });
-                } break;
-
-                case R_COMMAND_UI_RECTS:
-                {
-                    r_command_ui_rects_t *data = command->data;
-
-                    const d3d_cbuf_model_t cbuf_model = {
-						.instance_offset = data->first,
-					};
-
-					update_buffer(d3d.cbuf_model, &cbuf_model, sizeof(cbuf_model));
-
-					rect2_t clip_rect = view->clip_rect;
-
-					D3D11_RECT scissor_rect = {
-						.left   = (LONG)clip_rect.min.x,
-						.right  = (LONG)clip_rect.max.x,
-						.bottom = height - (LONG)clip_rect.min.y,
-						.top    = height - (LONG)clip_rect.max.y,
-					};
-
-					// set output merger state
-					ID3D11DeviceContext_OMSetBlendState(d3d.context, d3d.bs, NULL, ~0U);
-					ID3D11DeviceContext_OMSetDepthStencilState(d3d.context, d3d.dss_no_depth, 0);
-					ID3D11DeviceContext_OMSetRenderTargets(d3d.context, 1, &current_render_target->color_rtv, NULL);
-
-					// input assembly
-					ID3D11DeviceContext_IASetInputLayout(d3d.context, NULL);
-					ID3D11DeviceContext_IASetPrimitiveTopology(d3d.context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-
-					// set vertex shader
-					ID3D11DeviceContext_VSSetConstantBuffers(d3d.context, 0, 1, &d3d.cbuf_view);
-					ID3D11DeviceContext_VSSetShaderResources(d3d.context, 0, 1, (ID3D11ShaderResourceView *[]){ d3d.ui_rect_srv });
-					ID3D11DeviceContext_VSSetShader(d3d.context, d3d.ui_rect_vs, NULL, 0);
-
-					// set rasterizer state
-					ID3D11DeviceContext_RSSetViewports(d3d.context, 1, &viewport);
-					ID3D11DeviceContext_RSSetState(d3d.context, (ID3D11RasterizerState *)d3d.rs_no_cull);
-					ID3D11DeviceContext_RSSetScissorRects(d3d.context, 1, &scissor_rect);
-
-					// set pixel shader
-                    ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 2, ((ID3D11Buffer *[]){ d3d.cbuf_view, d3d.cbuf_model }));
-					ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 1, (ID3D11ShaderResourceView *[]){ d3d.ui_rect_srv });
-					ID3D11DeviceContext_PSSetShader(d3d.context, d3d.ui_rect_ps, NULL, 0);
-
-					ID3D11DeviceContext_DrawInstanced(d3d.context, 4, data->count, 0, 0);
-                } break;
-
-                INVALID_DEFAULT_CASE;
-            }
+            command_index = d3d_render_view(viewport, commands, command_index);
         }
 
         d3d_timestamp(RENDER_TS_UI);

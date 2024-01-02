@@ -1328,8 +1328,9 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 
 void update_and_render_in_game_editor(r_context_t *rc)
 {
-    r_push_view(rc, rc->screenspace);
-    r_push_layer(rc, R_SCREEN_LAYER_UI);
+    r_push_view      (rc, rc->screenspace);
+    r_push_view_layer(rc, R_VIEW_LAYER_UI);
+    r_push_layer     (rc, R_SCREEN_LAYER_UI);
 
 	if (!editor.initialized)
 	{
@@ -1406,6 +1407,7 @@ void update_and_render_in_game_editor(r_context_t *rc)
 
     r_flush_ui_rects(rc);
 
-    r_pop_layer(rc);
-    r_pop_view(rc);
+    r_pop_layer     (rc);
+    r_pop_view_layer(rc);
+    r_pop_view      (rc);
 }

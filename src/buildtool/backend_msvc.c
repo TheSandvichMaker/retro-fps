@@ -1,8 +1,9 @@
 static string_t msvc_warning_to_string[WARNING_COUNT] = {
-    [WARNING_NONSTANDARD_EXT_ANONYMOUS_STRUCT]       = strinit("/wd4201"),
-    [WARNING_NONSTANDARD_EXT_EMPTY_TRANSLATION_UNIT] = strinit("/wd4206"),
-    [WARNING_TYPE_DEFINITION_IN_PARENTHESIS]         = strinit("/wd4115"),
-    [WARNING_FLEXIBLE_ARRAY_MEMBER]                  = strinit("/wd4200"),
+    [WARNING_NONSTANDARD_EXT_ANONYMOUS_STRUCT]       = Sc("/wd4201"),
+    [WARNING_NONSTANDARD_EXT_EMPTY_TRANSLATION_UNIT] = Sc("/wd4206"),
+    [WARNING_TYPE_DEFINITION_IN_PARENTHESIS]         = Sc("/wd4115"),
+    [WARNING_UNNAMED_TYPE_DEFINITION_IN_PARENTHESES] = Sc("/wd4116"),
+    [WARNING_FLEXIBLE_ARRAY_MEMBER]                  = Sc("/wd4200"),
 };
 
 static compile_error_t msvc_compile(build_context_t *context, const compile_params_t *compile, const source_files_t *files_, object_collection_t *objects)

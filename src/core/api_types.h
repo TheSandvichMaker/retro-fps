@@ -53,6 +53,10 @@
 #define MASK_BITS(n) ((1 << ((n) + 1)) - 1)
 #define TOGGLE_BIT(x, n, b) ((b) ? ((x)|(n)) : ((x)&~(n)))
 
+#define BIT_CAST(from, to, x) (union { from f; to t; }){.f=x}.t
+#define F32_AS_U32(f) BIT_CAST(float, uint32_t, f)
+#define U32_AS_F32(u) BIT_CAST(uint32_t, float, u)
+
 #define DEFAULT_STRING_ALIGN 16
 
 typedef struct string_t

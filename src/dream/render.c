@@ -42,8 +42,8 @@ void r_init_render_context(r_context_t *rc, r_command_buffer_t *commands)
     rc->commands->imm_vertices_count = 0;
     rc->commands->ui_rects_count     = 0;
 
-    rc->layers_stack.at = 0;
-    stack_push(rc->layers_stack, R_SCREEN_LAYER_SCENE);
+    rc->screen_layers_stack.at = 0;
+    stack_push(rc->screen_layers_stack, R_SCREEN_LAYER_SCENE);
 
     rc->views_stack.at = 0;
 
@@ -64,13 +64,13 @@ void r_init_render_context(r_context_t *rc, r_command_buffer_t *commands)
         float a = 2.0f / (float)w;
         float b = 2.0f / (float)h;
 
-        view.camera = make_m4x4(
+        view.view_matrix = make_m4x4(
             a, 0, 0, -1,
             0, b, 0, -1,
             0, 0, 1,  0,
             0, 0, 0,  1
         );
-        view.projection = M4X4_IDENTITY;
+        view.proj_matrix = M4X4_IDENTITY;
 
         rc->screenspace = r_make_view(rc, &view);
     }
@@ -81,6 +81,19 @@ void r_command_identifier(r_context_t *rc, string_t identifier)
     // TODO: reimplement
     (void)rc;
     (void)identifier;
+}
+
+DREAM_INLINE r_command_key_t r_command_key(r_context_t *rc, r_command_kind_t kind, float depth, uint32_t material_id)
+{
+    r_command_key_t result = {
+        .screen_layer = stack_top(rc->screen_layers_stack),
+        .view         = stack_top(rc->views_stack),
+        .view_layer   = stack_top(rc->view_layers_stack),
+        .kind         = kind,
+        .depth        = r_encode_command_depth(depth),
+        .material_id  = material_id,
+    };
+    return result;
 }
 
 void r_push_command(r_context_t *rc, r_command_t command)
@@ -165,8 +178,8 @@ v3_t r_to_view_space(const r_view_t *view, v3_t p, float w)
 {
     v4_t pw = { p.x, p.y, p.z, w };
 
-    pw = mul(view->camera, pw);
-    pw = mul(view->projection, pw);
+    pw = mul(view->view_matrix, pw);
+    pw = mul(view->proj_matrix, pw);
     pw.xyz = div(pw.xyz, pw.w);
 
     int width, height;
@@ -180,32 +193,42 @@ v3_t r_to_view_space(const r_view_t *view, v3_t p, float w)
     return pw.xyz;
 }
 
+void r_push_view_layer(r_context_t *rc, r_view_layer_t layer)
+{
+    if (ALWAYS(stack_nonfull(rc->view_layers_stack)))
+    {
+        stack_push(rc->view_layers_stack, layer);
+    }
+}
+
+void r_pop_view_layer(r_context_t *rc)
+{
+    if (ALWAYS(stack_nonempty(rc->view_layers_stack)))
+    {
+        stack_pop(rc->view_layers_stack);
+    }
+}
+
 void r_push_layer(r_context_t *rc, r_screen_layer_t layer)
 {
-    if (ALWAYS(stack_nonfull(rc->layers_stack)))
+    if (ALWAYS(stack_nonfull(rc->screen_layers_stack)))
     {
-        stack_push(rc->layers_stack, layer);
+        stack_push(rc->screen_layers_stack, layer);
     }
 }
 
 void r_pop_layer(r_context_t *rc)
 {
-    if (ALWAYS(stack_nonempty(rc->layers_stack)))
+    if (ALWAYS(stack_nonempty(rc->screen_layers_stack)))
     {
-        stack_pop(rc->layers_stack);
+        stack_pop(rc->screen_layers_stack);
     }
 }
 
 void r_draw_mesh(r_context_t *rc, m4x4_t transform, mesh_handle_t mesh, const r_material_t *material)
 {
     r_command_t command = {
-        .key = {
-            .screen_layer = R_SCREEN_LAYER_SCENE,
-            .view         = stack_top(rc->views_stack),
-            .kind         = R_COMMAND_MODEL,
-            .depth        = 0, // TODO
-            .material_id  = 0, // TODO
-        },
+        .key  = r_command_key(rc, R_COMMAND_MODEL, 0.0, 0),
         .data = r_allocate_command_data(rc, sizeof(r_command_model_t)),
     };
 
@@ -234,14 +257,9 @@ void r_immediate_end(r_context_t *rc, r_immediate_t *imm)
     ASSERT(rc->current_immediate == imm);
 
     r_command_t command = {
-        .key = {
-            .screen_layer = stack_top(rc->layers_stack),
-            .view         = stack_top(rc->views_stack),
-            .kind         = R_COMMAND_IMMEDIATE,
-        },
+        .key  = r_command_key(rc, R_COMMAND_IMMEDIATE, 0.0, imm->shader),
         .data = imm,
     };
-
     r_push_command(rc, command);
 
     rc->current_immediate = NULL;
@@ -303,11 +321,7 @@ void r_flush_ui_rects(r_context_t *rc)
     data->count = rc->current_ui_rect_count;
 
     r_push_command(rc, (r_command_t){
-        .key = {
-            .screen_layer = stack_top(rc->layers_stack),
-            .view         = stack_top(rc->views_stack),
-            .kind = R_COMMAND_UI_RECTS,
-        },
+        .key  = r_command_key(rc, R_COMMAND_UI_RECTS, 0.0, 0),
         .data = data,
     });
 

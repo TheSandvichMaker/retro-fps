@@ -335,13 +335,13 @@ static void init_view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *v
     v3_t d = negate(camera->computed_z);
 
     v3_t up = { 0, 0, 1 };
-    view->camera = make_view_matrix(p, d, up);
+    view->view_matrix = make_view_matrix(p, d, up);
 
     float w = viewport.max.x - viewport.min.x;
     float h = viewport.max.y - viewport.min.y;
 
     float aspect = w / h;
-    view->projection = make_perspective_matrix(camera->vfov, aspect, 1.0f);
+    view->proj_matrix = make_perspective_matrix(camera->vfov, aspect, 1.0f);
 }
 
 void game_init(void)
@@ -451,28 +451,31 @@ DREAM_INLINE void render_map(r_context_t *rc, camera_t *camera, map_t *map)
         0, 0, (float)res_x, (float)res_y,
     };
 
+    float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
+    v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
+          sun_color      = mul(sun_brightness, sun_color);
+
     r_view_t view = {0};
     init_view_for_camera(camera, viewport, &view);
 
-    v3_t sun_color = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
-    float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
-    sun_color = mul(sun_brightness, sun_color);
+    r_scene_parameters_t *scene = &view.scene;
 
-    view.skybox          = skybox;
-    view.fogmap          = map->fogmap;
-    view.fog_offset      = rect3_center(map->bounds);
-    view.fog_dim         = rect3_dim(map->bounds);
-    view.sun_direction   = normalize(make_v3(0.25f, 0.75f, 1));
-    view.sun_color       = sun_color;
-    view.fog_absorption  = map->fog_absorption;
-    view.fog_density     = map->fog_density;
-    view.fog_scattering  = map->fog_scattering;
-    view.fog_phase_k     = map->fog_phase_k;
-    view.compute_shadows = true;
+    scene->skybox = skybox;
+    scene->sun_direction   = normalize(make_v3(0.25f, 0.75f, 1));
+    scene->sun_color       = sun_color;
+
+    scene->fogmap          = map->fogmap;
+    scene->fog_offset      = rect3_center(map->bounds);
+    scene->fog_dim         = rect3_dim(map->bounds);
+    scene->fog_absorption  = map->fog_absorption;
+    scene->fog_density     = map->fog_density;
+    scene->fog_scattering  = map->fog_scattering;
+    scene->fog_phase_k     = map->fog_phase_k;
 
     r_view_index_t game_view = r_make_view(rc, &view);
 
-    R_VIEW(rc, game_view)
+    R_VIEW      (rc, game_view)
+    R_VIEW_LAYER(rc, R_VIEW_LAYER_SCENE)
     {
         //
         // render map
@@ -541,9 +544,10 @@ DREAM_INLINE void render_game_ui(r_context_t *rc, world_t *world)
 
     v2_t res = make_v2((float)res_x, (float)res_y);
 
-    R_LAYER    (rc, R_SCREEN_LAYER_UI)
-    R_VIEW     (rc, rc->screenspace) 
-    R_IMMEDIATE(rc, imm)
+    R_LAYER     (rc, R_SCREEN_LAYER_SCENE)
+    R_VIEW      (rc, rc->screenspace) 
+    R_VIEW_LAYER(rc, R_VIEW_LAYER_UI) 
+    R_IMMEDIATE (rc, imm)
     {
         if (g_cursor_locked)
         {
@@ -742,24 +746,6 @@ static void game_tick(platform_io_t *io)
     render_game_ui(rc, world);
 
     update_and_render_in_game_editor(rc);
-
-#if 0
-    static bool bad = false;
-    if (bad)
-    {
-        bad = false;
-
-        collision_geometry_t *geom = &map->collision;
-        collision_hull_t *hull = &geom->hulls[0];
-
-        triangle_mesh_t mesh = {
-            .triangle_count = hull->count / 3,
-            .points         = &geom->vertices[hull->first],
-        };
-
-        load_convex_hull_debug(&mesh, hull->debug);
-    }
-#endif
 
     ui_end();
 #endif

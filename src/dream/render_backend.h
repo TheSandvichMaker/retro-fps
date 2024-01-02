@@ -176,26 +176,34 @@ typedef struct r_timings_t
 
 typedef unsigned char r_view_index_t;
 
-typedef struct r_view_t
+typedef struct r_scene_parameters_t
 {
-    r_view_index_t    index;
-
-    bool              compute_shadows : 1;
-
-    v3_t              camera_p;
-    rect2_t           clip_rect;
-    m4x4_t            camera;
-    m4x4_t            projection;
     texture_handle_t  skybox;
+    v3_t              sun_direction;
+    v3_t              sun_color;
+
     texture_handle_t  fogmap;
     v3_t              fog_offset;
     v3_t              fog_dim;
-    v3_t              sun_direction;
-    v3_t              sun_color;
     float             fog_density;
     float             fog_absorption;
     float             fog_scattering;
     float             fog_phase_k;
+} r_scene_parameters_t;
+
+typedef struct r_view_t
+{
+    bool              no_shadows      : 1;
+    bool              no_post_process : 1;
+
+    v3_t              camera_p;
+
+    m4x4_t            view_matrix;
+    m4x4_t            proj_matrix;
+
+    rect2_t           clip_rect;
+
+    r_scene_parameters_t scene;
 } r_view_t;
 
 //
@@ -240,8 +248,8 @@ typedef enum r_command_kind_t
     R_COMMAND_NONE,
 
     R_COMMAND_MODEL,
+	R_COMMAND_UI_RECTS,   // FIXME: MEGA HACK. I re-ordered UI_RECTS to come before IMMEDIATE to make it look like my text rendering isn't busted.
     R_COMMAND_IMMEDIATE,
-	R_COMMAND_UI_RECTS,
     
     R_COMMAND_COUNT,
 } r_command_kind_t;
@@ -299,6 +307,12 @@ typedef enum r_cull_mode_t
 	R_CULL_COUNT,
 } r_cull_mode_t;
 
+typedef enum r_view_layer_t
+{
+    R_VIEW_LAYER_SCENE,
+    R_VIEW_LAYER_UI,
+} r_view_layer_t;
+
 typedef enum r_screen_layer_t
 {
     R_SCREEN_LAYER_SCENE,
@@ -309,14 +323,19 @@ typedef union r_command_key_t
 {
     struct
     {
-        uint64_t material_id  : 32;
-        uint64_t depth        : 20;
-        uint64_t kind         : 4;
-        uint64_t view         : 6;
-        uint64_t screen_layer : 2;
+        uint64_t material_id  : 30;  // 30
+        uint64_t depth        : 20;  // 50
+        uint64_t kind         : 4;   // 54
+        uint64_t view_layer   : 2;   // 56
+        uint64_t view         : 6;   // 62
+        uint64_t screen_layer : 2;   // 64
     };
     uint64_t value;
 } r_command_key_t;
+
+#define R_COMMAND_DEPTH_FAR_PLANE 10000.0f
+
+DREAM_LOCAL uint64_t r_encode_command_depth(float depth);
 
 typedef struct r_command_t
 {
