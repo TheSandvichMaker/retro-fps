@@ -1090,9 +1090,7 @@ DREAM_INLINE size_t d3d_render_view(D3D11_VIEWPORT viewport, r_command_buffer_t 
         bool was_scene = (prev_view_layer == R_VIEW_LAYER_SCENE);
         bool done_with_view = (key->view != view_index);
 
-        d3d_rendertarget_t *rt = is_scene ? &d3d.scene_target : &d3d.backbuffer;
-
-        bool should_resolve = (was_scene && !is_scene) || done_with_view;
+        bool should_resolve = (was_scene && !is_scene) || (is_scene && done_with_view);
         if (should_resolve)
         {
             // Done rendering scene view, apply post processing / MSAA resolve
@@ -1137,6 +1135,8 @@ DREAM_INLINE size_t d3d_render_view(D3D11_VIEWPORT viewport, r_command_buffer_t 
         {
             break;
         }
+
+        d3d_rendertarget_t *rt = is_scene ? &d3d.scene_target : &d3d.backbuffer;
 
         r_command_kind_t kind = key->kind;
 
@@ -1272,6 +1272,8 @@ DREAM_INLINE size_t d3d_render_view(D3D11_VIEWPORT viewport, r_command_buffer_t 
                     .top    = (LONG)viewport.Height - (LONG)clip_rect.max.y,
                 };
 
+                d3d_texture_t *texture = d3d_get_texture_or(data->texture, d3d.white_texture);
+
                 // set output merger state
                 ID3D11DeviceContext_OMSetBlendState(d3d.context, d3d.bs, NULL, ~0U);
                 ID3D11DeviceContext_OMSetDepthStencilState(d3d.context, d3d.dss_no_depth, 0);
@@ -1283,7 +1285,7 @@ DREAM_INLINE size_t d3d_render_view(D3D11_VIEWPORT viewport, r_command_buffer_t 
 
                 // set vertex shader
                 ID3D11DeviceContext_VSSetConstantBuffers(d3d.context, 0, 1, &d3d.cbuf_view);
-                ID3D11DeviceContext_VSSetShaderResources(d3d.context, 0, 1, (ID3D11ShaderResourceView *[]){ d3d.ui_rect_srv });
+                ID3D11DeviceContext_VSSetShaderResources(d3d.context, 0, 2, ((ID3D11ShaderResourceView *[]){ d3d.ui_rect_srv, texture->srv }));
                 ID3D11DeviceContext_VSSetShader(d3d.context, d3d.ui_rect_vs, NULL, 0);
 
                 // set rasterizer state
@@ -1293,7 +1295,8 @@ DREAM_INLINE size_t d3d_render_view(D3D11_VIEWPORT viewport, r_command_buffer_t 
 
                 // set pixel shader
                 ID3D11DeviceContext_PSSetConstantBuffers(d3d.context, 0, 2, ((ID3D11Buffer *[]){ d3d.cbuf_view, d3d.cbuf_model }));
-                ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 1, (ID3D11ShaderResourceView *[]){ d3d.ui_rect_srv });
+                ID3D11DeviceContext_PSSetShaderResources(d3d.context, 0, 2, ((ID3D11ShaderResourceView *[]){ d3d.ui_rect_srv, texture->srv }));
+                ID3D11DeviceContext_PSSetSamplers(d3d.context, 0, D3D_SAMPLER_COUNT, d3d.samplers);
                 ID3D11DeviceContext_PSSetShader(d3d.context, d3d.ui_rect_ps, NULL, 0);
 
                 ID3D11DeviceContext_DrawInstanced(d3d.context, 4, data->count, 0, 0);

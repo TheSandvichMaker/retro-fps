@@ -442,6 +442,8 @@ void game_init(void)
 
 DREAM_INLINE void render_map(r_context_t *rc, camera_t *camera, map_t *map)
 {
+    r_push_command_identifier(rc, S(LOC_CSTRING ":render_map"));
+
     map_entity_t *worldspawn = map->worldspawn;
 
     int res_x, res_y;
@@ -481,6 +483,7 @@ DREAM_INLINE void render_map(r_context_t *rc, camera_t *camera, map_t *map)
         // render map
         //
 
+        R_COMMAND_IDENTIFIER_LOC(rc, S("brushes"))
         for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
         {
             map_poly_t *poly = &map->polys[poly_index];
@@ -497,6 +500,7 @@ DREAM_INLINE void render_map(r_context_t *rc, camera_t *camera, map_t *map)
         // render map point lights
         //
 
+        R_COMMAND_IDENTIFIER_LOC(rc, S("point light debug"))
         R_IMMEDIATE(rc, imm)
         {
             imm->topology  = R_TOPOLOGY_LINELIST;
@@ -518,6 +522,7 @@ DREAM_INLINE void render_map(r_context_t *rc, camera_t *camera, map_t *map)
         // draw random moving thing to show dynamic shadows and volumetric fog
         //
 
+        R_COMMAND_IDENTIFIER_LOC(rc, S("moving thing"))
         {
             static float timer = 0.0f;
             timer += 1.0f / 60.0f;
@@ -535,6 +540,8 @@ DREAM_INLINE void render_map(r_context_t *rc, camera_t *camera, map_t *map)
             r_draw_mesh(rc, transform, poly->mesh, &material->base);
         }
     }
+
+    r_pop_command_identifier(rc);
 }
 
 DREAM_INLINE void render_game_ui(r_context_t *rc, world_t *world)
@@ -544,6 +551,7 @@ DREAM_INLINE void render_game_ui(r_context_t *rc, world_t *world)
 
     v2_t res = make_v2((float)res_x, (float)res_y);
 
+    R_COMMAND_IDENTIFIER_FUNC(rc)
     R_LAYER     (rc, R_SCREEN_LAYER_SCENE)
     R_VIEW      (rc, rc->screenspace) 
     R_VIEW_LAYER(rc, R_VIEW_LAYER_UI) 
@@ -747,7 +755,7 @@ static void game_tick(platform_io_t *io)
 
     update_and_render_in_game_editor(rc);
 
-    ui_end();
+    ui_end(rc);
 #endif
 
     if (button_pressed(BUTTON_ESCAPE))

@@ -953,7 +953,7 @@ static void render_lm_editor(r_context_t *rc)
 
     if (lm_editor->debug_lightmaps)
     {
-        r_command_identifier(rc, S("lightmap debug"));
+        r_push_command_identifier(rc, S("lightmap debug"));
 
         r_immediate_t *imm = r_immediate_begin(rc);
         imm->topology   = R_TOPOLOGY_LINELIST;
@@ -1161,6 +1161,7 @@ static void render_lm_editor(r_context_t *rc)
 		}
 
         r_immediate_end(rc, imm);
+        r_pop_command_identifier(rc);
     }
 }
 
@@ -1328,6 +1329,8 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 
 void update_and_render_in_game_editor(r_context_t *rc)
 {
+    r_push_command_identifier(rc, S("update_and_render_in_game_editor"));
+
     r_push_view      (rc, rc->screenspace);
     r_push_view_layer(rc, R_VIEW_LAYER_UI);
     r_push_layer     (rc, R_SCREEN_LAYER_UI);
@@ -1410,4 +1413,6 @@ void update_and_render_in_game_editor(r_context_t *rc)
     r_pop_layer     (rc);
     r_pop_view_layer(rc);
     r_pop_view      (rc);
+
+    r_pop_command_identifier(rc);
 }

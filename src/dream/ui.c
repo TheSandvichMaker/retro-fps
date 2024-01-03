@@ -655,6 +655,7 @@ rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_tex
 
 	uint32_t color_packed = pack_color(color);
 
+#if 0
     r_immediate_t *imm = NULL;
 
 	if (op == UI_TEXT_OP_DRAW)
@@ -667,9 +668,12 @@ rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_tex
 		imm->shader     = R_SHADER_TEXT;
 		imm->blend_mode = R_BLEND_PREMUL_ALPHA;
 	}
+#endif
 
 	p.x = roundf(p.x);
 	p.y = roundf(p.y);
+
+    r_ui_texture(rc, font->texture);
 
 	m_scoped(temp)
 	{
@@ -687,41 +691,31 @@ rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_tex
 
 				rect = rect2_add_offset(rect, p);
 
-				r_vertex_immediate_t q0 = {
-					.pos = { rect   .min.x, rect   .min.y, 0.0f },
-					.tex = { rect_uv.min.x, rect_uv.min.y       },
-					.col = color_packed,
-				};
+                r_ui_rect_t ui_rect = {
+                    .rect = rect,
+                    .tex_coords = rect_uv,
+                    .color_00 = color_packed,
+                    .color_10 = color_packed,
+                    .color_11 = color_packed,
+                    .color_01 = color_packed,
+                    .flags    = R_UI_RECT_BLEND_TEXT,
+                };
 
-				r_vertex_immediate_t q1 = {
-					.pos = { rect   .max.x, rect   .min.y, 0.0f },
-					.tex = { rect_uv.max.x, rect_uv.min.y       },
-					.col = color_packed,
-				};
-
-				r_vertex_immediate_t q2 = {
-					.pos = { rect   .max.x, rect   .max.y, 0.0f },
-					.tex = { rect_uv.max.x, rect_uv.max.y       },
-					.col = color_packed,
-				};
-
-				r_vertex_immediate_t q3 = {
-					.pos = { rect   .min.x, rect   .max.y, 0.0f },
-					.tex = { rect_uv.min.x, rect_uv.max.y       },
-					.col = color_packed,
-				};
-
-				r_immediate_quad(rc, q0, q1, q2, q3);
+                r_ui_rect(rc, ui_rect);
 			}
 		}
 	}
 
+    r_ui_texture(rc, NULL_HANDLE(texture_handle_t));
+
+#if 0
 	if (op == UI_TEXT_OP_DRAW)
 	{
         r_immediate_end(rc, imm);
         r_pop_layer(rc);
         r_pop_view(rc);
 	}
+#endif
 
 	return result;
 }
@@ -2162,7 +2156,7 @@ bool ui_begin(r_context_t *rc, float dt)
 	return ui.has_focus;
 }
 
-void ui_end(void)
+void ui_end(r_context_t *rc)
 {
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);
@@ -2170,6 +2164,10 @@ void ui_end(void)
 	float font_height = ui_font_height();
 	float at_y = 32.0f;
 
+    R_COMMAND_IDENTIFIER_FUNC(rc)
+    R_VIEW      (rc, rc->screenspace)
+    R_VIEW_LAYER(rc, R_VIEW_LAYER_UI)
+    R_LAYER     (rc, R_SCREEN_LAYER_UI)
 	for (size_t i = 0; i < stack_count(ui.tooltip_stack); i++)
 	{
 		ui_tooltip_t *tooltip = &ui.tooltip_stack.values[i];

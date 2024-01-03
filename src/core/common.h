@@ -71,10 +71,10 @@
 
 #define dll_remove(f, l, n)                         \
     do {                                            \
-        if ((n) == (f)) (f) = (n)->next;            \
-        if ((n) == (l)) (l) = (n)->prev;            \
         if ((n)->prev) (n)->prev->next = (n)->next; \
         if ((n)->next) (n)->next->prev = (n)->prev; \
+        if ((n) == (f)) (f) = (n)->next;            \
+        if ((n) == (l)) (l) = (n)->prev;            \
     } while (0)
 
 #define sll_append(fd, ld, fs, ls) \

@@ -34,6 +34,7 @@ void r_init_render_context(r_context_t *rc, r_command_buffer_t *commands)
     zero_struct(rc);
 
     rc->commands = commands;
+    m_reset_and_decommit(&rc->commands->debug_render_data_arena);
 
     rc->commands->views_count        = 0;
     rc->commands->commands_count     = 0;
@@ -76,11 +77,28 @@ void r_init_render_context(r_context_t *rc, r_command_buffer_t *commands)
     }
 }
 
-void r_command_identifier(r_context_t *rc, string_t identifier)
+void r_push_command_identifier(r_context_t *rc, string_t info)
 {
-    // TODO: reimplement
+    (void)rc; (void)info;
+
+#if DREAM_SLOW
+    arena_t *debug_arena = &rc->commands->debug_render_data_arena;
+    slist_appends(&rc->identifier_stack, debug_arena, info);
+    rc->next_command_identifier = slist_flatten_with_separator(&rc->identifier_stack, debug_arena, S("\n"), 0);
+#endif
+}
+
+void r_pop_command_identifier(r_context_t *rc)
+{
     (void)rc;
-    (void)identifier;
+
+#if DREAM_SLOW
+    DEBUG_ASSERT(!slist_empty(&rc->identifier_stack));
+    slist_pop_last(&rc->identifier_stack);
+    arena_t *debug_arena = &rc->commands->debug_render_data_arena;
+    rc->next_command_identifier = slist_flatten_with_separator(&rc->identifier_stack, debug_arena, S("\n"), 0);
+#endif
+
 }
 
 DREAM_INLINE r_command_key_t r_command_key(r_context_t *rc, r_command_kind_t kind, float depth, uint32_t material_id)
@@ -101,6 +119,12 @@ void r_push_command(r_context_t *rc, r_command_t command)
     ASSERT(command.key.view < rc->commands->views_count);
 
     r_command_buffer_t *commands = rc->commands;
+#if DREAM_SLOW
+    if (!command.identifier.count)
+    {
+        command.identifier = rc->next_command_identifier;
+    }
+#endif
 
     if (ALWAYS(commands->commands_count < commands->commands_capacity))
     {
@@ -112,13 +136,16 @@ void *r_allocate_command_data(r_context_t *rc, size_t size)
 {
     void *result = NULL;
 
-    size_t at_aligned = align_forward(rc->commands->data_at, R_RENDER_COMMAND_ALIGN);
-    size_t size_left  = rc->commands->data_capacity - at_aligned;
-
-    if (ALWAYS(size <= size_left))
+    if (size > 0)
     {
-        result = &rc->commands->data[at_aligned];
-        rc->commands->data_at = (uint32_t)(at_aligned + size);
+        size_t at_aligned = align_forward(rc->commands->data_at, R_RENDER_COMMAND_ALIGN);
+        size_t size_left  = rc->commands->data_capacity - at_aligned;
+
+        if (ALWAYS(size <= size_left))
+        {
+            result = &rc->commands->data[at_aligned];
+            rc->commands->data_at = (uint32_t)(at_aligned + size);
+        }
     }
 
     return result;
@@ -296,6 +323,16 @@ void r_immediate_index(r_context_t *rc, uint32_t index)
     }
 }
 
+void r_ui_texture(r_context_t *rc, texture_handle_t texture)
+{
+    if (!RESOURCE_HANDLES_EQUAL(rc->current_ui_texture, texture))
+    {
+        r_flush_ui_rects(rc);
+    }
+
+    rc->current_ui_texture = texture;
+}
+
 void r_ui_rect(r_context_t *rc, r_ui_rect_t rect)
 {
     // TODO: But when do we even submit the command? dfbkdmgbdgr
@@ -316,15 +353,32 @@ void r_ui_rect(r_context_t *rc, r_ui_rect_t rect)
 
 void r_flush_ui_rects(r_context_t *rc)
 {
-    r_command_ui_rects_t *data = r_allocate_command_data(rc, sizeof(r_command_ui_rects_t));
-    data->first = rc->current_first_ui_rect;
-    data->count = rc->current_ui_rect_count;
+    if (rc->current_ui_rect_count > 0)
+    {
+        r_command_ui_rects_t *data = r_allocate_command_data(rc, sizeof(r_command_ui_rects_t));
+        data->texture = rc->current_ui_texture;
+        data->first = rc->current_first_ui_rect;
+        data->count = rc->current_ui_rect_count;
 
-    r_push_command(rc, (r_command_t){
-        .key  = r_command_key(rc, R_COMMAND_UI_RECTS, 0.0, 0),
-        .data = data,
-    });
+        r_push_command(rc, (r_command_t){
+            .key  = r_command_key(rc, R_COMMAND_UI_RECTS, 0.0, 0),
+            .data = data,
+        });
+    }
+
+#if 0
+    OK THE PROBLEM NOW IS that it seems first of all that a view is being resolved
+    without having anything rendered to it, and then it's being rendered to afterwards
+    and not resolved. The second resolve that lets me actually see it only gets triggered
+    if I flush UI rects. Adding that check for count above, if there are no UI rects now
+    the image ends up blank.
+
+    OK besides that here's an issue: rc->screenspace is still being used. It shouldn't be.
+    UI for the game should be in the UI layer of the scene view, not a separate screenspace
+    view. So that needs to be solved
+#endif
 
     rc->current_first_ui_rect = rc->commands->ui_rects_count;
     rc->current_ui_rect_count = 0;
+    rc->current_ui_texture    = NULL_HANDLE(texture_handle_t);
 }

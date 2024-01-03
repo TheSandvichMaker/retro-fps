@@ -3,18 +3,19 @@
 
 #include "api_types.h"
 
-typedef struct string_node_t
+DREAM_INLINE bool slist_empty(string_list_t *list)
 {
-    string_t string;
+    bool result = !list->first;
+    DEBUG_ASSERT(!list->first == !list->last);
+    return result;
+}
 
-    struct string_node_t *next;
-    struct string_node_t *prev;
-} string_node_t;
-
-typedef struct string_list_t
+typedef uint32_t slist_separator_flags_t;
+typedef enum slist_separator_flags_enum_t
 {
-    string_node_t *first, *last;
-} string_list_t;
+    SLIST_SEPARATOR_BEFORE_FIRST = 1 << 0,
+    SLIST_SEPARATOR_AFTER_LAST   = 1 << 1,
+} slist_separator_flags_enum_t;
 
 // add string to the end of the list
 DREAM_GLOBAL void slist_appends_nocopy(string_list_t *list, arena_t *arena, string_t string);
@@ -34,13 +35,22 @@ DREAM_GLOBAL void slist_interleaves   (string_list_t *list, arena_t *arena, stri
 DREAM_GLOBAL void slist_interleavef   (string_list_t *list, arena_t *arena, const char *fmt, ...);
 DREAM_GLOBAL void slist_interleavef_va(string_list_t *list, arena_t *arena, const char *fmt, va_list args);
 
+DREAM_GLOBAL size_t slist_get_total_count(string_list_t *list);
+
 // returns a flattened string of the contents of the list
+DREAM_GLOBAL string_t slist_flatten_into_with_separator(string_list_t *list, size_t buffer_size, void *buffer, string_t separator, slist_separator_flags_t flags);
+DREAM_GLOBAL string_t slist_flatten_into(string_list_t *list, size_t buffer_size, void *buffer);
+DREAM_GLOBAL string_t slist_flatten_with_separator(string_list_t *list, arena_t *arena, string_t separator, slist_separator_flags_t flags);
 DREAM_GLOBAL string_t slist_flatten(string_list_t *list, arena_t *arena);
 // returns a flattened string of the contents of the list as a C string
-DREAM_GLOBAL char *slist_flatten_null_terminated(string_list_t *list, arena_t *arena);
+DREAM_GLOBAL string_t slist_flatten_null_terminated(string_list_t *list, arena_t *arena);
 
+DREAM_GLOBAL bool slist_contains_node(string_list_t *list, string_node_t *node);
+DREAM_GLOBAL void slist_remove(string_list_t *list, string_node_t *node);
+DREAM_GLOBAL string_node_t *slist_pop_last(string_list_t *list);
 // uses linear search, not fast, just convenience. removes one instance of the string, not all
-DREAM_GLOBAL bool slist_remove(string_list_t *list, string_t string);
+DREAM_GLOBAL string_node_t *slist_find_node(string_list_t *list, string_t string);
+DREAM_GLOBAL bool slist_find_and_remove(string_list_t *list, string_t string);
 // uses linear search, not fast, just convenience
 DREAM_GLOBAL bool slist_append_unique(string_list_t *list, arena_t *arena, string_t string);
 

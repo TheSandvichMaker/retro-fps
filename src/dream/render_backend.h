@@ -271,24 +271,31 @@ typedef struct r_rect2_fixed_t
     int16_t max_y; // 14:2 fixed point
 } r_rect2_fixed_t;
 
+typedef enum r_ui_rect_flags_t
+{
+    R_UI_RECT_BLEND_TEXT = 1 << 0,
+} r_ui_rect_flags_t;
+
 typedef struct r_ui_rect_t
 {
 	rect2_t  rect;              // 16
-	v4_t     roundedness;       // 32
-	uint32_t color_00;          // 36
-	uint32_t color_10;          // 42
-	uint32_t color_11;          // 48
-	uint32_t color_01;          // 52
-	float    shadow_radius;     // 58
-	float    shadow_amount;     // 64
-	float    inner_radius;      // 68
-	float    pad0;              // 72
-	float    pad1;              // 76
-	float    pad2;              // 80
+    rect2_t  tex_coords;        // 32
+	v4_t     roundedness;       // 48
+	uint32_t color_00;          // 52
+	uint32_t color_10;          // 58
+	uint32_t color_11;          // 64
+	uint32_t color_01;          // 68
+	float    shadow_radius;     // 74
+	float    shadow_amount;     // 80
+	float    inner_radius;      // 84
+	uint32_t flags;             // 88
+	float    pad1;              // 92
+	float    pad2;              // 96
 } r_ui_rect_t;
 
 typedef struct r_command_ui_rects_t
 {
+    texture_handle_t texture;
 	uint32_t first;
 	uint32_t count;
 } r_command_ui_rects_t;
@@ -341,10 +348,16 @@ typedef struct r_command_t
 {
     r_command_key_t key;
     void           *data;
+#if DREAM_SLOW
+    string_t identifier;
+#endif
 } r_command_t;
 
 typedef struct r_command_buffer_t
 {
+#if DREAM_SLOW
+    arena_t debug_render_data_arena; // exists to avoid pushing more onto the data buffer, which would make its size requirements change based on builds which seems lame
+#endif
     uint32_t     views_capacity;
     uint32_t     views_count;
     r_view_t    *views;

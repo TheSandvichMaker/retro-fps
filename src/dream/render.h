@@ -33,23 +33,38 @@ typedef struct r_command_buffer_t r_command_buffer_t;
 
 typedef struct r_context_t
 {
-    r_command_buffer_t   *commands;
+    r_command_buffer_t *commands;
+
+#if DREAM_SLOW
+    string_list_t identifier_stack;
+    string_t      next_command_identifier;
+#endif
 
     r_immediate_t *current_immediate;
 
     uint32_t current_first_ui_rect;
     uint32_t current_ui_rect_count;
+    texture_handle_t current_ui_texture;
 
     stack_t(r_screen_layer_t, 8) screen_layers_stack;
     stack_t(r_view_index_t,  64) views_stack;
     stack_t(r_view_layer_t,   8) view_layers_stack;
     
-    r_view_index_t        screenspace;
+    r_view_index_t screenspace; // REMOVE...
 } r_context_t;
 
-DREAM_LOCAL void           r_init_render_context (r_context_t *rc, r_command_buffer_t *commands);
-DREAM_LOCAL void           r_command_identifier  (r_context_t *rc, string_t identifier);
-DREAM_LOCAL void           r_draw_mesh           (r_context_t *rc, m4x4_t transform, mesh_handle_t mesh, const r_material_t *material);
+DREAM_LOCAL void           r_init_render_context(r_context_t *rc, r_command_buffer_t *commands);
+DREAM_LOCAL void           r_push_command_identifier(r_context_t *rc, string_t info);
+DREAM_LOCAL void           r_pop_command_identifier (r_context_t *rc);
+
+#define R_COMMAND_IDENTIFIER(rc, ident) \
+    DEFER_LOOP(r_push_command_identifier(rc, ident), r_pop_command_identifier(rc))
+
+#define R_COMMAND_IDENTIFIER_FUNC(rc) R_COMMAND_IDENTIFIER(rc, string_from_cstr(__FUNCTION__))
+// NOTE: I am treating __FUNCTION__ as a runtime string because I think in MSVC it is. Cringe.
+#define R_COMMAND_IDENTIFIER_LOC(rc, info) R_COMMAND_IDENTIFIER(rc, Sf(LOC_CSTRING ":%s: %.*s", __FUNCTION__, Sx(info)))
+
+DREAM_LOCAL void           r_draw_mesh(r_context_t *rc, m4x4_t transform, mesh_handle_t mesh, const r_material_t *material);
 DREAM_LOCAL void           r_push_command        (r_context_t *rc, r_command_t command);
 DREAM_LOCAL void          *r_allocate_command_data(r_context_t *rc, size_t size);
 
@@ -63,6 +78,7 @@ DREAM_LOCAL void           r_immediate_end       (r_context_t *rc, r_immediate_t
                                   r_immediate_end(rc, imm), imm = NULL)
 
 DREAM_LOCAL void           r_ui_rect             (r_context_t *rc, r_ui_rect_t rect);
+DREAM_LOCAL void           r_ui_texture          (r_context_t *rc, texture_handle_t texture);
 DREAM_LOCAL void           r_flush_ui_rects      (r_context_t *rc); // frowny?
 
 DREAM_LOCAL r_view_index_t r_make_view           (r_context_t *rc, const r_view_t *view);

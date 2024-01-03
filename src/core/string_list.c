@@ -99,61 +99,210 @@ void slist_interleavef_va(string_list_t *list, arena_t *arena, const char *fmt, 
 
 //
 
-string_t slist_flatten(string_list_t *list, arena_t *arena)
+size_t slist_get_total_count(string_list_t *list)
 {
     size_t total_count = 0;
     for (string_node_t *node = list->first; node; node = node->next)
     {
         total_count += node->string.count;
     }
-
-    char *data = m_alloc_string(arena, total_count);
-    char *at   = data;
-
-    for (string_node_t *node = list->first; node; node = node->next)
-    {
-        copy_memory(at, node->string.data, node->string.count);
-        at += node->string.count;
-    }
-
-    string_t string = { total_count, data };
-    return string;
+    return total_count;
 }
 
-char *slist_flatten_null_terminated(string_list_t *list, arena_t *arena)
+// TODO: this is literally the same thing as dynamic_string_t. deduplicate.
+typedef struct string_buffer_t
+{
+    char  *data;
+    size_t at;
+    size_t capacity;
+} string_buffer_t;
+
+DREAM_INLINE string_t string_buffer_push(string_buffer_t *buf, string_t string)
+{
+    string_t result = strnull;
+
+    size_t size_left = buf->capacity - buf->at;
+    if (size_left > 0)
+    {
+        size_t copy_size = MIN(size_left, string.count);
+        copy_memory(&buf->data[buf->at], string.data, copy_size);
+
+        result.data  = &buf->data[buf->at];
+        result.count = copy_size;
+
+        buf->at += copy_size;
+    }
+
+    return result;
+}
+
+DREAM_INLINE string_t string_from_string_buffer(string_buffer_t *buf)
+{
+    string_t result = {
+        .data  = buf->data,
+        .count = buf->at,
+    };
+    return result;
+}
+
+string_t slist_flatten_into_with_separator(string_list_t          *list, 
+                                           size_t                  buffer_size, 
+                                           void                   *buffer, 
+                                           string_t                separator, 
+                                           slist_separator_flags_t flags)
+{
+    string_buffer_t buf = {
+        .data     = buffer,
+        .capacity = buffer_size,
+    };
+
+    if (flags & SLIST_SEPARATOR_BEFORE_FIRST)
+    {
+        string_buffer_push(&buf, separator);
+    }
+
+    for (string_node_t *node = list->first; node; node = node->next)
+    {
+        string_buffer_push(&buf, node->string);
+
+        if (node->next)
+        {
+            string_buffer_push(&buf, separator);
+        }
+    }
+
+    if (flags & SLIST_SEPARATOR_AFTER_LAST)
+    {
+        string_buffer_push(&buf, separator);
+    }
+
+    string_t result = string_from_string_buffer(&buf);
+    return result;
+}
+
+string_t slist_flatten_into(string_list_t *list, size_t buffer_size, void *buffer)
+{
+    string_buffer_t buf = {
+        .data     = buffer,
+        .capacity = buffer_size,
+    };
+
+    for (string_node_t *node = list->first; node; node = node->next)
+    {
+        string_buffer_push(&buf, node->string);
+    }
+
+    string_t result = string_from_string_buffer(&buf);
+    return result;
+}
+
+string_t slist_flatten_with_separator(string_list_t *list, arena_t *arena, string_t separator, slist_separator_flags_t flags)
 {
     size_t total_count = 0;
+
+    if (flags & SLIST_SEPARATOR_BEFORE_FIRST)
+    {
+        total_count += separator.count;
+    }
+
     for (string_node_t *node = list->first; node; node = node->next)
     {
         total_count += node->string.count;
+
+        if (node->next)
+        {
+            total_count += separator.count;
+        }
     }
 
-    char *data = m_alloc_string(arena, total_count + 1);
-    char *at   = data;
-
-    for (string_node_t *node = list->first; node; node = node->next)
+    if (flags & SLIST_SEPARATOR_AFTER_LAST)
     {
-        copy_memory(at, node->string.data, node->string.count);
-        at += node->string.count;
+        total_count += separator.count;
     }
 
-    data[total_count] = 0;
-    return data;
+    char    *buffer = m_alloc_string(arena, total_count);
+    string_t result = slist_flatten_into_with_separator(list, total_count, buffer, separator, flags);
+    return result;
+}
+
+string_t slist_flatten(string_list_t *list, arena_t *arena)
+{
+    size_t   total_count = slist_get_total_count(list);
+    char    *buffer      = m_alloc_string(arena, total_count);
+    string_t result      = slist_flatten_into(list, total_count, buffer);
+    return result;
+}
+
+string_t slist_flatten_null_terminated(string_list_t *list, arena_t *arena)
+{
+    size_t   total_count = slist_get_total_count(list) + 1;
+    char    *buffer      = m_alloc_string(arena, total_count);
+    string_t result      = slist_flatten_into(list, total_count, buffer);
+
+    result.data[total_count] = 0;
+    return result;
 }
 
 //
 
-bool slist_remove(string_list_t *list, string_t string)
+bool slist_contains_node(string_list_t *list, string_node_t *node)
 {
-    for (string_node_t *node = list->first, *next; node; node = next)
+    bool found_node = false;
+    for (const string_node_t *test_node = list->first; test_node; test_node = test_node->next)
     {
-        next = node->next;
+        if (node == test_node)
+        {
+            found_node = true;
+            break;
+        }
+    }
+    return found_node;
+}
 
+void slist_remove(string_list_t *list, string_node_t *node)
+{
+#if DREAM_SLOW
+    if (ALWAYS(slist_contains_node(list, node)))
+    {
+#endif
+        dll_remove(list->first, list->last, node);
+#if DREAM_SLOW
+    }
+#endif
+}
+
+string_node_t *slist_pop_last(string_list_t *list)
+{
+    string_node_t *result = NULL;
+    if (!slist_empty(list))
+    {
+        result = list->last;
+        dll_remove(list->first, list->last, list->last);
+    }
+    return result;
+}
+
+string_node_t *slist_find_node(string_list_t *list, string_t string)
+{
+    string_node_t *result = NULL;
+    for (string_node_t *node = list->first; node; node = node->next)
+    {
         if (string_match(node->string, string))
         {
-            dll_remove(list->first, list->last, node);
-            return true;
+            result = node;
         }
+    }
+
+    return result;
+}
+
+bool slist_find_and_remove(string_list_t *list, string_t string)
+{
+    string_node_t *node = slist_find_node(list, string);
+    if (node)
+    {
+        // avoiding slist_remove to not do redudant debug checks of node-existence
+        dll_remove(list->first, list->last, node);
     }
 
     return false;

@@ -73,6 +73,19 @@ typedef struct string_t
 #define Sx(text) strexpand(text)
 #define strnull (string_t){ 0 }
 
+typedef struct string_node_t
+{
+    string_t string;
+
+    struct string_node_t *next;
+    struct string_node_t *prev;
+} string_node_t;
+
+typedef struct string_list_t
+{
+    string_node_t *first, *last;
+} string_list_t;
+
 typedef struct dynamic_string_t
 {
 	size_t capacity;
@@ -91,6 +104,9 @@ typedef struct dynamic_string_t
 #define string_from_storage(storage) (string_t) { (storage).count, (storage).data }
 #define string_into_storage(storage, string) (copy_memory((storage).data, (string).data, MIN(ARRAY_COUNT((storage).data), (string).count)), (storage).count = (string).count)
 #define string_storage_size(storage) ARRAY_COUNT((storage).data)
+
+#define LOC_CSTRING STRINGIFY(__FILE__) ":" STRINGIFY(__LINE__)
+#define LOC_STRING S(LOC_CSTRING)
 
 #define stack_t(type, count)                                               \
 	struct { size_t at; type values[count]; }
@@ -409,6 +425,7 @@ typedef union resource_handle_t
 DEFINE_HANDLE_TYPE(texture_handle_t);
 DEFINE_HANDLE_TYPE(mesh_handle_t);
 
+#define NULL_HANDLE(type_t) ((type_t){0})
 #define NULL_RESOURCE_HANDLE ((resource_handle_t){0})
 #define NULL_TEXTURE_HANDLE ((texture_handle_t){0})
 #define NULL_MESH_HANDLE ((mesh_handle_t){0})
