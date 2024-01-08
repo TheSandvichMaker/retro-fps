@@ -23,6 +23,8 @@
 #define DREAM_LOCAL  extern 
 #endif
 
+#define SUPPRESS_UNUSED_WARNING(x) (void)(x)
+
 #define DREAM_DLLEXPORT extern __declspec(dllexport)
 #define DREAM_INLINE static inline
 
@@ -56,6 +58,9 @@
 #define BIT_CAST(from, to, x) (union { from f; to t; }){.f=x}.t
 #define F32_AS_U32(f) BIT_CAST(float, uint32_t, f)
 #define U32_AS_F32(u) BIT_CAST(uint32_t, float, u)
+
+#define U64_FROM_PTR(x) (uint64_t)(uintptr_t)(x)
+#define PTR_FROM_U64(x) (void *)(uintptr_t)(x)
 
 #define DEFAULT_STRING_ALIGN 16
 

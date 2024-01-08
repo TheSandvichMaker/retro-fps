@@ -20,6 +20,14 @@
 #include "camera.h"
 #include "physics_playground.h"
 
+#define UI_FORCE_ONE_DRAW_CALL_PER_RECT_SLOW_DEBUG_STUFF 0
+
+#if 0
+    OK here's an issue: rc->screenspace is still being used. It shouldn't be.
+    UI for the game should be in the UI layer of the scene view, not a separate screenspace
+    view. So that needs to be solved
+#endif
+
 static bool initialized = false;
 
 bool g_cursor_locked;
@@ -440,7 +448,8 @@ void game_init(void)
     initialized = true;
 }
 
-DREAM_INLINE void render_map(r_context_t *rc, camera_t *camera, map_t *map)
+// don't return the game view ya dingus... what bad code
+DREAM_INLINE r_view_index_t render_map(r_context_t *rc, camera_t *camera, map_t *map)
 {
     r_push_command_identifier(rc, S(LOC_CSTRING ":render_map"));
 
@@ -542,6 +551,9 @@ DREAM_INLINE void render_map(r_context_t *rc, camera_t *camera, map_t *map)
     }
 
     r_pop_command_identifier(rc);
+
+    // stop it man...
+    return game_view;
 }
 
 DREAM_INLINE void render_game_ui(r_context_t *rc, world_t *world)
@@ -748,14 +760,56 @@ static void game_tick(platform_io_t *io)
     map->fog_scattering = 0.04f;
     map->fog_phase_k    = 0.6f;
 
-    render_map(rc, camera, map);
+    r_view_index_t game_view = render_map(rc, camera, map);
 
     world->fade_t += 0.45f*dt*(world->fade_target_t - world->fade_t);
     render_game_ui(rc, world);
 
     update_and_render_in_game_editor(rc);
 
-    ui_end(rc);
+    ui_end();
+
+#if UI_USE_RENDER_COMMANDS
+    R_VIEW      (rc, game_view) 
+    R_VIEW_LAYER(rc, R_VIEW_LAYER_UI)
+    {
+        // bit of manhandling with the texture for now
+        texture_handle_t texture = NULL_HANDLE(texture_handle_t);
+        rc->current_ui_texture = NULL_HANDLE(texture_handle_t);
+
+        size_t commands_processed_count = 0;
+
+        ui_render_bucket_t *bucket = ui_get_render_commands();
+        for (ui_render_command_block_t *block = bucket->first_block;
+             block;
+             block = block->next)
+        {
+            for (size_t command_index = 0;
+                 command_index < block->commands_count;
+                 command_index++)
+            {
+                ui_render_command_t *command = &block->commands[command_index];
+
+                // bad code...
+#if !UI_FORCE_ONE_DRAW_CALL_PER_RECT_SLOW_DEBUG_STUFF 
+                if (!RESOURCE_HANDLES_EQUAL(command->texture, texture))
+#endif
+                {
+                    r_flush_ui_rects(rc);
+                    texture = command->texture;
+                    rc->current_ui_texture = texture;
+                }
+
+                r_ui_rect(rc, command->rect);
+
+                commands_processed_count += 1;
+            }
+        }
+
+        r_flush_ui_rects(rc);
+    }
+#endif
+
 #endif
 
     if (button_pressed(BUTTON_ESCAPE))

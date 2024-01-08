@@ -75,6 +75,12 @@ void r_init_render_context(r_context_t *rc, r_command_buffer_t *commands)
 
         rc->screenspace = r_make_view(rc, &view);
     }
+
+    // pushing a null command so that there's an easy way to refer to null command indices
+    r_push_command(rc, (r_command_t) {
+        .key  = { .value = 0 },
+        .data = NULL,
+    });
 }
 
 void r_push_command_identifier(r_context_t *rc, string_t info)
@@ -325,12 +331,16 @@ void r_immediate_index(r_context_t *rc, uint32_t index)
 
 void r_ui_texture(r_context_t *rc, texture_handle_t texture)
 {
+    (void)rc;
+    (void)texture;
+#if !UI_USE_RENDER_COMMANDS
     if (!RESOURCE_HANDLES_EQUAL(rc->current_ui_texture, texture))
     {
         r_flush_ui_rects(rc);
     }
 
     rc->current_ui_texture = texture;
+#endif
 }
 
 void r_ui_rect(r_context_t *rc, r_ui_rect_t rect)
@@ -365,18 +375,6 @@ void r_flush_ui_rects(r_context_t *rc)
             .data = data,
         });
     }
-
-#if 0
-    OK THE PROBLEM NOW IS that it seems first of all that a view is being resolved
-    without having anything rendered to it, and then it's being rendered to afterwards
-    and not resolved. The second resolve that lets me actually see it only gets triggered
-    if I flush UI rects. Adding that check for count above, if there are no UI rects now
-    the image ends up blank.
-
-    OK besides that here's an issue: rc->screenspace is still being used. It shouldn't be.
-    UI for the game should be in the UI layer of the scene view, not a separate screenspace
-    view. So that needs to be solved
-#endif
 
     rc->current_first_ui_rect = rc->commands->ui_rects_count;
     rc->current_ui_rect_count = 0;

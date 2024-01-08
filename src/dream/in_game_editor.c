@@ -1323,6 +1323,7 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 			ui_label(Sf("Active UI Animation Count: %zu", ui.style.animation_state.count));
 			ui_label(Sf("Delta Time: %.02fms", 1000.0f*ui.input.dt));
 			ui_label(Sf("UI Hover Time: %.02f", ui.hover_time_seconds));
+			ui_label(Sf("UI Rect Count: %zu", ui.last_frame_ui_rect_count));
         }
     }
 }
@@ -1408,7 +1409,9 @@ void update_and_render_in_game_editor(r_context_t *rc)
 
 	ui_process_windows();
 
+#if !UI_USE_RENDER_COMMANDS
     r_flush_ui_rects(rc);
+#endif
 
     r_pop_layer     (rc);
     r_pop_view_layer(rc);

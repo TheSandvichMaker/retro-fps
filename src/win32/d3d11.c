@@ -979,7 +979,7 @@ DREAM_INLINE void radix_sort_commands(r_command_t *array, size_t count)
     }
 }
 
-DREAM_INLINE void d3d_update_view_constants(r_view_t *view)
+DREAM_INLINE void d3d_update_view_constants(const r_view_t *view)
 {
     v3_t sun_direction = view->scene.sun_direction;
 
@@ -1031,7 +1031,7 @@ DREAM_INLINE void d3d_update_view_constants(r_view_t *view)
     update_buffer(d3d.cbuf_view, &cbuf_view, sizeof(cbuf_view));
 }
 
-DREAM_INLINE void d3d_render_skybox(r_view_t *view, D3D11_VIEWPORT viewport)
+DREAM_INLINE void d3d_render_skybox(const r_view_t *view, D3D11_VIEWPORT viewport)
 {
     const r_scene_parameters_t *scene = &view->scene;
 
@@ -1064,20 +1064,19 @@ DREAM_INLINE void d3d_render_skybox(r_view_t *view, D3D11_VIEWPORT viewport)
     });
 }
 
-DREAM_INLINE size_t d3d_render_view(D3D11_VIEWPORT viewport, r_command_buffer_t *commands, size_t first_command_index)
+DREAM_INLINE size_t d3d_render_view(const d3d_frame_context_t *frame, D3D11_VIEWPORT viewport, const r_command_buffer_t *commands, size_t first_command_index)
 {
-    r_command_t          *first_command = &commands->commands[first_command_index];
-    r_command_key_t      *first_key     = &first_command->key;
-    r_view_index_t        view_index    = (r_view_index_t)first_key->view;
-    r_view_t             *view          = &commands->views[view_index];
-    r_scene_parameters_t *scene         = &view->scene;
+    const r_command_t          *first_command = &commands->commands[first_command_index];
+    const r_command_key_t      *first_key     = &first_command->key;
+    const r_view_index_t        view_index    = (r_view_index_t)first_key->view;
+    const r_view_t             *view          = &commands->views[view_index];
+    const d3d_view_data_t      *view_data     = &frame->view_datas[view_index];
+    const r_scene_parameters_t *scene         = &view->scene;
 
     d3d_update_view_constants(view);
 
     // TODO: Should render skybox last for efficiency (can reject anything not at infinite Z)
     d3d_render_skybox(view, viewport);
-
-    r_view_layer_t prev_view_layer = first_key->view_layer;
 
     size_t command_index = first_command_index;
     for (; command_index < commands->commands_count; command_index++)
@@ -1085,12 +1084,7 @@ DREAM_INLINE size_t d3d_render_view(D3D11_VIEWPORT viewport, r_command_buffer_t 
         r_command_t *command = &commands->commands[command_index];
         r_command_key_t *key = &command->key;
 
-        r_view_layer_t view_layer = key->view_layer;
-        bool is_scene  = (view_layer      == R_VIEW_LAYER_SCENE);
-        bool was_scene = (prev_view_layer == R_VIEW_LAYER_SCENE);
-        bool done_with_view = (key->view != view_index);
-
-        bool should_resolve = (was_scene && !is_scene) || (is_scene && done_with_view);
+        bool should_resolve = (command_index == view_data->last_scene_command);
         if (should_resolve)
         {
             // Done rendering scene view, apply post processing / MSAA resolve
@@ -1136,9 +1130,12 @@ DREAM_INLINE size_t d3d_render_view(D3D11_VIEWPORT viewport, r_command_buffer_t 
             break;
         }
 
-        d3d_rendertarget_t *rt = is_scene ? &d3d.scene_target : &d3d.backbuffer;
+        const r_view_layer_t view_layer = key->view_layer;
+        const bool is_scene = (view_layer == R_VIEW_LAYER_SCENE);
 
-        r_command_kind_t kind = key->kind;
+        const d3d_rendertarget_t *rt = is_scene ? &d3d.scene_target : &d3d.backbuffer;
+
+        const r_command_kind_t kind = key->kind;
 
         switch (kind)
         {
@@ -1304,15 +1301,15 @@ DREAM_INLINE size_t d3d_render_view(D3D11_VIEWPORT viewport, r_command_buffer_t 
 
             INVALID_DEFAULT_CASE;
         }
-
-        prev_view_layer = view_layer;
     }
 
     return command_index;
 }
 
-void d3d11_execute_command_buffer(r_command_buffer_t *commands, int width, int height)
+void d3d11_execute_command_buffer(r_command_buffer_t *command_buffer, int width, int height)
 {
+    arena_marker_t temp_marker = m_get_marker(temp);
+
 	AcquireSRWLockExclusive(&d3d.context_lock);
 
     d3d_queries_t *queries = &d3d.queries[d3d.query_frame];
@@ -1321,11 +1318,42 @@ void d3d11_execute_command_buffer(r_command_buffer_t *commands, int width, int h
 
     d3d_ensure_swap_chain_size(width, height);
 
-    radix_sort_commands(commands->commands, commands->commands_count);
+    {
+        r_command_t *commands       = command_buffer->commands;
+        const size_t commands_count = command_buffer->commands_count;
+        radix_sort_commands(commands, commands_count);
+    }
+
+    const r_command_t *commands       = command_buffer->commands;
+    const size_t       commands_count = command_buffer->commands_count;
+
+    // per-frame rendering related context that's useful to pass down to functions
+    d3d_frame_context_t frame = {
+        .view_datas = m_alloc_array(temp, command_buffer->views_count, d3d_view_data_t),
+    };
+
+    for (size_t command_index = 1; command_index < commands_count; command_index++)
+    {
+        const r_command_t *command = &commands[command_index];
+        const r_command_key_t *key = &command->key;
+
+        const r_view_index_t view_index = (r_view_index_t)key->view;
+
+        d3d_view_data_t *view_data = &frame.view_datas[view_index];
+        if (key->view_layer == R_VIEW_LAYER_SCENE)
+        {
+            if (view_data->first_scene_command == 0)
+            {
+                view_data->first_scene_command = (uint32_t)command_index;
+            }
+
+            view_data->last_scene_command = (uint32_t)command_index;
+        }
+    }
 
     if (d3d.backbuffer.color_rtv)
     {
-        r_view_t *view = NULL;
+        const r_view_t *view = NULL;
 
         //
         // sun shadows
@@ -1348,39 +1376,39 @@ void d3d11_execute_command_buffer(r_command_buffer_t *commands, int width, int h
 
         D3D11_RECT sun_scissor_rect = { 0, 0, SUN_SHADOWMAP_RESOLUTION, SUN_SHADOWMAP_RESOLUTION };
 
-        for (size_t command_index = 0; command_index < commands->commands_count; command_index++)
+        for (size_t command_index = 1; command_index < commands_count; command_index++)
         {
-            r_command_t *command = &commands->commands[command_index];
-            r_command_key_t *key = &command->key;
+            const r_command_t *command = &commands[command_index];
+            const r_command_key_t *key = &command->key;
 
-            r_view_t *new_view = &commands->views[key->view];
+            const r_view_t *new_view = &command_buffer->views[key->view];
             if (view != new_view)
             {
                 view = new_view;
                 d3d_update_view_constants(view);
             }
             
-            r_screen_layer_t new_layer = key->screen_layer;
+            const r_screen_layer_t new_layer = key->screen_layer;
             if (new_layer != R_SCREEN_LAYER_SCENE)
             {
                 break;
             }
 
-            r_view_layer_t view_layer = key->view_layer;
+            const r_view_layer_t view_layer = key->view_layer;
             if (view_layer != R_VIEW_LAYER_SCENE)
             {
                 continue;
             }
 
-            r_command_kind_t kind = key->kind;
+            const r_command_kind_t kind = key->kind;
 
             switch (kind)
             {
                 case R_COMMAND_MODEL:
                 {
-                    r_command_model_t *data = command->data;
+                    const r_command_model_t *data = command->data;
 
-                    d3d_model_t *model = pool_get(&d3d_models, data->mesh);
+                    const d3d_model_t *model = pool_get(&d3d_models, data->mesh);
 
                     if (model)
                     {
@@ -1450,18 +1478,18 @@ void d3d11_execute_command_buffer(r_command_buffer_t *commands, int width, int h
         d3d_timestamp(RENDER_TS_CLEAR_MAIN);
 
         // update immediate index/vertex buffer
-        update_buffer(d3d.immediate_ibuffer, commands->imm_indices,  sizeof(commands->imm_indices[0])*commands->imm_indices_count);
-        update_buffer(d3d.immediate_vbuffer, commands->imm_vertices, sizeof(commands->imm_vertices[0])*commands->imm_vertices_count);
+        update_buffer(d3d.immediate_ibuffer, command_buffer->imm_indices,  sizeof(command_buffer->imm_indices[0])*command_buffer->imm_indices_count);
+        update_buffer(d3d.immediate_vbuffer, command_buffer->imm_vertices, sizeof(command_buffer->imm_vertices[0])*command_buffer->imm_vertices_count);
 
         // update ui rect buffer
-        update_buffer(d3d.ui_rect_buffer, commands->ui_rects, sizeof(commands->ui_rects[0])*commands->ui_rects_count);
+        update_buffer(d3d.ui_rect_buffer, command_buffer->ui_rects, sizeof(command_buffer->ui_rects[0])*command_buffer->ui_rects_count);
 
         d3d_timestamp(RENDER_TS_UPLOAD_IMMEDIATE_DATA);
 
-        size_t command_index = 0;
-        while (command_index < commands->commands_count)
+        size_t command_index = 1;
+        while (command_index < commands_count)
         {
-            command_index = d3d_render_view(viewport, commands, command_index);
+            command_index = d3d_render_view(&frame, viewport, command_buffer, command_index);
         }
 
         d3d_timestamp(RENDER_TS_UI);
@@ -1506,6 +1534,8 @@ void d3d11_execute_command_buffer(r_command_buffer_t *commands, int width, int h
 	}
 
     d3d.frame_index++;
+
+    m_reset_to_marker(temp, temp_marker);
 }
 
 DREAM_INLINE void d3d_collect_timestamp_data(void)
@@ -1958,7 +1988,7 @@ void update_buffer(ID3D11Buffer *buffer, const void *data, size_t size)
     ID3D11DeviceContext_Unmap(d3d.context, (ID3D11Resource *)buffer, 0);
 }
 
-void set_model_buffers(d3d_model_t *model, DXGI_FORMAT index_format)
+void set_model_buffers(const d3d_model_t *model, DXGI_FORMAT index_format)
 {
     ID3D11DeviceContext_IASetInputLayout(d3d.context, d3d.layouts[model->vertex_format]);
     ID3D11DeviceContext_IASetPrimitiveTopology(d3d.context, model->primitive_topology);

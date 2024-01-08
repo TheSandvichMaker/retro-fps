@@ -15,7 +15,7 @@ enum {
     R_COMMANDS_DATA_CAPACITY      = MB(16),
     R_IMMEDIATE_INDICES_CAPACITY  = 1 << 20,
     R_IMMEDIATE_VERTICES_CAPACITY = 1 << 18,
-    R_UI_RECTS_CAPACITY           = 8192,
+    R_UI_RECTS_CAPACITY           = 8192 << 1,
 };
 
 typedef enum r_pixel_format_t

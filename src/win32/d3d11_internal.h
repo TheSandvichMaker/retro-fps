@@ -141,8 +141,15 @@ typedef struct d3d_shader_pair_t
 
 typedef struct d3d_view_data_t
 {
-    d3d_rendertarget_t sun_shadowmap;
+    // d3d_rendertarget_t sun_shadowmap;
+    uint32_t first_scene_command;
+    uint32_t last_scene_command;
 } d3d_view_data_t;
+
+typedef struct d3d_frame_context_t
+{
+    d3d_view_data_t *view_datas;
+} d3d_frame_context_t;
 
 typedef struct d3d_state_t
 {
@@ -239,7 +246,7 @@ DREAM_LOCAL ID3D11PixelShader *d3d_compile_ps(string_t hlsl_file, string_t hlsl,
 DREAM_LOCAL ID3D11VertexShader *d3d_compile_vs(string_t hlsl_file, string_t hlsl, const char *entry_point);
 
 DREAM_LOCAL void update_buffer(ID3D11Buffer *buffer, const void *data, size_t size);
-DREAM_LOCAL void set_model_buffers(d3d_model_t *model, DXGI_FORMAT index_format);
+DREAM_LOCAL void set_model_buffers(const d3d_model_t *model, DXGI_FORMAT index_format);
 
 DREAM_LOCAL void get_resolution(int *w, int *h);
 
@@ -255,7 +262,7 @@ typedef struct d3d_render_pass_t
     ID3D11RenderTargetView *render_target;
     ID3D11DepthStencilView *depth_stencil;
 
-    d3d_model_t *model;
+    const d3d_model_t *model;
 
     r_blend_mode_t blend_mode;
 

@@ -2,6 +2,13 @@
 #define DREAM_UI_H
 
 //
+//
+//
+
+#define UI_USE_RENDER_COMMANDS 1
+#define UI_SLOW (1 && DREAM_SLOW)
+
+//
 // IDs
 //
 
@@ -408,6 +415,31 @@ typedef struct ui_tooltip_t
 	string_storage_t(UI_MAX_TOOLTIP_LENGTH) text;
 } ui_tooltip_t;
 
+#define UI_RENDER_COMMAND_BLOCK_CAPACITY (256)
+
+typedef struct ui_render_command_t
+{
+    texture_handle_t texture;
+    r_ui_rect_t rect;
+} ui_render_command_t;
+
+typedef struct ui_render_command_block_t
+{
+    struct ui_render_command_block_t *next;
+    size_t commands_count;
+    ui_render_command_t commands[UI_RENDER_COMMAND_BLOCK_CAPACITY];
+} ui_render_command_block_t;
+
+typedef struct ui_render_bucket_t
+{
+    ui_render_command_block_t *first_block;
+    ui_render_command_block_t *last_block;
+} ui_render_bucket_t;
+
+DREAM_LOCAL void ui_push_command(ui_render_bucket_t *bucket, const ui_render_command_t *command);
+DREAM_LOCAL void ui_free_block(ui_render_command_block_t *block);
+DREAM_LOCAL void ui_free_bucket(ui_render_bucket_t *bucket);
+
 #define UI_ID_STACK_COUNT (32)
 
 typedef struct ui_t
@@ -460,6 +492,12 @@ typedef struct ui_t
 	ui_panels_t  panels;
 	ui_windows_t windows;
 	ui_style_t   style;
+
+    // TODO: Command bucketing?
+    ui_render_bucket_t render_commands;
+    ui_render_command_block_t *first_free_render_command_block;
+
+    size_t last_frame_ui_rect_count;
 } ui_t;
 
 DREAM_LOCAL ui_t ui;
@@ -489,7 +527,8 @@ DREAM_LOCAL ui_state_t *ui_get_state(ui_id_t id);
 DREAM_LOCAL bool ui_state_is_new(ui_state_t *state);
 
 DREAM_LOCAL bool ui_begin(r_context_t *rc, float dt);
-DREAM_LOCAL void ui_end(r_context_t *rc);
+DREAM_LOCAL void ui_end(void);
+DREAM_LOCAL ui_render_bucket_t *ui_get_render_commands(void);
 
 //
 //

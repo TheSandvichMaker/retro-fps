@@ -650,30 +650,18 @@ rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_tex
 {
     // TODO: UI render commands
     r_context_t *rc = ui.rc;
+    SUPPRESS_UNUSED_WARNING(rc);
 
 	rect2_t result = rect2_inverted_infinity();
 
 	uint32_t color_packed = pack_color(color);
 
-#if 0
-    r_immediate_t *imm = NULL;
-
-	if (op == UI_TEXT_OP_DRAW)
-	{
-        r_push_view(rc, rc->screenspace);
-        r_push_layer(rc, R_SCREEN_LAYER_UI);
-
-        imm = r_immediate_begin(rc);
-        imm->texture    = font->texture;
-		imm->shader     = R_SHADER_TEXT;
-		imm->blend_mode = R_BLEND_PREMUL_ALPHA;
-	}
-#endif
-
 	p.x = roundf(p.x);
 	p.y = roundf(p.y);
 
+#if !UI_USE_RENDER_COMMANDS
     r_ui_texture(rc, font->texture);
+#endif
 
 	m_scoped(temp)
 	{
@@ -691,6 +679,20 @@ rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_tex
 
 				rect = rect2_add_offset(rect, p);
 
+#if UI_USE_RENDER_COMMANDS
+                ui_push_command(&ui.render_commands, &(ui_render_command_t){
+                    .texture = font->texture,
+                    .rect = {
+                        .rect = rect,
+                        .tex_coords = rect_uv,
+                        .color_00 = color_packed,
+                        .color_10 = color_packed,
+                        .color_11 = color_packed,
+                        .color_01 = color_packed,
+                        .flags    = R_UI_RECT_BLEND_TEXT,
+                    },
+                });
+#else
                 r_ui_rect_t ui_rect = {
                     .rect = rect,
                     .tex_coords = rect_uv,
@@ -702,19 +704,13 @@ rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_tex
                 };
 
                 r_ui_rect(rc, ui_rect);
+#endif
 			}
 		}
 	}
 
+#if !UI_USE_RENDER_COMMANDS
     r_ui_texture(rc, NULL_HANDLE(texture_handle_t));
-
-#if 0
-	if (op == UI_TEXT_OP_DRAW)
-	{
-        r_immediate_end(rc, imm);
-        r_pop_layer(rc);
-        r_pop_view(rc);
-	}
 #endif
 
 	return result;
@@ -784,11 +780,89 @@ rect2_t ui_draw_text_aligned(font_atlas_t *font, rect2_t rect, string_t text, v2
 	return result;
 }
 
+DREAM_INLINE void ui_sanity_check_bucket(ui_render_bucket_t *bucket)
+{
+    ui_render_command_block_t *first_block = bucket->first_block;
+
+
+    if (first_block)
+    {
+        table_t visited_blocks = {0};
+
+        for (ui_render_command_block_t *block = first_block->next;
+             block;
+             block = block->next)
+        {
+            ASSERT(!table_find_object(&visited_blocks, U64_FROM_PTR(block)));
+            table_insert_object(&visited_blocks, U64_FROM_PTR(block), block);
+        }
+
+        table_release(&visited_blocks);
+    }
+}
+
+void ui_push_command(ui_render_bucket_t *bucket, const ui_render_command_t *command)
+{
+    if (!bucket->last_block ||
+         bucket->last_block->commands_count == UI_RENDER_COMMAND_BLOCK_CAPACITY)
+    {
+        if (!ui.first_free_render_command_block)
+        {
+            ui.first_free_render_command_block = m_alloc_struct_nozero(&ui.arena, ui_render_command_block_t);
+            ui.first_free_render_command_block->next = NULL;
+        }
+
+        ui_render_command_block_t *block = sll_pop(ui.first_free_render_command_block);
+        block->next           = NULL;
+        block->commands_count = 0;
+
+        sll_push_back(bucket->first_block, bucket->last_block, block);
+    }
+
+    ui_render_command_block_t *block = bucket->last_block;
+    if (ALWAYS(block->commands_count < UI_RENDER_COMMAND_BLOCK_CAPACITY))
+    {
+        block->commands[block->commands_count++] = *command;
+    }
+
+#if UI_SLOW // super slow!
+    ui_sanity_check_bucket(bucket);
+#endif
+}
+
+void ui_free_block(ui_render_command_block_t *block)
+{
+    sll_push(ui.first_free_render_command_block, block);
+}
+
+void ui_free_bucket(ui_render_bucket_t *bucket)
+{
+    while (bucket->first_block)
+    {
+        ui_render_command_block_t *block = sll_pop(bucket->first_block);
+        ui_free_block(block);
+    }
+    ASSERT(bucket->first_block == NULL);
+    bucket->last_block = bucket->first_block = NULL;
+}
+
+// TODO: remove... silly function
+DREAM_INLINE void ui_do_rect(r_ui_rect_t rect)
+{
+#if UI_USE_RENDER_COMMANDS
+	ui_push_command(&ui.render_commands, &(ui_render_command_t){
+        .rect = rect,
+	});
+#else
+	r_ui_rect(ui.rc, rect);
+#endif
+}
+
 void ui_draw_rect(rect2_t rect, v4_t color)
 {
 	uint32_t color_packed = pack_color(color);
 
-	r_ui_rect(ui.rc, (r_ui_rect_t){
+	ui_do_rect((r_ui_rect_t){
 		.rect        = rect, 
 		.roundedness = v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS)),
 		.color_00    = color_packed,
@@ -802,7 +876,7 @@ void ui_draw_rect_shadow(rect2_t rect, v4_t color, float shadow_amount, float sh
 {
 	uint32_t color_packed = pack_color(color);
 
-	r_ui_rect(ui.rc, (r_ui_rect_t){
+	ui_do_rect((r_ui_rect_t){
 		.rect          = rect, 
 		.roundedness   = v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS)),
 		.color_00      = color_packed,
@@ -818,7 +892,7 @@ void ui_draw_rect_roundedness(rect2_t rect, v4_t color, v4_t roundness)
 {
 	uint32_t color_packed = pack_color(color);
 
-	r_ui_rect(ui.rc, (r_ui_rect_t){
+	ui_do_rect((r_ui_rect_t){
 		.rect        = rect, 
 		.roundedness = mul(roundness, v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS))),
 		.color_00    = color_packed,
@@ -832,7 +906,7 @@ void ui_draw_rect_roundedness_shadow(rect2_t rect, v4_t color, v4_t roundness, f
 {
 	uint32_t color_packed = pack_color(color);
 
-	r_ui_rect(ui.rc, (r_ui_rect_t){
+	ui_do_rect((r_ui_rect_t){
 		.rect        = rect, 
 		.roundedness = mul(roundness, v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS))),
 		.color_00    = color_packed,
@@ -848,7 +922,7 @@ void ui_draw_rect_outline(rect2_t rect, v4_t color, float width)
 {
 	uint32_t color_packed = pack_color(color);
 
-	r_ui_rect(ui.rc, (r_ui_rect_t){
+	ui_do_rect((r_ui_rect_t){
 		.rect         = rect, 
 		.roundedness  = v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS)),
 		.color_00     = color_packed,
@@ -863,7 +937,7 @@ void ui_draw_rect_roundedness_outline(rect2_t rect, v4_t color, v4_t roundedness
 {
 	uint32_t color_packed = pack_color(color);
 
-	r_ui_rect(ui.rc, (r_ui_rect_t){
+	ui_do_rect((r_ui_rect_t){
 		.rect         = rect, 
 		.roundedness  = mul(roundedness, v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS))),
 		.color_00     = color_packed,
@@ -880,7 +954,7 @@ void ui_draw_circle(v2_t p, float radius, v4_t color)
 
 	rect2_t rect = rect2_center_radius(p, make_v2(radius, radius));
 
-	r_ui_rect(ui.rc, (r_ui_rect_t){
+	ui_do_rect((r_ui_rect_t){
 		.rect        = rect, 
 		.roundedness = v4_from_scalar(radius),
 		.color_00    = color_packed,
@@ -2054,6 +2128,22 @@ bool ui_begin(r_context_t *rc, float dt)
     ui.rc = rc;
 	ui.input.dt = dt;
 
+    {
+        size_t render_commands_count = 0;
+
+        for (ui_render_command_block_t *block = ui.render_commands.first_block;
+             block;
+             block = block->next)
+        {
+            render_commands_count += block->commands_count;        
+        }
+
+        ui.last_frame_ui_rect_count = render_commands_count;
+    }
+
+    // reset render commands
+    ui_free_bucket(&ui.render_commands);
+
 	for (pool_iter_t it = pool_iter(&ui.state); 
 		 pool_iter_valid(&it); 
 		 pool_iter_next(&it))
@@ -2156,7 +2246,7 @@ bool ui_begin(r_context_t *rc, float dt)
 	return ui.has_focus;
 }
 
-void ui_end(r_context_t *rc)
+void ui_end(void)
 {
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);
@@ -2164,10 +2254,6 @@ void ui_end(r_context_t *rc)
 	float font_height = ui_font_height();
 	float at_y = 32.0f;
 
-    R_COMMAND_IDENTIFIER_FUNC(rc)
-    R_VIEW      (rc, rc->screenspace)
-    R_VIEW_LAYER(rc, R_VIEW_LAYER_UI)
-    R_LAYER     (rc, R_SCREEN_LAYER_UI)
 	for (size_t i = 0; i < stack_count(ui.tooltip_stack); i++)
 	{
 		ui_tooltip_t *tooltip = &ui.tooltip_stack.values[i];
@@ -2198,4 +2284,13 @@ void ui_end(r_context_t *rc)
 
 	ASSERT(ui.panels.current_panel == NULL);
 	ASSERT(ui.id_stack.at == 0);
+
+#if UI_SLOW
+    ui_sanity_check_bucket(&ui.render_commands);
+#endif
+}
+
+ui_render_bucket_t *ui_get_render_commands(void)
+{
+    return &ui.render_commands;
 }
