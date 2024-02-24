@@ -1141,7 +1141,7 @@ static void build_bvh(arena_t *arena, map_t *map)
         map->brush_edges[i] = (uint32_t)i;
     }
 
-		map->nodes = m_alloc_nozero(arena, max_nodes_count*sizeof(map_bvh_node_t), 64); 
+    map->nodes = m_alloc_nozero(arena, max_nodes_count*sizeof(map_bvh_node_t), 64); 
 
     map_bvh_node_t *root = &map->nodes[map->node_count++];
     map->node_count++; // leave a gap after the root to make pairs of nodes end up on the same cache line

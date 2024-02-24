@@ -140,6 +140,7 @@ int main(int argc, char **argv)
         else if (args_match(args, "-release"))
         {
             release = true;
+            debug = false;
 			build_all = false;
         }
         else if (args_match(args, "-all"))
@@ -214,8 +215,8 @@ int main(int argc, char **argv)
 			bool is_debug   = config == 0;
 			bool is_release = config == 1;
 
-			if (!build_all && debug   != is_debug)   continue;
-			if (!build_all && release != is_release) continue;
+			if (!build_all && debug   && !is_debug)   continue;
+			if (!build_all && release && !is_release) continue;
 
 			if (is_debug)
 			{

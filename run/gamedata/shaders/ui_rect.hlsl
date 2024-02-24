@@ -1,29 +1,35 @@
 #include "common.hlsl"
 
+#define R_UI_RECT_BLEND_TEXT (1 << 0)
+
 struct r_ui_rect_t
 {
 	float2 p_min;           // 8
 	float2 p_max;           // 16
-	float4 roundedness;     // 32
-	uint   color_00;        // 36
-	uint   color_10;        // 42
-	uint   color_11;        // 48
-	uint   color_01;        // 52
-	float  shadow_radius;   // 58
-	float  shadow_amount;   // 64
-	float  inner_radius;    // 68
-	float  pad0;            // 72
-	float  pad1;            // 76
-	float  pad2;            // 80
+	float2 uv_min;          // 24
+	float2 uv_max;          // 32
+	float4 roundedness;     // 48
+	uint   color_00;        // 52
+	uint   color_10;        // 58
+	uint   color_11;        // 64
+	uint   color_01;        // 68
+	float  shadow_radius;   // 74
+	float  shadow_amount;   // 80
+	float  inner_radius;    // 84
+	uint   flags;           // 88
+	float  pad1;            // 92
+	float  pad2;            // 96
 };
 
 StructuredBuffer<r_ui_rect_t> ui_rects : register(t0);
+Texture2D                     texture0 : register(t1);
 
 struct PS_INPUT
 {
 	float4 pos : SV_Position;
 	uint   id  : INSTANCE_ID;
 	float4 col : COLOR;
+    float2 uv  : TEXCOORD;
 };
 
 PS_INPUT vs(uint vertex_id : SV_VertexID, uint instance_id : SV_InstanceID)
@@ -31,6 +37,13 @@ PS_INPUT vs(uint vertex_id : SV_VertexID, uint instance_id : SV_InstanceID)
 	r_ui_rect_t rect = ui_rects[instance_id + instance_offset];
 
 	float r = rect.shadow_radius + 1.0f;
+
+    // float rect_w = rect.p_max.x - rect.p_min.y;
+    // float rect_h = rect.p_max.y - rect.p_min.y;
+    // float2 r_scaled = r / float2(rect_w, rect_h);
+    float uv_w = rect.uv_max.x - rect.uv_min.x;
+    float uv_h = rect.uv_max.y - rect.uv_min.y;
+    float2 r_scaled = r*float2(uv_w, uv_h) / screen_dim;
 	
 	float4 verts[] = {
 		{ rect.p_min.x - r, rect.p_min.y - r, 0, 1 },
@@ -38,6 +51,13 @@ PS_INPUT vs(uint vertex_id : SV_VertexID, uint instance_id : SV_InstanceID)
 		{ rect.p_max.x + r, rect.p_min.y - r, 0, 1 },
 		{ rect.p_max.x + r, rect.p_max.y + r, 0, 1 },
 	};
+
+    float2 uvs[] = {
+        { rect.uv_min.x - r_scaled.x, rect.uv_min.y - r_scaled.y },
+        { rect.uv_min.x - r_scaled.x, rect.uv_max.y + r_scaled.y },
+        { rect.uv_max.x + r_scaled.x, rect.uv_min.y - r_scaled.y },
+        { rect.uv_max.x + r_scaled.x, rect.uv_max.y + r_scaled.y },
+    };
 
 	uint colors[] = {
 		rect.color_00,
@@ -51,6 +71,7 @@ PS_INPUT vs(uint vertex_id : SV_VertexID, uint instance_id : SV_InstanceID)
 
 	PS_INPUT OUT;
 	OUT.pos = vert;
+    OUT.uv  = uvs[vertex_id]; // TODO: Scale to counteract distortion from shadow radius
 	OUT.id  = instance_id + instance_offset;
 	OUT.col = unpack_color(colors[vertex_id]);
 	return OUT;
@@ -106,8 +127,18 @@ float4 ps(PS_INPUT IN) : SV_Target
 	if (aa > 0.0f)
 	{
 		color = IN.col;
-		color.a *= aa;
 	}
+
+    float4 tex_col = texture0.SampleLevel(sampler_linear_clamped, IN.uv, 0);
+    if (rect.flags & R_UI_RECT_BLEND_TEXT)
+    {
+        color *= sqrt(tex_col.r);
+    }
+    else
+    {
+        color *= tex_col;
+        color.a *= aa;
+    }
 
 	float shadow_radius = rect.shadow_radius;
 	float shadow = min(1.0, exp(-5.0f*d / shadow_radius)); // 1.0f - saturate(d / shadow_radius);

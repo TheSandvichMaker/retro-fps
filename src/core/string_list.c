@@ -26,14 +26,17 @@ void slist_prepends_nocopy(string_list_t *list, arena_t *arena, string_t string)
 
 void slist_interleaves_nocopy(string_list_t *list, arena_t *arena, string_t string)
 {
-    for (string_node_t *insert_after = list->first, *next; insert_after->next; insert_after = next)
+    if (list->first)
     {
-        next = insert_after->next;
+        for (string_node_t *insert_after = list->first, *next; insert_after->next; insert_after = next)
+        {
+            next = insert_after->next;
 
-        string_node_t *node = m_alloc_struct(arena, string_node_t);
-        node->string = string;
+            string_node_t *node = m_alloc_struct(arena, string_node_t);
+            node->string = string;
 
-        dll_insert_after(list->first, list->last, insert_after, node);
+            dll_insert_after(list->first, list->last, insert_after, node);
+        }
     }
 }
 
