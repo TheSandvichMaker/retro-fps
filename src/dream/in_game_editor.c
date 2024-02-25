@@ -1230,6 +1230,16 @@ DREAM_INLINE void ui_demo_proc(ui_window_t *window)
 	ui_slider(S("Diffusion Angle"), &mixer.reverb_diffusion_angle, 0.0f, 90.0f);
 
 	ui_slider(S("Filter Test"), &mixer.filter_test, -1.0f, 1.0f);
+
+	static size_t selection_index = 0;
+
+	static string_t options[] = {
+		Sc("Option A"),
+		Sc("Option B"),
+		Sc("Option C"),
+	};
+
+	ui_dropdown_box(S("Options"), &selection_index, ARRAY_COUNT(options), options);
 }
 
 DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
@@ -1408,10 +1418,6 @@ void update_and_render_in_game_editor(r_context_t *rc)
 	ui_panel_end();
 
 	ui_process_windows();
-
-#if !UI_USE_RENDER_COMMANDS
-    r_flush_ui_rects(rc);
-#endif
 
     r_pop_layer     (rc);
     r_pop_view_layer(rc);

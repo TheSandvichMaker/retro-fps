@@ -329,20 +329,6 @@ void r_immediate_index(r_context_t *rc, uint32_t index)
     }
 }
 
-void r_ui_texture(r_context_t *rc, texture_handle_t texture)
-{
-    (void)rc;
-    (void)texture;
-#if !UI_USE_RENDER_COMMANDS
-    if (!RESOURCE_HANDLES_EQUAL(rc->current_ui_texture, texture))
-    {
-        r_flush_ui_rects(rc);
-    }
-
-    rc->current_ui_texture = texture;
-#endif
-}
-
 void r_ui_rect(r_context_t *rc, r_ui_rect_t rect)
 {
     // TODO: But when do we even submit the command? dfbkdmgbdgr

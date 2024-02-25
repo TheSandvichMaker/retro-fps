@@ -5,7 +5,6 @@
 //
 //
 
-#define UI_USE_RENDER_COMMANDS 1
 #define UI_SLOW (1 && DREAM_SLOW)
 
 //
@@ -281,13 +280,6 @@ DREAM_LOCAL float ui_header_font_height(void);
 // Draw
 //
 
-typedef enum ui_layer_t
-{
-	UI_LAYER_BASE,
-	UI_LAYER_OVERLAY,
-	UI_LAYER_COUNT,
-} ui_layer_t;
-
 typedef enum ui_text_op_t
 {
 	UI_TEXT_OP_BOUNDS,
@@ -335,7 +327,14 @@ typedef enum ui_interaction_enum_t
 	UI_HOVERED  = 0x10,
 } ui_interaction_enum_t;
 
+typedef enum ui_priority_t
+{
+	UI_PRIORITY_DEFAULT,
+	UI_PRIORITY_OVERLAY,
+} ui_priority_t;
+
 // I still think this is a little odd
+DREAM_LOCAL ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, ui_priority_t priority);
 DREAM_LOCAL ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect);
 
 //
@@ -382,6 +381,7 @@ DREAM_LOCAL void ui_progress_bar  (string_t text, float progress);
 DREAM_LOCAL bool ui_button        (string_t text);
 DREAM_LOCAL bool ui_checkbox      (string_t text, bool *value);
 DREAM_LOCAL bool ui_option_buttons(string_t text, int *value, int count, string_t *names);
+DREAM_LOCAL bool ui_dropdown_box  (string_t text, size_t *selected_index, size_t count, string_t *names);
 DREAM_LOCAL bool ui_slider        (string_t text, float *value, float min, float max);
 DREAM_LOCAL bool ui_slider_int    (string_t text, int *value, int min, int max);
 DREAM_LOCAL bool ui_slider_int_ex (string_t text, int *value, int min, int max, ui_slider_flags_t flags);
@@ -415,7 +415,28 @@ typedef struct ui_tooltip_t
 	string_storage_t(UI_MAX_TOOLTIP_LENGTH) text;
 } ui_tooltip_t;
 
-#define UI_RENDER_COMMAND_BLOCK_CAPACITY (256)
+typedef enum ui_render_layer_t
+{
+	UI_LAYER_BACKGROUND,
+	UI_LAYER_FOREGROUND,
+	UI_LAYER_OVERLAY_BACKGROUND,
+	UI_LAYER_OVERLAY_FOREGROUND,
+	UI_LAYER_TOOLTIP,
+} ui_render_layer_t;
+
+typedef struct ui_render_command_key_t
+{
+	union
+	{
+		struct
+		{
+			uint16_t command_index;
+			uint8_t  layer;
+			uint8_t  window;
+		};
+		uint32_t u32;
+	};
+} ui_render_command_key_t;
 
 typedef struct ui_render_command_t
 {
@@ -423,30 +444,24 @@ typedef struct ui_render_command_t
     r_ui_rect_t rect;
 } ui_render_command_t;
 
-typedef struct ui_render_command_block_t
-{
-    struct ui_render_command_block_t *next;
-    size_t commands_count;
-    ui_render_command_t commands[UI_RENDER_COMMAND_BLOCK_CAPACITY];
-} ui_render_command_block_t;
+#define UI_RENDER_COMMANDS_CAPACITY (8192)
 
-typedef struct ui_render_bucket_t
+typedef struct ui_render_command_list_t
 {
-    ui_render_command_block_t *first_block;
-    ui_render_command_block_t *last_block;
-} ui_render_bucket_t;
+	size_t                   capacity;
+	size_t                   count;
+	ui_render_command_key_t *keys;
+	ui_render_command_t     *commands;
+} ui_render_command_list_t;
 
-DREAM_LOCAL void ui_push_command(ui_render_bucket_t *bucket, const ui_render_command_t *command);
-DREAM_LOCAL void ui_free_block(ui_render_command_block_t *block);
-DREAM_LOCAL void ui_free_bucket(ui_render_bucket_t *bucket);
+DREAM_LOCAL void ui_push_command(ui_render_command_key_t key, const ui_render_command_t *command);
+DREAM_LOCAL void ui_reset_render_commands(void);
+DREAM_LOCAL void ui_sort_render_commands(void);
 
 #define UI_ID_STACK_COUNT (32)
 
 typedef struct ui_t
 {
-    // FIXME: Remove this
-    r_context_t *rc;
-
 	bool initialized;
 
 	arena_t arena;
@@ -464,6 +479,8 @@ typedef struct ui_t
 	ui_id_t hot;
 	ui_id_t next_hot;
 	ui_id_t active;
+
+	ui_priority_t next_hot_priority;
 
 	ui_id_t next_id;
 	rect2_t next_rect;
@@ -493,9 +510,9 @@ typedef struct ui_t
 	ui_windows_t windows;
 	ui_style_t   style;
 
-    // TODO: Command bucketing?
-    ui_render_bucket_t render_commands;
-    ui_render_command_block_t *first_free_render_command_block;
+	// TODO: Think about where this goes
+	ui_render_layer_t render_layer;
+    ui_render_command_list_t render_commands;
 
     size_t last_frame_ui_rect_count;
 } ui_t;
@@ -508,8 +525,8 @@ DREAM_LOCAL bool ui_is_hot          (ui_id_t id);
 DREAM_LOCAL bool ui_is_active       (ui_id_t id);
 DREAM_LOCAL bool ui_is_hovered_panel(ui_id_t id);
 
-DREAM_LOCAL void ui_set_next_hot  (ui_id_t id);
-DREAM_LOCAL void ui_set_hot       (ui_id_t id);
+DREAM_LOCAL void ui_set_next_hot  (ui_id_t id, ui_priority_t priority);
+DREAM_LOCAL void ui_set_hot       (ui_id_t id); // maybe should be never used?
 DREAM_LOCAL void ui_set_active    (ui_id_t id);
 
 DREAM_LOCAL void ui_clear_next_hot(void);
@@ -526,9 +543,9 @@ DREAM_LOCAL bool ui_is_hovered_delay(ui_id_t id, float delay);
 DREAM_LOCAL ui_state_t *ui_get_state(ui_id_t id);
 DREAM_LOCAL bool ui_state_is_new(ui_state_t *state);
 
-DREAM_LOCAL bool ui_begin(r_context_t *rc, float dt);
+DREAM_LOCAL bool ui_begin(float dt);
 DREAM_LOCAL void ui_end(void);
-DREAM_LOCAL ui_render_bucket_t *ui_get_render_commands(void);
+DREAM_LOCAL ui_render_command_list_t *ui_get_render_commands(void);
 
 //
 //

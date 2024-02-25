@@ -10,8 +10,8 @@
 #include "asset.h"
 #include "intersect.h"
 #include "ui.h"
-#include "audio.h"
 #include "in_game_editor.h"
+#include "audio.h"
 #include "job_queues.h"
 #include "mesh.h"
 #include "light_baker.h"
@@ -695,7 +695,7 @@ static void game_tick(platform_io_t *io)
 	ui.input.app_has_focus = io->has_focus;
 	io->cursor = ui.input.cursor;
 
-	bool ui_focused = ui_begin(rc, dt);
+	bool ui_focused = ui_begin(dt);
 
     if (ui_focused)
     {
@@ -713,6 +713,7 @@ static void game_tick(platform_io_t *io)
     // update_and_render_physics_playground(world, dt);
 
 #if 1
+
     if (button_pressed(BUTTON_FIRE1))
 	{
 		static bool mono = true;
@@ -769,7 +770,6 @@ static void game_tick(platform_io_t *io)
 
     ui_end();
 
-#if UI_USE_RENDER_COMMANDS
     R_VIEW      (rc, game_view) 
     R_VIEW_LAYER(rc, R_VIEW_LAYER_UI)
     {
@@ -779,36 +779,34 @@ static void game_tick(platform_io_t *io)
 
         size_t commands_processed_count = 0;
 
-        ui_render_bucket_t *bucket = ui_get_render_commands();
-        for (ui_render_command_block_t *block = bucket->first_block;
-             block;
-             block = block->next)
-        {
-            for (size_t command_index = 0;
-                 command_index < block->commands_count;
-                 command_index++)
-            {
-                ui_render_command_t *command = &block->commands[command_index];
+		ui_render_command_list_t *list = ui_get_render_commands();
 
-                // bad code...
+		for (size_t key_index = 0;
+			 key_index < list->count;
+			 key_index++)
+		{
+			const ui_render_command_key_t *key = &list->keys[key_index];
+
+			const size_t command_index = key->command_index;
+			const ui_render_command_t *command = &list->commands[command_index];
+
+			// bad code...
 #if !UI_FORCE_ONE_DRAW_CALL_PER_RECT_SLOW_DEBUG_STUFF 
-                if (!RESOURCE_HANDLES_EQUAL(command->texture, texture))
+			if (!RESOURCE_HANDLES_EQUAL(command->texture, texture))
 #endif
-                {
-                    r_flush_ui_rects(rc);
-                    texture = command->texture;
-                    rc->current_ui_texture = texture;
-                }
+			{
+				r_flush_ui_rects(rc);
+				texture = command->texture;
+				rc->current_ui_texture = texture;
+			}
 
-                r_ui_rect(rc, command->rect);
+			r_ui_rect(rc, command->rect);
 
-                commands_processed_count += 1;
-            }
-        }
+			commands_processed_count += 1;
+		}
 
         r_flush_ui_rects(rc);
     }
-#endif
 
 #endif
 

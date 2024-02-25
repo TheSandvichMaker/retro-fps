@@ -648,20 +648,12 @@ float ui_header_font_height(void)
 
 rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op)
 {
-    // TODO: UI render commands
-    r_context_t *rc = ui.rc;
-    SUPPRESS_UNUSED_WARNING(rc);
-
 	rect2_t result = rect2_inverted_infinity();
 
 	uint32_t color_packed = pack_color(color);
 
 	p.x = roundf(p.x);
 	p.y = roundf(p.y);
-
-#if !UI_USE_RENDER_COMMANDS
-    r_ui_texture(rc, font->texture);
-#endif
 
 	m_scoped(temp)
 	{
@@ -679,39 +671,28 @@ rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_tex
 
 				rect = rect2_add_offset(rect, p);
 
-#if UI_USE_RENDER_COMMANDS
-                ui_push_command(&ui.render_commands, &(ui_render_command_t){
-                    .texture = font->texture,
-                    .rect = {
-                        .rect = rect,
-                        .tex_coords = rect_uv,
-                        .color_00 = color_packed,
-                        .color_10 = color_packed,
-                        .color_11 = color_packed,
-                        .color_01 = color_packed,
-                        .flags    = R_UI_RECT_BLEND_TEXT,
-                    },
-                });
-#else
-                r_ui_rect_t ui_rect = {
-                    .rect = rect,
-                    .tex_coords = rect_uv,
-                    .color_00 = color_packed,
-                    .color_10 = color_packed,
-                    .color_11 = color_packed,
-                    .color_01 = color_packed,
-                    .flags    = R_UI_RECT_BLEND_TEXT,
-                };
+                ui_push_command(
+					(ui_render_command_key_t){
+						.layer  = ui.render_layer,
+						.window = 0,
+					},
 
-                r_ui_rect(rc, ui_rect);
-#endif
+					&(ui_render_command_t){
+						.texture = font->texture,
+						.rect = {
+							.rect = rect,
+							.tex_coords = rect_uv,
+							.color_00 = color_packed,
+							.color_10 = color_packed,
+							.color_11 = color_packed,
+							.color_01 = color_packed,
+							.flags    = R_UI_RECT_BLEND_TEXT,
+						},
+					}
+                );
 			}
 		}
 	}
-
-#if !UI_USE_RENDER_COMMANDS
-    r_ui_texture(rc, NULL_HANDLE(texture_handle_t));
-#endif
 
 	return result;
 }
@@ -780,82 +761,46 @@ rect2_t ui_draw_text_aligned(font_atlas_t *font, rect2_t rect, string_t text, v2
 	return result;
 }
 
-DREAM_INLINE void ui_sanity_check_bucket(ui_render_bucket_t *bucket)
+void ui_reset_render_commands(void)
 {
-    ui_render_command_block_t *first_block = bucket->first_block;
-
-
-    if (first_block)
-    {
-        table_t visited_blocks = {0};
-
-        for (ui_render_command_block_t *block = first_block->next;
-             block;
-             block = block->next)
-        {
-            ASSERT(!table_find_object(&visited_blocks, U64_FROM_PTR(block)));
-            table_insert_object(&visited_blocks, U64_FROM_PTR(block), block);
-        }
-
-        table_release(&visited_blocks);
-    }
+	ui.render_commands.count = 0;
 }
 
-void ui_push_command(ui_render_bucket_t *bucket, const ui_render_command_t *command)
+void ui_push_command(ui_render_command_key_t key, const ui_render_command_t *command)
 {
-    if (!bucket->last_block ||
-         bucket->last_block->commands_count == UI_RENDER_COMMAND_BLOCK_CAPACITY)
-    {
-        if (!ui.first_free_render_command_block)
-        {
-            ui.first_free_render_command_block = m_alloc_struct_nozero(&ui.arena, ui_render_command_block_t);
-            ui.first_free_render_command_block->next = NULL;
-        }
+	ui_render_command_list_t *list = &ui.render_commands;
 
-        ui_render_command_block_t *block = sll_pop(ui.first_free_render_command_block);
-        block->next           = NULL;
-        block->commands_count = 0;
+	if (ALWAYS(list->count < list->capacity))
+	{
+		size_t index = list->count++;
 
-        sll_push_back(bucket->first_block, bucket->last_block, block);
-    }
+		ASSERT(index <= UINT16_MAX);
 
-    ui_render_command_block_t *block = bucket->last_block;
-    if (ALWAYS(block->commands_count < UI_RENDER_COMMAND_BLOCK_CAPACITY))
-    {
-        block->commands[block->commands_count++] = *command;
-    }
+		key.command_index = (uint16_t)index;
 
-#if UI_SLOW // super slow!
-    ui_sanity_check_bucket(bucket);
-#endif
+		list->keys    [index] = key;
+		list->commands[index] = *command;
+	}
 }
 
-void ui_free_block(ui_render_command_block_t *block)
+void ui_sort_render_commands(void)
 {
-    sll_push(ui.first_free_render_command_block, block);
-}
-
-void ui_free_bucket(ui_render_bucket_t *bucket)
-{
-    while (bucket->first_block)
-    {
-        ui_render_command_block_t *block = sll_pop(bucket->first_block);
-        ui_free_block(block);
-    }
-    ASSERT(bucket->first_block == NULL);
-    bucket->last_block = bucket->first_block = NULL;
+	radix_sort_u32(&ui.render_commands.keys[0].u32, ui.render_commands.count);
 }
 
 // TODO: remove... silly function
 DREAM_INLINE void ui_do_rect(r_ui_rect_t rect)
 {
-#if UI_USE_RENDER_COMMANDS
-	ui_push_command(&ui.render_commands, &(ui_render_command_t){
-        .rect = rect,
-	});
-#else
-	r_ui_rect(ui.rc, rect);
-#endif
+	ui_push_command(
+		(ui_render_command_key_t){
+			.layer  = ui.render_layer,
+			.window = 0,
+		},
+
+		&(ui_render_command_t){
+			.rect = rect,
+		}
+	);
 }
 
 void ui_draw_rect(rect2_t rect, v4_t color)
@@ -973,7 +918,7 @@ bool ui_mouse_in_rect(rect2_t rect)
 	return rect2_contains_point(rect, ui.input.mouse_p);
 }
 
-ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect)
+ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, ui_priority_t priority)
 {
 	uint32_t result = 0;
 
@@ -990,7 +935,7 @@ ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect)
 
 	if (hovered)
 	{
-        ui_set_next_hot(id);
+        ui_set_next_hot(id, priority);
 	}
 
 	if (ui_is_active(id))
@@ -1023,6 +968,11 @@ ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect)
 	}
 
 	return result;
+}
+
+ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect)
+{
+	return ui_default_widget_behaviour_priority(id, rect, UI_PRIORITY_DEFAULT);
 }
 
 float ui_roundedness_ratio(rect2_t rect)
@@ -1520,6 +1470,119 @@ bool ui_option_buttons(string_t label, int *value, int count, string_t *options)
     return result;
 }
 
+bool ui_dropdown_box(string_t label, size_t *selected_index, size_t count, string_t *names)
+{
+    bool result = false;
+
+	if (NEVER(!ui.initialized)) 
+		return result;
+
+	if (NEVER(!selected_index))
+		return result;
+
+	if (NEVER(!names || count == 0))
+		return result;
+
+	ui_id_t id = ui_id(label);
+
+	ui_push_id(id);
+
+	float label_width   = ui_text_width(&ui.style.font, label);
+	float label_padding = 0.33f*ui_font_height();
+
+	float max_name_width = 0.0f;
+	float total_height = 0.0f;
+	float *heights = m_alloc_array_nozero(temp, count, float);
+	for (size_t i = 0; i < count; i++)
+	{
+		v2_t dim = ui_text_dim(&ui.style.font, names[i]);
+		if (max_name_width < dim.x) max_name_width = dim.x;
+
+		heights[i] = dim.y;
+		total_height += dim.y + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN);
+	}
+
+	v2_t min_widget_size = { label_width + label_padding + max_name_width, ui_font_height() };
+
+	rect2_t rect = ui_cut_widget_rect(min_widget_size);
+
+	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
+	ui_draw_text_aligned(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
+
+	ui_hoverable(id, label_rect);
+
+	rect2_t arrow_rect = rect2_cut_left(&rect, rect2_height(rect));
+
+	bool interacted = false;
+
+	ui_set_next_rect(arrow_rect);
+	interacted |= ui_button(S(">"));
+
+	ui_set_next_rect(rect);
+	interacted |= ui_button(names[*selected_index]);
+
+	if (interacted)
+	{
+		ui_set_active(id);
+	}
+
+	if (ui_id_has_focus(id))
+	{
+		rect2_t dropdown_rect = rect;
+		dropdown_rect.min.y = dropdown_rect.max.y - total_height - ui_scalar(2.0*UI_SCALAR_WIDGET_MARGIN);
+
+		ui_id_t dropdown_id = ui_id(S("dropdown"));
+		ui_default_widget_behaviour_priority(dropdown_id, dropdown_rect, UI_PRIORITY_OVERLAY);
+
+		ui_render_layer_t old_layer = ui.render_layer;
+		ui.render_layer = UI_LAYER_OVERLAY_BACKGROUND;
+
+		ui_draw_rect(dropdown_rect, ui_color(UI_COLOR_WINDOW_BACKGROUND));
+
+		for (size_t i = 0; i < count; i++)
+		{
+			rect2_t option_rect = rect2_cut_top(&dropdown_rect, heights[i]);
+
+			ui_interaction_t interaction = ui_default_widget_behaviour_priority(ui_id(names[i]), option_rect, UI_PRIORITY_OVERLAY);
+			result |= interaction & UI_FIRED;
+
+			v4_t color = ui_animate_colors(id, interaction, 
+										   ui_color(UI_COLOR_BUTTON_IDLE),
+										   ui_color(UI_COLOR_BUTTON_HOT),
+										   ui_color(UI_COLOR_BUTTON_ACTIVE),
+										   ui_color(UI_COLOR_BUTTON_FIRED));
+
+			v4_t roundedness = {0};
+
+			if (i == 0)
+			{
+				roundedness.x = 1.0f;
+				roundedness.z = 1.0f;
+			}
+
+			if (i == count - 1)
+			{
+				roundedness.y = 1.0f;
+				roundedness.w = 1.0f;
+			}
+
+			ui_draw_rect_roundedness(option_rect, color, roundedness);
+			ui_draw_text_aligned(&ui.style.font, option_rect, names[i], make_v2(0.5f, 0.5f));
+		}
+
+		ui.render_layer = old_layer;
+	}
+
+	if (result)
+	{
+		ui.focused_id = UI_ID_NULL;
+	}
+
+	ui_pop_id();
+
+    return result;
+}
+
 typedef enum ui_slider__type_t
 {
 	UI_SLIDER__F32,
@@ -1971,9 +2034,13 @@ void ui_set_hot(ui_id_t id)
 	}
 }
 
-void ui_set_next_hot(ui_id_t id)
+void ui_set_next_hot(ui_id_t id, ui_priority_t priority)
 {
-    ui.next_hot = id;
+	if (ui.next_hot_priority <= priority)
+	{
+		ui.next_hot          = id;
+		ui.next_hot_priority = priority;
+	}
 }
 
 void ui_set_active(ui_id_t id)
@@ -2115,34 +2182,24 @@ static void ui_initialize(void)
 		.data     = m_alloc_nozero(&ui.arena, text_input_capacity, 16),
 	};
 
+	ui.render_commands.capacity = UI_RENDER_COMMANDS_CAPACITY;
+	ui.render_commands.keys     = m_alloc_array_nozero(&ui.arena, ui.render_commands.capacity, ui_render_command_key_t);
+	ui.render_commands.commands = m_alloc_array_nozero(&ui.arena, ui.render_commands.capacity, ui_render_command_t);
+
 	ui.initialized = true;
 }
 
-bool ui_begin(r_context_t *rc, float dt)
+bool ui_begin(float dt)
 {
 	if (!ui.initialized)
 	{
 		ui_initialize();
 	}
 
-    ui.rc = rc;
 	ui.input.dt = dt;
 
-    {
-        size_t render_commands_count = 0;
-
-        for (ui_render_command_block_t *block = ui.render_commands.first_block;
-             block;
-             block = block->next)
-        {
-            render_commands_count += block->commands_count;        
-        }
-
-        ui.last_frame_ui_rect_count = render_commands_count;
-    }
-
-    // reset render commands
-    ui_free_bucket(&ui.render_commands);
+	ui.last_frame_ui_rect_count = ui.render_commands.count;
+    ui_reset_render_commands();
 
 	for (pool_iter_t it = pool_iter(&ui.state); 
 		 pool_iter_valid(&it); 
@@ -2224,6 +2281,7 @@ bool ui_begin(r_context_t *rc, float dt)
 	}
 
 	ui.next_hot            = UI_ID_NULL;
+	ui.next_hot_priority   = UI_PRIORITY_DEFAULT;
 	ui.next_hovered_panel  = UI_ID_NULL;
 	ui.next_hovered_widget = UI_ID_NULL;
 
@@ -2285,12 +2343,10 @@ void ui_end(void)
 	ASSERT(ui.panels.current_panel == NULL);
 	ASSERT(ui.id_stack.at == 0);
 
-#if UI_SLOW
-    ui_sanity_check_bucket(&ui.render_commands);
-#endif
+	ui_sort_render_commands();
 }
 
-ui_render_bucket_t *ui_get_render_commands(void)
+ui_render_command_list_t *ui_get_render_commands(void)
 {
     return &ui.render_commands;
 }

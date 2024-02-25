@@ -1550,7 +1550,7 @@ DREAM_INLINE void d3d_collect_timestamp_data(void)
 
     while (ID3D11DeviceContext_GetData(d3d.context, (ID3D11Asynchronous *)queries->disjoint, NULL, 0, 0) == S_FALSE)
     {
-        debug_print("Snoozin on da query...\n");
+        // debug_print("Snoozin on da query...\n");
         Sleep(1);
     }
 
