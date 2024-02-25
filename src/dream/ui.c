@@ -936,6 +936,7 @@ ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, 
 	if (hovered)
 	{
         ui_set_next_hot(id, priority);
+		result |= UI_HOVERED;
 	}
 
 	if (ui_is_active(id))
@@ -957,7 +958,7 @@ ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, 
 
 	if (ui_is_hot(id))
 	{
-		result |= UI_HOVERED;
+		result |= UI_HOT;
 
 		if (ui_mouse_buttons_pressed(PLATFORM_MOUSE_BUTTON_LEFT))
 		{
@@ -1241,7 +1242,7 @@ DREAM_INLINE v4_t ui_animate_colors(ui_id_t id, uint32_t interaction, v4_t cold,
 	v4_t  target    = cold;
 	float stiffness = ui_scalar(UI_SCALAR_ANIMATION_STIFFNESS);
 
-	if (interaction & UI_HOVERED)
+	if (interaction & UI_HOT)
 	{
 		target = hot;
 	}
@@ -1498,8 +1499,9 @@ bool ui_dropdown_box(string_t label, size_t *selected_index, size_t count, strin
 		v2_t dim = ui_text_dim(&ui.style.font, names[i]);
 		if (max_name_width < dim.x) max_name_width = dim.x;
 
-		heights[i] = dim.y;
-		total_height += dim.y + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN);
+		float padded_height = dim.y + ui_widget_padding();
+		heights[i]    = padded_height;
+		total_height += padded_height;
 	}
 
 	v2_t min_widget_size = { label_width + label_padding + max_name_width, ui_font_height() };
@@ -1521,15 +1523,18 @@ bool ui_dropdown_box(string_t label, size_t *selected_index, size_t count, strin
 	ui_set_next_rect(rect);
 	interacted |= ui_button(names[*selected_index]);
 
+	ui_state_t *state = ui_get_state(id);
+
 	if (interacted)
 	{
-		ui_set_active(id);
+		state->opened = !state->opened;
 	}
 
-	if (ui_id_has_focus(id))
+	if (state->opened)
 	{
 		rect2_t dropdown_rect = rect;
-		dropdown_rect.min.y = dropdown_rect.max.y - total_height - ui_scalar(2.0*UI_SCALAR_WIDGET_MARGIN);
+		dropdown_rect.max.y = rect.min.y;
+		dropdown_rect.min.y = dropdown_rect.max.y - total_height - 1.0f*ui_scalar(UI_SCALAR_WIDGET_MARGIN);
 
 		ui_id_t dropdown_id = ui_id(S("dropdown"));
 		ui_default_widget_behaviour_priority(dropdown_id, dropdown_rect, UI_PRIORITY_OVERLAY);
@@ -1537,28 +1542,25 @@ bool ui_dropdown_box(string_t label, size_t *selected_index, size_t count, strin
 		ui_render_layer_t old_layer = ui.render_layer;
 		ui.render_layer = UI_LAYER_OVERLAY_BACKGROUND;
 
-		ui_draw_rect(dropdown_rect, ui_color(UI_COLOR_WINDOW_BACKGROUND));
+		ui_draw_rect_roundedness_shadow(dropdown_rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), (v4_t){0, 1, 0, 1}, 0.25f, 16.0f);
 
+		ui_push_id(ui_id(S("options")));
 		for (size_t i = 0; i < count; i++)
 		{
 			rect2_t option_rect = rect2_cut_top(&dropdown_rect, heights[i]);
+			option_rect = rect2_shrink(option_rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
-			ui_interaction_t interaction = ui_default_widget_behaviour_priority(ui_id(names[i]), option_rect, UI_PRIORITY_OVERLAY);
+			ui_id_t option_id = ui_id(names[i]);
+			ui_interaction_t interaction = ui_default_widget_behaviour_priority(option_id, option_rect, UI_PRIORITY_OVERLAY);
 			result |= interaction & UI_FIRED;
 
-			v4_t color = ui_animate_colors(id, interaction, 
+			v4_t color = ui_animate_colors(option_id, interaction, 
 										   ui_color(UI_COLOR_BUTTON_IDLE),
 										   ui_color(UI_COLOR_BUTTON_HOT),
 										   ui_color(UI_COLOR_BUTTON_ACTIVE),
 										   ui_color(UI_COLOR_BUTTON_FIRED));
 
 			v4_t roundedness = {0};
-
-			if (i == 0)
-			{
-				roundedness.x = 1.0f;
-				roundedness.z = 1.0f;
-			}
 
 			if (i == count - 1)
 			{
@@ -1568,7 +1570,13 @@ bool ui_dropdown_box(string_t label, size_t *selected_index, size_t count, strin
 
 			ui_draw_rect_roundedness(option_rect, color, roundedness);
 			ui_draw_text_aligned(&ui.style.font, option_rect, names[i], make_v2(0.5f, 0.5f));
+
+			if (interaction & UI_FIRED)
+			{
+				*selected_index = i;
+			}
 		}
+		ui_pop_id();
 
 		ui.render_layer = old_layer;
 	}
@@ -1576,6 +1584,7 @@ bool ui_dropdown_box(string_t label, size_t *selected_index, size_t count, strin
 	if (result)
 	{
 		ui.focused_id = UI_ID_NULL;
+		state->opened = false;
 	}
 
 	ui_pop_id();
@@ -2148,7 +2157,7 @@ static void ui_initialize(void)
 	ui.style.base_scalars[UI_SCALAR_ANIMATION_LENGTH_LIMIT] = FLT_MAX;
 	ui.style.base_scalars[UI_SCALAR_HOVER_LIFT            ] = 1.5f;
 	ui.style.base_scalars[UI_SCALAR_WINDOW_MARGIN         ] = 0.0f;
-	ui.style.base_scalars[UI_SCALAR_WIDGET_MARGIN         ] = 0.75f;
+	ui.style.base_scalars[UI_SCALAR_WIDGET_MARGIN         ] = 1.0f;
 	ui.style.base_scalars[UI_SCALAR_TEXT_MARGIN           ] = 2.2f;
 	ui.style.base_scalars[UI_SCALAR_ROUNDEDNESS           ] = 2.5f;
 	ui.style.base_scalars[UI_SCALAR_TEXT_ALIGN_X          ] = 0.5f;

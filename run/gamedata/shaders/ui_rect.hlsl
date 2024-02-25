@@ -38,25 +38,27 @@ PS_INPUT vs(uint vertex_id : SV_VertexID, uint instance_id : SV_InstanceID)
 
 	float r = rect.shadow_radius + 1.0f;
 
-    // float rect_w = rect.p_max.x - rect.p_min.y;
-    // float rect_h = rect.p_max.y - rect.p_min.y;
-    // float2 r_scaled = r / float2(rect_w, rect_h);
-    float uv_w = rect.uv_max.x - rect.uv_min.x;
-    float uv_h = rect.uv_max.y - rect.uv_min.y;
-    float2 r_scaled = r*float2(uv_w, uv_h) / screen_dim;
+	float2 center       = 0.5*(rect.p_min + rect.p_max);
+	float2 radius       = 0.5*(rect.p_max - rect.p_min);
+	float2 grown_radius = radius + r;
+	float2 grown_ratio  = grown_radius / radius;
 	
 	float4 verts[] = {
-		{ rect.p_min.x - r, rect.p_min.y - r, 0, 1 },
-		{ rect.p_min.x - r, rect.p_max.y + r, 0, 1 },
-		{ rect.p_max.x + r, rect.p_min.y - r, 0, 1 },
-		{ rect.p_max.x + r, rect.p_max.y + r, 0, 1 },
+		{ center + float2(-grown_radius.x, -grown_radius.y), 0, 1 },
+		{ center + float2(-grown_radius.x, +grown_radius.y), 0, 1 },
+		{ center + float2(+grown_radius.x, -grown_radius.y), 0, 1 },
+		{ center + float2(+grown_radius.x, +grown_radius.y), 0, 1 },
 	};
 
+	float2 uv_center       = 0.5*(rect.uv_min + rect.uv_max);
+	float2 uv_radius       = 0.5*(rect.uv_max - rect.uv_min);
+	float2 grown_uv_radius = grown_ratio*uv_radius;
+
     float2 uvs[] = {
-        { rect.uv_min.x - r_scaled.x, rect.uv_min.y - r_scaled.y },
-        { rect.uv_min.x - r_scaled.x, rect.uv_max.y + r_scaled.y },
-        { rect.uv_max.x + r_scaled.x, rect.uv_min.y - r_scaled.y },
-        { rect.uv_max.x + r_scaled.x, rect.uv_max.y + r_scaled.y },
+		uv_center + float2(-grown_uv_radius.x, -grown_uv_radius.y),
+		uv_center + float2(-grown_uv_radius.x, +grown_uv_radius.y),
+		uv_center + float2(+grown_uv_radius.x, -grown_uv_radius.y),
+		uv_center + float2(+grown_uv_radius.x, +grown_uv_radius.y),
     };
 
 	uint colors[] = {
@@ -71,7 +73,7 @@ PS_INPUT vs(uint vertex_id : SV_VertexID, uint instance_id : SV_InstanceID)
 
 	PS_INPUT OUT;
 	OUT.pos = vert;
-    OUT.uv  = uvs[vertex_id]; // TODO: Scale to counteract distortion from shadow radius
+    OUT.uv  = uvs[vertex_id];
 	OUT.id  = instance_id + instance_offset;
 	OUT.col = unpack_color(colors[vertex_id]);
 	return OUT;
@@ -129,16 +131,29 @@ float4 ps(PS_INPUT IN) : SV_Target
 		color = IN.col;
 	}
 
-    float4 tex_col = texture0.SampleLevel(sampler_linear_clamped, IN.uv, 0);
-    if (rect.flags & R_UI_RECT_BLEND_TEXT)
-    {
-        color *= sqrt(tex_col.r);
-    }
-    else
-    {
-        color *= tex_col;
-        color.a *= aa;
-    }
+	// guard against inverted rects
+	float2 uv_min = min(rect.uv_min, rect.uv_max);
+	float2 uv_max = max(rect.uv_min, rect.uv_max);
+
+	float2 uv = IN.uv;
+
+	if (all(uv >= uv_min && uv <= uv_max))
+	{
+		float4 tex_col = texture0.SampleLevel(sampler_linear_clamped, uv, 0);
+		if (rect.flags & R_UI_RECT_BLEND_TEXT)
+		{
+			color *= sqrt(tex_col.r);
+		}
+		else
+		{
+			color *= tex_col;
+			color.a *= aa;
+		}
+	}
+	else
+	{
+		color = 0;
+	}
 
 	float shadow_radius = rect.shadow_radius;
 	float shadow = min(1.0, exp(-5.0f*d / shadow_radius)); // 1.0f - saturate(d / shadow_radius);

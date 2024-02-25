@@ -1240,6 +1240,11 @@ DREAM_INLINE void ui_demo_proc(ui_window_t *window)
 	};
 
 	ui_dropdown_box(S("Options"), &selection_index, ARRAY_COUNT(options), options);
+
+	ui_button(S("Useless button #1"));
+	ui_button(S("Useless button #2"));
+	ui_button(S("Useless button #3"));
+	ui_button(S("Useless button #4"));
 }
 
 DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)

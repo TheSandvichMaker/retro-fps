@@ -325,6 +325,7 @@ typedef enum ui_interaction_enum_t
 	UI_RELEASED = 0x4,
 	UI_FIRED    = 0x8,
 	UI_HOVERED  = 0x10,
+	UI_HOT      = 0x20,
 } ui_interaction_enum_t;
 
 typedef enum ui_priority_t
@@ -399,6 +400,8 @@ typedef struct ui_state_t
 
 	uint64_t created_frame_index;
 	uint64_t last_touched_frame_index;
+
+	bool opened;
 
 	union
 	{
