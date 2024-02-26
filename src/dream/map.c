@@ -1309,7 +1309,7 @@ map_t *load_map(arena_t *arena, string_t path)
             }
         }
 
-        map->collision = collision_geometry_from_map(arena, map);
+        // map->collision = collision_geometry_from_map(arena, map);
     }
 
 	hires_time_t end_time = os_hires_time();

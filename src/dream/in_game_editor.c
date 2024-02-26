@@ -1239,7 +1239,7 @@ DREAM_INLINE void ui_demo_proc(ui_window_t *window)
 		Sc("Option C"),
 	};
 
-	ui_dropdown_box(S("Options"), &selection_index, ARRAY_COUNT(options), options);
+	ui_combo_box(S("Options"), &selection_index, ARRAY_COUNT(options), options);
 
 	ui_button(S("Useless button #1"));
 	ui_button(S("Useless button #2"));

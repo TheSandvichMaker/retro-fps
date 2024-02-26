@@ -1471,7 +1471,7 @@ bool ui_option_buttons(string_t label, int *value, int count, string_t *options)
     return result;
 }
 
-bool ui_dropdown_box(string_t label, size_t *selected_index, size_t count, string_t *names)
+bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t *names)
 {
     bool result = false;
 
@@ -1542,7 +1542,10 @@ bool ui_dropdown_box(string_t label, size_t *selected_index, size_t count, strin
 		ui_render_layer_t old_layer = ui.render_layer;
 		ui.render_layer = UI_LAYER_OVERLAY_BACKGROUND;
 
-		ui_draw_rect_roundedness_shadow(dropdown_rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), (v4_t){0, 1, 0, 1}, 0.25f, 16.0f);
+		rect2_t shadow_rect = rect2_add_offset(dropdown_rect, make_v2(4, -4));
+		ui_draw_rect_roundedness_shadow(shadow_rect, make_v4(0, 0, 0, 0.25f), make_v4(0, 1, 0, 1), 0.25f, 16.0f);
+
+		ui_draw_rect_roundedness_shadow(dropdown_rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), make_v4(0, 1, 0, 1), 0.25f, 16.0f);
 
 		ui_push_id(ui_id(S("options")));
 		for (size_t i = 0; i < count; i++)

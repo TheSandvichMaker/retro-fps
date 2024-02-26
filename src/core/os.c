@@ -188,7 +188,7 @@ string_t fs_read_entire_file(arena_t *arena, string_t path)
         {
             if (file_size_low + 1 <= m_size_remaining_for_align(arena, DEFAULT_STRING_ALIGN))
             {
-                char *buffer = m_alloc_string(arena, file_size_low + 1);
+                char *buffer = m_alloc_nozero(arena, file_size_low + 1, 16);
 
                 DWORD bytes_read;
                 if (ReadFile(handle, buffer, file_size_low, &bytes_read, NULL))
@@ -350,7 +350,6 @@ static fs_entry_t *fs_scan_directory_(arena_t *arena, string_t path, int flags, 
             if (!skip)
             {
                 fs_entry_t *entry = m_alloc_struct(arena, fs_entry_t);
-                zero_struct(entry);
 
                 dll_push_back(first, last, entry);
 

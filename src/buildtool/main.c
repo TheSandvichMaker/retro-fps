@@ -357,16 +357,39 @@ int main(int argc, char **argv)
 			// plugins
 			//
 
-			if (!build_plugin(context, &build, &compile, S("fs"), slist_from_array(temp, array_expand(string_t, S("core")))))
+			if (build_plugin(context, &build, &compile, S("fs"), slist_from_array(temp, array_expand(string_t, S("core")))) != BUILD_ERROR_NONE)
 			{
+				fprintf(stderr, "Failed to build fs plugin\n");
 				build_failed = true;
 			}
 
-			if (!build_plugin(context, &build, &compile, S("audio_output"), (string_list_t){0}))
+			if (build_plugin(context, &build, &compile, S("audio_output"), (string_list_t){0}) != BUILD_ERROR_NONE)
 			{
+				fprintf(stderr, "Failed to audio output plugin\n");
 				build_failed = true;
 			}
 		}
+	}
+
+    // ==========================================================================================================================
+	// copy shaders
+
+#define ROBOCOPY_SILENT " /NFL /NDL /NJH /NJS /NC /NS /NP"
+
+	// TODO: Figure out good directory mirroring that doesn't require calling an external process.
+	int robocopy_exit_code;
+	os_execute(S("robocopy src/shaders run/gamedata/shaders /MIR" ROBOCOPY_SILENT), &robocopy_exit_code);
+
+	if (robocopy_exit_code >= 4)
+	{
+		fprintf(stderr, "Failed to copy shaders! Robocopy returned error code 0x%X. Meaning given below:\n", robocopy_exit_code);
+		if (robocopy_exit_code & 0x04) fprintf(stderr, "ROBOCOPY 0x04: Some mismatched files or directories were detected. Examine the output log.\n");
+		if (robocopy_exit_code & 0x08) fprintf(stderr, "ROBOCOPY 0x08: Some files or directories could not be copied.\n");
+		if (robocopy_exit_code & 0x10) fprintf(stderr, "ROBOCOPY 0x10: Serious error. Robocopy did not copy any files.\n");
+	}
+	else
+	{
+		printf("Copied shaders successfully!\n");
 	}
 
     // ==========================================================================================================================

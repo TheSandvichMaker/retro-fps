@@ -382,7 +382,7 @@ DREAM_LOCAL void ui_progress_bar  (string_t text, float progress);
 DREAM_LOCAL bool ui_button        (string_t text);
 DREAM_LOCAL bool ui_checkbox      (string_t text, bool *value);
 DREAM_LOCAL bool ui_option_buttons(string_t text, int *value, int count, string_t *names);
-DREAM_LOCAL bool ui_dropdown_box  (string_t text, size_t *selected_index, size_t count, string_t *names);
+DREAM_LOCAL bool ui_combo_box     (string_t text, size_t *selected_index, size_t count, string_t *names);
 DREAM_LOCAL bool ui_slider        (string_t text, float *value, float min, float max);
 DREAM_LOCAL bool ui_slider_int    (string_t text, int *value, int min, int max);
 DREAM_LOCAL bool ui_slider_int_ex (string_t text, int *value, int min, int max, ui_slider_flags_t flags);

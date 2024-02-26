@@ -125,11 +125,11 @@ float4 ps(PS_INPUT IN) : SV_Target
 		aa *= smoothstep(rect.inner_radius + 0.5f, rect.inner_radius - 0.5f, -d);
 	}
 
-	float4 color = 0;
-	if (aa > 0.0f)
-	{
-		color = IN.col;
-	}
+	float shadow_radius = rect.shadow_radius;
+	float shadow = min(1.0, exp(-5.0f*d / shadow_radius)); // 1.0f - saturate(d / shadow_radius);
+	shadow *= rect.shadow_amount;
+
+	float4 color = IN.col;
 
 	// guard against inverted rects
 	float2 uv_min = min(rect.uv_min, rect.uv_max);
@@ -155,11 +155,7 @@ float4 ps(PS_INPUT IN) : SV_Target
 		color = 0;
 	}
 
-	float shadow_radius = rect.shadow_radius;
-	float shadow = min(1.0, exp(-5.0f*d / shadow_radius)); // 1.0f - saturate(d / shadow_radius);
-	shadow *= rect.shadow_amount;
-
-	color += float4(0, 0, 0, (1.0f - aa)*shadow);
+	color.a += shadow;
     color += remap_tri(r_dither(IN.pos.xy)) / 255.0f;
 
 	return color;
