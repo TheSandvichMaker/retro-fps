@@ -1,6 +1,8 @@
 #ifndef DREAM_UI_H
 #define DREAM_UI_H
 
+#include "core/api_types.h"
+
 //
 //
 //
@@ -14,6 +16,9 @@
 typedef struct ui_id_t
 {
 	uint64_t value;
+#if DREAM_SLOW
+	string_storage_t(64) name;
+#endif
 } ui_id_t;
 
 #define UI_ID_NULL (ui_id_t){0}
@@ -390,6 +395,10 @@ DREAM_LOCAL void ui_text_edit     (string_t label, dynamic_string_t *buffer);
 DREAM_LOCAL void ui_tooltip       (string_t text);
 DREAM_LOCAL void ui_hover_tooltip (string_t text);
 
+DREAM_LOCAL bool ui_popup_is_open(ui_id_t id);
+DREAM_LOCAL void ui_open_popup(ui_id_t id);
+DREAM_LOCAL void ui_close_popup(ui_id_t id);
+
 //
 //
 //
@@ -463,6 +472,13 @@ DREAM_LOCAL void ui_sort_render_commands(void);
 
 #define UI_ID_STACK_COUNT (32)
 
+typedef struct ui_popup_t
+{
+	ui_id_t id;
+} ui_popup_t;
+
+#define UI_POPUP_STACK_COUNT (32)
+
 typedef struct ui_t
 {
 	bool initialized;
@@ -483,6 +499,7 @@ typedef struct ui_t
 	ui_id_t next_hot;
 	ui_id_t active;
 
+	ui_priority_t override_priority;
 	ui_priority_t next_hot_priority;
 
 	ui_id_t next_id;
@@ -504,6 +521,7 @@ typedef struct ui_t
 
 	stack_t(ui_id_t, UI_ID_STACK_COUNT) id_stack;
 	stack_t(ui_tooltip_t, UI_TOOLTIP_STACK_COUNT) tooltip_stack;
+	stack_t(ui_popup_t, UI_POPUP_STACK_COUNT) popup_stack;
 
 	pool_t  state;
 	table_t state_index;

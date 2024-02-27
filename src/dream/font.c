@@ -162,7 +162,7 @@ void destroy_font_atlas(font_atlas_t *atlas)
 font_glyph_t *atlas_get_glyph(font_atlas_t *atlas, uint32_t codepoint)
 {
 	font_glyph_t *result = &atlas->null_glyph;
-	if (ALWAYS(codepoint >= atlas->first_glyph && codepoint < atlas->first_glyph + atlas->glyph_count))
+	if (codepoint >= atlas->first_glyph && codepoint < atlas->first_glyph + atlas->glyph_count)
 	{
 		result = &atlas->glyph_table[codepoint - atlas->first_glyph];
 	}

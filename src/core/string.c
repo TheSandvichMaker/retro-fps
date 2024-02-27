@@ -554,3 +554,12 @@ uint64_t string_hash(string_t string)
 {
     return XXH3_64bits(string.data, string.count);
 }
+
+void string_storage_append_impl(string_storage_overlay_t *storage, size_t capacity, string_t string)
+{
+	size_t size_left = capacity - storage->count;
+	size_t copy_size = MIN(string.count, size_left);
+
+	copy_memory(&storage->data[storage->count], string.data, copy_size);
+	storage->count += copy_size;
+}

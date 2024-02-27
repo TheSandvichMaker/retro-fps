@@ -1944,7 +1944,7 @@ ID3DBlob *d3d_compile_shader(string_t hlsl_file, string_t hlsl, const char *entr
     {
         const char* message = ID3D10Blob_GetBufferPointer(error);
         OutputDebugStringA(message);
-        FATAL_ERROR("Failed to compile shader. (%s, entry point '%s'):\n\n%s", kind, entry_point, message);
+        FATAL_ERROR("Failed to compile shader %.*s. (%s, entry point '%s'):\n\n%s", Sx(hlsl_file), kind, entry_point, message);
     }
 
     return blob;

@@ -1339,6 +1339,12 @@ DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
 			ui_label(Sf("Delta Time: %.02fms", 1000.0f*ui.input.dt));
 			ui_label(Sf("UI Hover Time: %.02f", ui.hover_time_seconds));
 			ui_label(Sf("UI Rect Count: %zu", ui.last_frame_ui_rect_count));
+#if DREAM_SLOW
+			ui_label(Sf("Hot ID: '%s'", ui.hot.name));
+			ui_label(Sf("Active ID: '%s'", ui.active.name));
+			ui_label(Sf("Hovered Panel: '%s'", ui.hovered_panel.name));
+			ui_label(Sf("Hovered Widget: '%s'", ui.hovered_widget.name));
+#endif
         }
     }
 }

@@ -34,6 +34,10 @@ ui_id_t ui_child_id(ui_id_t parent, string_t string)
 			hash = ~(uint64_t)0;
 
 		result.value = hash;
+
+#if DREAM_SLOW
+		string_storage_append(&result.name, string);
+#endif
 	}
 
 	return result;
@@ -270,6 +274,56 @@ rect2_t ui_default_label_rect(font_atlas_t *font, string_t label)
 		rect = rect2_do_cut((rect2_cut_t){ .side = panel->layout_direction, .rect = &panel->rect_layout }, a);
 	}
 	return rect;
+}
+
+void ui_open_popup(ui_id_t id)
+{
+	bool popup_exists = false;
+
+	for (size_t i = 0; i < ui.popup_stack.at; i++)
+	{
+		if (ui.popup_stack.values[i].id.value == id.value)
+		{
+			popup_exists = true;
+		}
+	}
+
+	if (!popup_exists)
+	{
+		ui_popup_t popup = {
+			.id = id, 
+		};
+
+		stack_push(ui.popup_stack, popup);
+	}
+}
+
+void ui_close_popup(ui_id_t id)
+{
+	for (size_t i = 0; i < ui.popup_stack.at; i++)
+	{
+		if (ui.popup_stack.values[i].id.value == id.value)
+		{
+			stack_remove(ui.popup_stack, i);
+			continue;
+		}
+	}
+}
+
+bool ui_popup_is_open(ui_id_t id)
+{
+	bool result = false;
+
+	for (size_t i = 0; i < ui.popup_stack.at; i++)
+	{
+		if (ui.popup_stack.values[i].id.value == id.value)
+		{
+			result = true;
+			break;
+		}
+	}
+
+	return result;
 }
 
 //
@@ -973,7 +1027,14 @@ ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, 
 
 ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect)
 {
-	return ui_default_widget_behaviour_priority(id, rect, UI_PRIORITY_DEFAULT);
+	ui_priority_t priority = UI_PRIORITY_DEFAULT;
+
+	if (ui.override_priority != UI_PRIORITY_DEFAULT)
+	{
+		priority = ui.override_priority;
+	}
+
+	return ui_default_widget_behaviour_priority(id, rect, priority);
 }
 
 float ui_roundedness_ratio(rect2_t rect)
@@ -1523,71 +1584,65 @@ bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t
 	ui_set_next_rect(rect);
 	interacted |= ui_button(names[*selected_index]);
 
-	ui_state_t *state = ui_get_state(id);
-
 	if (interacted)
 	{
-		state->opened = !state->opened;
+		if (ui_popup_is_open(id)) 
+		{
+			ui_close_popup(id);
+		}
+		else
+		{
+			ui_open_popup(id);
+		}
 	}
 
-	if (state->opened)
+	if (ui_popup_is_open(id))
 	{
+		const float clamped_height = min(total_height, 128.0f);
+
 		rect2_t dropdown_rect = rect;
 		dropdown_rect.max.y = rect.min.y;
-		dropdown_rect.min.y = dropdown_rect.max.y - total_height - 1.0f*ui_scalar(UI_SCALAR_WIDGET_MARGIN);
+		dropdown_rect.min.y = dropdown_rect.max.y - clamped_height - 1.0f*ui_scalar(UI_SCALAR_WIDGET_MARGIN);
 
-		ui_id_t dropdown_id = ui_id(S("dropdown"));
-		ui_default_widget_behaviour_priority(dropdown_id, dropdown_rect, UI_PRIORITY_OVERLAY);
-
-		ui_render_layer_t old_layer = ui.render_layer;
-		ui.render_layer = UI_LAYER_OVERLAY_BACKGROUND;
-
-		rect2_t shadow_rect = rect2_add_offset(dropdown_rect, make_v2(4, -4));
-		ui_draw_rect_roundedness_shadow(shadow_rect, make_v4(0, 0, 0, 0.25f), make_v4(0, 1, 0, 1), 0.25f, 16.0f);
-
-		ui_draw_rect_roundedness_shadow(dropdown_rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), make_v4(0, 1, 0, 1), 0.25f, 16.0f);
-
-		ui_push_id(ui_id(S("options")));
-		for (size_t i = 0; i < count; i++)
+		ui_panel_begin_ex(ui_child_id(id, S("panel")), dropdown_rect, UI_PANEL_SCROLLABLE_VERT);
 		{
-			rect2_t option_rect = rect2_cut_top(&dropdown_rect, heights[i]);
-			option_rect = rect2_shrink(option_rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+			ui_priority_t old_priority = ui.override_priority;
+			ui.override_priority = UI_PRIORITY_OVERLAY;
 
-			ui_id_t option_id = ui_id(names[i]);
-			ui_interaction_t interaction = ui_default_widget_behaviour_priority(option_id, option_rect, UI_PRIORITY_OVERLAY);
-			result |= interaction & UI_FIRED;
+			ui_id_t dropdown_id = ui_id(S("dropdown"));
+			ui_default_widget_behaviour(dropdown_id, dropdown_rect);
 
-			v4_t color = ui_animate_colors(option_id, interaction, 
-										   ui_color(UI_COLOR_BUTTON_IDLE),
-										   ui_color(UI_COLOR_BUTTON_HOT),
-										   ui_color(UI_COLOR_BUTTON_ACTIVE),
-										   ui_color(UI_COLOR_BUTTON_FIRED));
+			ui_render_layer_t old_layer = ui.render_layer;
+			ui.render_layer = UI_LAYER_OVERLAY_BACKGROUND;
 
-			v4_t roundedness = {0};
+			rect2_t shadow_rect = rect2_add_offset(dropdown_rect, make_v2(4, -4));
+			ui_draw_rect_roundedness_shadow(shadow_rect, make_v4(0, 0, 0, 0.25f), make_v4(0, 1, 0, 1), 0.25f, 16.0f);
 
-			if (i == count - 1)
+			ui_draw_rect_roundedness_shadow(dropdown_rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), make_v4(0, 1, 0, 1), 0.25f, 16.0f);
+
+			ui_push_id(ui_id(S("options")));
+			for (size_t i = 0; i < count; i++)
 			{
-				roundedness.y = 1.0f;
-				roundedness.w = 1.0f;
+				bool pressed = ui_button(names[i]);
+				result |= pressed;
+				
+				if (pressed)
+				{
+					*selected_index = i;
+				}
 			}
+			ui_pop_id();
 
-			ui_draw_rect_roundedness(option_rect, color, roundedness);
-			ui_draw_text_aligned(&ui.style.font, option_rect, names[i], make_v2(0.5f, 0.5f));
-
-			if (interaction & UI_FIRED)
-			{
-				*selected_index = i;
-			}
+			ui.render_layer = old_layer;
+			ui.override_priority = old_priority;
 		}
-		ui_pop_id();
-
-		ui.render_layer = old_layer;
+		ui_panel_end();
 	}
 
 	if (result)
 	{
 		ui.focused_id = UI_ID_NULL;
-		state->opened = false;
+		ui_close_popup(id);
 	}
 
 	ui_pop_id();
