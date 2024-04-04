@@ -22,7 +22,7 @@ typedef enum platform_keycode_t
     PLATFORM_KEYCODE_MBUTTON        = 0x4,
     PLATFORM_KEYCODE_XBUTTON1       = 0x5,
     PLATFORM_KEYCODE_XBUTTON2       = 0x6,
-    PLATFORM_KEYCODE_BACK           = 0x8,
+    PLATFORM_KEYCODE_BACKSPACE      = 0x8,
     PLATFORM_KEYCODE_TAB            = 0x9,
     PLATFORM_KEYCODE_CLEAR          = 0xC,
     PLATFORM_KEYCODE_RETURN         = 0xD,
@@ -59,8 +59,44 @@ typedef enum platform_keycode_t
     PLATFORM_KEYCODE_DELETE         = 0x2E,
     PLATFORM_KEYCODE_HELP           = 0x2F,
     /* 0x30 - 0x39: ascii numerals */
+	PLATFORM_KEYCODE_NUM_0          = 0x30,
+	PLATFORM_KEYCODE_NUM_1          = 0x31,
+	PLATFORM_KEYCODE_NUM_2          = 0x32,
+	PLATFORM_KEYCODE_NUM_3          = 0x33,
+	PLATFORM_KEYCODE_NUM_4          = 0x34,
+	PLATFORM_KEYCODE_NUM_5          = 0x35,
+	PLATFORM_KEYCODE_NUM_6          = 0x36,
+	PLATFORM_KEYCODE_NUM_7          = 0x37,
+	PLATFORM_KEYCODE_NUM_8          = 0x38,
+	PLATFORM_KEYCODE_NUM_9          = 0x39,
     /* 0x3A - 0x40: undefined */
     /* 0x41 - 0x5A: ascii alphabet */
+	PLATFORM_KEYCODE_A              = 0x41,
+	PLATFORM_KEYCODE_B              = 0x42,
+	PLATFORM_KEYCODE_C              = 0x43,
+	PLATFORM_KEYCODE_D              = 0x44,
+	PLATFORM_KEYCODE_E              = 0x45,
+	PLATFORM_KEYCODE_F              = 0x46,
+	PLATFORM_KEYCODE_G              = 0x47,
+	PLATFORM_KEYCODE_H              = 0x48,
+	PLATFORM_KEYCODE_I              = 0x49,
+	PLATFORM_KEYCODE_J              = 0x4A,
+	PLATFORM_KEYCODE_K              = 0x4B,
+	PLATFORM_KEYCODE_L              = 0x4C,
+	PLATFORM_KEYCODE_M              = 0x4D,
+	PLATFORM_KEYCODE_N              = 0x4E,
+	PLATFORM_KEYCODE_O              = 0x4F,
+	PLATFORM_KEYCODE_P              = 0x50,
+	PLATFORM_KEYCODE_Q              = 0x51,
+	PLATFORM_KEYCODE_R              = 0x52,
+	PLATFORM_KEYCODE_S              = 0x53,
+	PLATFORM_KEYCODE_T              = 0x54,
+	PLATFORM_KEYCODE_U              = 0x55,
+	PLATFORM_KEYCODE_V              = 0x56,
+	PLATFORM_KEYCODE_W              = 0x57,
+	PLATFORM_KEYCODE_X              = 0x58,
+	PLATFORM_KEYCODE_Y              = 0x59,
+	PLATFORM_KEYCODE_Z              = 0x5A,
     PLATFORM_KEYCODE_LSYS           = 0x5B,
     PLATFORM_KEYCODE_RSYS           = 0x5C,
     PLATFORM_KEYCODE_APPS           = 0x5D,
@@ -161,9 +197,14 @@ typedef enum platform_event_kind_t
 
 typedef struct platform_event_t
 {
-	struct platform_event_t *next;
+	struct platform_event_t *next_; // use platform_event_next()
 
 	platform_event_kind_t kind;
+
+	bool consumed : 1;
+	bool ctrl     : 1;
+	bool alt      : 1;
+	bool shift    : 1;
 
 	union
 	{
@@ -176,6 +217,7 @@ typedef struct platform_event_t
 		struct
 		{
 			bool               pressed;
+			bool               repeated;
 			platform_keycode_t keycode;
 		} key;
 
@@ -185,6 +227,39 @@ typedef struct platform_event_t
 		} text;
 	};
 } platform_event_t;
+
+DREAM_INLINE platform_event_t *platform_event_next(platform_event_t *event)
+{
+	if (!event) return NULL;
+
+	platform_event_t *result = event->next_;
+
+	while (result && result->consumed)
+	{
+		result = result->next_;
+	}
+
+	return result;
+}
+
+DREAM_INLINE platform_event_t *platform_event_iter(platform_event_t *event)
+{
+	if (!event) return NULL;
+
+	platform_event_t *result = event;
+
+	if (event->consumed)
+	{
+		result = platform_event_next(event);
+	}
+
+	return result;
+}
+
+DREAM_INLINE void platform_consume_event(platform_event_t *event)
+{
+	event->consumed = true;
+}
 
 typedef enum platform_gamepad_axis_t
 {

@@ -21,3 +21,14 @@ DREAM_LOCAL uint64_t r_encode_command_depth(float depth)
     uint64_t result           = (F32_AS_U32(depth_normalized) >> 3) & MASK_BITS(20);
     return result;
 }
+
+r_rect2_fixed_t rect2_to_fixed(rect2_t rect)
+{
+	r_rect2_fixed_t result;
+	result.min_x = (uint16_t)flt_clamp(roundf(rect.min.x), 0.0f, (float)UINT16_MAX);
+	result.min_y = (uint16_t)flt_clamp(roundf(rect.min.y), 0.0f, (float)UINT16_MAX);
+	result.max_x = (uint16_t)flt_clamp(roundf(rect.max.x), 0.0f, (float)UINT16_MAX);
+	result.max_y = (uint16_t)flt_clamp(roundf(rect.max.y), 0.0f, (float)UINT16_MAX);
+	return result;
+}
+

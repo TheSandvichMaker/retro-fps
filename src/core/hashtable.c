@@ -133,7 +133,7 @@ void table_insert(table_t *table, uint64_t key, uint64_t value)
         probe = (probe + 1) & mask;
 
         if (NEVER(probe == key))
-            break;
+            break; // table is full! that shouldn't happen!
     }
 }
 

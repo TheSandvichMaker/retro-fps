@@ -375,22 +375,6 @@ void game_init(void)
     world->fade_t = 1.0f;
 
 #if 1
-	{
-		test_waveform = get_waveform_from_string(S("gamedata/audio/SquareArp [excited mix (no clipping)].wav"));
-		// test_waveform = get_waveform_from_string(S("gamedata/audio/lego durbo.wav"));
-		short_sound   = get_waveform_from_string(S("gamedata/audio/menu_select.wav"));
-
-		music = play_sound(&(play_sound_t){
-			.waveform     = test_waveform,
-			.volume       = 1.0f,
-			.p            = make_v3(0, 0, 0),
-			.min_distance = 100000.0f,
-			.flags        = PLAY_SOUND_SPATIAL|PLAY_SOUND_FORCE_MONO|PLAY_SOUND_LOOPING,
-		});
-	}
-#endif
-
-#if 1
 	string_t startup_map = S("test");
 
     map_t    *map    = world->map    = load_map(&world->arena, Sf("gamedata/maps/%.*s.map", Sx(startup_map)));
@@ -624,9 +608,11 @@ static void game_tick(platform_io_t *io)
 
 		static uint64_t button_states = 0;
 
-		for (platform_event_t *ev = io->first_event;
+		ui.input.events = io->first_event;
+
+		for (platform_event_t *ev = platform_event_iter(io->first_event);
 			 ev;
-			 ev = ev->next)
+			 ev = platform_event_next(ev))
 		{
 			switch (ev->kind)
 			{
@@ -808,7 +794,7 @@ static void game_tick(platform_io_t *io)
         r_flush_ui_rects(rc);
     }
 
-#endif
+#endif // #if 1
 
     if (button_pressed(BUTTON_ESCAPE))
     {

@@ -225,11 +225,8 @@ void r_immediate_quad(r_context_t *rc, r_vertex_immediate_t a, r_vertex_immediat
 	r_immediate_index(rc, i3);
 }
 
-void r_draw_text(r_context_t *rc, const bitmap_font_t *font, v2_t p, v4_t color, string_t string)
+void r_immediate_text(r_context_t *rc, const bitmap_font_t *font, v2_t p, v4_t color, string_t string)
 {
-    r_immediate_t *imm = r_immediate_begin(rc);
-    imm->texture = font->texture;
-
     ASSERT(font->w / font->cw == 16);
     ASSERT(font->w % font->cw ==  0);
     ASSERT(font->h / font->ch >= 16);
@@ -305,8 +302,6 @@ void r_draw_text(r_context_t *rc, const bitmap_font_t *font, v2_t p, v4_t color,
             at.x += cw;
         }
     }
-
-    r_immediate_end(rc, imm);
 }
 
 void r_immediate_sphere(r_context_t *rc, v3_t p, float r, v4_t color_, size_t slices, size_t stacks)
@@ -386,4 +381,14 @@ void r_immediate_sphere(r_context_t *rc, v3_t p, float r, v4_t color_, size_t sl
             }
         }
     }
+}
+
+void r_draw_text(r_context_t *rc, const bitmap_font_t *font, v2_t p, v4_t color, string_t string)
+{
+    r_immediate_t *imm = r_immediate_begin(rc);
+    imm->texture = font->texture;
+
+	r_immediate_text(rc, font, p, color, string);
+
+    r_immediate_end(rc, imm);
 }

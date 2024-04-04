@@ -157,6 +157,15 @@ void *load_plugin(string_t name, bool release)
 #include "plugins/fs/fs.h"
 #include "plugins/audio_output/audio_output.h"
 
+DREAM_INLINE platform_event_t *new_event(arena_t *arena)
+{
+	platform_event_t *event = m_alloc_struct(arena, platform_event_t);
+	event->ctrl  = (bool)(GetAsyncKeyState(VK_CONTROL) & 0x8000);
+	event->alt   = (bool)(GetAsyncKeyState(VK_MENU)    & 0x8000);
+	event->shift = (bool)(GetAsyncKeyState(VK_SHIFT)   & 0x8000);
+	return event;
+}
+
 int wWinMain(HINSTANCE instance, 
              HINSTANCE prev_instance, 
              PWSTR     command_line, 
@@ -328,17 +337,19 @@ int wWinMain(HINSTANCE instance,
 				case WM_SYSKEYDOWN:
 				case WM_SYSKEYUP:
 				{
-					int  vk_code = (int)msg.wParam;
-					bool pressed = !!(msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN);
+					int  vk_code  = (int)msg.wParam;
+					bool pressed  = (bool)(msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN);
+					bool repeated = (bool)(msg.lParam & 0xFFFF);
 
-					platform_event_t *event = m_alloc_struct(event_arena, platform_event_t);
+					platform_event_t *event = new_event(event_arena);
 					event_count += 1;
 
-					event->kind        = PLATFORM_EVENT_KEY;
-					event->key.pressed = pressed;
-					event->key.keycode = (platform_keycode_t)vk_code;
+					event->kind         = PLATFORM_EVENT_KEY;
+					event->key.pressed  = pressed;
+					event->key.repeated = repeated;
+					event->key.keycode  = (platform_keycode_t)vk_code;
 
-					sll_push_back(first_event, last_event, event);
+					sll_push_back_ex(first_event, last_event, event, next_);
 
                     TranslateMessage(&msg);
 				} break;
@@ -352,7 +363,7 @@ int wWinMain(HINSTANCE instance,
 				case WM_XBUTTONDOWN:
 				case WM_XBUTTONUP:
 				{
-					platform_event_t *event = m_alloc_struct(event_arena, platform_event_t);
+					platform_event_t *event = new_event(event_arena);
 					event_count += 1;
 
 					platform_mouse_buttons_t button = 0;
@@ -392,12 +403,12 @@ int wWinMain(HINSTANCE instance,
 					event->mouse_button.pressed = !!(msg.wParam & (MK_LBUTTON|MK_MBUTTON|MK_RBUTTON|MK_XBUTTON1|MK_XBUTTON2));
 					event->mouse_button.button  = button;
 
-					sll_push_back(first_event, last_event, event);
+					sll_push_back_ex(first_event, last_event, event, next_);
 				} break;
 
 				case WM_CHAR:
 				{
-					platform_event_t *event = m_alloc_struct(event_arena, platform_event_t);
+					platform_event_t *event = new_event(event_arena);
 					event_count += 1;
 
 					event->kind = PLATFORM_EVENT_TEXT;
@@ -432,7 +443,7 @@ int wWinMain(HINSTANCE instance,
 						event->text.text.count = (size_t)WideCharToMultiByte(CP_UTF8, 0, chars, -1, event->text.text.data, string_storage_size(event->text.text), NULL, NULL) - 1;
 					}
 
-					sll_push_back(first_event, last_event, event);
+					sll_push_back_ex(first_event, last_event, event, next_);
 				} break;
 
                 default:

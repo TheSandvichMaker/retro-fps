@@ -265,11 +265,13 @@ typedef struct r_command_model_t
 // TODO: Use with ui rects
 typedef struct r_rect2_fixed_t
 {
-    int16_t min_x; // 14:2 fixed point
-    int16_t min_y; // 14:2 fixed point
-    int16_t max_x; // 14:2 fixed point
-    int16_t max_y; // 14:2 fixed point
+    uint16_t min_x; // 14:2 fixed point
+    uint16_t min_y; // 14:2 fixed point
+    uint16_t max_x; // 14:2 fixed point
+    uint16_t max_y; // 14:2 fixed point
 } r_rect2_fixed_t;
+
+DREAM_LOCAL r_rect2_fixed_t rect2_to_fixed(rect2_t rect);
 
 typedef enum r_ui_rect_flags_t
 {
@@ -289,8 +291,7 @@ typedef struct r_ui_rect_t
 	float    shadow_amount;     // 80
 	float    inner_radius;      // 84
 	uint32_t flags;             // 88
-	float    pad1;              // 92
-	float    pad2;              // 96
+	r_rect2_fixed_t clip_rect;
 } r_ui_rect_t;
 
 typedef struct r_command_ui_rects_t

@@ -2,6 +2,24 @@
 
 #define R_UI_RECT_BLEND_TEXT (1 << 0)
 
+struct r_rect2_fixed_t
+{
+	uint data0;
+	uint data1;
+};
+
+void decode_rect2_fixed(r_rect2_fixed_t rect, 
+						out float2 r_min, 
+						out float2 r_max)
+{
+	float min_x = float((rect.data0 >>  0) & 0xFFFF);// / 4.0;
+	float min_y = float((rect.data0 >> 16) & 0xFFFF);// / 4.0;
+	float max_x = float((rect.data1 >>  0) & 0xFFFF);// / 4.0;
+	float max_y = float((rect.data1 >> 16) & 0xFFFF);// / 4.0;
+	r_min = float2(min_x, min_y);
+	r_max = float2(max_x, max_y);
+}
+
 struct r_ui_rect_t
 {
 	float2 p_min;           // 8
@@ -17,8 +35,7 @@ struct r_ui_rect_t
 	float  shadow_amount;   // 80
 	float  inner_radius;    // 84
 	uint   flags;           // 88
-	float  pad1;            // 92
-	float  pad2;            // 96
+	r_rect2_fixed_t clip_rect;
 };
 
 StructuredBuffer<r_ui_rect_t> ui_rects : register(t0);
@@ -110,8 +127,21 @@ float4 ps(PS_INPUT IN) : SV_Target
 {
 	r_ui_rect_t rect = ui_rects[IN.id];
 
+	float2 clip_min, clip_max;
+	decode_rect2_fixed(rect.clip_rect, clip_min, clip_max);
+
 	float2 pos = IN.pos.xy;
 	pos.y = screen_dim.y - pos.y - 1;
+
+	if (pos.x < clip_min.x || pos.x > clip_max.x)
+	{
+		discard; 
+	}
+
+	if (pos.y < clip_min.y || pos.y > clip_max.y)
+	{
+		discard; 
+	}
 
 	float2 p = 0.5f*(rect.p_min + rect.p_max);
 	float2 b = 0.5f*(rect.p_max - rect.p_min);

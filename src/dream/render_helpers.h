@@ -4,6 +4,8 @@
 #include "core/api_types.h"
 #include "render.h"
 
+// all r_immediate_* calls just push the vertices/indices, they don't dispatch a draw call. it's up to you to make sure
+// the immediate draw call is set up correctly
 DREAM_LOCAL void r_immediate_line                 (r_context_t *rc, v3_t start, v3_t end, v4_t color);
 DREAM_LOCAL void r_immediate_line_gradient        (r_context_t *rc, v3_t start, v3_t end, v4_t start_color, v4_t end_color);
 DREAM_LOCAL void r_immediate_arrow                (r_context_t *rc, v3_t start, v3_t end, v4_t color);
@@ -15,8 +17,10 @@ DREAM_LOCAL void r_immediate_itriangle            (r_context_t *rc, uint32_t a, 
 DREAM_LOCAL void r_immediate_iquad                (r_context_t *rc, uint32_t a, uint32_t b, uint32_t c, uint32_t d);
 DREAM_LOCAL void r_immediate_triangle             (r_context_t *rc, triangle_t triangle, v4_t color);
 DREAM_LOCAL void r_immediate_quad                 (r_context_t *rc, r_vertex_immediate_t a, r_vertex_immediate_t b, r_vertex_immediate_t c, r_vertex_immediate_t d);
-DREAM_LOCAL void r_immediate_sphere(r_context_t *rc, v3_t p, float r, v4_t color, size_t slices, size_t stacks);
+DREAM_LOCAL void r_immediate_sphere               (r_context_t *rc, v3_t p, float r, v4_t color, size_t slices, size_t stacks);
+DREAM_LOCAL void r_immediate_text                 (r_context_t *rc, const struct bitmap_font_t *font, v2_t p, v4_t color, string_t string);
 
+// This one actually does a draw call by itself
 DREAM_LOCAL void r_draw_text(r_context_t *rc, const struct bitmap_font_t *font, v2_t p, v4_t color, string_t string);
 
 #endif /* RENDER_HELPERS_H */

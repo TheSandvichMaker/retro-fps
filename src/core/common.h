@@ -14,8 +14,14 @@
 #define sll_push(h, n)          do { (n)->next = (h); (h) = (n); } while (0)
 #define sll_pop(h)         (h); do { (h) = (h)->next; } while (0)
 
+#define sll_push_ex(h, n, next)      do { (n)->next = (h); (h) = (n); } while (0)
+#define sll_pop_ex(h, next)     (h); do { (h) = (h)->next; } while (0)
+
 #define sll_push_front(f, l, n) do { if (!(l)) { (f) = (l) = (n); } else { (n)->next = (f); (f) = (n); } } while (0)
 #define sll_push_back(f, l, n)  do { if (!(f)) { (f) = (l) = (n); } else { (l) = (l)->next = (n); } } while (0)
+
+#define sll_push_front_ex(f, l, n, next) do { if (!(l)) { (f) = (l) = (n); } else { (n)->next = (f); (f) = (n); } } while (0)
+#define sll_push_back_ex(f, l, n, next)  do { if (!(f)) { (f) = (l) = (n); } else { (l) = (l)->next = (n); } } while (0)
 
 // these macros would be easier to write if I used a sentinel for the doubly linked lists, but that has its own complications that I don't always want
 

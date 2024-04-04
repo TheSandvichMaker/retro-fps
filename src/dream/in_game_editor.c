@@ -1223,6 +1223,29 @@ DREAM_INLINE void ui_demo_proc(ui_window_t *window)
 	ui_hover_tooltip(S("Text edit demo box"));
 	ui_text_edit(S("Text Edit"), &demo->edit_buffer);
 
+	if (ui_button(S("Toggle Music")))
+	{
+		static bool       is_playing = false;
+		static mixer_id_t music_handle;
+
+		if (is_playing)
+		{
+			stop_sound(music_handle);
+			is_playing = false;
+		}
+		else
+		{
+			music_handle = play_sound(&(play_sound_t){
+				.waveform     = get_waveform_from_string(S("gamedata/audio/SquareArp [excited mix (no clipping)].wav")),
+				.volume       = 1.0f,
+				.p            = make_v3(0, 0, 0),
+				.min_distance = 100000.0f,
+				.flags        = PLAY_SOUND_SPATIAL|PLAY_SOUND_FORCE_MONO|PLAY_SOUND_LOOPING,
+			});
+			is_playing = true;
+		}
+	}
+
 	ui_slider(S("Reverb Amount"), &mixer.reverb_amount, 0.0f, 1.0f);
 	ui_slider(S("Reverb Feedback"), &mixer.reverb_feedback, -1.0f, 1.0f);
 	ui_slider_int(S("Delay Time"), &mixer.reverb_delay_time, 500, 2000);

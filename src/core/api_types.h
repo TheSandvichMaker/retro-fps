@@ -108,7 +108,7 @@ typedef struct dynamic_string_t
 typedef struct string_storage_overlay_t
 {
 	size_t count;
-	char data[0];
+	char data[1];
 } string_storage_overlay_t;
 
 #define string_storage_t(size) struct { size_t count; char data[size]; }
