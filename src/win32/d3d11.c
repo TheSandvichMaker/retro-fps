@@ -565,14 +565,14 @@ int init_d3d11(void *hwnd_)
         image_t t2 = load_image_from_disk(temp, S("gamedata/textures/noise/LDR_LLL1_15.png"), 1);
         image_t t3 = load_image_from_disk(temp, S("gamedata/textures/noise/LDR_LLL1_23.png"), 1);
 
-        uint32_t *pixels = m_alloc_array(temp, t0.w*t0.h, uint32_t);
+        uint32_t *pixels = m_alloc_array(temp, t0.info.w*t0.info.h, uint32_t);
 
         unsigned char *t0p = t0.pixels;
         unsigned char *t1p = t1.pixels;
         unsigned char *t2p = t2.pixels;
         unsigned char *t3p = t3.pixels;
 
-        for (size_t i = 0; i < t0.w*t0.h; i++)
+        for (size_t i = 0; i < t0.info.w*t0.info.h; i++)
         {
             pixels[i] = ((t0p[i] <<  0) | 
                          (t1p[i] <<  8) |
@@ -583,8 +583,8 @@ int init_d3d11(void *hwnd_)
         texture_handle_t handle = render->upload_texture(&(r_upload_texture_t){
             .desc = {
                 .format = R_PIXEL_FORMAT_RGBA8,
-                .w      = t0.w,
-                .h      = t0.h,
+                .w      = t0.info.w,
+                .h      = t0.info.h,
             },
             .data = {
                 .pixels = pixels,

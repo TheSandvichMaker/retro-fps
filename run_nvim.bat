@@ -1,4 +1,2 @@
 @echo off
-pushd src
-start nvim-qt
-popd
+start nvim-qt -- -S Session.vim

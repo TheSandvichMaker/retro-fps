@@ -22,6 +22,9 @@ long _InterlockedIncrement(long volatile *destination);
 long _InterlockedExchange(long volatile *destination, long exchange);
 #pragma intrinsic(_InterlockedCompareExchange)
 
+long _InterlockedOr(long volatile *destination, long value);
+#pragma intrinsic(_InterlockedOr)
+
 
 // ------------------------------------------------------------------
 
@@ -30,9 +33,16 @@ static inline int64_t atomic_add64(int64_t volatile *addend, int64_t value)
     return _InterlockedExchangeAdd64((long long volatile *)addend, value) - value;
 }
 
-static inline int64_t atomic_cas64(int64_t volatile *destination, int64_t exchange, int64_t comparand)
+static inline int64_t atomic_cas_i64(int64_t volatile *destination, int64_t exchange, int64_t comparand)
 {
     return _InterlockedCompareExchange64(destination, exchange, comparand);
+}
+
+typedef void *void_t;
+
+static inline void *atomic_cas_ptr(void_t volatile *destination, void *exchange, void *comparand)
+{
+    return (void *)_InterlockedCompareExchange64((int64_t volatile *)destination, (intptr_t)exchange, (intptr_t)comparand);
 }
 
 static inline int64_t atomic_exchange64(int64_t volatile *target, int64_t value)
@@ -53,6 +63,12 @@ static inline uint32_t atomic_cas_u32(uint32_t volatile *destination, uint32_t e
 static inline uint32_t atomic_increment_u32(uint32_t volatile *target)
 {
     return (uint32_t)_InterlockedIncrement((long volatile *)target);
+}
+
+static inline uint32_t atomic_or_u32(uint32_t volatile *target, uint32_t value)
+{
+	uint32_t result = _InterlockedOr((long volatile *)target, (long)value);
+	return result;
 }
 
 #define COMPILER_BARRIER _ReadWriteBarrier()

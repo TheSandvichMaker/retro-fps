@@ -837,23 +837,21 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
 				asset_hash_t texture_tga = asset_hash_from_string(string_format(temp, "gamedata/textures/%.*s.tga", strexpand(plane->texture)));
 				// TODO ALSO: String + formatting helper function for asset hashes
 
-				image_t *image = &missing_image;
+				image_info_t *image_info = &missing_image.info;
 
 				if (asset_exists(texture_png, ASSET_KIND_IMAGE))
 				{
-					image = get_image(texture_png);
-                    poly->texture_hash = texture_png;
+					image_info = get_image_info(texture_png);
+                    poly->texture = texture_png;
 				}
 				else if (asset_exists(texture_tga, ASSET_KIND_IMAGE))
 				{
-					image = get_image(texture_tga);
-                    poly->texture_hash = texture_tga;
+					image_info = get_image_info(texture_tga);
+                    poly->texture = texture_tga;
 				}
 
-				poly->image = image;
-				texscale_x = (float)image->w;
-				texscale_y = (float)image->h;
-				poly->texture = image->renderer_handle; // TODO: Weird? Maybe?
+				texscale_x = (float)image_info->w;
+				texscale_y = (float)image_info->h;
             }
 
             // triangulate

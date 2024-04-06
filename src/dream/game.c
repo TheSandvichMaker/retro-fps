@@ -364,8 +364,8 @@ void game_init(void)
 
     {
 		image_t *font_image = get_image_from_string(S("gamedata/textures/font.png"));
-        debug_font.w = font_image->w;
-        debug_font.h = font_image->h;
+        debug_font.w = font_image->info.w;
+        debug_font.h = font_image->info.h;
         debug_font.cw = 10;
         debug_font.ch = 12;
         debug_font.texture = font_image->renderer_handle;
@@ -405,8 +405,8 @@ void game_init(void)
 				skybox = render->upload_texture(&(r_upload_texture_t){
 					.desc = {
 						.format = R_PIXEL_FORMAT_SRGB8_A8,
-						.w     = faces[0].w,
-						.h     = faces[0].h,
+						.w     = faces[0].info.w,
+						.h     = faces[0].info.h,
 						.flags = R_TEXTURE_FLAG_CUBEMAP,
 					},
 					.data = {
@@ -484,7 +484,7 @@ DREAM_INLINE r_view_index_t render_map(r_context_t *rc, camera_t *camera, map_t 
 
             r_material_brush_t *material = r_allocate_command_data(rc, sizeof(r_material_brush_t));
             material->kind     = R_MATERIAL_BRUSH,
-            material->texture  = poly->texture,
+            material->texture  = get_image(poly->texture)->renderer_handle,
             material->lightmap = poly->lightmap,
 
             r_draw_mesh(rc, M4X4_IDENTITY, poly->mesh, &material->base);
@@ -528,7 +528,7 @@ DREAM_INLINE r_view_index_t render_map(r_context_t *rc, camera_t *camera, map_t 
 
             r_material_brush_t *material = r_allocate_command_data(rc, sizeof(r_material_brush_t));
             material->kind     = R_MATERIAL_BRUSH,
-            material->texture  = poly->texture,
+            material->texture  = get_image(poly->texture)->renderer_handle,
             material->lightmap = poly->lightmap,
 
             r_draw_mesh(rc, transform, poly->mesh, &material->base);

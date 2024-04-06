@@ -40,14 +40,14 @@ void copy_memory(void *dest_init, const void *source_init, size_t size)
 
     ASSERT(dest + size <= source || dest >= source + size);
 
-#ifdef _MSC_VER
-    __movsb(dest, source, size);
-#elif defined(__i386__) || defined(__x86_64__)
-    __asm__ __volatile__("rep movsb" : "+c"(size), "+S"(source), "+D"(dest): : "memory");
-#else
+// #ifdef _MSC_VER
+//     __movsb(dest, source, size);
+// #elif defined(__i386__) || defined(__x86_64__)
+//     __asm__ __volatile__("rep movsb" : "+c"(size), "+S"(source), "+D"(dest): : "memory");
+// #else
     while (size--)
     {
         *dest++ = *source++;
     }
-#endif
+// #endif
 }

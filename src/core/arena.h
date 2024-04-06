@@ -33,7 +33,9 @@ size_t m_size_remaining_for_align(const arena_t *arena, size_t align);
 
 void m_pre_commit(arena_t *arena, size_t size);
 
+// checks if there are no active scopes. maybe it deserves a better name!
 void m_check(arena_t *arena);
+
 void m_reset(arena_t *arena);
 void m_reset_and_decommit(arena_t *arena);
 void m_release(arena_t *arena);

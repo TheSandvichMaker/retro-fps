@@ -174,16 +174,16 @@ static v3_t pathtrace_recursively(lum_thread_context_t *thread, lum_params_t *pa
 
         v3_t albedo = {0, 0, 0};
 
-        image_t *texture = hit_poly->image;
+        image_t *texture = get_image(hit_poly->texture);
         if (texture->pixels)
         {
             // TODO: Enforce pow2 textures?
-            uint32_t tex_x = (uint32_t)((float)texture->w*tex.x) % texture->w;
-            uint32_t tex_y = (uint32_t)((float)texture->h*tex.y) % texture->h;
+            uint32_t tex_x = (uint32_t)((float)texture->info.w*tex.x) % texture->info.w;
+            uint32_t tex_y = (uint32_t)((float)texture->info.h*tex.y) % texture->info.h;
 
             uint32_t *pixels = texture->pixels;
 
-            v4_t texture_sample = unpack_color(pixels[texture->w*tex_y + tex_x]);
+            v4_t texture_sample = unpack_color(pixels[texture->info.w*tex_y + tex_x]);
             albedo = texture_sample.xyz;
         }
 

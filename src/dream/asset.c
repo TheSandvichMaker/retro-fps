@@ -60,38 +60,53 @@ void *stbi_realloc(void *ptr, size_t new_size)
 // streaming asset API
 //
 
+typedef struct asset_node_t
+{
+	struct asset_node_t *previous_version; // re: hot reloading
+	void *asset_blob;
+} asset_node_t;
+
 typedef struct asset_slot_t
 {
 	alignas(64) uint32_t state;
 	PAD(60);
 
-	// for the time being, every single asset gets its own arena:
+	// for the time being, every single asset slot gets its own arena:
 	arena_t arena;
+	mutex_t mutex;
 
 	asset_hash_t hash;
 	asset_kind_t kind;
 
 	string_storage_t(1024) path;
 
+	// asset_node_t *latest;
 	union
 	{
-		image_t    image;
+		image_t image;
 		waveform_t waveform;
 	};
 } asset_slot_t;
 
+#if 0
+// asset_blob is an image_t, or waveform_t, etc depending on asset kind
+DREAM_INLINE void asset__update_slot(asset_slot_t *slot, void *asset_blob)
+{
+	asset_node_t *node = m_alloc_struct(&slot->arena, asset_node_t);
+	node->asset_blob = asset_blob;
+
+	// atomic linked list insert
+	asset_node_t *previous_latest = slot->latest;
+	do
+	{
+		node->previous_version = previous_latest;
+	}
+	while (atomic_cas_ptr((void **)&slot->latest, node, previous_latest) != previous_latest);
+}
+#endif
+
 image_t    missing_image;
 waveform_t missing_waveform;
-
-/*
-typedef struct asset_system_t
-{
-	arena_t        arena;
-	pool_t         asset_store;
-	table_t        asset_index;
-	asset_config_t asset_config;
-} asset_system_t;
-*/
 
 static arena_t        asset_arena;
 static pool_t         asset_store = INIT_POOL(asset_slot_t);
@@ -127,13 +142,16 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 	asset_job_t  *job   = userdata;
 	asset_slot_t *asset = job->asset;
 
+	bool success = mutex_try_lock(&asset->mutex);
+	ASSERT(success);
+
 	switch (job->kind)
 	{
 		case ASSET_JOB_LOAD_FROM_DISK:
 		{
 			asset_state_t state = asset->state;
 
-			if (state != ASSET_STATE_BEING_LOADED)
+			if (!(state & ASSET_STATE_BEING_LOADED))
 				break;
 
 			bool loaded_successfully = true;
@@ -147,13 +165,13 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 					asset->image = load_image_from_disk(&asset->arena, string_from_storage(asset->path), 4);
 					asset->image.renderer_handle = idiot_code;
 
-					render->populate_texture(asset->image.renderer_handle, &(r_upload_texture_t){
+					asset->image.renderer_handle = render->upload_texture(&(r_upload_texture_t){
 						.upload_flags = R_UPLOAD_TEXTURE_GEN_MIPMAPS,
 						.desc = {
 							.type   = R_TEXTURE_TYPE_2D,
 							.format = R_PIXEL_FORMAT_SRGB8_A8,
-							.w      = asset->image.w,
-							.h      = asset->image.h,
+							.w      = asset->image.info.w,
+							.h      = asset->image.info.h,
 						},
 						.data = {
 							.pitch  = asset->image.pitch,
@@ -226,12 +244,14 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 
 			if (loaded_successfully)
 			{
-				asset->state = ASSET_STATE_IN_MEMORY;
+				asset->state = (state & ~ASSET_STATE_BEING_LOADED) | ASSET_STATE_RESIDENT;
 			}
 		} break;
 
         INVALID_DEFAULT_CASE;
 	}
+
+	mutex_unlock(&asset->mutex);
 }
 
 static void preload_asset_info(asset_slot_t *asset)
@@ -240,7 +260,7 @@ static void preload_asset_info(asset_slot_t *asset)
 	{
 		case ASSET_KIND_IMAGE:
 		{
-			image_t *image = &asset->image;
+			image_info_t *info = &asset->image.info;
 
 			m_scoped_temp
 			{
@@ -251,13 +271,11 @@ static void preload_asset_info(asset_slot_t *asset)
 				int x, y, comp;
 				if (stbi_info(string_null_terminate(temp, path), &x, &y, &comp))
 				{
-					image->w             = (uint32_t)x;
-					image->h             = (uint32_t)y;
-					image->channel_count = (uint32_t)comp;
+					info->w             = (uint32_t)x;
+					info->h             = (uint32_t)y;
+					info->channel_count = (uint32_t)comp;
 				}
 			}
-
-			image->renderer_handle = render->reserve_texture();
 		} break;
 
         case ASSET_KIND_WAVEFORM:
@@ -278,6 +296,8 @@ static void preload_asset_info(asset_slot_t *asset)
         
         INVALID_DEFAULT_CASE;
 	}
+
+	atomic_or_u32(&asset->state, ASSET_STATE_INFO_RESIDENT);
 }
 
 void initialize_asset_system(const asset_config_t *config)
@@ -353,10 +373,13 @@ static asset_slot_t *get_or_load_asset_async(asset_hash_t hash, asset_kind_t kin
 	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
 	if (asset && asset->kind == kind)
 	{
-		int64_t state = asset->state;
+		uint32_t state     = asset->state;
+		uint32_t new_state = state | ASSET_STATE_BEING_LOADED;
 
-		if (state == ASSET_STATE_ON_DISK &&
-			atomic_cas_u32(&asset->state, ASSET_STATE_BEING_LOADED, ASSET_STATE_ON_DISK) == ASSET_STATE_ON_DISK)
+		bool should_load = (state & ASSET_STATE_ON_DISK) && !(state & (ASSET_STATE_RESIDENT|ASSET_STATE_BEING_LOADED));
+
+		if (should_load &&
+			atomic_cas_u32(&asset->state, new_state, state) == state)
 		{
 			asset_job_t job = {
 				.kind  = ASSET_JOB_LOAD_FROM_DISK,
@@ -373,14 +396,18 @@ static asset_slot_t *get_or_load_asset_blocking(asset_hash_t hash, asset_kind_t 
 	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
 	if (asset && asset->kind == kind)
 	{
-		if (asset->state == ASSET_STATE_ON_DISK)
+		uint32_t state     = asset->state;
+		uint32_t new_state = state | ASSET_STATE_BEING_LOADED;
+
+		bool should_load = (state & ASSET_STATE_ON_DISK) && !(state & (ASSET_STATE_RESIDENT|ASSET_STATE_BEING_LOADED));
+
+		if (should_load &&
+			atomic_cas_u32(&asset->state, new_state, state) == state)
 		{
 			asset_job_t job = {
 				.kind  = ASSET_JOB_LOAD_FROM_DISK,
 				.asset = asset,
 			};
-
-			asset->state = ASSET_STATE_BEING_LOADED;
 
 			job_context_t context = { 0 };
 			asset_job_proc(&context, &job);
@@ -389,18 +416,52 @@ static asset_slot_t *get_or_load_asset_blocking(asset_hash_t hash, asset_kind_t 
 	return asset;
 }
 
+void reload_asset(asset_hash_t hash)
+{
+	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
+	if (asset)
+	{
+		uint32_t state     = asset->state;
+		uint32_t new_state = state | ASSET_STATE_BEING_LOADED;
+
+		if ((state & ASSET_STATE_ON_DISK) &&
+			atomic_cas_u32(&asset->state, new_state, state) == state)
+		{
+			asset_job_t job = {
+				.kind  = ASSET_JOB_LOAD_FROM_DISK,
+				.asset = asset,
+			};
+			add_job_to_queue_with_data(high_priority_job_queue, asset_job_proc, job);
+		}
+	}
+}
+
 image_t *get_image(asset_hash_t hash)
 {
-	image_t *image = &missing_image;
+	image_t *result = &missing_image;
 
 	asset_slot_t *asset = get_or_load_asset_async(hash, ASSET_KIND_IMAGE);
 	if (asset)
 	{
-		image = &asset->image;
+		result = &asset->image;
 	}
 
-	return image;
+	return result;
 }
+
+image_info_t *get_image_info(asset_hash_t hash)
+{
+	image_info_t *result = &missing_image.info;
+
+	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
+	if (asset && asset->kind == ASSET_KIND_IMAGE)
+	{
+		result = &asset->image.info;
+	}
+
+	return result;
+}
+
 
 image_t *get_image_blocking(asset_hash_t hash)
 {
@@ -471,10 +532,11 @@ image_t load_image_from_disk(arena_t *arena, string_t path, unsigned nchannels)
 		unsigned char *pixels = stbi_load(string_null_terminate(temp, path), &w, &h, &n, nchannels);
 
 		result = (image_t){
-			.w      = (unsigned)w,
-			.h      = (unsigned)h,
-			.pitch  = nchannels*w,
-			.pixels = m_copy(arena, pixels, nchannels*w*h),
+			.info.w             = (unsigned)w,
+			.info.h             = (unsigned)h,
+			.info.channel_count = nchannels,
+			.pitch              = nchannels*w,
+			.pixels             = m_copy(arena, pixels, nchannels*w*h),
 		};
 	}
 
@@ -499,11 +561,11 @@ bool split_image_into_cubemap_faces(const image_t *source, cubemap_t *cubemap)
      * faces[5] = -z
      */
 
-    unsigned w = source->w / 4;
-    unsigned h = source->h / 3;
+    unsigned w = source->info.w / 4;
+    unsigned h = source->info.h / 3;
 
-    if (source->w % w != 0 ||
-        source->h % h != 0)
+    if (source->info.w % w != 0 ||
+        source->info.h % h != 0)
     {
         return false;
     }

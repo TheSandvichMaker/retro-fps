@@ -47,11 +47,8 @@ typedef struct map_poly_t
     v3_t normal;
 	float distance;
 
-    image_t *image;
-
     mesh_handle_t    mesh;
-    asset_hash_t     texture_hash;
-    texture_handle_t texture;
+    asset_hash_t     texture;
     texture_handle_t lightmap;
 } map_poly_t;
 

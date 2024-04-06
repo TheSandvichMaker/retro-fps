@@ -1223,6 +1223,11 @@ DREAM_INLINE void ui_demo_proc(ui_window_t *window)
 	ui_hover_tooltip(S("Text edit demo box"));
 	ui_text_edit(S("Text Edit"), &demo->edit_buffer);
 
+	if (ui_button(S("Hot Reload Music")))
+	{
+		reload_asset(asset_hash_from_string(S("gamedata/audio/test.wav")));
+	}
+
 	if (ui_button(S("Toggle Music")))
 	{
 		static bool       is_playing = false;
@@ -1236,7 +1241,7 @@ DREAM_INLINE void ui_demo_proc(ui_window_t *window)
 		else
 		{
 			music_handle = play_sound(&(play_sound_t){
-				.waveform     = get_waveform_from_string(S("gamedata/audio/SquareArp [excited mix (no clipping)].wav")),
+				.waveform     = get_waveform_from_string(S("gamedata/audio/test.wav")),
 				.volume       = 1.0f,
 				.p            = make_v3(0, 0, 0),
 				.min_distance = 100000.0f,

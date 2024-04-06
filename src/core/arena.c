@@ -30,7 +30,9 @@ void *m_alloc_nozero(arena_t *arena, size_t size, size_t align)
         if (result + size > arena->committed)
         {
             size_t to_commit = align_forward(result + size - arena->committed, ARENA_COMMIT_CHUNK_SIZE);
-            vm_commit(arena->committed, to_commit);
+
+            bool commit_result = vm_commit(arena->committed, to_commit);
+			ASSERT(commit_result);
 
             arena->committed += to_commit;
         }
@@ -51,7 +53,7 @@ void *m_alloc(arena_t *arena, size_t size, size_t align)
 
 void *m_copy(arena_t *arena, const void *src, size_t size)
 {
-    void *result = m_alloc(arena, size, 16);
+    void *result = m_alloc_nozero(arena, size, 16);
     copy_memory(result, src, size);
     return result;
 }
@@ -125,7 +127,7 @@ void m_reset_and_decommit(arena_t *arena)
 			vm_decommit(decommit_from, decommit_bytes);
 
         arena->at        = arena->buffer;
-        arena->committed = arena->buffer;
+        arena->committed = decommit_from;
     }
     else
     {

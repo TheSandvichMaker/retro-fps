@@ -21,11 +21,12 @@ typedef enum asset_kind_t
 
 typedef enum asset_state_t
 {
-	ASSET_STATE_NONE,
+	ASSET_STATE_NONE = 0,
 
-	ASSET_STATE_ON_DISK,
-	ASSET_STATE_BEING_LOADED,
-	ASSET_STATE_IN_MEMORY,
+	ASSET_STATE_ON_DISK       = 1 << 0,
+	ASSET_STATE_BEING_LOADED  = 1 << 1,
+	ASSET_STATE_INFO_RESIDENT = 1 << 2,
+	ASSET_STATE_RESIDENT      = 1 << 3,
 
 	ASSET_STATE_COUNT,
 } asset_state_t;
@@ -43,12 +44,18 @@ DREAM_INLINE asset_hash_t asset_hash_from_string(string_t string)
 	return result;
 }
 
-typedef struct image_t
+typedef struct image_info_t
 {
 	uint32_t w;
 	uint32_t h;
-	uint32_t pitch;
 	uint32_t channel_count;
+} image_info_t;
+
+typedef struct image_t
+{
+	image_info_t info;
+
+	uint32_t pitch;
 	void    *pixels;
 
 	texture_handle_t renderer_handle;
@@ -91,7 +98,6 @@ typedef struct asset_config_t
 } asset_config_t;
 
 DREAM_LOCAL void initialize_asset_system(const asset_config_t *config);
-DREAM_LOCAL void preload_asset(asset_hash_t hash);
 
 // DREAM_GLOBAL from here on out because d3d11.c is using some of these.
 // Should I fix that? Yes I think so, I imagine the renderer should be
@@ -103,11 +109,13 @@ DREAM_GLOBAL waveform_t missing_waveform;
 
 DREAM_GLOBAL bool        asset_exists          (asset_hash_t hash, asset_kind_t kind);
 DREAM_GLOBAL string_t    get_asset_path_on_disk(asset_hash_t hash); 
+DREAM_GLOBAL void        reload_asset          (asset_hash_t hash);
 
-DREAM_GLOBAL image_t    *get_image            (asset_hash_t hash);
-DREAM_GLOBAL image_t    *get_missing_image    (void);
-DREAM_GLOBAL waveform_t *get_waveform         (asset_hash_t hash);
-DREAM_GLOBAL image_t    *get_missing_waveform (void);
+DREAM_GLOBAL image_t      *get_image            (asset_hash_t hash);
+DREAM_GLOBAL image_info_t *get_image_info     (asset_hash_t hash);
+DREAM_GLOBAL image_t      *get_missing_image    (void);
+DREAM_GLOBAL waveform_t   *get_waveform         (asset_hash_t hash);
+DREAM_GLOBAL image_t      *get_missing_waveform (void);
 
 DREAM_GLOBAL image_t    *get_image_blocking   (asset_hash_t hash);
 DREAM_GLOBAL waveform_t *get_waveform_blocking(asset_hash_t hash);
