@@ -45,11 +45,14 @@ static void display_last_error(void)
 
 static void output_last_error(string16_t prefix)
 {
-    wchar_t *message = format_error(GetLastError());
-    OutputDebugStringW(string16_null_terminate(temp, prefix));
-    OutputDebugStringW(L": ");
-    OutputDebugStringW(message);
-    LocalFree(message);
+	wchar_t *message = format_error(GetLastError());
+
+	m_scoped_temp
+	OutputDebugStringW(string16_null_terminate(temp, prefix));
+
+	OutputDebugStringW(L": ");
+	OutputDebugStringW(message);
+	LocalFree(message);
 }
 
 static void error_box(char *message)
@@ -156,8 +159,12 @@ void vm_release(void *address)
 void debug_print_va(const char *fmt, va_list args)
 {
     // TODO: Convert to string16 and use OutputDebugStringW
-    string_t string = string_format_va(temp, fmt, args);
-    OutputDebugStringA(string.data);
+
+	m_scoped_temp
+	{
+		string_t string = string_format_va(temp, fmt, args);
+		OutputDebugStringA(string.data);
+	}
 }
 
 void debug_print(const char *fmt, ...)
@@ -176,44 +183,49 @@ string_t fs_read_entire_file(arena_t *arena, string_t path)
 {
     string_t result = { 0 };
 
-    string16_t path16 = utf16_from_utf8(temp, path);
+	arena_t *temp = m_get_temp(&arena, 1);
 
-    HANDLE handle = CreateFileW(path16.data, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (handle != INVALID_HANDLE_VALUE)
-    {
-        DWORD file_size_high;
-        DWORD file_size_low = GetFileSize(handle, &file_size_high);
+	m_scoped(temp)
+	{
+		string16_t path16 = utf16_from_utf8(temp, path);
 
-        if (file_size_high == 0)
-        {
-            if (file_size_low + 1 <= m_size_remaining_for_align(arena, DEFAULT_STRING_ALIGN))
-            {
-                char *buffer = m_alloc_nozero(arena, file_size_low + 1, 16);
+		HANDLE handle = CreateFileW(path16.data, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (handle != INVALID_HANDLE_VALUE)
+		{
+			DWORD file_size_high;
+			DWORD file_size_low = GetFileSize(handle, &file_size_high);
 
-                DWORD bytes_read;
-                if (ReadFile(handle, buffer, file_size_low, &bytes_read, NULL))
-                {
-                    buffer[bytes_read] = 0;
+			if (file_size_high == 0)
+			{
+				if (file_size_low + 1 <= m_size_remaining_for_align(arena, DEFAULT_STRING_ALIGN))
+				{
+					char *buffer = m_alloc_nozero(arena, file_size_low + 1, 16);
 
-                    result.count = bytes_read;
-                    result.data  = buffer;
-                }
-                else
-                {
-                    // TODO: Log read failure
-                }
-            }
-            else
-            {
-                // TODO: Log OOM
-            }
-        }
-        else
-        {
-            // TODO: log file too big we dumb need to stop being dumb
-        }
-        CloseHandle(handle);
-    }
+					DWORD bytes_read;
+					if (ReadFile(handle, buffer, file_size_low, &bytes_read, NULL))
+					{
+						buffer[bytes_read] = 0;
+
+						result.count = bytes_read;
+						result.data  = buffer;
+					}
+					else
+					{
+						// TODO: Log read failure
+					}
+				}
+				else
+				{
+					// TODO: Log OOM
+				}
+			}
+			else
+			{
+				// TODO: log file too big we dumb need to stop being dumb
+			}
+			CloseHandle(handle);
+		}
+	}
 
     return result;
 }
@@ -228,7 +240,7 @@ bool fs_write_entire_file(string_t path, string_t file)
         file.count = UINT32_MAX; // TODO: Remove filesize limitation
     }
 
-    m_scoped(temp)
+    m_scoped_temp
     {
         string16_t path16 = utf16_from_utf8(temp, path);
 
@@ -260,7 +272,7 @@ bool fs_copy(string_t source, string_t destination)
 {
 	bool result = false;
 
-	m_scoped(temp)
+	m_scoped_temp
 	{
 		string16_t src16 = utf16_from_utf8(temp, source);
 		string16_t dst16 = utf16_from_utf8(temp, destination);
@@ -276,7 +288,7 @@ bool fs_move(string_t source, string_t destination)
 {
 	bool result = false;
 
-	m_scoped(temp)
+	m_scoped_temp
 	{
 		string16_t src16 = utf16_from_utf8(temp, source);
 		string16_t dst16 = utf16_from_utf8(temp, destination);
@@ -292,7 +304,7 @@ bool fs_copy_directory(string_t source, string_t destination)
 {
 	bool result = false;
 
-	m_scoped(temp)
+	m_scoped_temp
 	{
 		string16_t src16 = utf16_from_utf8(temp, source);
 		string16_t dst16 = utf16_from_utf8(temp, destination);
@@ -328,6 +340,9 @@ static bool wide_strings_equal(wchar_t *a, wchar_t *b)
 
 static fs_entry_t *fs_scan_directory_(arena_t *arena, string_t path, int flags, fs_entry_t *parent_dir)
 {
+	arena_t *temp = m_get_temp(&arena, 1);
+	m_scope_begin(temp);
+
     string16_t path16 = utf16_from_utf8(temp, string_format(temp, "%.*s\\*", strexpand(path)));
 
     fs_entry_t *first = NULL;
@@ -388,6 +403,8 @@ static fs_entry_t *fs_scan_directory_(arena_t *arena, string_t path, int flags, 
         }
     }
 
+	m_scope_end(temp);
+
     return first;
 }
 
@@ -433,6 +450,7 @@ fs_create_directory_result_t fs_create_directory(string_t directory)
 {
     fs_create_directory_result_t result = CREATE_DIRECTORY_SUCCESS;
 
+	m_scoped_temp
     if (!CreateDirectoryW(utf16_from_utf8(temp, directory).data, NULL))
     {
         switch (GetLastError())
@@ -493,14 +511,17 @@ string_t fs_full_path(arena_t *arena, string_t relative_path)
 {
     string_t result = strnull;
 
-    DWORD count = GetFullPathNameW(utf16_from_utf8(temp, relative_path).data, 0, NULL, NULL);
-    if (ALWAYS(count > 0))
-    {
-        wchar_t *data = m_alloc_string16(temp, count);
-        GetFullPathNameW(data, count, data, NULL);
+	m_scoped_temp
+	{
+		DWORD count = GetFullPathNameW(utf16_from_utf8(temp, relative_path).data, 0, NULL, NULL);
+		if (ALWAYS(count > 0))
+		{
+			wchar_t *data = m_alloc_string16(temp, count);
+			GetFullPathNameW(data, count, data, NULL);
 
-        result = utf8_from_utf16(arena, (string16_t) { count-1, data });
-    }
+			result = utf8_from_utf16(arena, (string16_t) { count-1, data });
+		}
+	}
 
     return result;
 }
@@ -512,10 +533,15 @@ string_t os_get_working_directory(arena_t *arena)
     DWORD count = GetCurrentDirectoryW(0, NULL);
     if (ALWAYS(count > 0))
     {
-        wchar_t *data = m_alloc_string16(temp, count);
-        GetCurrentDirectory(count, data);
+		arena_t *temp = m_get_temp(&arena, 1);
 
-        result = utf8_from_utf16(arena, (string16_t) { count-1, data });
+		m_scoped(temp)
+		{
+			wchar_t *data = m_alloc_string16(temp, count);
+			GetCurrentDirectory(count, data);
+
+			result = utf8_from_utf16(arena, (string16_t) { count-1, data });
+		}
     }
 
     return result;
@@ -523,13 +549,22 @@ string_t os_get_working_directory(arena_t *arena)
 
 bool os_set_working_directory(string_t directory)
 {
-    bool result = SetCurrentDirectoryW(utf16_from_utf8(temp, directory).data);
-    if (!result)  output_last_error(strlit16("os_set_working_directory"));
+	bool result = false;
+
+	m_scoped_temp
+	{
+		result = SetCurrentDirectoryW(utf16_from_utf8(temp, directory).data);
+		if (!result) output_last_error(strlit16("os_set_working_directory"));
+	}
+
     return result;
 }
 
 bool os_execute(string_t command, int *exit_code)
 {
+	arena_t *temp = m_get_temp(NULL, 0);
+	m_scope_begin(temp);
+
     string16_t command16 = utf16_from_utf8(temp, command);
 
     HANDLE stdout_read, stdout_write;
@@ -620,11 +655,16 @@ bool os_execute(string_t command, int *exit_code)
     CloseHandle(stdout_read);
     CloseHandle(stderr_read);
 
+	m_scope_end(temp);
+
     return result;
 }
 
 bool os_execute_capture(string_t command, int *exit_code, arena_t *arena, string_t *out, string_t *err)
 {
+	arena_t *temp = m_get_temp(NULL, 0);
+	m_scope_begin(temp);
+
     string16_t command16 = utf16_from_utf8(temp, command);
 
     HANDLE stdout_read, stdout_write;
@@ -716,6 +756,8 @@ bool os_execute_capture(string_t command, int *exit_code, arena_t *arena, string
 
     CloseHandle(stdout_read);
     CloseHandle(stderr_read);
+
+	m_scope_end(temp);
 
     return result;
 }

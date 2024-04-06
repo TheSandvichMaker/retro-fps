@@ -2,7 +2,7 @@
 
 void radix_sort_u32(uint32_t *array, size_t count)
 {
-    m_scoped(temp)
+    m_scoped_temp
     {
         uint32_t *src = array;
         uint32_t *dst = m_alloc_array(temp, count, uint32_t);
@@ -38,7 +38,7 @@ void radix_sort_u32(uint32_t *array, size_t count)
 
 void radix_sort_u64(uint64_t *array, size_t count)
 {
-    m_scoped(temp)
+    m_scoped_temp
     {
         uint64_t *src = array;
         uint64_t *dst = m_alloc_array(temp, count, uint64_t);

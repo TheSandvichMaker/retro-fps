@@ -9,6 +9,8 @@
 #include "core/thread.h"
 #include "core/atomics.h"
 #include "core/arena.h"
+#include "core/assert.h"
+#include "core/common.h"
 
 bool wait_on_address(volatile void *address, void *compare_address, size_t address_size)
 {
@@ -117,7 +119,14 @@ typedef struct job_thread_t
 typedef struct job_queue_entry_t
 {
     job_proc_t proc;
-    void *userdata;
+
+	bool userdata_is_ptr;
+
+	union
+	{
+		char  userdata_u8[64];
+		void *userdata_ptr;
+	};
 } job_queue_entry_t;
 
 typedef struct job_queue_internal_t
@@ -146,11 +155,10 @@ typedef struct job_proc_params_t
     int thread_index;
 } job_proc_params_t;
 
-static DWORD WINAPI job_queue_thread_proc(void *userdata)
+static DWORD WINAPI job_queue_thread_proc(void *params_)
 {
-    job_proc_params_t *params = userdata;
-
-    job_queue_internal_t *queue = params->queue;
+    job_proc_params_t    *params = params_;
+    job_queue_internal_t *queue  = params->queue;
 
     job_context_t context = {
         .thread_index = params->thread_index,
@@ -167,7 +175,11 @@ static DWORD WINAPI job_queue_thread_proc(void *userdata)
             if (exchanged_index == entry_index)
             {
                 job_queue_entry_t *entry = &queue->entries[entry_index % queue->queue_size];
-                entry->proc(&context, entry->userdata);
+
+				void *userdata = entry->userdata_is_ptr ? entry->userdata_ptr : entry->userdata_u8;
+                entry->proc(&context, userdata);
+
+				m_reset_temp_arenas();
 
                 uint32_t jobs_count = InterlockedDecrement((volatile long *)&queue->jobs_in_flight);
 
@@ -244,7 +256,7 @@ void destroy_job_queue(job_queue_t handle)
     m_release(&queue->arena);
 }
 
-void add_job_to_queue(job_queue_t handle, job_proc_t proc, void *userdata)
+void add_job_to_queue_internal(job_queue_t handle, job_proc_t proc, void *userdata, size_t userdata_size, bool userdata_is_ptr)
 {
     job_queue_internal_t *queue = handle.opaque;
 
@@ -252,8 +264,15 @@ void add_job_to_queue(job_queue_t handle, job_proc_t proc, void *userdata)
     uint32_t next_write = write + 1;
 
     job_queue_entry_t *entry = &queue->entries[write % queue->queue_size];
-    entry->proc     = proc;
-    entry->userdata = userdata;
+
+	if (userdata_size > sizeof(entry->userdata_u8))
+	{
+		FATAL_ERROR("Tried to add job with userdata that was larger than 64 bytes!");
+	}
+
+    entry->proc = proc;
+	copy_memory(entry->userdata_u8, userdata, userdata_size);
+	entry->userdata_is_ptr = userdata_is_ptr;
 
     MemoryBarrier();
 
@@ -263,6 +282,16 @@ void add_job_to_queue(job_queue_t handle, job_proc_t proc, void *userdata)
     ResetEvent(queue->event_done);
 
     ReleaseSemaphore(queue->semaphore, 1, NULL);
+}
+
+void add_job_to_queue(job_queue_t queue, job_proc_t proc, void *userdata)
+{
+	add_job_to_queue_internal(queue, proc, &userdata, sizeof(userdata), true);
+}
+
+void add_job_to_queue_with_data_(job_queue_t queue, job_proc_t proc, void *userdata, size_t userdata_size)
+{
+	add_job_to_queue_internal(queue, proc, userdata, userdata_size, false);
 }
 
 void wait_on_queue(job_queue_t handle)

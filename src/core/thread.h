@@ -37,6 +37,9 @@ typedef struct job_context_t
 
 typedef void (*job_proc_t)(job_context_t *context, void *userdata);
 DREAM_GLOBAL void add_job_to_queue(job_queue_t queue, job_proc_t proc, void *userdata);
+// up to 64 bytes of per-job data (so you don't have to allocate it yourself)
+DREAM_GLOBAL void add_job_to_queue_with_data_(job_queue_t queue, job_proc_t proc, void *userdata, size_t userdata_size);
+#define add_job_to_queue_with_data(queue, proc, data) add_job_to_queue_with_data_(queue, proc, &(data), sizeof(data))
 DREAM_GLOBAL void wait_on_queue(job_queue_t queue);
 
 #endif

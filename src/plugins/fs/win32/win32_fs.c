@@ -184,7 +184,7 @@ static bool write_entire_file(string_t path, string_t file)
         file.count = UINT32_MAX; // TODO: Remove filesize limitation
     }
 
-    m_scoped(temp)
+    m_scoped_temp
     {
         string16_t path16 = utf16_from_utf8(temp, path);
 
@@ -216,7 +216,7 @@ static bool copy(string_t source, string_t destination)
 {
 	bool result = false;
 
-	m_scoped(temp)
+	m_scoped_temp
 	{
 		string16_t src16 = utf16_from_utf8(temp, source);
 		string16_t dst16 = utf16_from_utf8(temp, destination);
@@ -232,7 +232,7 @@ static bool move(string_t source, string_t destination)
 {
 	bool result = false;
 
-	m_scoped(temp)
+	m_scoped_temp
 	{
 		string16_t src16 = utf16_from_utf8(temp, source);
 		string16_t dst16 = utf16_from_utf8(temp, destination);
@@ -248,7 +248,7 @@ static bool copy_directory(string_t source, string_t destination)
 {
 	bool result = false;
 
-	m_scoped(temp)
+	m_scoped_temp
 	{
 		string16_t src16 = utf16_from_utf8(temp, source);
 		string16_t dst16 = utf16_from_utf8(temp, destination);

@@ -203,8 +203,9 @@ DREAM_INLINE bool edge_in_set(const stretchy_buffer(edge_t) Q, edge_t e)
 
 triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *points, hull_debug_t *debug)
 {
-	// TODO: Add temp arena pool to avoid conflicts like this
-	ASSERT(arena != temp);
+	arena_t *temp = m_get_temp(&arena, 1);
+	m_scope_begin(temp);
+
 	ASSERT(count > 3);
 
 	// TODO FIXME: A lot of horrible O(N^2) stuff happening here to check if things are in a set
@@ -225,7 +226,7 @@ triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *
 
 	triangle_mesh_t result = {0};
 
-	m_scoped(temp)
+	m_scoped_temp
 	{
 		// TODO: Pre-allocate upper bound as given by Euler's formula
 		// V = N
@@ -283,6 +284,8 @@ triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *
 		result.triangle_count = sb_count(H);
 		result.triangles      = sb_copy(arena, H);
 	}
+
+	m_scope_end(temp);
 
 	return result;
 }

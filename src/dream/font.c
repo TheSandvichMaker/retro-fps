@@ -18,7 +18,7 @@ font_atlas_t make_font_atlas(string_t path, size_t range_count, font_range_t *ra
 {
 	font_atlas_t result = {0};
 
-	m_scoped(temp)
+	m_scoped_temp
 	{
 		string_t font = fs_read_entire_file(temp, path);
 		if (font.count)
@@ -36,7 +36,7 @@ font_atlas_t make_font_atlas_from_memory(string_t font_data, size_t range_count,
 
 	if (NEVER(font_data.count == 0)) return result;
 
-	m_scoped(temp)
+	m_scoped_temp
 	{
 		unsigned char *data = (unsigned char *)font_data.data;
 

@@ -187,7 +187,7 @@ static void generate_new_random_convex_hull(size_t point_count, random_series_t 
 	triangle_mesh_t *mesh  = &hull_test->mesh;
 	hull_debug_t    *debug = &hull_test->debug;
 
-	m_scoped(temp)
+	m_scoped_temp
 	{
 		v3_t *random_points = m_alloc_array_nozero(temp, point_count, v3_t);
 
@@ -221,7 +221,7 @@ static void hull_render_debug_triangles(r_context_t *rc, hull_debug_step_t *step
 	hull_debug_t             *debug     = &hull_test->debug;
 	hull_diagnostic_result_t *diag      = debug->diagnostics;
 
-	m_scoped(temp)
+	m_scoped_temp
 	{
 		float alpha = 0.6f;
 

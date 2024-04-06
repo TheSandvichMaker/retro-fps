@@ -368,7 +368,7 @@ void game_init(void)
         debug_font.h = font_image->h;
         debug_font.cw = 10;
         debug_font.ch = 12;
-        debug_font.texture = font_image->gpu;
+        debug_font.texture = font_image->renderer_handle;
     }
 
     world_t *world = g_world = m_bootstrap(world_t, arena);
@@ -390,7 +390,8 @@ void game_init(void)
 		if (is_class(map, e, S("worldspawn")))
 		{
 			string_t skytex = value_from_key(map, e, S("skytex"));
-			m_scoped(temp)
+
+			m_scoped_temp
 			{
 				image_t faces[6] = {
 					load_image_from_disk(temp, Sf("gamedata/textures/sky/%.*s/posx.jpg", Sx(skytex)), 4),

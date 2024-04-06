@@ -35,7 +35,7 @@ wchar_t *string16_null_terminate(arena_t *arena, string16_t string);
 string_t string_format(arena_t *arena, const char *fmt, ...);
 string_t string_format_va(arena_t *arena, const char *fmt, va_list args);
 
-#define Sf(fmt, ...) string_format(temp, fmt, ##__VA_ARGS__)
+#define Sf(fmt, ...) string_format(m_get_temp(NULL, 0), fmt, ##__VA_ARGS__)
 
 string_t string_format_into_buffer(char *buffer, size_t buffer_size, const char *fmt, ...);
 string_t string_format_into_buffer_va(char *buffer, size_t buffer_size, const char *fmt, va_list args);

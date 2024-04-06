@@ -154,7 +154,6 @@ void *load_plugin(string_t name, bool release)
 	return result;
 }
 
-#include "plugins/fs/fs.h"
 #include "plugins/audio_output/audio_output.h"
 
 DREAM_INLINE platform_event_t *new_event(arena_t *arena)
@@ -173,20 +172,6 @@ int wWinMain(HINSTANCE instance,
 {
     IGNORED(instance);
     IGNORED(prev_instance);
-
-	fs_i *fs = load_plugin(S("fs"), false);
-
-	if (fs)
-	{
-		for (fs_entry_t *entry = fs->scan_directory(temp, S("."), 0);
-			 entry;
-			 entry = fs_entry_next(entry))
-		{
-			debug_print("entry: %.*s\n", Sx(entry->name));
-		}
-	}
-
-	// enumerate_symbols();
 
     int argc;
     wchar_t **argv_wide = CommandLineToArgvW(command_line, &argc);
@@ -308,7 +293,7 @@ int wWinMain(HINSTANCE instance,
     bool running = true;
     while (running)
     {
-		arena_t *event_arena = temp; // TODO: Think about how to provide events nicer (will be a ring buffer later probably for threaded fun)
+		arena_t *event_arena = m_get_temp(NULL, 0); // TODO: Think about how to provide events nicer (will be a ring buffer later probably for threaded fun)
 		platform_event_t *first_event = NULL;
 		platform_event_t * last_event = NULL;
 
@@ -551,7 +536,7 @@ int wWinMain(HINSTANCE instance,
             running = false;
         }
 
-        m_reset_and_decommit(temp);
+		m_reset_temp_arenas();
 
 		hires_time_t end_time = os_hires_time();
 		dt = (float)os_seconds_elapsed(start_time, end_time);

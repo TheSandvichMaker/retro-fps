@@ -2,6 +2,8 @@
 
 void build_maps(string_t source_maps, string_t dest)
 {
+	arena_t *temp = m_get_temp(NULL, 0);
+
     printf("\n");
     printf("=================================================\n");
     printf("                  BUILD MAPS                     \n");

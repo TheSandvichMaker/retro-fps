@@ -172,7 +172,7 @@ int init_d3d11(void *hwnd_)
 
     // create input layouts
 
-    m_scoped(temp)
+    m_scoped_temp
     {
 		// TODO: use tighter packing for all this (normals especially)
 
@@ -220,7 +220,7 @@ int init_d3d11(void *hwnd_)
 
     // compile shaders
 
-    m_scoped(temp)
+    m_scoped_temp
     {
         string_t hlsl_file = S("gamedata/shaders/brushmodel.hlsl");
         string_t hlsl = fs_read_entire_file(temp, hlsl_file);
@@ -237,7 +237,7 @@ int init_d3d11(void *hwnd_)
 
 	STATIC_ASSERT(ARRAY_COUNT(immediate_shaders) == R_SHADER_COUNT, "There's a new immediate shader kind that is not being loaded!");
 
-	for_array(i, immediate_shaders) m_scoped(temp)
+	for_array(i, immediate_shaders) m_scoped_temp
 	{
 		string_t path = immediate_shaders[i].path;
 		string_t file = fs_read_entire_file(temp, path);
@@ -245,7 +245,7 @@ int init_d3d11(void *hwnd_)
 		d3d.immediate_shaders[immediate_shaders[i].shader].ps = d3d_compile_ps(path, file, "ps");
 	}
 
-	m_scoped(temp)
+	m_scoped_temp
 	{
 		string_t path = S("gamedata/shaders/ui_rect.hlsl");
 		string_t file = fs_read_entire_file(temp, path);
@@ -253,7 +253,7 @@ int init_d3d11(void *hwnd_)
 		d3d.ui_rect_ps = d3d_compile_ps(path, file, "ps");
 	}
 
-    m_scoped(temp)
+    m_scoped_temp
     {
         string_t hlsl_file = S("gamedata/shaders/skybox.hlsl");
         string_t hlsl = fs_read_entire_file(temp, hlsl_file);
@@ -262,7 +262,7 @@ int init_d3d11(void *hwnd_)
         d3d.skybox_ps = d3d_compile_ps(hlsl_file, hlsl, "ps");
     }
 
-    m_scoped(temp)
+    m_scoped_temp
     {
         string_t hlsl_file = S("gamedata/shaders/postprocess.hlsl");
         string_t hlsl = fs_read_entire_file(temp, hlsl_file);
@@ -272,7 +272,7 @@ int init_d3d11(void *hwnd_)
         d3d.hdr_resolve_ps  = d3d_compile_ps(hlsl_file, hlsl, "hdr_resolve_ps");
     }
 
-    m_scoped(temp)
+    m_scoped_temp
     {
         string_t hlsl_file = S("gamedata/shaders/shadowmap.hlsl");
         string_t hlsl = fs_read_entire_file(temp, hlsl_file);
@@ -558,7 +558,7 @@ int init_d3d11(void *hwnd_)
     }
 
     // blue noise texture
-    m_scoped(temp)
+    m_scoped_temp
     {
         image_t t0 = load_image_from_disk(temp, S("gamedata/textures/noise/LDR_LLL1_0.png"), 1);
         image_t t1 = load_image_from_disk(temp, S("gamedata/textures/noise/LDR_LLL1_7.png"), 1);
@@ -945,7 +945,7 @@ void d3d_ensure_swap_chain_size(int width, int height)
 
 DREAM_INLINE void radix_sort_commands(r_command_t *array, size_t count)
 {
-    m_scoped(temp)
+    m_scoped_temp
     {
         r_command_t *src = array;
         r_command_t *dst = m_alloc_array(temp, count, r_command_t);
@@ -1308,7 +1308,8 @@ DREAM_INLINE size_t d3d_render_view(const d3d_frame_context_t *frame, D3D11_VIEW
 
 void d3d11_execute_command_buffer(r_command_buffer_t *command_buffer, int width, int height)
 {
-    arena_marker_t temp_marker = m_get_marker(temp);
+	arena_t *temp = m_get_temp(NULL, 0);
+	m_scope_begin(temp);
 
 	AcquireSRWLockExclusive(&d3d.context_lock);
 
@@ -1535,7 +1536,7 @@ void d3d11_execute_command_buffer(r_command_buffer_t *command_buffer, int width,
 
     d3d.frame_index++;
 
-    m_reset_to_marker(temp, temp_marker);
+    m_scope_end(temp);
 }
 
 DREAM_INLINE void d3d_collect_timestamp_data(void)
@@ -1929,6 +1930,9 @@ void destroy_mesh(mesh_handle_t mesh)
 
 ID3DBlob *d3d_compile_shader(string_t hlsl_file, string_t hlsl, const char *entry_point, const char *kind)
 {
+	arena_t *temp = m_get_temp(NULL, 0);
+	m_scope_begin(temp);
+
     UINT flags = D3DCOMPILE_PACK_MATRIX_COLUMN_MAJOR|D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_WARNINGS_ARE_ERRORS;
 #if defined(DEBUG_RENDERER)
     flags |= D3DCOMPILE_DEBUG|D3DCOMPILE_SKIP_OPTIMIZATION;
@@ -1946,6 +1950,8 @@ ID3DBlob *d3d_compile_shader(string_t hlsl_file, string_t hlsl, const char *entr
         OutputDebugStringA(message);
         FATAL_ERROR("Failed to compile shader %.*s. (%s, entry point '%s'):\n\n%s", Sx(hlsl_file), kind, entry_point, message);
     }
+
+	m_scope_end(temp);
 
     return blob;
 }

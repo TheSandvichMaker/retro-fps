@@ -184,6 +184,10 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 		mixer_init();
 	}
 
+	arena_t *temp = m_get_temp(NULL, 0);
+
+	m_scope_begin(temp);
+
 	size_t mix_channel_count = 2; // TODO: Surround sound!?
 
 	//
@@ -536,6 +540,8 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 #endif
 
 	mixer.frame_index += frames_to_mix;
+
+	m_scope_end(temp);
 
 #if MIXER_FLUSH_DENORMALS
 	_mm_setcsr(old_csr);

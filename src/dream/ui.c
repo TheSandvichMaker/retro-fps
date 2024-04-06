@@ -762,7 +762,7 @@ rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_tex
 	p.x = roundf(p.x);
 	p.y = roundf(p.y);
 
-	m_scoped(temp)
+	m_scoped_temp
 	{
 		prepared_glyphs_t prep = atlas_prepare_glyphs(font, temp, text);
 		result = rect2_add_offset(prep.bounds, p);
@@ -1601,6 +1601,9 @@ bool ui_option_buttons(string_t label, int *value, int count, string_t *options)
 
 bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t *names)
 {
+	arena_t *temp = m_get_temp(NULL, 0);
+	m_scope_begin(temp);
+
     bool result = false;
 
 	if (NEVER(!ui.initialized)) 
@@ -1723,6 +1726,8 @@ bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t
 	}
 
 	ui_pop_id();
+
+	m_scope_end(temp);
 
     return result;
 }
@@ -2007,6 +2012,9 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 	if (NEVER(!ui.initialized)) 
 		return;
 
+	arena_t *temp = m_get_temp(NULL, 0);
+	m_scope_begin(temp);
+
 	// TODO: Use ui_cut_widget_rect 
 	rect2_t rect;
 	if (!ui_override_rect(&rect))
@@ -2237,6 +2245,8 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 	}
 
 	ui_pop_id();
+
+	m_scope_end(temp);
 }
 
 void ui_tooltip(string_t text)
@@ -2711,17 +2721,20 @@ void debug_notif(v4_t color, float time, string_t fmt, ...)
 
 void debug_notif_va(v4_t color, float time, string_t fmt, va_list args)
 {
-	string_t text = string_format(ui_frame_arena(), string_null_terminate(temp, fmt), args);
+	m_scoped_temp
+	{
+		string_t text = string_format(ui_frame_arena(), string_null_terminate(temp, fmt), args);
 
-	debug_notif_t *notif = m_alloc_struct(ui_frame_arena(), debug_notif_t);
-	notif->id            = ui_id_u64(ui.next_notif_id++);
-	notif->color         = color;
-	notif->text          = text;
-	notif->init_lifetime = time;
-	notif->lifetime      = time;
+		debug_notif_t *notif = m_alloc_struct(ui_frame_arena(), debug_notif_t);
+		notif->id            = ui_id_u64(ui.next_notif_id++);
+		notif->color         = color;
+		notif->text          = text;
+		notif->init_lifetime = time;
+		notif->lifetime      = time;
 
-	notif->next = ui.first_debug_notif;
-	ui.first_debug_notif = notif;
+		notif->next = ui.first_debug_notif;
+		ui.first_debug_notif = notif;
+	}
 }
 
 void debug_notif_replicate(debug_notif_t *notif)

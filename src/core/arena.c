@@ -100,13 +100,22 @@ void m_pre_commit(arena_t *arena, size_t size)
     arena->committed += to_commit;
 }
 
+void m_check(arena_t *arena)
+{
+	ASSERT(arena->temp == NULL);
+}
+
 void m_reset(arena_t *arena)
 {
+	m_check(arena);
+
     arena->at = arena->buffer;
 }
 
 void m_reset_and_decommit(arena_t *arena)
 {
+	m_check(arena);
+
     if (arena->owns_memory)
     {
         char  *decommit_from  = arena->buffer + ARENA_DEFAULT_COMMIT_PRESERVE_THRESHOLD;
@@ -126,6 +135,8 @@ void m_reset_and_decommit(arena_t *arena)
 
 void m_release(arena_t *arena)
 {
+	m_check(arena);
+
     if (arena->owns_memory)
     {
         void *buffer = arena->buffer;
@@ -141,21 +152,88 @@ void m_release(arena_t *arena)
 arena_marker_t m_get_marker(arena_t *arena)
 {
     arena_marker_t result;
-    result.arena = arena;
     result.at    = arena->at;
     return result;
 }
 
 void m_reset_to_marker(arena_t *arena, arena_marker_t marker)
 {
-    ASSERT(marker.arena == arena);
-
     if (marker.at == NULL)
         marker.at = arena->buffer;
 
     ASSERT(marker.at >= arena->buffer && marker.at < arena->end);
 
     arena->at = marker.at;
+}
+
+void m_scope_begin(arena_t *arena)
+{
+	arena_marker_t marker = m_get_marker(arena);
+	arena_temp_t  *temp   = m_alloc_struct_nozero(arena, arena_temp_t);
+
+	temp->prev   = arena->temp;
+	temp->marker = marker;
+
+	arena->temp = temp;
+}
+
+void m_scope_end(arena_t *arena)
+{
+	if (ALWAYS(arena->temp))
+	{
+		arena_temp_t *temp = arena->temp;
+		arena->temp = temp->prev;
+
+		m_reset_to_marker(arena, temp->marker);
+	}
+}
+
+static thread_local arena_t temp_arenas[4];
+
+arena_t *m_get_temp(arena_t **conflicts, size_t conflict_count)
+{
+	arena_t *result = NULL;
+
+	for (size_t i = 0; i < ARRAY_COUNT(temp_arenas); i++)
+	{
+		arena_t *candidate = &temp_arenas[i];
+
+		bool has_conflict = false;
+
+		for (size_t j = 0; j < conflict_count; j++)
+		{
+			if (conflicts[j] == candidate)
+			{
+				has_conflict = true;
+				break;
+			}
+		}
+
+		if (!has_conflict)
+		{
+			result = candidate;
+			break;
+		}
+	}
+
+	ASSERT(result);
+
+	return result;
+}
+
+arena_t *m_get_temp_scope_begin(arena_t **conflicts, size_t conflict_count)
+{
+	arena_t *temp = m_get_temp(conflicts, conflict_count);
+	m_scope_begin(temp);
+	return temp;
+}
+
+void m_reset_temp_arenas(void)
+{
+	for (size_t i = 0; i < ARRAY_COUNT(temp_arenas); i++)
+	{
+		m_reset_and_decommit(&temp_arenas[i]);
+	}
 }
 
 void *m_bootstrap_(size_t size, size_t align, size_t arena_offset)

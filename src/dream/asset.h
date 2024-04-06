@@ -14,6 +14,7 @@ typedef enum asset_kind_t
 
 	ASSET_KIND_IMAGE,
 	ASSET_KIND_WAVEFORM,
+	ASSET_KIND_MAP,
 
 	ASSET_KIND_COUNT,
 } asset_kind_t;
@@ -23,7 +24,7 @@ typedef enum asset_state_t
 	ASSET_STATE_NONE,
 
 	ASSET_STATE_ON_DISK,
-	ASSET_STATE_BEING_LOADED_ASYNC,
+	ASSET_STATE_BEING_LOADED,
 	ASSET_STATE_IN_MEMORY,
 
 	ASSET_STATE_COUNT,
@@ -50,7 +51,7 @@ typedef struct image_t
 	uint32_t channel_count;
 	void    *pixels;
 
-	texture_handle_t gpu;
+	texture_handle_t renderer_handle;
 } image_t;
 
 typedef struct cubemap_t
@@ -61,7 +62,7 @@ typedef struct cubemap_t
 	uint32_t channel_count;
 	void    *pixels[6];
 
-	texture_handle_t gpu;
+	texture_handle_t renderer_handle;
 } cubemap_t;
 
 typedef struct waveform_t

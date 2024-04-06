@@ -65,6 +65,9 @@ typedef struct asset_slot_t
 	alignas(64) uint32_t state;
 	PAD(60);
 
+	// for the time being, every single asset gets its own arena:
+	arena_t arena;
+
 	asset_hash_t hash;
 	asset_kind_t kind;
 
@@ -79,6 +82,16 @@ typedef struct asset_slot_t
 
 image_t    missing_image;
 waveform_t missing_waveform;
+
+/*
+typedef struct asset_system_t
+{
+	arena_t        arena;
+	pool_t         asset_store;
+	table_t        asset_index;
+	asset_config_t asset_config;
+} asset_system_t;
+*/
 
 static arena_t        asset_arena;
 static pool_t         asset_store = INIT_POOL(asset_slot_t);
@@ -97,8 +110,7 @@ typedef enum asset_job_kind_t
 typedef struct asset_job_t
 {
 	asset_job_kind_t kind;
-	asset_slot_t *asset;
-	arena_t *arena; // TODO: figure it out.
+	asset_slot_t    *asset;
 } asset_job_t;
 
 DREAM_INLINE size_t convert_sample_count(size_t src_sample_rate, size_t dst_sample_rate, size_t sample_count)
@@ -108,17 +120,12 @@ DREAM_INLINE size_t convert_sample_count(size_t src_sample_rate, size_t dst_samp
     return result;
 }
 
-static void asset_job(job_context_t *context, void *userdata)
+static void asset_job_proc(job_context_t *context, void *userdata)
 {
 	(void)context;
 
 	asset_job_t  *job   = userdata;
 	asset_slot_t *asset = job->asset;
-	arena_t      *arena = job->arena;
-
-	// FIXME: figure out about allocation. temp is thread local so that's cool but that's obviously the wrong way to do this!!
-	if (!arena)
-		arena = temp;
 
 	switch (job->kind)
 	{
@@ -126,7 +133,7 @@ static void asset_job(job_context_t *context, void *userdata)
 		{
 			asset_state_t state = asset->state;
 
-			if (state != ASSET_STATE_BEING_LOADED_ASYNC)
+			if (state != ASSET_STATE_BEING_LOADED)
 				break;
 
 			bool loaded_successfully = true;
@@ -135,12 +142,12 @@ static void asset_job(job_context_t *context, void *userdata)
 			{
 				case ASSET_KIND_IMAGE:
 				{
-					texture_handle_t idiot_code = asset->image.gpu;
+					texture_handle_t idiot_code = asset->image.renderer_handle;
 
-					asset->image = load_image_from_disk(arena, string_from_storage(asset->path), 4);
-					asset->image.gpu = idiot_code;
+					asset->image = load_image_from_disk(&asset->arena, string_from_storage(asset->path), 4);
+					asset->image.renderer_handle = idiot_code;
 
-					render->populate_texture(asset->image.gpu, &(r_upload_texture_t){
+					render->populate_texture(asset->image.renderer_handle, &(r_upload_texture_t){
 						.upload_flags = R_UPLOAD_TEXTURE_GEN_MIPMAPS,
 						.desc = {
 							.type   = R_TEXTURE_TYPE_2D,
@@ -157,49 +164,57 @@ static void asset_job(job_context_t *context, void *userdata)
 
 				case ASSET_KIND_WAVEFORM:
 				{
-                    waveform_t  src_waveform = load_waveform_from_disk(temp, string_from_storage(asset->path));
-                    waveform_t *dst_waveform = &asset->waveform;
+					m_scoped_temp
+					{
+						waveform_t  src_waveform = load_waveform_from_disk(temp, string_from_storage(asset->path));
+						waveform_t *dst_waveform = &asset->waveform;
 
-                    ASSERT(src_waveform.channel_count == asset->waveform.channel_count);
+						ASSERT(src_waveform.channel_count == asset->waveform.channel_count);
 
-                    if (src_waveform.sample_rate == dst_waveform->sample_rate)
-                    {
-                        // FIXME: FOOLISH CODE FOR DUMB PEOPLE
-                        dst_waveform->frames = m_copy_array(arena, src_waveform.frames, src_waveform.channel_count*src_waveform.frame_count);
-                    }
-                    else
-                    {
-                        uint32_t channel_count   = src_waveform.channel_count;
-                        size_t   src_frame_count = src_waveform.frame_count;
-                        size_t   dst_frame_count = dst_waveform->frame_count;
+						if (src_waveform.sample_rate == dst_waveform->sample_rate)
+						{
+							// FIXME: FOOLISH CODE FOR DUMB PEOPLE
+							dst_waveform->frames = m_copy_array(&asset->arena, src_waveform.frames, src_waveform.channel_count*src_waveform.frame_count);
+						}
+						else
+						{
+							uint32_t channel_count   = src_waveform.channel_count;
+							size_t   src_frame_count = src_waveform.frame_count;
+							size_t   dst_frame_count = dst_waveform->frame_count;
 
-                        int16_t *dst_frames = m_alloc_array_nozero(arena, channel_count*dst_frame_count, int16_t);
+							int16_t *dst_frames = m_alloc_array_nozero(&asset->arena, channel_count*dst_frame_count, int16_t);
 
-                        for (size_t channel_index = 0; channel_index < channel_count; channel_index++)
-                        {
-                            int16_t *src = waveform_channel(&src_waveform, channel_index);
-                            int16_t *dst = dst_frames + channel_index*dst_frame_count;
+							for (size_t channel_index = 0; channel_index < channel_count; channel_index++)
+							{
+								int16_t *src = waveform_channel(&src_waveform, channel_index);
+								int16_t *dst = dst_frames + channel_index*dst_frame_count;
 
-                            for (size_t dst_frame_index = 0; dst_frame_index < dst_frame_count; dst_frame_index++)
-                            {
-                                float t = (float)dst_frame_index / (float)dst_frame_count;
-                                float x = t*(float)src_frame_count;
-                                size_t x_i = (size_t)x;
-                                float x_f = (float)(x - (float)x_i);
+								for (size_t dst_frame_index = 0; dst_frame_index < dst_frame_count; dst_frame_index++)
+								{
+									float t = (float)dst_frame_index / (float)dst_frame_count;
+									float x = t*(float)src_frame_count;
+									size_t x_i = (size_t)x;
+									float x_f = (float)(x - (float)x_i);
 
-                                if (x_i >= src_frame_count) 
-                                    x_i = src_frame_count - 1;
+									if (x_i >= src_frame_count) 
+										x_i = src_frame_count - 1;
 
-                                float s_1 = snorm_from_s16(src[x_i]);
-                                float s_2 = snorm_from_s16(src[x_i + 1]);
-                                float s = lerp(s_1, s_2, x_f);
+									float s_1 = snorm_from_s16(src[x_i]);
+									float s_2 = snorm_from_s16(src[x_i + 1]);
+									float s = lerp(s_1, s_2, x_f);
 
-                                *dst++ = s16_from_snorm(s);
-                            }
-                        }
+									*dst++ = s16_from_snorm(s);
+								}
+							}
 
-                        dst_waveform->frames = dst_frames;
-                    }
+							dst_waveform->frames = dst_frames;
+						}
+					}
+				} break;
+
+				case ASSET_KIND_MAP:
+				{
+					INVALID_CODE_PATH; // TODO: handle
 				} break;
 
 				default:
@@ -227,10 +242,10 @@ static void preload_asset_info(asset_slot_t *asset)
 		{
 			image_t *image = &asset->image;
 
-			stbi_arena = temp;
-
-			m_scoped(temp)
+			m_scoped_temp
 			{
+				stbi_arena = temp;
+
 				string_t path = string_from_storage(asset->path);
 
 				int x, y, comp;
@@ -242,7 +257,7 @@ static void preload_asset_info(asset_slot_t *asset)
 				}
 			}
 
-			image->gpu = render->reserve_texture();
+			image->renderer_handle = render->reserve_texture();
 		} break;
 
         case ASSET_KIND_WAVEFORM:
@@ -255,6 +270,11 @@ static void preload_asset_info(asset_slot_t *asset)
 
             asset->waveform = waveform;
         } break;
+
+		case ASSET_KIND_MAP:
+		{
+			// do nothing, for now
+		} break;
         
         INVALID_DEFAULT_CASE;
 	}
@@ -264,7 +284,7 @@ void initialize_asset_system(const asset_config_t *config)
 {
     copy_struct(&asset_config, config);
 
-	m_scoped(temp)
+	m_scoped_temp
 	{
 		for (fs_entry_t *entry = fs_scan_directory(temp, S("gamedata"), FS_SCAN_RECURSIVE);
 			 entry;
@@ -285,6 +305,10 @@ void initialize_asset_system(const asset_config_t *config)
 			else if (string_match_nocase(ext, S(".wav")))
 			{
 				kind = ASSET_KIND_WAVEFORM;
+			}
+			else if (string_match_nocase(ext, S(".map")))
+			{
+				kind = ASSET_KIND_MAP;
 			}
 
 			if (kind)
@@ -332,18 +356,13 @@ static asset_slot_t *get_or_load_asset_async(asset_hash_t hash, asset_kind_t kin
 		int64_t state = asset->state;
 
 		if (state == ASSET_STATE_ON_DISK &&
-			atomic_cas_u32(&asset->state, ASSET_STATE_BEING_LOADED_ASYNC, ASSET_STATE_ON_DISK) == ASSET_STATE_ON_DISK)
+			atomic_cas_u32(&asset->state, ASSET_STATE_BEING_LOADED, ASSET_STATE_ON_DISK) == ASSET_STATE_ON_DISK)
 		{
-			// FIXME: FIX LEAK!!!!!
-			// FIXME: FIX LEAK!!!!!
-			// FIXME: FIX LEAK!!!!!
-			// FIXME: FIX LEAK!!!!!
-			// FIXME: FIX LEAK!!!!!
-			asset_job_t *job = m_alloc_struct(&asset_arena, asset_job_t);
-			job->kind  = ASSET_JOB_LOAD_FROM_DISK;
-			job->asset = asset;
-
-			add_job_to_queue(high_priority_job_queue, asset_job, job);
+			asset_job_t job = {
+				.kind  = ASSET_JOB_LOAD_FROM_DISK,
+				.asset = asset,
+			};
+			add_job_to_queue_with_data(high_priority_job_queue, asset_job_proc, job);
 		}
 	}
 	return asset;
@@ -359,13 +378,12 @@ static asset_slot_t *get_or_load_asset_blocking(asset_hash_t hash, asset_kind_t 
 			asset_job_t job = {
 				.kind  = ASSET_JOB_LOAD_FROM_DISK,
 				.asset = asset,
-				.arena = &asset_arena,
 			};
 
-			asset->state = ASSET_STATE_BEING_LOADED_ASYNC;
+			asset->state = ASSET_STATE_BEING_LOADED;
 
 			job_context_t context = { 0 };
-			asset_job(&context, &job);
+			asset_job_proc(&context, &job);
 		}
 	}
 	return asset;
@@ -441,17 +459,24 @@ image_t load_image_from_memory(arena_t *arena, string_t path, unsigned nchannels
 
 image_t load_image_from_disk(arena_t *arena, string_t path, unsigned nchannels)
 {
-    stbi_arena = arena;
+	image_t result = {0};
 
-    int w = 0, h = 0, n = 0;
-    unsigned char *pixels = stbi_load(string_null_terminate(temp, path), &w, &h, &n, nchannels);
+	arena_t *temp = m_get_temp(&arena, 1);
 
-    image_t result = {
-        .w      = (unsigned)w,
-        .h      = (unsigned)h,
-        .pitch  = sizeof(uint32_t)*w,
-        .pixels = pixels,
-    };
+	m_scoped(temp)
+	{
+		stbi_arena = temp;
+
+		int w = 0, h = 0, n = 0;
+		unsigned char *pixels = stbi_load(string_null_terminate(temp, path), &w, &h, &n, nchannels);
+
+		result = (image_t){
+			.w      = (unsigned)w,
+			.h      = (unsigned)h,
+			.pitch  = nchannels*w,
+			.pixels = m_copy(arena, pixels, nchannels*w*h),
+		};
+	}
 
     return result;
 }
@@ -589,7 +614,7 @@ waveform_t load_waveform_info_from_disk(string_t path)
 {
     waveform_t result = {0};
 
-    m_scoped(temp)
+    m_scoped_temp
     {
 		string_t file = fs_read_entire_file(temp, path);
 		result = load_waveform_info_from_memory(file);
@@ -682,8 +707,9 @@ waveform_t load_waveform_from_disk(arena_t *arena, string_t path)
 {
 	waveform_t result = {0};
 
-    // uh oh
-	// m_scoped(temp)
+	arena_t *temp = m_get_temp(&arena, 1);
+
+	m_scoped(temp)
 	{
 		string_t file = fs_read_entire_file(temp, path);
 		result = load_waveform_from_memory(arena, file);

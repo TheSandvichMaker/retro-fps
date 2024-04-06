@@ -251,6 +251,9 @@ static inline uint32_t pack_lightmap_color(v4_t color)
 
 static void lum_job(job_context_t *job_context, void *userdata)
 {
+	arena_t *temp = m_get_temp(NULL, 0);
+	m_scope_begin(temp);
+
     lum_job_t *job = userdata;
 
 	lum_bake_state_t     *state  = job->state;
@@ -494,6 +497,8 @@ done:
 	{
 		bake_finalize(state);
 	}
+
+	m_scope_end(temp);
 }
 
 typedef struct lum_voxel_cluster_t
@@ -527,6 +532,9 @@ static inline lum_voxel_cluster_t *lum_allocate_cluster(const lum_params_t *para
 static void trace_volumetric_lighting_job(job_context_t *job_context, void *userdata)
 {
 	(void)job_context;
+
+	arena_t *temp = m_get_temp(NULL, 0);
+	m_scope_begin(temp);
 
 	lum_bake_state_t *state  = userdata;
 	lum_params_t     *params = &state->params;
@@ -653,6 +661,8 @@ done:
 	{
 		bake_finalize(state);
 	}
+
+	m_scope_end(temp);
 }
 
 lum_bake_state_t *bake_lighting(const lum_params_t *in_params)

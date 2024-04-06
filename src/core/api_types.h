@@ -217,6 +217,17 @@ typedef struct string16_t
 #define strlit16(text) (string16_t) { sizeof(text) / sizeof(wchar_t) - 1, (const wchar_t *)(L"" text) }
 #define strnull16 (string16_t){ 0 }
 
+typedef struct arena_marker_t
+{
+    char *at;
+} arena_marker_t;
+
+typedef struct arena_temp_t
+{
+	struct arena_temp_t *prev;
+    arena_marker_t marker;
+} arena_temp_t;
+
 typedef struct arena_t
 {
     bool owns_memory; // 1
@@ -225,13 +236,9 @@ typedef struct arena_t
     char *end;        // 24
     char *at;         // 32
     char *buffer;     // 48
-} arena_t;
 
-typedef struct arena_marker_t
-{
-    arena_t *arena;
-    char *at;
-} arena_marker_t;
+	arena_temp_t *temp; // 56
+} arena_t;
 
 //
 // mathy types

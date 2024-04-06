@@ -29,6 +29,6 @@ void sb__ensure_space(void **sb_at, unsigned count, size_t item_size)
     }
     else
     {
-        *sb_at = sb__alloc(temp, MAX(8, count), item_size);
+        *sb_at = sb__alloc(m_get_temp(NULL, 0), MAX(8, count), item_size);
     }
 }

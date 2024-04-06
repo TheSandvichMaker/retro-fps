@@ -381,6 +381,9 @@ static bool parse_map(arena_t *arena, string_t path, map_parse_result_t *result)
 {
     zero_struct(result);
 
+	arena_t *temp = m_get_temp(&arena, 1);
+	m_scope_begin(temp);
+
     string_t map_file = fs_read_entire_file(temp, path);
 
     map_entity_node_t   *first_entity   = NULL, *last_entity   = NULL;
@@ -543,6 +546,8 @@ static bool parse_map(arena_t *arena, string_t path, map_parse_result_t *result)
         result->plane_count    = 0;
     }
 
+	m_scope_end(temp);
+
     return parsed_successfully;
 }
 
@@ -552,9 +557,8 @@ static bool parse_map(arena_t *arena, string_t path, map_parse_result_t *result)
 
 static void generate_map_geometry(arena_t *arena, map_t *map)
 {
-    ASSERT(arena != temp);
-
-    arena_marker_t temp_marker = m_get_marker(temp);
+	arena_t *temp = m_get_temp(&arena, 1);
+	m_scope_begin(temp);
 
     // these are for building up the final map geometry
     // TODO: do some reservation to avoid pointless copying
@@ -698,7 +702,7 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
             }
             v_mean = div(v_mean, (float)index_count);
 
-            m_scoped(temp)
+            m_scoped_temp
             {
                 float *angles = m_alloc_array_nozero(temp, index_count, float);
 
@@ -826,7 +830,7 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
 
             // load texture
 
-			m_scoped(temp)
+			m_scoped_temp
 			{
 				// TODO: pretty sad... handle file formats properly...
 				asset_hash_t texture_png = asset_hash_from_string(string_format(temp, "gamedata/textures/%.*s.png", strexpand(plane->texture)));
@@ -849,7 +853,7 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
 				poly->image = image;
 				texscale_x = (float)image->w;
 				texscale_y = (float)image->h;
-				poly->texture = image->gpu; // TODO: Weird? Maybe?
+				poly->texture = image->renderer_handle; // TODO: Weird? Maybe?
             }
 
             // triangulate
@@ -950,7 +954,7 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
     map->vertex.texcoords = sb_copy(arena, map_texcoords);
     map->vertex.lightmap_texcoords = sb_copy(arena, map_lightmap_texcoords);
 
-    m_reset_to_marker(temp, temp_marker);
+    m_scope_end(temp);
 }
 
 typedef struct bvh_builder_context_t
@@ -1148,7 +1152,7 @@ static void build_bvh(arena_t *arena, map_t *map)
 
     build_bvh_recursively(&context, root, 0, map->brush_count);
 
-    m_scoped(temp)
+    m_scoped_temp
     {
         // NOTE: I am going to sort the brushes in memory according to the BVH, which means I have to
         // re-order the brush edges so that entities can use them to find brushes, because from the
@@ -1323,7 +1327,7 @@ map_t *load_map(arena_t *arena, string_t path)
     // write out map texture manifest
 
 #if 0
-    m_scoped(temp)
+    m_scoped_temp
     {
         table_t texture_table = {0};
 

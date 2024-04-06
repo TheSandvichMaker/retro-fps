@@ -530,17 +530,22 @@ bool string_parse_int(string_t *inout_string, int64_t *out_value)
 
 bool string_parse_float(string_t *string, float *value)
 {
-    const char *null_terminated = string_null_terminate(temp, *string);
+	bool result = false;
 
-    const char *strtod_end = NULL;
-    *value = (float)strtod(null_terminated, &strtod_end);
+	m_scoped_temp
+	{
+		const char *null_terminated = string_null_terminate(temp, *string);
 
-    bool result = strtod_end != null_terminated;
-    if (result)
-    {
-        string->data  += strtod_end - null_terminated;
-        string->count -= strtod_end - null_terminated;
-    }
+		const char *strtod_end = NULL;
+		*value = (float)strtod(null_terminated, &strtod_end);
+
+		result = strtod_end != null_terminated;
+		if (result)
+		{
+			string->data  += strtod_end - null_terminated;
+			string->count -= strtod_end - null_terminated;
+		}
+	}
 
     return result;
 }

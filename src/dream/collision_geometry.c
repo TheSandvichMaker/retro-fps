@@ -3,6 +3,7 @@
 #include "dream/map.h"
 #include "dream/mesh.h"
 
+#if 0
 typedef struct hull_node_t
 {
     struct hull_node_t *next;
@@ -23,15 +24,9 @@ collision_geometry_t collision_geometry_from_map(arena_t *arena, map_t *map)
         .min = { -16, -16, -player_height },
         .max = {  16,  16,  0  },
     };
-
-    // FIXME
-    // FIXME
-    // FIXME
-    // FIXME
     arena_t emergency_temp = {0}; // oh no...
 
-    ASSERT(arena != temp);
-    m_scoped(temp)
+    m_scoped_temp(temp, arena)
     {
         hull_node_t *first_hull = NULL;
         hull_node_t *last_hull = NULL;
@@ -39,7 +34,6 @@ collision_geometry_t collision_geometry_from_map(arena_t *arena, map_t *map)
         size_t total_vertex_count = 0;
 
         for (size_t brush_index = 0; brush_index < map->brush_count; brush_index++) 
-            // m_scoped(temp): warning: high peak temp usage because I really need a second temp arena...
         {
             map_brush_t *brush = &map->brushes[brush_index];
 
@@ -53,7 +47,7 @@ collision_geometry_t collision_geometry_from_map(arena_t *arena, map_t *map)
 
             splat_vertex_count *= 8;
 
-            v3_t *splat_vertices = m_alloc_array_nozero(temp, brush->plane_poly_count, v3_t);
+            v3_t *splat_vertices = m_alloc_array_nozero(temp_inner, brush->plane_poly_count, v3_t);
 
             size_t splat_index = 0;
 
@@ -85,7 +79,7 @@ collision_geometry_t collision_geometry_from_map(arena_t *arena, map_t *map)
 
             hull_node_t *node = m_alloc_struct(temp, hull_node_t);
             node->debug = m_alloc_struct(arena, hull_debug_t);
-            node->mesh = calculate_convex_hull_debug(&emergency_temp, splat_vertex_count, splat_vertices, node->debug);
+            node->mesh = calculate_convex_hull_debug(temp, splat_vertex_count, splat_vertices, node->debug);
             convex_hull_do_extended_diagnostics(&node->mesh, node->debug);
 
             sll_push_back(first_hull, last_hull, node);
@@ -114,7 +108,6 @@ collision_geometry_t collision_geometry_from_map(arena_t *arena, map_t *map)
         }
     }
 
-    m_release(&emergency_temp);
-
     return result;
 }
+#endif

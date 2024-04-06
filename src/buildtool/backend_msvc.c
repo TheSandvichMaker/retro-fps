@@ -8,6 +8,8 @@ static string_t msvc_warning_to_string[WARNING_COUNT] = {
 
 static compile_error_t msvc_compile(build_context_t *context, const compile_params_t *compile, const source_files_t *files_, object_collection_t *objects)
 {
+	arena_t *temp = m_get_temp(NULL, 0);
+
     compile_error_t result = COMPILE_ERROR_NONE;
 
 	const build_params_t *build = context->params;
@@ -194,6 +196,8 @@ static compile_error_t msvc_compile(build_context_t *context, const compile_para
 
 static link_error_t msvc_link(build_context_t *context, const link_params_t *params, const object_collection_t *objects)
 {
+	arena_t *temp = m_get_temp(NULL, 0);
+
     link_error_t result = LINK_ERROR_NONE;
 
 	const build_params_t *build = context->params;

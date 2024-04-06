@@ -33,6 +33,7 @@ size_t m_size_remaining_for_align(const arena_t *arena, size_t align);
 
 void m_pre_commit(arena_t *arena, size_t size);
 
+void m_check(arena_t *arena);
 void m_reset(arena_t *arena);
 void m_reset_and_decommit(arena_t *arena);
 void m_release(arena_t *arena);
@@ -40,7 +41,16 @@ void m_release(arena_t *arena);
 arena_marker_t m_get_marker(arena_t *arena);
 void m_reset_to_marker(arena_t *arena, arena_marker_t marker);
 
-#define m_scoped(ARENA) for (arena_marker_t __marker = m_get_marker(ARENA); __marker.arena; m_reset_to_marker(ARENA, __marker), __marker.arena = NULL)
+void m_scope_begin(arena_t *arena);
+void m_scope_end(arena_t *arena);
+
+arena_t *m_get_temp(arena_t **conflicts, size_t conflict_count);
+arena_t *m_get_temp_scope_begin(arena_t **conflicts, size_t conflict_count);
+
+void m_reset_temp_arenas(void);
+
+#define m_scoped(arena) DEFER_LOOP(m_scope_begin(arena), m_scope_end(arena))
+#define m_scoped_temp for (arena_t *temp = m_get_temp_scope_begin(NULL, 0); temp; m_scope_end(temp), temp = NULL)
 
 void *m_bootstrap_(size_t size, size_t align, size_t arena_offset);
 #define m_bootstrap(type, arena) m_bootstrap_(sizeof(type), alignof(type), offsetof(type, arena))

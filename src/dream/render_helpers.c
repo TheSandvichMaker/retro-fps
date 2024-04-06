@@ -310,7 +310,7 @@ void r_immediate_sphere(r_context_t *rc, v3_t p, float r, v4_t color_, size_t sl
 
     uint32_t color = pack_color(color_);
 
-    m_scoped(temp)
+    m_scoped_temp
     {
         stretchy_buffer(uint32_t) indices = NULL;
 

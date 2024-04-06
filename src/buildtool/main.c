@@ -64,6 +64,8 @@ static void print_usage(void)
 
 static build_error_t build_plugin(build_context_t *context, build_params_t *build, compile_params_t *compile, string_t name, string_list_t dependencies__remove_me)
 {
+	arena_t *temp = m_get_temp(NULL, 0);
+
 	build_error_t result = BUILD_ERROR_NONE;
 
 	source_files_t dll_files = {0};
@@ -108,6 +110,8 @@ static build_error_t build_plugin(build_context_t *context, build_params_t *buil
 
 int main(int argc, char **argv)
 {
+	arena_t *temp = m_get_temp(NULL, 0);
+
     // ==========================================================================================================================
     // parse arguments
 
@@ -379,13 +383,6 @@ int main(int argc, char **argv)
 			//
 			// plugins
 			//
-
-			if (build_plugin(context, &build, &compile, S("fs"), slist_from_array(temp, array_expand(string_t, S("core")))) != BUILD_ERROR_NONE)
-			{
-				fprintf(stderr, "Failed to build fs plugin\n");
-				build_failed = true;
-				continue;
-			}
 
 			if (build_plugin(context, &build, &compile, S("audio_output"), (string_list_t){0}) != BUILD_ERROR_NONE)
 			{
