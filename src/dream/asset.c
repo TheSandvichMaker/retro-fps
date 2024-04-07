@@ -29,6 +29,7 @@ static void *stbi_realloc(void *ptr, size_t new_size);
 
 #include "dream/job_queues.h"
 #include "dream/render.h"
+#include "dream/log.h"
 
 //
 // stbi support
@@ -685,6 +686,9 @@ waveform_t load_waveform_info_from_disk(string_t path)
     return result;
 }
 
+#define LOG_ERROR(fmt, ...) logf(LogCat_Asset, LogLevel_Error, fmt, ##__VA_ARGS__)
+#define PRINT_RIFF_ID(id) 4, (char *)&id
+
 waveform_t load_waveform_from_memory(arena_t *arena, string_t file)
 {
     // TODO: Deduplicate with load_waveform_info
@@ -692,33 +696,60 @@ waveform_t load_waveform_from_memory(arena_t *arena, string_t file)
 	waveform_t result = {0};
 
 	if (file.count < sizeof(wave_riff_chunk_t) + sizeof(wave_fmt_chunk_t) + sizeof(wave_data_chunk_t))
+	{
+		LOG_ERROR("Implausible file size while loading .wav.");
 		goto bail; // implausible file size
+	}
 
 	char *base = (char *)file.data;
 
 	wave_riff_chunk_t *riff_chunk = (wave_riff_chunk_t *)base;
 
 	if (riff_chunk->chunk_id != RIFF_ID("RIFF"))
+	{
+		LOG_ERROR("Unexpected chunk ID while loading .wav (expected 'RIFF', got '%.*s')", PRINT_RIFF_ID(riff_chunk->chunk_id));
 		goto bail; // unexpected chunk
+	}
 
 	if (riff_chunk->format != RIFF_ID("WAVE"))
+	{
+		LOG_ERROR("Unexpected chunk format while loading .wav (expected 'WAVE', got '%.*s')", PRINT_RIFF_ID(riff_chunk->format));
 		goto bail; // wrong format
+	}
 
 	wave_fmt_chunk_t *fmt_chunk = (wave_fmt_chunk_t *)(riff_chunk + 1);
 
 	if (fmt_chunk->chunk_id != RIFF_ID("fmt "))
+	{
+		LOG_ERROR("Unexpected chunk ID while loading .wav (expected 'fmt ', got '%.*s')", PRINT_RIFF_ID(fmt_chunk->chunk_id));
 		goto bail; // unexpected chunk
+	}
 
 	if (fmt_chunk->audio_format != 1)
+	{
+		LOG_ERROR("Unsupported audio format while loading .wav (expected 1, got %u)", fmt_chunk->audio_format);
 		goto bail; // unexpected format (only want uncompressed PCM)
+	}
 
 	if (fmt_chunk->bits_per_sample != 16)
+	{
+		LOG_ERROR("Unsupported bits per sample while loading .wav (expected 16, got %u)", fmt_chunk->bits_per_sample);
 		goto bail; // unexpected bits per sample (I may later allow other bit depths)
+	}
+
+	if (fmt_chunk->sample_rate != WAVE_SAMPLE_RATE)
+	{
+		LOG_ERROR("Unsupported sample rate while loading .wav (expected %u, got %u)", WAVE_SAMPLE_RATE, fmt_chunk->sample_rate);
+		goto bail;
+	}
 
 	wave_data_chunk_t *data_chunk = (wave_data_chunk_t *)(fmt_chunk + 1);
 
 	if (data_chunk->chunk_id != RIFF_ID("data"))
+	{
+		LOG_ERROR("Unexpected chunk ID while loading .wav (expected 'data', got '%.*s')", PRINT_RIFF_ID(data_chunk->chunk_id));
 		goto bail; // unexpected chunk
+	}
 
 	uint32_t sample_count = data_chunk->chunk_size / 2;
 
@@ -779,3 +810,6 @@ waveform_t load_waveform_from_disk(arena_t *arena, string_t path)
 
 	return result;
 }
+
+#undef LOG_ERROR
+#undef PRINT_RIFF_ID
