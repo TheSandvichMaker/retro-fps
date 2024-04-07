@@ -621,6 +621,8 @@ static void game_tick(platform_io_t *io)
         game_init();
     }
 
+	process_asset_changes();
+
     r_context_t *rc = &(r_context_t){0};
     r_init_render_context(rc, io->r_commands);
 

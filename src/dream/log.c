@@ -32,7 +32,7 @@ void log_(const log_loc_t *loc, log_category_t cat, log_level_t level, string_t 
 	string_t cat_string   = log_category_to_string[cat];
 	string_t level_string = log_level_to_string[level];
 
-	debug_print("[%.*s]: %.*s - %.*s", Sx(cat_string), Sx(level_string), Sx(message));
+	debug_print("[%.*s|%.*s] %.*s", Sx(cat_string), Sx(level_string), Sx(message));
 }
 
 void logf_(const log_loc_t *loc, log_category_t cat, log_level_t level, const char *fmt, ...)

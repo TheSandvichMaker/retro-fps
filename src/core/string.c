@@ -212,6 +212,29 @@ string_t string_strip_extension(string_t string)
     return substring(string, 0, pos);
 }
 
+string_t string_normalize_path(arena_t *arena, string_t path)
+{
+	// TODO: Deduplicate separators as well
+	string_t result = {
+		.data  = m_alloc_string(arena, path.count),
+		.count = path.count,
+	};
+
+	for (size_t i = 0; i < path.count; i++)
+	{
+		if (path.data[i] == '\\')
+		{
+			result.data[i] = '/';
+		}
+		else
+		{
+			result.data[i] = path.data[i];
+		}
+	}
+
+	return result;
+}
+
 string_t string_path_leaf(string_t path)
 {
     size_t leaf_start = 0;

@@ -98,6 +98,7 @@ typedef struct asset_config_t
 } asset_config_t;
 
 DREAM_LOCAL void initialize_asset_system(const asset_config_t *config);
+DREAM_LOCAL void process_asset_changes(void);
 
 // DREAM_GLOBAL from here on out because d3d11.c is using some of these.
 // Should I fix that? Yes I think so, I imagine the renderer should be

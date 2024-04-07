@@ -192,6 +192,7 @@ typedef enum platform_event_kind_t
 	PLATFORM_EVENT_MOUSE_BUTTON,
 	PLATFORM_EVENT_KEY,
 	PLATFORM_EVENT_TEXT,
+	PLATFORM_EVENT_FILE_CHANGE,
 	PLATFORM_EVENT_COUNT,
 } platform_event_kind_t;
 

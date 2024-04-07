@@ -26,6 +26,7 @@ static void *stbi_realloc(void *ptr, size_t new_size);
 #include "core/hashtable.h"
 #include "core/math.h"
 #include "core/atomics.h"
+#include "core/file_watcher.h"
 
 #include "dream/job_queues.h"
 #include "dream/render.h"
@@ -74,7 +75,7 @@ typedef struct asset_slot_t
 
 	// for the time being, every single asset slot gets its own arena:
 	arena_t arena;
-	mutex_t mutex;
+	mutex_t mutex; // this is only used for sanity checking the threading, it shouldn't ever be contended
 
 	asset_hash_t hash;
 	asset_kind_t kind;
@@ -113,6 +114,7 @@ static arena_t        asset_arena;
 static pool_t         asset_store = INIT_POOL(asset_slot_t);
 static table_t        asset_index;
 static asset_config_t asset_config;
+static file_watcher_t asset_watcher;
 
 typedef enum asset_job_kind_t
 {
@@ -284,6 +286,54 @@ void initialize_asset_system(const asset_config_t *config)
 			}
 		}
 	}
+
+	file_watcher_init(&asset_watcher);
+	file_watcher_add_directory(&asset_watcher, S("gamedata"));
+}
+
+DREAM_INLINE string_t stringify_flag(string_t total_string, uint32_t flags, uint32_t flag, string_t flag_string)
+{
+	string_t result = total_string;
+
+	if (flags & flag)
+	{
+		if (total_string.count)
+		{
+			result = Sf("%.*s|%.*s", Sx(total_string), Sx(flag_string));
+		}
+		else
+		{
+			result = flag_string;
+		}
+	}
+
+	return result;
+}
+
+void process_asset_changes(void)
+{
+	m_scoped_temp
+	for (file_event_t *event = file_watcher_get_events(&asset_watcher, temp);
+		 event;
+		 event = event->next)
+	{
+		string_t flags_string = {0};
+
+		if (event->flags & FileEvent_Added)    
+			flags_string = stringify_flag(flags_string, event->flags, FileEvent_Added, S("Added"));
+		if (event->flags & FileEvent_Removed)  
+			flags_string = stringify_flag(flags_string, event->flags, FileEvent_Removed, S("Removed"));
+		if (event->flags & FileEvent_Modified) 
+			flags_string = stringify_flag(flags_string, event->flags, FileEvent_Modified, S("Modified"));
+		if (event->flags & FileEvent_Renamed)  
+			flags_string = stringify_flag(flags_string, event->flags, FileEvent_Renamed, S("Renamed"));
+
+		string_t path = string_normalize_path(temp, event->path);
+
+		// logf(LogCat_Asset, LogLevel_Info, "File event for '%.*s': %.*s\n", Sx(path), Sx(flags_string));
+
+		reload_asset(asset_hash_from_string(path));
+	}
 }
 
 bool asset_exists(asset_hash_t hash, asset_kind_t kind)
@@ -363,7 +413,9 @@ void reload_asset(asset_hash_t hash)
 		uint32_t state     = asset->state;
 		uint32_t new_state = state | ASSET_STATE_BEING_LOADED;
 
-		if ((state & ASSET_STATE_ON_DISK) &&
+		bool should_load = (state & ASSET_STATE_ON_DISK) && !(state & ASSET_STATE_BEING_LOADED);
+
+		if (should_load &&
 			atomic_cas_u32(&asset->state, new_state, state) == state)
 		{
 			asset_job_t job = {

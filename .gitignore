@@ -40,6 +40,6 @@ run/gamedata/shaders
 !run/gamedata/textures/font.png
 !run/gamedata/textures/dog.png
 
-# edior files
+# editor files
 *.10x
 *.vim
