@@ -53,6 +53,6 @@ DREAM_GLOBAL void file_watcher_init(file_watcher_t *watcher);
 DREAM_GLOBAL void file_watcher_release(file_watcher_t *watcher);
 
 DREAM_GLOBAL void file_watcher_add_directory(file_watcher_t *watcher, string_t directory);
-DREAM_GLOBAL file_event_t *file_watcher_get_events(file_watcher_t *watcher, arena_t *arena, double debounce_time);
+DREAM_GLOBAL file_event_t *file_watcher_get_events(file_watcher_t *watcher, arena_t *arena);
 
 #endif

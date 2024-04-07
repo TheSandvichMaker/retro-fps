@@ -327,7 +327,7 @@ void process_asset_changes(void)
 
 		string_t path = string_normalize_path(temp, event->path);
 
-		// logf(LogCat_Asset, LogLevel_Info, "File event for '%.*s': %.*s\n", Sx(path), Sx(flags_string));
+		logf(LogCat_Asset, LogLevel_Info, "File event for '%.*s': %.*s\n", Sx(path), Sx(flags_string));
 
 		reload_asset(asset_hash_from_string(path));
 	}
