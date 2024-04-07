@@ -630,70 +630,17 @@ typedef struct wave_data_chunk_t
 	int16_t  data[];
 } wave_data_chunk_t;
 
-waveform_t load_waveform_info_from_memory(string_t file)
-{
-	waveform_t result = {0};
-
-	if (file.count < sizeof(wave_riff_chunk_t) + sizeof(wave_fmt_chunk_t) + sizeof(wave_data_chunk_t))
-		goto bail; // implausible file size
-
-	char *base = (char *)file.data;
-
-	wave_riff_chunk_t *riff_chunk = (wave_riff_chunk_t *)base;
-
-	if (riff_chunk->chunk_id != RIFF_ID("RIFF"))
-		goto bail; // unexpected chunk
-
-	if (riff_chunk->format != RIFF_ID("WAVE"))
-		goto bail; // wrong format
-
-	wave_fmt_chunk_t *fmt_chunk = (wave_fmt_chunk_t *)(riff_chunk + 1);
-
-	if (fmt_chunk->chunk_id != RIFF_ID("fmt "))
-		goto bail; // unexpected chunk
-
-	if (fmt_chunk->audio_format != 1)
-		goto bail; // unexpected format (only want uncompressed PCM)
-
-	if (fmt_chunk->bits_per_sample != 16)
-		goto bail; // unexpected bits per sample (I may later allow other bit depths)
-
-	wave_data_chunk_t *data_chunk = (wave_data_chunk_t *)(fmt_chunk + 1);
-
-	if (data_chunk->chunk_id != RIFF_ID("data"))
-		goto bail; // unexpected chunk
-
-	uint32_t sample_count = data_chunk->chunk_size / 2;
-
-	result.channel_count = fmt_chunk->channel_count;
-    result.frame_count   = sample_count / result.channel_count;
-    result.sample_rate   = fmt_chunk->sample_rate;
-
-bail:
-	return result;
-}
-
-waveform_t load_waveform_info_from_disk(string_t path)
-{
-    waveform_t result = {0};
-
-    m_scoped_temp
-    {
-		string_t file = fs_read_entire_file(temp, path);
-		result = load_waveform_info_from_memory(file);
-    }
-
-    return result;
-}
-
 #define LOG_ERROR(fmt, ...) logf(LogCat_Asset, LogLevel_Error, fmt, ##__VA_ARGS__)
 #define PRINT_RIFF_ID(id) 4, (char *)&id
 
-waveform_t load_waveform_from_memory(arena_t *arena, string_t file)
+bool parse_waveform_header_internal(string_t file, 
+									wave_riff_chunk_t **out_riff,
+									wave_fmt_chunk_t **out_fmt,
+									wave_data_chunk_t **out_data)
 {
-    // TODO: Deduplicate with load_waveform_info
+	// TODO: Defer format related error handling to loader functions
 
-	waveform_t result = {0};
+	bool result = false;
 
 	if (file.count < sizeof(wave_riff_chunk_t) + sizeof(wave_fmt_chunk_t) + sizeof(wave_data_chunk_t))
 	{
@@ -751,48 +698,104 @@ waveform_t load_waveform_from_memory(arena_t *arena, string_t file)
 		goto bail; // unexpected chunk
 	}
 
-	uint32_t sample_count = data_chunk->chunk_size / 2;
+	*out_riff = riff_chunk;
+	*out_fmt  = fmt_chunk;
+	*out_data = data_chunk;
 
-	result.channel_count = fmt_chunk->channel_count;
-    result.sample_rate   = fmt_chunk->sample_rate;
-	result.frame_count   = sample_count / result.channel_count;
-
-    if (result.channel_count == 1)
-    {
-        result.frames = m_copy(arena, data_chunk->data, data_chunk->chunk_size);
-    }
-    else if (result.channel_count == 2)
-    {
-        result.frames = m_alloc_nozero(arena, data_chunk->chunk_size, 16);
-
-        int16_t *dst_l = waveform_channel(&result, 0);
-        int16_t *dst_r = waveform_channel(&result, 1);
-
-        int16_t *src = data_chunk->data;
-        for (size_t frame_index = 0; frame_index < result.frame_count; frame_index++)
-        {
-            *dst_l++ = *src++;
-            *dst_r++ = *src++;
-        }
-    }
-    else
-    {
-        ASSERT(result.channel_count > 2);
-
-        result.frames = m_alloc_nozero(arena, data_chunk->chunk_size, 16);
-
-        int16_t *src = data_chunk->data;
-        for (size_t frame_index = 0; frame_index < result.frame_count; frame_index++)
-        {
-            for (size_t channel_index = 0; channel_index < result.channel_count; channel_index++)
-            {
-                int16_t *dst = waveform_channel(&result, channel_index);
-                dst[frame_index] = *src++;
-            }
-        }
-    }
+	result = true;
 
 bail:
+	return result;
+}
+
+#undef LOG_ERROR
+#undef PRINT_RIFF_ID
+
+waveform_t load_waveform_info_from_memory(string_t file)
+{
+	waveform_t result = {0};
+
+	wave_riff_chunk_t *riff_chunk;
+	wave_fmt_chunk_t  *fmt_chunk;
+	wave_data_chunk_t *data_chunk;
+
+	if (parse_waveform_header_internal(file, &riff_chunk, &fmt_chunk, &data_chunk))
+	{
+		uint32_t sample_count = data_chunk->chunk_size / 2;
+
+		result.channel_count = fmt_chunk->channel_count;
+		result.frame_count   = sample_count / result.channel_count;
+		result.sample_rate   = fmt_chunk->sample_rate;
+	}
+
+	return result;
+}
+
+waveform_t load_waveform_info_from_disk(string_t path)
+{
+    waveform_t result = {0};
+
+    m_scoped_temp
+    {
+		string_t file = fs_read_entire_file(temp, path);
+		result = load_waveform_info_from_memory(file);
+    }
+
+    return result;
+}
+
+waveform_t load_waveform_from_memory(arena_t *arena, string_t file)
+{
+	waveform_t result = {0};
+
+	wave_riff_chunk_t *riff_chunk;
+	wave_fmt_chunk_t  *fmt_chunk;
+	wave_data_chunk_t *data_chunk;
+
+	if (parse_waveform_header_internal(file, &riff_chunk, &fmt_chunk, &data_chunk))
+	{
+		uint32_t sample_count = data_chunk->chunk_size / 2;
+
+		result.channel_count = fmt_chunk->channel_count;
+		result.frame_count   = sample_count / result.channel_count;
+		result.sample_rate   = fmt_chunk->sample_rate;
+
+		if (result.channel_count == 1)
+		{
+			result.frames = m_copy(arena, data_chunk->data, data_chunk->chunk_size);
+		}
+		else if (result.channel_count == 2)
+		{
+			result.frames = m_alloc_nozero(arena, data_chunk->chunk_size, 16);
+
+			int16_t *dst_l = waveform_channel(&result, 0);
+			int16_t *dst_r = waveform_channel(&result, 1);
+
+			int16_t *src = data_chunk->data;
+			for (size_t frame_index = 0; frame_index < result.frame_count; frame_index++)
+			{
+				*dst_l++ = *src++;
+				*dst_r++ = *src++;
+			}
+		}
+		else
+		{
+			ASSERT(result.channel_count > 2);
+
+			result.frames = m_alloc_nozero(arena, data_chunk->chunk_size, 16);
+
+			int16_t *src = data_chunk->data;
+			for (size_t frame_index = 0; frame_index < result.frame_count; frame_index++)
+			{
+				for (size_t channel_index = 0; channel_index < result.channel_count; channel_index++)
+				{
+					int16_t *dst = waveform_channel(&result, channel_index);
+					dst[frame_index] = *src++;
+				}
+			}
+		}
+	}
+
 	return result;
 }
 
@@ -810,6 +813,3 @@ waveform_t load_waveform_from_disk(arena_t *arena, string_t path)
 
 	return result;
 }
-
-#undef LOG_ERROR
-#undef PRINT_RIFF_ID
