@@ -475,4 +475,6 @@ typedef struct hires_time_t
     uint64_t value;
 } hires_time_t;
 
+typedef unsigned char r_view_index_t;
+
 #endif /* API_TYPES_H */

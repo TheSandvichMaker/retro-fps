@@ -3,6 +3,9 @@
 
 #include "core/api_types.h"
 
+#include "platform.h"
+#include "font.h"
+
 //
 //
 //

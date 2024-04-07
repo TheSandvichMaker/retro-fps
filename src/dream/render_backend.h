@@ -174,8 +174,6 @@ typedef struct r_timings_t
 // views
 //
 
-typedef unsigned char r_view_index_t;
-
 typedef struct r_scene_parameters_t
 {
     texture_handle_t  skybox;

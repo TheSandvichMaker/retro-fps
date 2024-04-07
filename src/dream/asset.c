@@ -374,7 +374,7 @@ static asset_slot_t *get_or_load_asset_async(asset_hash_t hash, asset_kind_t kin
 				.kind  = ASSET_JOB_LOAD_FROM_DISK,
 				.asset = asset,
 			};
-			add_job_to_queue_with_data(high_priority_job_queue, asset_job_proc, job);
+			add_job_to_queue_with_data(low_priority_job_queue, asset_job_proc, job);
 		}
 	}
 	return asset;
@@ -422,7 +422,7 @@ void reload_asset(asset_hash_t hash)
 				.kind  = ASSET_JOB_LOAD_FROM_DISK,
 				.asset = asset,
 			};
-			add_job_to_queue_with_data(high_priority_job_queue, asset_job_proc, job);
+			add_job_to_queue_with_data(low_priority_job_queue, asset_job_proc, job);
 		}
 	}
 }

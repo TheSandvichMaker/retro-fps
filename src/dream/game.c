@@ -786,7 +786,7 @@ static void game_tick(platform_io_t *io)
     world->fade_t += 0.45f*dt*(world->fade_target_t - world->fade_t);
     render_game_ui(rc, world);
 
-    update_and_render_in_game_editor(rc);
+    update_and_render_in_game_editor(rc, game_view);
 
     ui_end();
 
