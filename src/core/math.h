@@ -519,6 +519,15 @@ DREAM_INLINE v3_t v3_from_scalar(float x)
     return (v3_t){x, x, x};
 }
 
+DREAM_INLINE v3_t v3_from_v2(v2_t xy, float z)
+{
+	return (v3_t){
+		.x = xy.x,
+		.y = xy.y,
+		.z = z,
+	};
+}
+
 DREAM_INLINE v3_t make_v3(float x, float y, float z)
 {
     return (v3_t){x,y,z};
@@ -530,6 +539,16 @@ DREAM_INLINE v3_t v3_add3(v3_t a, v3_t b, v3_t c)
         a.x + b.x + c.x,
         a.y + b.y + c.y,
         a.z + b.z + c.z,
+    };
+    return result;
+}
+
+DREAM_INLINE v3_t v3_sub3(v3_t a, v3_t b, v3_t c)
+{
+    v3_t result = {
+        a.x - b.x - c.x,
+        a.y - b.y - c.y,
+        a.z - b.z - c.z,
     };
     return result;
 }

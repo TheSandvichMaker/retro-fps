@@ -3,6 +3,9 @@ build
 *.pdb
 *.rdbg
 *.exe.lnk
+*.dll
+*.wav
+
 .vs
 ctm
 
@@ -22,9 +25,20 @@ generated
 # anything "autosave" is surely not it
 autosave
 
+# don't include the auto-copied shaders
+run/gamedata/shaders
+
+# whatever this is 
+
 # no more textures on git lfs, thank you, I don't want to pay github hosting costs
-run/*
+*.png
+*.jpg
+*.jpeg
+*.tga
+*.swatch
+
 !run/gamedata/textures/font.png
+!run/gamedata/textures/dog.png
 
 # edior files
 *.10x

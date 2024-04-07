@@ -41,7 +41,11 @@ float remap_tri(float n)
 
 float4 ps(PS_INPUT IN) : SV_TARGET
 {
-    float4 tex = texture0.Sample(sampler_point, IN.uv);
+	float w, h;
+	texture0.GetDimensions(w, h);
+
+	float2 uv = fat_pixel(float2(w, h), IN.uv);
+    float4 tex = texture0.Sample(sampler_linear, uv);
 
     float4 result = IN.col*tex;
     result.rgb += remap_tri(r_dither(IN.pos.xy)) / 255.0f;

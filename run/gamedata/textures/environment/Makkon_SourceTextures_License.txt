@@ -1,0 +1,15 @@
++----------------------------------------------------------------+
+All textures made from scratch in Substance Designer by Ben "Makkon" Hale.
+Modification is allowed and encouraged, with credit.
+Not for commercial use without express written permission. This doesn't mean it's a hard no, it just means an agreement needs to be arranged.
+
+All sets come with color variations, with exception of a few. This makes for many textures to import and process. As a result, I have not cut up many of the trimsheets into separate trim textures, as this would result in several hundred (actually thounsand) textures to process. If you need your trims separated, feel free to cut them up yourself. I would otherwise encourage you to use the trims as a sheet, it's better for organization and performance, and makes it extremely easy to swap to different colors.
+
+This pack contains the source textures exported directly from Substance Designer in their original colors (not quake-palette). These can be used in Quake via the Textures folder or imported into other games for use, such as Quake 2 or Half-Life.
+
+These textures were built for and look best in Nearest filtering.
+
+~Ben "Makkon" Hale
+https://twitter.com/makkon_art
+https://www.artstation.com/makkon
++----------------------------------------------------------------+

@@ -383,6 +383,47 @@ void r_immediate_sphere(r_context_t *rc, v3_t p, float r, v4_t color_, size_t sl
     }
 }
 
+void make_quad_vertices(v3_t pos, v2_t size, quat_t rotation, v4_t color,
+						r_vertex_immediate_t *a,
+						r_vertex_immediate_t *b,
+						r_vertex_immediate_t *c,
+						r_vertex_immediate_t *d)
+{
+	v3_t basis_x = quat_rotatev(rotation, v3_from_v2(mul(size, make_v2(0.5, 0)), 0));
+	v3_t basis_y = quat_rotatev(rotation, v3_from_v2(mul(size, make_v2(0, 0.5)), 0));
+
+	v3_t pos_a = v3_add3(pos, negate(basis_x), negate(basis_y));
+	v3_t pos_b = v3_add3(pos,        basis_x , negate(basis_y));
+	v3_t pos_c = v3_add3(pos,        basis_x ,        basis_y );
+	v3_t pos_d = v3_add3(pos, negate(basis_x),        basis_y );
+
+	uint32_t color_packed = pack_color(color);
+
+	*a = (r_vertex_immediate_t){
+		.pos   = pos_a,
+		.tex   = { 0, 0 },
+		.col   = color_packed,
+	};
+
+	*b = (r_vertex_immediate_t){
+		.pos   = pos_b,
+		.tex   = { 1, 0 },
+		.col   = color_packed,
+	};
+
+	*c = (r_vertex_immediate_t){
+		.pos   = pos_c,
+		.tex   = { 1, 1 },
+		.col   = color_packed,
+	};
+
+	*d = (r_vertex_immediate_t){
+		.pos   = pos_d,
+		.tex   = { 0, 1 },
+		.col   = color_packed,
+	};
+}
+
 void r_draw_text(r_context_t *rc, const bitmap_font_t *font, v2_t p, v4_t color, string_t string)
 {
     r_immediate_t *imm = r_immediate_begin(rc);

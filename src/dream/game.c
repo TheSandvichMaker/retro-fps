@@ -512,6 +512,37 @@ DREAM_INLINE r_view_index_t render_map(r_context_t *rc, camera_t *camera, map_t 
             }
         }
 
+		//
+		// dog
+		//
+
+		r_vertex_immediate_t a, b, c, d;
+		make_quad_vertices(make_v3(64, 64, 128), make_v2(64, 64), QUAT_IDENTITY, COLORF_WHITE, &a, &b, &c, &d);
+
+        R_COMMAND_IDENTIFIER_LOC(rc, S("dog"))
+        R_IMMEDIATE(rc, imm)
+		{
+			imm->topology  = R_TOPOLOGY_TRIANGLELIST;
+			imm->use_depth = true;
+			imm->shader    = R_SHADER_FLAT;
+			imm->texture   = get_image_from_string(S("gamedata/textures/dog.png"))->renderer_handle;
+
+			r_immediate_quad(rc, a, b, c, d);
+		}
+
+        R_COMMAND_IDENTIFIER_LOC(rc, S("dog"))
+        R_IMMEDIATE(rc, imm)
+		{
+			imm->topology  = R_TOPOLOGY_LINELIST;
+			imm->use_depth = false;
+			imm->shader    = R_SHADER_FLAT;
+
+			r_immediate_line(rc, a.pos, b.pos, COLORF_YELLOW);
+			r_immediate_line(rc, a.pos, d.pos, COLORF_YELLOW);
+			r_immediate_line(rc, b.pos, c.pos, COLORF_YELLOW);
+			r_immediate_line(rc, d.pos, c.pos, COLORF_YELLOW);
+		}
+
         //
         // draw random moving thing to show dynamic shadows and volumetric fog
         //

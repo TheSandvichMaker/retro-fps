@@ -20,6 +20,12 @@ DREAM_LOCAL void r_immediate_quad                 (r_context_t *rc, r_vertex_imm
 DREAM_LOCAL void r_immediate_sphere               (r_context_t *rc, v3_t p, float r, v4_t color, size_t slices, size_t stacks);
 DREAM_LOCAL void r_immediate_text                 (r_context_t *rc, const struct bitmap_font_t *font, v2_t p, v4_t color, string_t string);
 
+DREAM_LOCAL void make_quad_vertices(v3_t pos, v2_t size, quat_t rotation, v4_t color,
+									r_vertex_immediate_t *a,
+									r_vertex_immediate_t *b,
+									r_vertex_immediate_t *c,
+									r_vertex_immediate_t *d);
+
 // This one actually does a draw call by itself
 DREAM_LOCAL void r_draw_text(r_context_t *rc, const struct bitmap_font_t *font, v2_t p, v4_t color, string_t string);
 

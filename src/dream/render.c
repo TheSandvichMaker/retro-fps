@@ -13,11 +13,14 @@ v3_t g_debug_colors[] = {
 
 DREAM_INLINE void r_init_immediate(r_context_t *rc, r_immediate_t *imm)
 {
+	int w, h;
+	render->get_resolution(&w, &h);
+
 	imm->shader     = R_SHADER_FLAT;
 	imm->topology   = R_TOPOLOGY_TRIANGLELIST;
 	imm->blend_mode = R_BLEND_PREMUL_ALPHA;
 	imm->cull_mode  = R_CULL_NONE;
-	imm->clip_rect  = (rect2_t){ 0, 0, 0, 0 };
+	imm->clip_rect  = (rect2_t){ 0, 0, w, h };
 	imm->texture    = NULL_TEXTURE_HANDLE;
     imm->transform  = M4X4_IDENTITY;
 	imm->use_depth  = false;

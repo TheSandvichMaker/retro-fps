@@ -129,13 +129,6 @@ typedef struct asset_job_t
 	asset_slot_t    *asset;
 } asset_job_t;
 
-DREAM_INLINE size_t convert_sample_count(size_t src_sample_rate, size_t dst_sample_rate, size_t sample_count)
-{
-    // TODO: Overflow check
-    size_t result = (sample_count*dst_sample_rate + src_sample_rate - 1) / src_sample_rate;
-    return result;
-}
-
 static void asset_job_proc(job_context_t *context, void *userdata)
 {
 	(void)context;
@@ -161,11 +154,7 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 			{
 				case ASSET_KIND_IMAGE:
 				{
-					texture_handle_t idiot_code = asset->image.renderer_handle;
-
 					asset->image = load_image_from_disk(&asset->arena, string_from_storage(asset->path), 4);
-					asset->image.renderer_handle = idiot_code;
-
 					asset->image.renderer_handle = render->upload_texture(&(r_upload_texture_t){
 						.upload_flags = R_UPLOAD_TEXTURE_GEN_MIPMAPS,
 						.desc = {
@@ -183,52 +172,7 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 
 				case ASSET_KIND_WAVEFORM:
 				{
-					m_scoped_temp
-					{
-						waveform_t  src_waveform = load_waveform_from_disk(temp, string_from_storage(asset->path));
-						waveform_t *dst_waveform = &asset->waveform;
-
-						ASSERT(src_waveform.channel_count == asset->waveform.channel_count);
-
-						if (src_waveform.sample_rate == dst_waveform->sample_rate)
-						{
-							// FIXME: FOOLISH CODE FOR DUMB PEOPLE
-							dst_waveform->frames = m_copy_array(&asset->arena, src_waveform.frames, src_waveform.channel_count*src_waveform.frame_count);
-						}
-						else
-						{
-							uint32_t channel_count   = src_waveform.channel_count;
-							size_t   src_frame_count = src_waveform.frame_count;
-							size_t   dst_frame_count = dst_waveform->frame_count;
-
-							int16_t *dst_frames = m_alloc_array_nozero(&asset->arena, channel_count*dst_frame_count, int16_t);
-
-							for (size_t channel_index = 0; channel_index < channel_count; channel_index++)
-							{
-								int16_t *src = waveform_channel(&src_waveform, channel_index);
-								int16_t *dst = dst_frames + channel_index*dst_frame_count;
-
-								for (size_t dst_frame_index = 0; dst_frame_index < dst_frame_count; dst_frame_index++)
-								{
-									float t = (float)dst_frame_index / (float)dst_frame_count;
-									float x = t*(float)src_frame_count;
-									size_t x_i = (size_t)x;
-									float x_f = (float)(x - (float)x_i);
-
-									if (x_i >= src_frame_count) 
-										x_i = src_frame_count - 1;
-
-									float s_1 = snorm_from_s16(src[x_i]);
-									float s_2 = snorm_from_s16(src[x_i + 1]);
-									float s = lerp(s_1, s_2, x_f);
-
-									*dst++ = s16_from_snorm(s);
-								}
-							}
-
-							dst_waveform->frames = dst_frames;
-						}
-					}
+					asset->waveform = load_waveform_from_disk(&asset->arena, string_from_storage(asset->path));
 				} break;
 
 				case ASSET_KIND_MAP:
@@ -281,13 +225,7 @@ static void preload_asset_info(asset_slot_t *asset)
 
         case ASSET_KIND_WAVEFORM:
         {
-            waveform_t waveform = load_waveform_info_from_disk(string_from_storage(asset->path));
-
-            // we're gonna resample waveforms that don't match:
-            waveform.frame_count = convert_sample_count(waveform.sample_rate, asset_config.mix_sample_rate, waveform.frame_count);
-            waveform.sample_rate = asset_config.mix_sample_rate;
-
-            asset->waveform = waveform;
+            asset->waveform = load_waveform_info_from_disk(string_from_storage(asset->path));
         } break;
 
 		case ASSET_KIND_MAP:

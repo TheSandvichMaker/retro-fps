@@ -1223,9 +1223,9 @@ DREAM_INLINE void ui_demo_proc(ui_window_t *window)
 	ui_hover_tooltip(S("Text edit demo box"));
 	ui_text_edit(S("Text Edit"), &demo->edit_buffer);
 
-	if (ui_button(S("Hot Reload Music")))
+	if (ui_button(S("Hot Reload Dog")))
 	{
-		reload_asset(asset_hash_from_string(S("gamedata/audio/test.wav")));
+		reload_asset(asset_hash_from_string(S("gamedata/textures/dog.png")));
 	}
 
 	if (ui_button(S("Toggle Music")))
