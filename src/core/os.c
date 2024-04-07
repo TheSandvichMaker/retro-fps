@@ -762,6 +762,29 @@ bool os_execute_capture(string_t command, int *exit_code, arena_t *arena, string
     return result;
 }
 
+uint64_t fs_get_last_write_time(string_t path)
+{
+	ULARGE_INTEGER result = {0};
+
+	m_scoped_temp
+	{
+		string16_t path_wide = utf16_from_utf8(temp, path);
+
+		FILETIME last_write_time = {0};
+
+		WIN32_FILE_ATTRIBUTE_DATA data;
+		if (GetFileAttributesExW(path_wide.data, GetFileExInfoStandard, &data))
+		{
+			last_write_time = data.ftLastWriteTime;
+		}
+
+		result.LowPart  = last_write_time.dwLowDateTime;
+		result.HighPart = last_write_time.dwLowDateTime;
+	}
+
+    return result.QuadPart;
+}
+
 static LARGE_INTEGER qpc_freq;
 
 hires_time_t os_hires_time(void)

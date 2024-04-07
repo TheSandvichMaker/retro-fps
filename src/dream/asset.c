@@ -312,21 +312,18 @@ DREAM_INLINE string_t stringify_flag(string_t total_string, uint32_t flags, uint
 
 void process_asset_changes(void)
 {
+	// TODO: Don't spam reloads right away
+
 	m_scoped_temp
-	for (file_event_t *event = file_watcher_get_events(&asset_watcher, temp);
+	for (file_event_t *event = file_watcher_get_events(&asset_watcher, temp); 
 		 event;
 		 event = event->next)
 	{
 		string_t flags_string = {0};
-
-		if (event->flags & FileEvent_Added)    
-			flags_string = stringify_flag(flags_string, event->flags, FileEvent_Added, S("Added"));
-		if (event->flags & FileEvent_Removed)  
-			flags_string = stringify_flag(flags_string, event->flags, FileEvent_Removed, S("Removed"));
-		if (event->flags & FileEvent_Modified) 
-			flags_string = stringify_flag(flags_string, event->flags, FileEvent_Modified, S("Modified"));
-		if (event->flags & FileEvent_Renamed)  
-			flags_string = stringify_flag(flags_string, event->flags, FileEvent_Renamed, S("Renamed"));
+		flags_string = stringify_flag(flags_string, event->flags, FileEvent_Added, S("Added"));
+		flags_string = stringify_flag(flags_string, event->flags, FileEvent_Removed, S("Removed"));
+		flags_string = stringify_flag(flags_string, event->flags, FileEvent_Modified, S("Modified"));
+		flags_string = stringify_flag(flags_string, event->flags, FileEvent_Renamed, S("Renamed"));
 
 		string_t path = string_normalize_path(temp, event->path);
 

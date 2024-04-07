@@ -181,9 +181,10 @@ file_event_t *file_watcher_get_events(file_watcher_t *watcher, arena_t *arena)
 				.count = notif->FileNameLength / 2,
 			};
 
-			event->name  = utf8_from_utf16(arena, name_wide);
-			event->path  = string_format(arena, "%.*s/%.*s", Sx(dir->path), Sx(event->name));
-			event->flags = flags;
+			event->name      = utf8_from_utf16(arena, name_wide);
+			event->path      = string_format(arena, "%.*s/%.*s", Sx(dir->path), Sx(event->name));
+			event->flags     = flags;
+			event->timestamp = os_hires_time();
 
 			sll_push_back(head_event, tail_event, event);
 		}

@@ -55,4 +55,6 @@ fs_create_directory_result_t fs_create_directory_recursive(string_t directory);
 
 string_t fs_full_path(arena_t *arena, string_t relative_path);
 
+uint64_t fs_get_last_write_time(string_t path);
+
 #endif /* FILESYSTEM_H */
