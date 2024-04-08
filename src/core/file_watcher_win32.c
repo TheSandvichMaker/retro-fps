@@ -154,14 +154,6 @@ file_event_t *file_watcher_get_events(file_watcher_t *watcher, arena_t *arena)
 
 		FILE_NOTIFY_INFORMATION *notifies = (FILE_NOTIFY_INFORMATION *)dir->os->buffer;
 
-		size_t event_count = 0;
-		for (FILE_NOTIFY_INFORMATION *notif = notifies; 
-			 notif->NextEntryOffset != 0; 
-			 notif = file_watcher__next_notif(notif))
-		{
-			event_count += 1;
-		}
-
 		for (FILE_NOTIFY_INFORMATION *notif = notifies; 
 			 notif->NextEntryOffset != 0; 
 			 notif = file_watcher__next_notif(notif))
