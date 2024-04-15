@@ -26,19 +26,19 @@ typedef struct ui_id_t
 
 #define UI_ID_NULL (ui_id_t){0}
 
-DREAM_LOCAL ui_id_t ui_id        (string_t string);
-DREAM_LOCAL ui_id_t ui_child_id  (ui_id_t parent, string_t string);
-DREAM_LOCAL ui_id_t ui_id_pointer(void *pointer);
-DREAM_LOCAL ui_id_t ui_id_u64    (uint64_t u64);
+fn ui_id_t ui_id        (string_t string);
+fn ui_id_t ui_child_id  (ui_id_t parent, string_t string);
+fn ui_id_t ui_id_pointer(void *pointer);
+fn ui_id_t ui_id_u64    (uint64_t u64);
 
-DREAM_INLINE bool ui_id_valid(ui_id_t id)
+fn_local bool ui_id_valid(ui_id_t id)
 {
 	return id.value != 0;
 }
 
-DREAM_LOCAL void    ui_set_next_id(ui_id_t id);
-DREAM_LOCAL void    ui_push_id    (ui_id_t id);
-DREAM_LOCAL void    ui_pop_id     (void);
+fn void    ui_set_next_id(ui_id_t id);
+fn void    ui_push_id    (ui_id_t id);
+fn void    ui_pop_id     (void);
 
 //
 // Input
@@ -69,15 +69,15 @@ typedef struct ui_input_t
 	int               cursor_reset_delay;
 } ui_input_t;
 
-DREAM_LOCAL void ui_submit_mouse_buttons(platform_mouse_buttons_t buttons, bool pressed);
-DREAM_LOCAL void ui_submit_mouse_wheel  (float wheel_delta);
-DREAM_LOCAL void ui_submit_mouse_p      (v2_t p);
-DREAM_LOCAL void ui_submit_mouse_dp     (v2_t dp);
-DREAM_LOCAL void ui_submit_text         (string_t text);
+fn void ui_submit_mouse_buttons(platform_mouse_buttons_t buttons, bool pressed);
+fn void ui_submit_mouse_wheel  (float wheel_delta);
+fn void ui_submit_mouse_p      (v2_t p);
+fn void ui_submit_mouse_dp     (v2_t dp);
+fn void ui_submit_text         (string_t text);
 
-DREAM_LOCAL bool ui_mouse_buttons_down    (platform_mouse_buttons_t buttons);
-DREAM_LOCAL bool ui_mouse_buttons_pressed (platform_mouse_buttons_t buttons);
-DREAM_LOCAL bool ui_mouse_buttons_released(platform_mouse_buttons_t buttons);
+fn bool ui_mouse_buttons_down    (platform_mouse_buttons_t buttons);
+fn bool ui_mouse_buttons_pressed (platform_mouse_buttons_t buttons);
+fn bool ui_mouse_buttons_released(platform_mouse_buttons_t buttons);
 
 //
 // Panels
@@ -108,19 +108,19 @@ typedef struct ui_panels_t
 	ui_panel_t *first_free_panel;
 } ui_panels_t;
 
-DREAM_LOCAL ui_panel_t *ui_push_panel(ui_id_t id, rect2_t rect, ui_panel_flags_t flags);
-DREAM_LOCAL void        ui_pop_panel (void);
-DREAM_LOCAL ui_panel_t *ui_panel     (void);
+fn ui_panel_t *ui_push_panel(ui_id_t id, rect2_t rect, ui_panel_flags_t flags);
+fn void        ui_pop_panel (void);
+fn ui_panel_t *ui_panel     (void);
 
-DREAM_LOCAL rect2_t *ui_layout_rect         (void);
-DREAM_LOCAL void     ui_set_layout_direction(rect2_cut_side_t side);
-DREAM_LOCAL void     ui_set_next_rect       (rect2_t rect);
-DREAM_LOCAL float    ui_divide_space        (float item_count);
+fn rect2_t *ui_layout_rect         (void);
+fn void     ui_set_layout_direction(rect2_cut_side_t side);
+fn void     ui_set_next_rect       (rect2_t rect);
+fn float    ui_divide_space        (float item_count);
 
 // layout helpers
-DREAM_LOCAL float    ui_widget_padding      (void);
-DREAM_LOCAL bool     ui_override_rect       (rect2_t *rect);
-DREAM_LOCAL rect2_t  ui_default_label_rect  (font_atlas_t *font, string_t label);
+fn float    ui_widget_padding      (void);
+fn bool     ui_override_rect       (rect2_t *rect);
+fn rect2_t  ui_default_label_rect  (font_atlas_t *font, string_t label);
 
 typedef uint32_t ui_rect_edge_t;
 typedef enum ui_rect_edge_enum_t
@@ -161,16 +161,16 @@ typedef struct ui_windows_t
 	ui_window_t *focus_window;
 } ui_windows_t;
 
-DREAM_LOCAL void ui_add_window            (ui_window_t *window);
-DREAM_LOCAL void ui_remove_window         (ui_window_t *window);
-DREAM_LOCAL void ui_bring_window_to_front (ui_window_t *window);
-DREAM_LOCAL void ui_send_window_to_back   (ui_window_t *window);
-DREAM_LOCAL void ui_focus_window          (ui_window_t *window);
-DREAM_LOCAL void ui_open_window           (ui_window_t *window);
-DREAM_LOCAL void ui_close_window          (ui_window_t *window);
-DREAM_LOCAL void ui_toggle_window_openness(ui_window_t *window);
+fn void ui_add_window            (ui_window_t *window);
+fn void ui_remove_window         (ui_window_t *window);
+fn void ui_bring_window_to_front (ui_window_t *window);
+fn void ui_send_window_to_back   (ui_window_t *window);
+fn void ui_focus_window          (ui_window_t *window);
+fn void ui_open_window           (ui_window_t *window);
+fn void ui_close_window          (ui_window_t *window);
+fn void ui_toggle_window_openness(ui_window_t *window);
 
-DREAM_LOCAL void ui_process_windows(void);
+fn void ui_process_windows(void);
 
 //
 // Style
@@ -264,34 +264,34 @@ typedef struct ui_style_t
 	font_atlas_t header_font;
 } ui_style_t;
 
-DREAM_LOCAL ui_anim_t *ui_get_anim        (ui_id_t id, v4_t init_value);
-DREAM_LOCAL float ui_interpolate_f32      (ui_id_t id, float target);
-DREAM_LOCAL float ui_interpolate_f32_start(ui_id_t id, float target, float start);
-DREAM_LOCAL float ui_set_f32              (ui_id_t id, float target);
-DREAM_LOCAL v4_t  ui_interpolate_v4       (ui_id_t id, v4_t  target);
-DREAM_LOCAL v4_t  ui_set_v4               (ui_id_t id, v4_t  target);
+fn ui_anim_t *ui_get_anim        (ui_id_t id, v4_t init_value);
+fn float ui_interpolate_f32      (ui_id_t id, float target);
+fn float ui_interpolate_f32_start(ui_id_t id, float target, float start);
+fn float ui_set_f32              (ui_id_t id, float target);
+fn v4_t  ui_interpolate_v4       (ui_id_t id, v4_t  target);
+fn v4_t  ui_set_v4               (ui_id_t id, v4_t  target);
 
-DREAM_LOCAL float ui_scalar            (ui_style_scalar_t scalar);
-DREAM_LOCAL void  ui_push_scalar       (ui_style_scalar_t scalar, float value);
-DREAM_LOCAL float ui_pop_scalar        (ui_style_scalar_t scalar);
+fn float ui_scalar            (ui_style_scalar_t scalar);
+fn void  ui_push_scalar       (ui_style_scalar_t scalar, float value);
+fn float ui_pop_scalar        (ui_style_scalar_t scalar);
 
-DREAM_LOCAL void  ui_push_scalar2      (ui_style_scalar_t scalar, float value);
-DREAM_LOCAL float ui_pop_scalar2       (void);
+fn void  ui_push_scalar2      (ui_style_scalar_t scalar, float value);
+fn float ui_pop_scalar2       (void);
 
 #define UI_SCALAR(scalar, value) DEFER_LOOP(ui_push_scalar(scalar, value), ui_pop_scalar(scalar))
 
-DREAM_LOCAL v4_t  ui_color             (ui_style_color_t color);
-DREAM_LOCAL void  ui_push_color        (ui_style_color_t color, v4_t value);
-DREAM_LOCAL v4_t  ui_pop_color         (ui_style_color_t color);
+fn v4_t  ui_color             (ui_style_color_t color);
+fn void  ui_push_color        (ui_style_color_t color, v4_t value);
+fn v4_t  ui_pop_color         (ui_style_color_t color);
 
-DREAM_LOCAL void  ui_push_color2       (ui_style_color_t color, v4_t value);
-DREAM_LOCAL v4_t  ui_pop_color2        (void);
+fn void  ui_push_color2       (ui_style_color_t color, v4_t value);
+fn v4_t  ui_pop_color2        (void);
 
 #define UI_COLOR(color, value) DEFER_LOOP(ui_push_color(color, value), ui_pop_color(color))
 
-DREAM_LOCAL void  ui_set_font_height   (float height);
-DREAM_LOCAL float ui_font_height       (void);
-DREAM_LOCAL float ui_header_font_height(void);
+fn void  ui_set_font_height   (float height);
+fn float ui_font_height       (void);
+fn float ui_header_font_height(void);
 
 //
 // Draw
@@ -304,38 +304,38 @@ typedef enum ui_text_op_t
 	UI_TEXT_OP_COUNT,
 } ui_text_op_t;
 
-DREAM_LOCAL rect2_t ui_text_op                      (font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op);
-DREAM_LOCAL v2_t    ui_text_align_p                 (font_atlas_t *font, rect2_t rect, string_t text, v2_t align);
-DREAM_LOCAL v2_t    ui_text_center_p                (font_atlas_t *font, rect2_t rect, string_t text);
+fn rect2_t ui_text_op                      (font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op);
+fn v2_t    ui_text_align_p                 (font_atlas_t *font, rect2_t rect, string_t text, v2_t align);
+fn v2_t    ui_text_center_p                (font_atlas_t *font, rect2_t rect, string_t text);
 
-DREAM_LOCAL void    ui_push_clip_rect               (rect2_t rect);
-DREAM_LOCAL void    ui_pop_clip_rect                (void);
+fn void    ui_push_clip_rect               (rect2_t rect);
+fn void    ui_pop_clip_rect                (void);
 
-DREAM_LOCAL rect2_t ui_draw_text                    (font_atlas_t *font, v2_t p, string_t text);
-DREAM_LOCAL rect2_t ui_draw_text_aligned            (font_atlas_t *font, rect2_t rect, string_t text, v2_t align);
-DREAM_LOCAL rect2_t ui_text_bounds                  (font_atlas_t *font, v2_t p, string_t text);
-DREAM_LOCAL float   ui_text_width                   (font_atlas_t *font, string_t text);
-DREAM_LOCAL float   ui_text_height                  (font_atlas_t *font, string_t text);
-DREAM_LOCAL v2_t    ui_text_dim                     (font_atlas_t *font, string_t text);
+fn rect2_t ui_draw_text                    (font_atlas_t *font, v2_t p, string_t text);
+fn rect2_t ui_draw_text_aligned            (font_atlas_t *font, rect2_t rect, string_t text, v2_t align);
+fn rect2_t ui_text_bounds                  (font_atlas_t *font, v2_t p, string_t text);
+fn float   ui_text_width                   (font_atlas_t *font, string_t text);
+fn float   ui_text_height                  (font_atlas_t *font, string_t text);
+fn v2_t    ui_text_dim                     (font_atlas_t *font, string_t text);
 
-DREAM_LOCAL void    ui_draw_rect                    (rect2_t rect, v4_t color);
-DREAM_LOCAL void    ui_draw_rect_shadow             (rect2_t rect, v4_t color, float shadow_amount, float shadow_radius);
-DREAM_LOCAL void    ui_draw_rect_roundedness        (rect2_t rect, v4_t color, v4_t roundness);
-DREAM_LOCAL void    ui_draw_rect_roundedness_shadow (rect2_t rect, v4_t color, v4_t roundness, float shadow_amount, float shadow_radius);
-DREAM_LOCAL void    ui_draw_rect_roundedness_outline(rect2_t rect, v4_t color, v4_t roundedness, float width);
-DREAM_LOCAL void    ui_draw_rect_outline            (rect2_t rect, v4_t color, float outline_width);
-DREAM_LOCAL void    ui_draw_circle                  (v2_t p, float r, v4_t color);
+fn void    ui_draw_rect                    (rect2_t rect, v4_t color);
+fn void    ui_draw_rect_shadow             (rect2_t rect, v4_t color, float shadow_amount, float shadow_radius);
+fn void    ui_draw_rect_roundedness        (rect2_t rect, v4_t color, v4_t roundness);
+fn void    ui_draw_rect_roundedness_shadow (rect2_t rect, v4_t color, v4_t roundness, float shadow_amount, float shadow_radius);
+fn void    ui_draw_rect_roundedness_outline(rect2_t rect, v4_t color, v4_t roundedness, float width);
+fn void    ui_draw_rect_outline            (rect2_t rect, v4_t color, float outline_width);
+fn void    ui_draw_circle                  (v2_t p, float r, v4_t color);
 
 //
 // Widget Building Utilities
 //
 
-DREAM_LOCAL bool    ui_mouse_in_rect           (rect2_t rect);
-DREAM_LOCAL float   ui_hover_lift              (ui_id_t id);
-DREAM_LOCAL float   ui_button_style_hover_lift (ui_id_t id);
-DREAM_LOCAL rect2_t ui_cut_widget_rect         (v2_t min_size);
-DREAM_LOCAL float   ui_roundedness_ratio       (rect2_t rect);
-DREAM_LOCAL float   ui_roundedness_ratio_to_abs(rect2_t rect, float ratio);
+fn bool    ui_mouse_in_rect           (rect2_t rect);
+fn float   ui_hover_lift              (ui_id_t id);
+fn float   ui_button_style_hover_lift (ui_id_t id);
+fn rect2_t ui_cut_widget_rect         (v2_t min_size);
+fn float   ui_roundedness_ratio       (rect2_t rect);
+fn float   ui_roundedness_ratio_to_abs(rect2_t rect, float ratio);
 
 typedef uint32_t ui_interaction_t;
 typedef enum ui_interaction_enum_t
@@ -355,8 +355,8 @@ typedef enum ui_priority_t
 } ui_priority_t;
 
 // I still think this is a little odd
-DREAM_LOCAL ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, ui_priority_t priority);
-DREAM_LOCAL ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect);
+fn ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, ui_priority_t priority);
+fn ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect);
 
 //
 // Base Widgets
@@ -382,9 +382,9 @@ typedef enum ui_panel_flags_enum_t
 	UI_PANEL_SCROLLABLE_VERT = 0x2,
 } ui_panel_flags_enum_t;
 
-DREAM_LOCAL void ui_panel_begin   (rect2_t rect);
-DREAM_LOCAL void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags);
-DREAM_LOCAL void ui_panel_end     (void);
+fn void ui_panel_begin   (rect2_t rect);
+fn void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags);
+fn void ui_panel_end     (void);
 
 #define UI_PANEL(rect) DEFER_LOOP(ui_panel_begin(rect), ui_panel_end())
 
@@ -394,24 +394,24 @@ typedef enum ui_slider_flags_enum_t
 	UI_SLIDER_FLAGS_INC_DEC_BUTTONS = 0x1,
 } ui_slider_flags_enum_t;
 
-DREAM_LOCAL void ui_seperator     (void);
-DREAM_LOCAL void ui_label         (string_t text);
-DREAM_LOCAL void ui_header        (string_t text);
-DREAM_LOCAL void ui_progress_bar  (string_t text, float progress);
-DREAM_LOCAL bool ui_button        (string_t text);
-DREAM_LOCAL bool ui_checkbox      (string_t text, bool *value);
-DREAM_LOCAL bool ui_option_buttons(string_t text, int *value, int count, string_t *names);
-DREAM_LOCAL bool ui_combo_box     (string_t text, size_t *selected_index, size_t count, string_t *names);
-DREAM_LOCAL bool ui_slider        (string_t text, float *value, float min, float max);
-DREAM_LOCAL bool ui_slider_int    (string_t text, int *value, int min, int max);
-DREAM_LOCAL bool ui_slider_int_ex (string_t text, int *value, int min, int max, ui_slider_flags_t flags);
-DREAM_LOCAL void ui_text_edit     (string_t label, dynamic_string_t *buffer);
-DREAM_LOCAL void ui_tooltip       (string_t text);
-DREAM_LOCAL void ui_hover_tooltip (string_t text);
+fn void ui_seperator     (void);
+fn void ui_label         (string_t text);
+fn void ui_header        (string_t text);
+fn void ui_progress_bar  (string_t text, float progress);
+fn bool ui_button        (string_t text);
+fn bool ui_checkbox      (string_t text, bool *value);
+fn bool ui_option_buttons(string_t text, int *value, int count, string_t *names);
+fn bool ui_combo_box     (string_t text, size_t *selected_index, size_t count, string_t *names);
+fn bool ui_slider        (string_t text, float *value, float min, float max);
+fn bool ui_slider_int    (string_t text, int *value, int min, int max);
+fn bool ui_slider_int_ex (string_t text, int *value, int min, int max, ui_slider_flags_t flags);
+fn void ui_text_edit     (string_t label, dynamic_string_t *buffer);
+fn void ui_tooltip       (string_t text);
+fn void ui_hover_tooltip (string_t text);
 
-DREAM_LOCAL bool ui_popup_is_open(ui_id_t id);
-DREAM_LOCAL void ui_open_popup(ui_id_t id);
-DREAM_LOCAL void ui_close_popup(ui_id_t id);
+fn bool ui_popup_is_open(ui_id_t id);
+fn void ui_open_popup(ui_id_t id);
+fn void ui_close_popup(ui_id_t id);
 
 //
 //
@@ -481,9 +481,9 @@ typedef struct ui_render_command_list_t
 	ui_render_command_t     *commands;
 } ui_render_command_list_t;
 
-DREAM_LOCAL void ui_push_command(ui_render_command_key_t key, const ui_render_command_t *command);
-DREAM_LOCAL void ui_reset_render_commands(void);
-DREAM_LOCAL void ui_sort_render_commands(void);
+fn void ui_push_command(ui_render_command_key_t key, const ui_render_command_t *command);
+fn void ui_reset_render_commands(void);
+fn void ui_sort_render_commands(void);
 
 #define UI_ID_STACK_COUNT (32)
 
@@ -568,50 +568,50 @@ typedef struct ui_t
     size_t last_frame_ui_rect_count;
 } ui_t;
 
-DREAM_LOCAL ui_t ui;
+fn ui_t ui;
 
-DREAM_INLINE arena_t *ui_frame_arena(void)
+fn_local arena_t *ui_frame_arena(void)
 {
 	arena_t *result = &ui.frame_arenas[ui.frame_index & 1];
 	return result;
 }
 
-DREAM_LOCAL bool ui_is_cold         (ui_id_t id);
-DREAM_LOCAL bool ui_is_next_hot     (ui_id_t id);
-DREAM_LOCAL bool ui_is_hot          (ui_id_t id);
-DREAM_LOCAL bool ui_is_active       (ui_id_t id);
-DREAM_LOCAL bool ui_is_hovered_panel(ui_id_t id);
+fn bool ui_is_cold         (ui_id_t id);
+fn bool ui_is_next_hot     (ui_id_t id);
+fn bool ui_is_hot          (ui_id_t id);
+fn bool ui_is_active       (ui_id_t id);
+fn bool ui_is_hovered_panel(ui_id_t id);
 
-DREAM_LOCAL void ui_set_next_hot  (ui_id_t id, ui_priority_t priority);
-DREAM_LOCAL void ui_set_hot       (ui_id_t id); // maybe should be never used?
-DREAM_LOCAL void ui_set_active    (ui_id_t id);
+fn void ui_set_next_hot  (ui_id_t id, ui_priority_t priority);
+fn void ui_set_hot       (ui_id_t id); // maybe should be never used?
+fn void ui_set_active    (ui_id_t id);
 
-DREAM_LOCAL void ui_clear_next_hot(void);
-DREAM_LOCAL void ui_clear_hot     (void);
-DREAM_LOCAL void ui_clear_active  (void);
+fn void ui_clear_next_hot(void);
+fn void ui_clear_hot     (void);
+fn void ui_clear_active  (void);
 
-DREAM_LOCAL bool ui_has_focus     (void);
-DREAM_LOCAL bool ui_id_has_focus(ui_id_t id);
+fn bool ui_has_focus     (void);
+fn bool ui_id_has_focus(ui_id_t id);
 
-DREAM_LOCAL void ui_hoverable       (ui_id_t id, rect2_t rect);
-DREAM_LOCAL bool ui_is_hovered      (ui_id_t id);
-DREAM_LOCAL bool ui_is_hovered_delay(ui_id_t id, float delay);
+fn void ui_hoverable       (ui_id_t id, rect2_t rect);
+fn bool ui_is_hovered      (ui_id_t id);
+fn bool ui_is_hovered_delay(ui_id_t id, float delay);
 
-DREAM_LOCAL ui_state_t *ui_get_state(ui_id_t id);
-DREAM_LOCAL bool ui_state_is_new(ui_state_t *state);
+fn ui_state_t *ui_get_state(ui_id_t id);
+fn bool ui_state_is_new(ui_state_t *state);
 
-DREAM_LOCAL bool ui_begin(float dt);
-DREAM_LOCAL void ui_end(void);
-DREAM_LOCAL ui_render_command_list_t *ui_get_render_commands(void);
+fn bool ui_begin(float dt);
+fn void ui_end(void);
+fn ui_render_command_list_t *ui_get_render_commands(void);
 
-DREAM_LOCAL void debug_text    (v4_t color, string_t fmt, ...);
-DREAM_LOCAL void debug_text_va (v4_t color, string_t fmt, va_list args);
+fn void debug_text    (v4_t color, string_t fmt, ...);
+fn void debug_text_va (v4_t color, string_t fmt, va_list args);
 
-DREAM_LOCAL void debug_notif   (v4_t color, float time, string_t fmt, ...);
-DREAM_LOCAL void debug_notif_va(v4_t color, float time, string_t fmt, va_list args);
+fn void debug_notif   (v4_t color, float time, string_t fmt, ...);
+fn void debug_notif_va(v4_t color, float time, string_t fmt, va_list args);
 
 // internal use
-DREAM_LOCAL void debug_notif_replicate(debug_notif_t *notif);
+fn void debug_notif_replicate(debug_notif_t *notif);
 
 //
 //

@@ -42,7 +42,7 @@ void hull_add_debug_triangle(hull_debug_step_t *step, triangle_t t, bool added_t
 	sll_push_back(step->first_triangle, step->last_triangle, debug_triangle);
 }
 
-DREAM_INLINE v3_t triangle_vertex_with_all_points_to_the_left(edge_t e, size_t count, v3_t *points)
+fn_local v3_t triangle_vertex_with_all_points_to_the_left(edge_t e, size_t count, v3_t *points)
 {
 	ASSERT(count > 0);
 
@@ -81,7 +81,7 @@ DREAM_INLINE v3_t triangle_vertex_with_all_points_to_the_left(edge_t e, size_t c
 	return p;
 }
 
-DREAM_INLINE edge_t find_edge_on_hull(size_t count, v3_t *points)
+fn_local edge_t find_edge_on_hull(size_t count, v3_t *points)
 {
 	ASSERT(count > 1);
 
@@ -110,7 +110,7 @@ triangle_mesh_t calculate_convex_hull(arena_t *arena, size_t count, v3_t *points
 	return calculate_convex_hull_debug(arena, count, points, NULL);
 }
 
-DREAM_INLINE bool triangles_share_all_points(triangle_t t, triangle_t t2)
+fn_local bool triangles_share_all_points(triangle_t t, triangle_t t2)
 {
 	bool result = false;
 
@@ -161,7 +161,7 @@ DREAM_INLINE bool triangles_share_all_points(triangle_t t, triangle_t t2)
 	return result;
 }
 
-DREAM_INLINE bool triangle_in_set(const stretchy_buffer(triangle_t) H, triangle_t t)
+fn_local bool triangle_in_set(const stretchy_buffer(triangle_t) H, triangle_t t)
 {
 	// TODO: Fix this N^2 bull
 
@@ -180,7 +180,7 @@ DREAM_INLINE bool triangle_in_set(const stretchy_buffer(triangle_t) H, triangle_
 	return result;
 }
 
-DREAM_INLINE bool edge_in_set(const stretchy_buffer(edge_t) Q, edge_t e)
+fn_local bool edge_in_set(const stretchy_buffer(edge_t) Q, edge_t e)
 {
 	// TODO: Fix this N^2 bull
 
@@ -290,7 +290,7 @@ triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *
 	return result;
 }
 
-DREAM_LOCAL void convex_hull_do_extended_diagnostics(triangle_mesh_t *mesh, hull_debug_t *debug)
+fn void convex_hull_do_extended_diagnostics(triangle_mesh_t *mesh, hull_debug_t *debug)
 {
 	if (NEVER(!mesh))  return;
 	if (NEVER(!debug)) return;

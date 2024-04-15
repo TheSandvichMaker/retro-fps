@@ -436,7 +436,7 @@ void game_init(void)
 }
 
 // don't return the game view ya dingus... what bad code
-DREAM_INLINE r_view_index_t render_map(r_context_t *rc, camera_t *camera, map_t *map)
+fn_local r_view_index_t render_map(r_context_t *rc, camera_t *camera, map_t *map)
 {
     r_push_command_identifier(rc, S(LOC_CSTRING ":render_map"));
 
@@ -574,7 +574,7 @@ DREAM_INLINE r_view_index_t render_map(r_context_t *rc, camera_t *camera, map_t 
     return game_view;
 }
 
-DREAM_INLINE void render_game_ui(r_context_t *rc, world_t *world)
+fn_local void render_game_ui(r_context_t *rc, world_t *world)
 {
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);

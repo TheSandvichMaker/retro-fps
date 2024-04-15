@@ -4,32 +4,32 @@
 // pool
 //
 
-DREAM_INLINE pool_item_t *pool_item_from_item(void *item)
+fn_local pool_item_t *pool_item_from_item(void *item)
 {
     return ((pool_item_t *)item) - 1;
 }
 
-DREAM_INLINE void *item_from_pool_item(pool_item_t *pool_item)
+fn_local void *item_from_pool_item(pool_item_t *pool_item)
 {
     return pool_item + 1;
 }
 
-DREAM_INLINE size_t pool_stride(pool_t *pool)
+fn_local size_t pool_stride(pool_t *pool)
 {
     return align_forward(MAX(sizeof(free_item_t), pool->item_size) + sizeof(pool_item_t), pool->align);
 }
 
-DREAM_INLINE uint32_t index_from_pool_item(pool_t *pool, pool_item_t *pool_item)
+fn_local uint32_t index_from_pool_item(pool_t *pool, pool_item_t *pool_item)
 {
     return (uint32_t)(((char *)pool_item - pool->buffer) / pool_stride(pool));
 }
 
-DREAM_INLINE void *pool_item_at_index(pool_t *pool, size_t index)
+fn_local void *pool_item_at_index(pool_t *pool, size_t index)
 {
     return (void *)(pool->buffer + index*pool_stride(pool));
 }
 
-DREAM_INLINE void pool_init(pool_t *pool)
+fn_local void pool_init(pool_t *pool)
 {
     ASSERT_MSG(pool->item_size, "POOL INITIALIZATION FAILURE: ITEM SIZE IS ZERO"); // this needs to be initialized by the user
 

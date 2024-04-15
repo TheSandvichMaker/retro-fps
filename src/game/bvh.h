@@ -25,6 +25,6 @@ typedef struct bvh_iter_t
 	uint32_t node_stack_at;
 } bvh_iter_t;
 
-DREAM_LOCAL void bvh_iter_init(bvh_iter_t *it, bvh_node_t *nodes, uint32_t node_count);
+fn void bvh_iter_init(bvh_iter_t *it, bvh_node_t *nodes, uint32_t node_count);
 
 #endif /* BVH_H */

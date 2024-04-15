@@ -685,7 +685,7 @@ static void render_lm_editor(r_context_t *rc)
     }
 }
 
-DREAM_INLINE void fullscreen_show_timings(void)
+fn_local void fullscreen_show_timings(void)
 {
     UI_SCALAR(UI_SCALAR_TEXT_ALIGN_X, 0.5f)
     {
@@ -703,7 +703,7 @@ DREAM_INLINE void fullscreen_show_timings(void)
     }
 }
 
-DREAM_INLINE void ui_demo_proc(ui_window_t *window)
+fn_local void ui_demo_proc(ui_window_t *window)
 {
 	if (window->hovered)
 	{
@@ -795,7 +795,7 @@ DREAM_INLINE void ui_demo_proc(ui_window_t *window)
 	ui_button(S("Useless button #4"));
 }
 
-DREAM_INLINE void fullscreen_update_and_render_top_editor_bar(void)
+fn_local void fullscreen_update_and_render_top_editor_bar(void)
 {
     rect2_t bar = rect2_cut_top(editor.fullscreen_layout, 32.0f);
 

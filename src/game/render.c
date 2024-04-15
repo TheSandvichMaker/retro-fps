@@ -11,7 +11,7 @@ v3_t g_debug_colors[] = {
     { 0, 1, 1 },
 };
 
-DREAM_INLINE void r_init_immediate(r_context_t *rc, r_immediate_t *imm)
+fn_local void r_init_immediate(r_context_t *rc, r_immediate_t *imm)
 {
 	int w, h;
 	render->get_resolution(&w, &h);
@@ -112,7 +112,7 @@ void r_pop_command_identifier(r_context_t *rc)
 
 }
 
-DREAM_INLINE r_command_key_t r_command_key(r_context_t *rc, r_command_kind_t kind, float depth, uint32_t material_id)
+fn_local r_command_key_t r_command_key(r_context_t *rc, r_command_kind_t kind, float depth, uint32_t material_id)
 {
     r_command_key_t result = {
         .screen_layer = stack_top(rc->screen_layers_stack),

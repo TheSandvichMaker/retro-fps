@@ -28,13 +28,13 @@ mixer_t mixer = {
 //
 //
 
-DREAM_INLINE float limit(float s)
+fn_local float limit(float s)
 {
 	s = max(-1.0f, min(1.0f, s));
 	return s;
 }
 
-DREAM_INLINE channel_matrix_t spatialize_channel_matrix(playing_sound_t *playing, channel_matrix_t in_matrix)
+fn_local channel_matrix_t spatialize_channel_matrix(playing_sound_t *playing, channel_matrix_t in_matrix)
 {
 	waveform_t *waveform = playing->waveform;
 
@@ -72,7 +72,7 @@ DREAM_INLINE channel_matrix_t spatialize_channel_matrix(playing_sound_t *playing
 	return result;
 }
 
-DREAM_INLINE void delay_init(delay_t *effect, float feedback, uint32_t delay_time)
+fn_local void delay_init(delay_t *effect, float feedback, uint32_t delay_time)
 {
 	effect->feedback   = feedback;
 	effect->delay_time = delay_time;
@@ -80,12 +80,12 @@ DREAM_INLINE void delay_init(delay_t *effect, float feedback, uint32_t delay_tim
 	zero_array(&effect->buffer[0], ARRAY_COUNT(effect->buffer));
 }
 
-DREAM_INLINE float delay_read(delay_t *effect)
+fn_local float delay_read(delay_t *effect)
 {
 	return effect->buffer[effect->index];
 }
 
-DREAM_INLINE float delay_process(delay_t *effect, float input)
+fn_local float delay_process(delay_t *effect, float input)
 {
 	size_t index    = effect->index;
 	//float  feedback = effect->feedback;
@@ -104,7 +104,7 @@ DREAM_INLINE float delay_process(delay_t *effect, float input)
 	return output;
 }
 
-DREAM_INLINE void reverb_set_diffusion_angle(reverb_t *effect, float diffusion_angle)
+fn_local void reverb_set_diffusion_angle(reverb_t *effect, float diffusion_angle)
 {
 	float s, c;
 	sincos_ss(diffusion_angle, &s, &c);
@@ -115,7 +115,7 @@ DREAM_INLINE void reverb_set_diffusion_angle(reverb_t *effect, float diffusion_a
 	effect->mix_matrix[1][1] =  c;
 }
 
-DREAM_INLINE void reverb_init(reverb_t *effect, float feedback, float diffusion_angle)
+fn_local void reverb_init(reverb_t *effect, float feedback, float diffusion_angle)
 {
 	effect->feedback = feedback;
 	effect->index_l = 0;
@@ -127,7 +127,7 @@ DREAM_INLINE void reverb_init(reverb_t *effect, float feedback, float diffusion_
 	reverb_set_diffusion_angle(effect, diffusion_angle);
 }
 
-DREAM_INLINE v2_t reverb_process(reverb_t *effect, v2_t input)
+fn_local v2_t reverb_process(reverb_t *effect, v2_t input)
 {
 	float l = effect->buffer_l[effect->index_l];
 	float r = effect->buffer_r[effect->index_r];
@@ -145,7 +145,7 @@ DREAM_INLINE v2_t reverb_process(reverb_t *effect, v2_t input)
 	return result;
 }
 
-DREAM_INLINE void mixer_init(void)
+fn_local void mixer_init(void)
 {
 	for (size_t i = 0; i < ARRAY_COUNT(mixer.category_volumes); i++)
 	{
@@ -157,7 +157,7 @@ DREAM_INLINE void mixer_init(void)
 	reverb_init(&mixer.reverb, 0.9f, to_radians(15.0f));
 }
 
-DREAM_INLINE void stop_playing_sound_internal(playing_sound_t *playing)
+fn_local void stop_playing_sound_internal(playing_sound_t *playing)
 {
 	while (playing->first_fade)
 	{

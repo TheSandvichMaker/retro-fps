@@ -35,13 +35,13 @@ typedef struct pool_t
 	mutex_t  lock;
 } pool_t;
 
-DREAM_GLOBAL void             *pool_add       (pool_t *pool);
-DREAM_GLOBAL resource_handle_t pool_add_item  (pool_t *pool, const void *item);
-DREAM_GLOBAL void             *pool_get_impl  (pool_t *pool, resource_handle_t handle);
+fn void             *pool_add       (pool_t *pool);
+fn resource_handle_t pool_add_item  (pool_t *pool, const void *item);
+fn void             *pool_get_impl  (pool_t *pool, resource_handle_t handle);
 #define pool_get(pool, handle) pool_get_impl(pool, CAST_HANDLE(resource_handle_t, handle))
-DREAM_GLOBAL bool              pool_rem       (pool_t *pool, resource_handle_t handle);
-DREAM_GLOBAL bool              pool_rem_item  (pool_t *pool, void *item);
-DREAM_GLOBAL resource_handle_t pool_get_handle(pool_t *pool, void *item);
+fn bool              pool_rem       (pool_t *pool, resource_handle_t handle);
+fn bool              pool_rem_item  (pool_t *pool, void *item);
+fn resource_handle_t pool_get_handle(pool_t *pool, void *item);
 
 #define INIT_POOL(Type)           { .item_size = sizeof(Type), .align = alignof(Type) }
 #define INIT_POOL_EX(Type, Flags) { .item_size = sizeof(Type), .align = alignof(Type), .flags = Flags }
@@ -52,9 +52,9 @@ typedef struct pool_iter_t
     void *data;
 } pool_iter_t;
 
-DREAM_GLOBAL pool_iter_t pool_iter(pool_t *pool);
-DREAM_GLOBAL bool pool_iter_valid (pool_iter_t *it);
-DREAM_GLOBAL void pool_iter_next  (pool_iter_t *it);
-DREAM_GLOBAL void pool_iter_rem   (pool_iter_t *it);
+fn pool_iter_t pool_iter(pool_t *pool);
+fn bool pool_iter_valid (pool_iter_t *it);
+fn void pool_iter_next  (pool_iter_t *it);
+fn void pool_iter_rem   (pool_iter_t *it);
 
 #endif /* DREAM_POOL_H */

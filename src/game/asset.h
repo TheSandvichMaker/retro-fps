@@ -10,25 +10,25 @@
 
 typedef enum asset_kind_t
 {
-	ASSET_KIND_NONE,
+	AssetKind_none,
 
-	ASSET_KIND_IMAGE,
-	ASSET_KIND_WAVEFORM,
-	ASSET_KIND_MAP,
+	AssetKind_image,
+	AssetKind_waveform,
+	AssetKind_map,
 
-	ASSET_KIND_COUNT,
+	AssetKind_count,
 } asset_kind_t;
 
 typedef enum asset_state_t
 {
-	ASSET_STATE_NONE = 0,
+	AssetState_none = 0,
 
-	ASSET_STATE_ON_DISK       = 1 << 0,
-	ASSET_STATE_BEING_LOADED  = 1 << 1,
-	ASSET_STATE_INFO_RESIDENT = 1 << 2,
-	ASSET_STATE_RESIDENT      = 1 << 3,
+	AssetState_on_disk       = 1 << 0,
+	AssetState_being_loaded  = 1 << 1,
+	AssetState_info_resident = 1 << 2,
+	AssetState_resident      = 1 << 3,
 
-	ASSET_STATE_COUNT,
+	AssetState_count,
 } asset_state_t;
 
 typedef struct asset_hash_t
@@ -36,7 +36,7 @@ typedef struct asset_hash_t
 	uint64_t value;
 } asset_hash_t;
 
-DREAM_INLINE asset_hash_t asset_hash_from_string(string_t string)
+fn_local asset_hash_t asset_hash_from_string(string_t string)
 {
 	asset_hash_t result = {
 		.value = string_hash(string),
@@ -80,7 +80,7 @@ typedef struct waveform_t
 	int16_t *frames;
 } waveform_t;
 
-DREAM_INLINE int16_t *waveform_channel(const waveform_t *waveform, size_t index)
+fn_local int16_t *waveform_channel(const waveform_t *waveform, size_t index)
 {
     int16_t *result = NULL;
 
@@ -97,41 +97,41 @@ typedef struct asset_config_t
     uint32_t mix_sample_rate;
 } asset_config_t;
 
-DREAM_LOCAL void initialize_asset_system(const asset_config_t *config);
-DREAM_LOCAL void process_asset_changes(void);
+fn void initialize_asset_system(const asset_config_t *config);
+fn void process_asset_changes(void);
 
-// DREAM_GLOBAL from here on out because d3d11.c is using some of these.
+// fn from here on out because d3d11.c is using some of these.
 // Should I fix that? Yes I think so, I imagine the renderer should be
 // modular and really shouldn't have a (direct) dependency on this specific
 // game's asset system.
 
-DREAM_GLOBAL image_t    missing_image;
-DREAM_GLOBAL waveform_t missing_waveform;
+fn image_t    missing_image;
+fn waveform_t missing_waveform;
 
-DREAM_GLOBAL bool        asset_exists          (asset_hash_t hash, asset_kind_t kind);
-DREAM_GLOBAL string_t    get_asset_path_on_disk(asset_hash_t hash); 
-DREAM_GLOBAL void        reload_asset          (asset_hash_t hash);
+fn bool        asset_exists          (asset_hash_t hash, asset_kind_t kind);
+fn string_t    get_asset_path_on_disk(asset_hash_t hash); 
+fn void        reload_asset          (asset_hash_t hash);
 
-DREAM_GLOBAL image_t      *get_image            (asset_hash_t hash);
-DREAM_GLOBAL image_info_t *get_image_info     (asset_hash_t hash);
-DREAM_GLOBAL image_t      *get_missing_image    (void);
-DREAM_GLOBAL waveform_t   *get_waveform         (asset_hash_t hash);
-DREAM_GLOBAL image_t      *get_missing_waveform (void);
+fn image_t      *get_image            (asset_hash_t hash);
+fn image_info_t *get_image_info     (asset_hash_t hash);
+fn image_t      *get_missing_image    (void);
+fn waveform_t   *get_waveform         (asset_hash_t hash);
+fn image_t      *get_missing_waveform (void);
 
-DREAM_GLOBAL image_t    *get_image_blocking   (asset_hash_t hash);
-DREAM_GLOBAL waveform_t *get_waveform_blocking(asset_hash_t hash);
+fn image_t    *get_image_blocking   (asset_hash_t hash);
+fn waveform_t *get_waveform_blocking(asset_hash_t hash);
 
-DREAM_INLINE image_t *get_image_from_string(string_t string)
+fn_local image_t *get_image_from_string(string_t string)
 {
 	return get_image(asset_hash_from_string(string));
 }
 
-DREAM_INLINE waveform_t *get_waveform_from_string(string_t string)
+fn_local waveform_t *get_waveform_from_string(string_t string)
 {
 	return get_waveform(asset_hash_from_string(string));
 }
 
-DREAM_INLINE waveform_t *get_waveform_from_string_blocking(string_t string)
+fn_local waveform_t *get_waveform_from_string_blocking(string_t string)
 {
 	return get_waveform_blocking(asset_hash_from_string(string));
 }
@@ -140,16 +140,16 @@ DREAM_INLINE waveform_t *get_waveform_from_string_blocking(string_t string)
 // raw asset loading
 //
 
-DREAM_GLOBAL image_t load_image_from_memory(arena_t *arena, string_t file_data, unsigned nchannels);
-DREAM_GLOBAL image_t load_image_from_disk  (arena_t *arena, string_t path, unsigned nchannels);
+fn image_t load_image_from_memory(arena_t *arena, string_t file_data, unsigned nchannels);
+fn image_t load_image_from_disk  (arena_t *arena, string_t path, unsigned nchannels);
 
-DREAM_GLOBAL bool split_image_into_cubemap(const image_t *source, cubemap_t *cubemap);
+fn bool split_image_into_cubemap(const image_t *source, cubemap_t *cubemap);
 
 #define WAVE_SAMPLE_RATE 44100
 
-DREAM_GLOBAL waveform_t load_waveform_info_from_memory(string_t file_data);
-DREAM_GLOBAL waveform_t load_waveform_info_from_disk  (string_t path);
-DREAM_GLOBAL waveform_t load_waveform_from_memory(arena_t *arena, string_t file_data);
-DREAM_GLOBAL waveform_t load_waveform_from_disk  (arena_t *arena, string_t path);
+fn waveform_t load_waveform_info_from_memory(string_t file_data);
+fn waveform_t load_waveform_info_from_disk  (string_t path);
+fn waveform_t load_waveform_from_memory(arena_t *arena, string_t file_data);
+fn waveform_t load_waveform_from_disk  (arena_t *arena, string_t path);
 
 #endif /* ASSET_H */

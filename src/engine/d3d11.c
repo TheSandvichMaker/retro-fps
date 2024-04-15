@@ -30,7 +30,7 @@ pool_t d3d_textures = INIT_POOL_EX(d3d_texture_t, POOL_FLAGS_CONCURRENT);
 
 d3d_state_t d3d;
 
-DREAM_INLINE ID3D11Buffer *d3d_make_cbuf(size_t size)
+fn_local ID3D11Buffer *d3d_make_cbuf(size_t size)
 {
     ID3D11Buffer *result = NULL;
 
@@ -941,7 +941,7 @@ void d3d_ensure_swap_chain_size(int width, int height)
     }
 }
 
-DREAM_INLINE void radix_sort_commands(r_command_t *array, size_t count)
+fn_local void radix_sort_commands(r_command_t *array, size_t count)
 {
     m_scoped_temp
     {
@@ -977,7 +977,7 @@ DREAM_INLINE void radix_sort_commands(r_command_t *array, size_t count)
     }
 }
 
-DREAM_INLINE void d3d_update_view_constants(const r_view_t *view)
+fn_local void d3d_update_view_constants(const r_view_t *view)
 {
     v3_t sun_direction = view->scene.sun_direction;
 
@@ -1029,7 +1029,7 @@ DREAM_INLINE void d3d_update_view_constants(const r_view_t *view)
     update_buffer(d3d.cbuf_view, &cbuf_view, sizeof(cbuf_view));
 }
 
-DREAM_INLINE void d3d_render_skybox(const r_view_t *view, D3D11_VIEWPORT viewport)
+fn_local void d3d_render_skybox(const r_view_t *view, D3D11_VIEWPORT viewport)
 {
     const r_scene_parameters_t *scene = &view->scene;
 
@@ -1062,7 +1062,7 @@ DREAM_INLINE void d3d_render_skybox(const r_view_t *view, D3D11_VIEWPORT viewpor
     });
 }
 
-DREAM_INLINE size_t d3d_render_view(const d3d_frame_context_t *frame, D3D11_VIEWPORT viewport, const r_command_buffer_t *commands, size_t first_command_index)
+fn_local size_t d3d_render_view(const d3d_frame_context_t *frame, D3D11_VIEWPORT viewport, const r_command_buffer_t *commands, size_t first_command_index)
 {
     const r_command_t          *first_command = &commands->commands[first_command_index];
     const r_command_key_t      *first_key     = &first_command->key;
@@ -1537,7 +1537,7 @@ void d3d11_execute_command_buffer(r_command_buffer_t *command_buffer, int width,
     m_scope_end(temp);
 }
 
-DREAM_INLINE void d3d_collect_timestamp_data(void)
+fn_local void d3d_collect_timestamp_data(void)
 {
     if (d3d.query_collect_frame < 0)
     {

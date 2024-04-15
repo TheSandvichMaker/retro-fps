@@ -62,9 +62,9 @@ typedef struct hull_debug_t
 	hull_diagnostic_result_t *diagnostics;
 } hull_debug_t;
 
-DREAM_LOCAL hull_debug_step_t *hull_add_debug_step(hull_debug_t *debug);
-DREAM_LOCAL void hull_add_debug_edge(hull_debug_step_t *step, edge_t e, bool processed_this_step);
-DREAM_LOCAL void hull_add_debug_triangle(hull_debug_step_t *step, triangle_t t, bool added_this_step);
+fn hull_debug_step_t *hull_add_debug_step(hull_debug_t *debug);
+fn void hull_add_debug_edge(hull_debug_step_t *step, edge_t e, bool processed_this_step);
+fn void hull_add_debug_triangle(hull_debug_step_t *step, triangle_t t, bool added_this_step);
 
 typedef struct triangle_mesh_t
 {
@@ -77,8 +77,8 @@ typedef struct triangle_mesh_t
 	};
 } triangle_mesh_t;
 
-DREAM_LOCAL triangle_mesh_t calculate_convex_hull      (arena_t *arena, size_t count, v3_t *points);
-DREAM_LOCAL triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *points, hull_debug_t *debug);
-DREAM_LOCAL void convex_hull_do_extended_diagnostics   (triangle_mesh_t *mesh, hull_debug_t *debug);
+fn triangle_mesh_t calculate_convex_hull      (arena_t *arena, size_t count, v3_t *points);
+fn triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *points, hull_debug_t *debug);
+fn void convex_hull_do_extended_diagnostics   (triangle_mesh_t *mesh, hull_debug_t *debug);
 
 #endif

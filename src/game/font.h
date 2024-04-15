@@ -58,13 +58,13 @@ typedef struct prepared_glyphs_t
 	rect2_t           bounds;
 } prepared_glyphs_t;
 
-DREAM_LOCAL font_atlas_t make_font_atlas            (string_t path,      size_t range_count, font_range_t *ranges, float font_size);
-DREAM_LOCAL font_atlas_t make_font_atlas_from_memory(string_t font_data, size_t range_count, font_range_t *ranges, float font_size);
-DREAM_LOCAL void         destroy_font_atlas         (font_atlas_t *atlas);
+fn font_atlas_t make_font_atlas            (string_t path,      size_t range_count, font_range_t *ranges, float font_size);
+fn font_atlas_t make_font_atlas_from_memory(string_t font_data, size_t range_count, font_range_t *ranges, float font_size);
+fn void         destroy_font_atlas         (font_atlas_t *atlas);
 
-DREAM_LOCAL font_glyph_t     *atlas_get_glyph           (font_atlas_t *atlas, uint32_t codepoint);
-DREAM_LOCAL font_glyph_t     *atlas_get_glyph_from_index(font_atlas_t *atlas, uint32_t index);
-DREAM_LOCAL float             atlas_get_advance         (font_atlas_t *atlas, uint32_t a, uint32_t b);
-DREAM_LOCAL prepared_glyphs_t atlas_prepare_glyphs      (font_atlas_t *atlas, arena_t *arena, string_t text);
+fn font_glyph_t     *atlas_get_glyph           (font_atlas_t *atlas, uint32_t codepoint);
+fn font_glyph_t     *atlas_get_glyph_from_index(font_atlas_t *atlas, uint32_t index);
+fn float             atlas_get_advance         (font_atlas_t *atlas, uint32_t a, uint32_t b);
+fn prepared_glyphs_t atlas_prepare_glyphs      (font_atlas_t *atlas, arena_t *arena, string_t text);
 
 #endif

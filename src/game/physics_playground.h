@@ -34,9 +34,9 @@ typedef struct phys_body_t
     phys_shape_t *shape;
 } phys_body_t;
 
-DREAM_LOCAL v3_t phys_get_center_of_mass_world(phys_body_t *body);
-DREAM_LOCAL m3x3_t phys_get_inv_inertia_tensor_world(phys_body_t *body);
-DREAM_LOCAL void phys_body_update(phys_body_t *body, float dt);
+fn v3_t phys_get_center_of_mass_world(phys_body_t *body);
+fn m3x3_t phys_get_inv_inertia_tensor_world(phys_body_t *body);
+fn void phys_body_update(phys_body_t *body, float dt);
 
 typedef struct phys_contact_t
 {
@@ -53,11 +53,11 @@ typedef struct phys_contact_t
     phys_body_t *body_b;
 } phys_contact_t;
 
-DREAM_LOCAL void phys_apply_impulse_linear(phys_body_t *body, v3_t impulse);
-DREAM_LOCAL void phys_apply_impulse_angular(phys_body_t *body, v3_t impulse);
-DREAM_LOCAL void phys_apply_impulse(phys_body_t *body, v3_t impulse_point, v3_t impulse);
+fn void phys_apply_impulse_linear(phys_body_t *body, v3_t impulse);
+fn void phys_apply_impulse_angular(phys_body_t *body, v3_t impulse);
+fn void phys_apply_impulse(phys_body_t *body, v3_t impulse_point, v3_t impulse);
 
-DREAM_LOCAL bool phys_intersect(phys_body_t *body_a, phys_body_t *body_b, phys_contact_t *out_contact);
+fn bool phys_intersect(phys_body_t *body_a, phys_body_t *body_b, phys_contact_t *out_contact);
 
 #define MAX_PHYS_BODIES (4096)
 
@@ -69,6 +69,6 @@ typedef struct phys_scene_t
     phys_body_t bodies[MAX_PHYS_BODIES];
 } phys_scene_t;
 
-DREAM_LOCAL void update_and_render_physics_playground(struct r_context_t *rc, struct world_t *world, float dt);
+fn void update_and_render_physics_playground(struct r_context_t *rc, struct world_t *world, float dt);
 
 #endif

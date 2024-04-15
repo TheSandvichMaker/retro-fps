@@ -13,21 +13,13 @@
 #define USING(type, name) union { type; type name; }
 
 #define fn static
+#define fn_local static inline
+#define fn_export extern __declspec(dllexport)
 
-#ifdef SINGLE_TRANSLATION_UNIT_BUILD
-#define DREAM_API    extern  // deprecated
-#define DREAM_GLOBAL extern  // visible outside modules
-#define DREAM_LOCAL  static  // not visible outside modules
-#else
-#define DREAM_API    extern  // deprecated
-#define DREAM_GLOBAL extern 
-#define DREAM_LOCAL  extern 
-#endif
+#define global static
 
 #define SUPPRESS_UNUSED_WARNING(x) (void)(x)
 
-#define DREAM_DLLEXPORT extern __declspec(dllexport)
-#define DREAM_INLINE static inline
 
 // still not sure where this should go, but it should be present in headers as well.
 // if the convention is that headers include api_types.h, then I guess this is the place

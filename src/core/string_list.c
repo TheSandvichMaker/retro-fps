@@ -120,7 +120,7 @@ typedef struct string_buffer_t
     size_t capacity;
 } string_buffer_t;
 
-DREAM_INLINE string_t string_buffer_push(string_buffer_t *buf, string_t string)
+fn_local string_t string_buffer_push(string_buffer_t *buf, string_t string)
 {
     string_t result = strnull;
 
@@ -139,7 +139,7 @@ DREAM_INLINE string_t string_buffer_push(string_buffer_t *buf, string_t string)
     return result;
 }
 
-DREAM_INLINE string_t string_from_string_buffer(string_buffer_t *buf)
+fn_local string_t string_from_string_buffer(string_buffer_t *buf)
 {
     string_t result = {
         .data  = buf->data,

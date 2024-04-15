@@ -38,7 +38,7 @@ void file_watcher_release(file_watcher_t *watcher)
 	m_release(&watcher->arena);
 }
 
-DREAM_INLINE void file_watcher__issue_read(file_watcher_t *watcher, file_watcher_directory_t *dir)
+fn_local void file_watcher__issue_read(file_watcher_t *watcher, file_watcher_directory_t *dir)
 {
 	bool result = ReadDirectoryChangesW(dir->os->handle,
 										dir->os->buffer,
@@ -107,7 +107,7 @@ void file_watcher_add_directory(file_watcher_t *watcher, string_t directory)
 	file_watcher__issue_read(watcher, dir);
 }
 
-DREAM_INLINE FILE_NOTIFY_INFORMATION *file_watcher__next_notif(FILE_NOTIFY_INFORMATION *notif)
+fn_local FILE_NOTIFY_INFORMATION *file_watcher__next_notif(FILE_NOTIFY_INFORMATION *notif)
 {
 	if (notif->NextEntryOffset)
 	{

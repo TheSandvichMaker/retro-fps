@@ -839,12 +839,12 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
 
 				image_info_t *image_info = &missing_image.info;
 
-				if (asset_exists(texture_png, ASSET_KIND_IMAGE))
+				if (asset_exists(texture_png, AssetKind_image))
 				{
 					image_info = get_image_info(texture_png);
                     poly->texture = texture_png;
 				}
-				else if (asset_exists(texture_tga, ASSET_KIND_IMAGE))
+				else if (asset_exists(texture_tga, AssetKind_image))
 				{
 					image_info = get_image_info(texture_tga);
                     poly->texture = texture_tga;

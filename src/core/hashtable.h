@@ -25,16 +25,16 @@ typedef struct table_t
     table_entry_t *entries;
 } table_t;
 
-DREAM_GLOBAL bool table_find          (const table_t *table, uint64_t key, uint64_t *value);
-DREAM_GLOBAL void table_insert        (      table_t *table, uint64_t key, uint64_t  value);
-DREAM_GLOBAL bool table_remove        (      table_t *table, uint64_t key);
+fn bool table_find          (const table_t *table, uint64_t key, uint64_t *value);
+fn void table_insert        (      table_t *table, uint64_t key, uint64_t  value);
+fn bool table_remove        (      table_t *table, uint64_t key);
 
-DREAM_GLOBAL void *table_find_object  (const table_t *table, uint64_t key);
-DREAM_GLOBAL void  table_insert_object(      table_t *table, uint64_t key, void *value);
+fn void *table_find_object  (const table_t *table, uint64_t key);
+fn void  table_insert_object(      table_t *table, uint64_t key, void *value);
 
-DREAM_GLOBAL void table_release(table_t *table);
+fn void table_release(table_t *table);
 
-DREAM_INLINE table_entry_t *table_get_entries(const table_t *table)
+fn_local table_entry_t *table_get_entries(const table_t *table)
 {
 	return TABLE_UNTAG_POINTER(table->entries);
 }
@@ -53,7 +53,7 @@ typedef struct table_iter_t
     };
 } table_iter_t;
 
-DREAM_INLINE table_iter_t table_iter(const table_t *table)
+fn_local table_iter_t table_iter(const table_t *table)
 {
     table_iter_t it = {
         .table = table,
@@ -63,7 +63,7 @@ DREAM_INLINE table_iter_t table_iter(const table_t *table)
     return it;
 }
 
-DREAM_INLINE bool table_iter_next(table_iter_t *it)
+fn_local bool table_iter_next(table_iter_t *it)
 {
     bool result = false;
 

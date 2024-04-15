@@ -269,7 +269,7 @@ typedef struct r_rect2_fixed_t
     uint16_t max_y; // 14:2 fixed point
 } r_rect2_fixed_t;
 
-DREAM_LOCAL r_rect2_fixed_t rect2_to_fixed(rect2_t rect);
+fn r_rect2_fixed_t rect2_to_fixed(rect2_t rect);
 
 typedef enum r_ui_rect_flags_t
 {
@@ -341,7 +341,7 @@ typedef union r_command_key_t
 
 #define R_COMMAND_DEPTH_FAR_PLANE 10000.0f
 
-DREAM_LOCAL uint64_t r_encode_command_depth(float depth);
+fn uint64_t r_encode_command_depth(float depth);
 
 typedef struct r_command_t
 {

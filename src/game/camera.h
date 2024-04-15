@@ -20,8 +20,8 @@ typedef struct camera_t
     v3_t computed_z;
 } camera_t;
 
-DREAM_LOCAL void compute_camera_axes(camera_t *camera);
-DREAM_LOCAL void update_camera_rotation(camera_t *camera, float dt);
-DREAM_LOCAL void camera_freecam(camera_t *camera, float move_speed, float dt);
+fn void compute_camera_axes(camera_t *camera);
+fn void update_camera_rotation(camera_t *camera, float dt);
+fn void camera_freecam(camera_t *camera, float move_speed, float dt);
 
 #endif /* CAMERA_H */

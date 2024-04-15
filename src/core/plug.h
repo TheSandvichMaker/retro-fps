@@ -15,7 +15,7 @@ typedef void (*plug_unload_t)(plug_io_t *io);
 #define DREAM_PLUG_UNLOAD(name) void plug_unload__##name(plug_io_t *io)
 
 #define DREAM_DECLARE_PLUG(name)           \
-	DREAM_DLLEXPORT DREAM_PLUG_LOAD(name); \
-	DREAM_DLLEXPORT DREAM_PLUG_UNLOAD(name);
+	fn_export DREAM_PLUG_LOAD(name); \
+	fn_export DREAM_PLUG_UNLOAD(name);
 
 #endif /* PLUG_H */

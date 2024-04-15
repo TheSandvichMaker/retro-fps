@@ -97,7 +97,7 @@ LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
     return 0;
 }
 
-DREAM_INLINE v2_t convert_mouse_cursor(POINT cursor, int height)
+fn_local v2_t convert_mouse_cursor(POINT cursor, int height)
 {
 	v2_t result = {
 		.x = (float)(cursor.x),
@@ -114,7 +114,7 @@ BOOL CALLBACK enumerate_symbols_proc(SYMBOL_INFO *symbol_info, ULONG symbol_size
 	return true;
 }
 
-DREAM_INLINE void enumerate_symbols(void)
+fn_local void enumerate_symbols(void)
 {
 	HANDLE process = GetCurrentProcess();
 
@@ -126,7 +126,7 @@ DREAM_INLINE void enumerate_symbols(void)
 	SymCleanup(process);
 }
 
-DREAM_INLINE platform_event_t *new_event(arena_t *arena)
+fn_local platform_event_t *new_event(arena_t *arena)
 {
 	platform_event_t *event = m_alloc_struct(arena, platform_event_t);
 	event->ctrl  = (bool)(GetAsyncKeyState(VK_CONTROL) & 0x8000);
@@ -663,3 +663,5 @@ int wWinMain(HINSTANCE instance,
 
     return 0;
 }
+
+CREATE_PROFILER_TABLE

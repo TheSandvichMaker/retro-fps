@@ -739,7 +739,7 @@ void ui_pop_clip_rect(void)
 	}
 }
 
-DREAM_INLINE r_rect2_fixed_t ui_get_clip_rect(void)
+fn_local r_rect2_fixed_t ui_get_clip_rect(void)
 {
 	r_rect2_fixed_t clip_rect = {
 		0, 0, UINT16_MAX, UINT16_MAX,
@@ -909,7 +909,7 @@ void ui_sort_render_commands(void)
 }
 
 // TODO: remove... silly function
-DREAM_INLINE void ui_do_rect(r_ui_rect_t rect)
+fn_local void ui_do_rect(r_ui_rect_t rect)
 {
 	rect.clip_rect = ui_get_clip_rect();
 
@@ -1346,7 +1346,7 @@ typedef enum ui_widget_state_t
 	UI_WIDGET_STATE_ACTIVE,
 } ui_widget_state_t;
 
-DREAM_INLINE ui_widget_state_t ui_get_widget_state(ui_id_t id)
+fn_local ui_widget_state_t ui_get_widget_state(ui_id_t id)
 {
 	ui_widget_state_t result = UI_WIDGET_STATE_COLD;
 
@@ -1358,7 +1358,7 @@ DREAM_INLINE ui_widget_state_t ui_get_widget_state(ui_id_t id)
 	return result;
 }
 
-DREAM_INLINE v4_t ui_animate_colors(ui_id_t id, uint32_t interaction, v4_t cold, v4_t hot, v4_t active, v4_t fired)
+fn_local v4_t ui_animate_colors(ui_id_t id, uint32_t interaction, v4_t cold, v4_t hot, v4_t active, v4_t fired)
 {
 	ui_id_t color_id = ui_child_id(id, S("color"));
 
@@ -1760,7 +1760,7 @@ typedef struct ui_slider__params_t
 	};
 } ui_slider__params_t;
 
-DREAM_INLINE void ui_slider__impl(ui_id_t id, rect2_t rect, ui_slider__params_t *p)
+fn_local void ui_slider__impl(ui_id_t id, rect2_t rect, ui_slider__params_t *p)
 {
 	if (NEVER(!ui.initialized)) 
 		return;
@@ -1966,7 +1966,7 @@ bool ui_slider_int(string_t label, int *v, int min, int max)
 	return ui_slider_int_ex(label, v, min, max, UI_SLIDER_FLAGS_INC_DEC_BUTTONS);
 }
 
-DREAM_INLINE size_t ui_text_edit__find_insert_point_from_offset(prepared_glyphs_t *prep, float x)
+fn_local size_t ui_text_edit__find_insert_point_from_offset(prepared_glyphs_t *prep, float x)
 {
 	size_t result = 0;
 
@@ -1988,7 +1988,7 @@ DREAM_INLINE size_t ui_text_edit__find_insert_point_from_offset(prepared_glyphs_
 	return result;
 }
 
-DREAM_INLINE float ui_text_edit__get_caret_x(prepared_glyphs_t *prep, size_t index)
+fn_local float ui_text_edit__get_caret_x(prepared_glyphs_t *prep, size_t index)
 {
 	float result = 0.0f;
 

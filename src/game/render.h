@@ -53,9 +53,9 @@ typedef struct r_context_t
     r_view_index_t screenspace; // REMOVE...
 } r_context_t;
 
-DREAM_LOCAL void           r_init_render_context(r_context_t *rc, r_command_buffer_t *commands);
-DREAM_LOCAL void           r_push_command_identifier(r_context_t *rc, string_t info);
-DREAM_LOCAL void           r_pop_command_identifier (r_context_t *rc);
+fn void           r_init_render_context(r_context_t *rc, r_command_buffer_t *commands);
+fn void           r_push_command_identifier(r_context_t *rc, string_t info);
+fn void           r_pop_command_identifier (r_context_t *rc);
 
 #define R_COMMAND_IDENTIFIER(rc, ident) \
     DEFER_LOOP(r_push_command_identifier(rc, ident), r_pop_command_identifier(rc))
@@ -64,37 +64,37 @@ DREAM_LOCAL void           r_pop_command_identifier (r_context_t *rc);
 // NOTE: I am treating __FUNCTION__ as a runtime string because I think in MSVC it is. Cringe.
 #define R_COMMAND_IDENTIFIER_LOC(rc, info) R_COMMAND_IDENTIFIER(rc, Sf(LOC_CSTRING ":%s: %.*s", __FUNCTION__, Sx(info)))
 
-DREAM_LOCAL void           r_draw_mesh(r_context_t *rc, m4x4_t transform, mesh_handle_t mesh, const r_material_t *material);
-DREAM_LOCAL void           r_push_command        (r_context_t *rc, r_command_t command);
-DREAM_LOCAL void          *r_allocate_command_data(r_context_t *rc, size_t size);
+fn void           r_draw_mesh(r_context_t *rc, m4x4_t transform, mesh_handle_t mesh, const r_material_t *material);
+fn void           r_push_command        (r_context_t *rc, r_command_t command);
+fn void          *r_allocate_command_data(r_context_t *rc, size_t size);
 
-DREAM_LOCAL r_immediate_t *r_immediate_begin     (r_context_t *rc);
-DREAM_LOCAL uint32_t       r_immediate_vertex    (r_context_t *rc, r_vertex_immediate_t vertex);
-DREAM_LOCAL void           r_immediate_index     (r_context_t *rc, uint32_t index);
-DREAM_LOCAL void           r_immediate_end       (r_context_t *rc, r_immediate_t *imm);
+fn r_immediate_t *r_immediate_begin     (r_context_t *rc);
+fn uint32_t       r_immediate_vertex    (r_context_t *rc, r_vertex_immediate_t vertex);
+fn void           r_immediate_index     (r_context_t *rc, uint32_t index);
+fn void           r_immediate_end       (r_context_t *rc, r_immediate_t *imm);
 
 #define R_IMMEDIATE(rc, imm) for (r_immediate_t *imm = r_immediate_begin(rc); \
                                   imm;                                        \
                                   r_immediate_end(rc, imm), imm = NULL)
 
-DREAM_LOCAL void           r_ui_rect             (r_context_t *rc, r_ui_rect_t rect);
-DREAM_LOCAL void           r_ui_texture          (r_context_t *rc, texture_handle_t texture);
-DREAM_LOCAL void           r_flush_ui_rects      (r_context_t *rc); // frowny?
+fn void           r_ui_rect             (r_context_t *rc, r_ui_rect_t rect);
+fn void           r_ui_texture          (r_context_t *rc, texture_handle_t texture);
+fn void           r_flush_ui_rects      (r_context_t *rc); // frowny?
 
-DREAM_LOCAL r_view_index_t r_make_view           (r_context_t *rc, const r_view_t *view);
-DREAM_LOCAL void           r_push_view           (r_context_t *rc, r_view_index_t view);
-DREAM_LOCAL void           r_pop_view            (r_context_t *rc);
-DREAM_LOCAL r_view_t      *r_get_view            (r_context_t *rc); // gets current view
-DREAM_LOCAL r_view_t      *r_get_view_from_index (r_context_t *rc, r_view_index_t index);
-DREAM_LOCAL v3_t           r_to_view_space       (const r_view_t *view, v3_t p, float w);
-DREAM_LOCAL void           r_push_view_layer     (r_context_t *rc, r_view_layer_t layer);
-DREAM_LOCAL void           r_pop_view_layer      (r_context_t *rc);
+fn r_view_index_t r_make_view           (r_context_t *rc, const r_view_t *view);
+fn void           r_push_view           (r_context_t *rc, r_view_index_t view);
+fn void           r_pop_view            (r_context_t *rc);
+fn r_view_t      *r_get_view            (r_context_t *rc); // gets current view
+fn r_view_t      *r_get_view_from_index (r_context_t *rc, r_view_index_t index);
+fn v3_t           r_to_view_space       (const r_view_t *view, v3_t p, float w);
+fn void           r_push_view_layer     (r_context_t *rc, r_view_layer_t layer);
+fn void           r_pop_view_layer      (r_context_t *rc);
 
 #define R_VIEW(rc, view_index)  DEFER_LOOP(r_push_view(rc, view_index), r_pop_view(rc))
 #define R_VIEW_LAYER(rc, layer) DEFER_LOOP(r_push_view_layer(rc, layer), r_pop_view_layer(rc))
 
-DREAM_LOCAL void r_push_layer(r_context_t *rc, r_screen_layer_t layer);
-DREAM_LOCAL void r_pop_layer(r_context_t *rc);
+fn void r_push_layer(r_context_t *rc, r_screen_layer_t layer);
+fn void r_pop_layer(r_context_t *rc);
 
 #define R_LAYER(rc, layer) DEFER_LOOP(r_push_layer(rc, layer), r_pop_layer(rc))
 

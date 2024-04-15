@@ -36,22 +36,22 @@ typedef struct mixer_id_t
 	uint64_t value;
 } mixer_id_t;
 
-DREAM_INLINE bool mixer_id_valid(mixer_id_t id)
+fn_local bool mixer_id_valid(mixer_id_t id)
 {
     return id.value != 0;
 }
 
-DREAM_INLINE uint64_t mixer_id_index(mixer_id_t id)
+fn_local uint64_t mixer_id_index(mixer_id_t id)
 {
 	return id.value & MIXER_ID_INDEX_MASK;
 }
 
-DREAM_INLINE uint64_t mixer_id_type(mixer_id_t id)
+fn_local uint64_t mixer_id_type(mixer_id_t id)
 {
 	return (id.value & MIXER_ID_TYPE_MASK) >> MIXER_ID_TYPE_SHIFT;
 }
 
-DREAM_INLINE mixer_id_t make_mixer_id(mixer_id_type_t type, uint64_t index)
+fn_local mixer_id_t make_mixer_id(mixer_id_type_t type, uint64_t index)
 {
 	mixer_id_t result = {
 		.value = ((uint64_t)type << MIXER_ID_TYPE_SHIFT)|(index & MIXER_ID_INDEX_MASK),
@@ -165,7 +165,7 @@ typedef struct channel_matrix_t
 	float m[A_CHANNEL_COUNT][A_CHANNEL_COUNT]; // [src][dst]
 } channel_matrix_t;
 
-DREAM_INLINE channel_matrix_t channel_matrix_identity(void)
+fn_local channel_matrix_t channel_matrix_identity(void)
 {
 	channel_matrix_t result = {0};
 
@@ -177,7 +177,7 @@ DREAM_INLINE channel_matrix_t channel_matrix_identity(void)
 	return result;
 }
 
-DREAM_INLINE channel_matrix_t channel_matrix_mono(float value)
+fn_local channel_matrix_t channel_matrix_mono(float value)
 {
 	channel_matrix_t result = {0};
 
@@ -192,7 +192,7 @@ DREAM_INLINE channel_matrix_t channel_matrix_mono(float value)
 	return result;
 }
 
-DREAM_INLINE channel_matrix_t lerp_channel_matrix(channel_matrix_t a, channel_matrix_t b, float t)
+fn_local channel_matrix_t lerp_channel_matrix(channel_matrix_t a, channel_matrix_t b, float t)
 {
 	channel_matrix_t result;
 
@@ -301,7 +301,7 @@ typedef struct mixer_t
 	bool initialized;
 } mixer_t;
 
-DREAM_LOCAL mixer_t mixer;
+fn mixer_t mixer;
 
 // TODO: Deduplicate with mix_command_play_sound_t
 typedef struct play_sound_t
@@ -314,7 +314,7 @@ typedef struct play_sound_t
 	float            min_distance;
 } play_sound_t;
 
-DREAM_INLINE mix_command_t *push_mix_command(const mix_command_t *command)
+fn_local mix_command_t *push_mix_command(const mix_command_t *command)
 {
 	// We should never be in a situation where we overwrite unprocessed mixer commands,
 	// but it's not catastrophic.
@@ -330,7 +330,7 @@ DREAM_INLINE mix_command_t *push_mix_command(const mix_command_t *command)
 	return &mixer.commands[command_index];
 }
 
-DREAM_INLINE mixer_id_t play_sound(const play_sound_t *params)
+fn_local mixer_id_t play_sound(const play_sound_t *params)
 {
 	mixer_id_t id = make_mixer_id(MIXER_ID_TYPE_PLAYING_SOUND, mixer.next_playing_sound_id++);
 
@@ -351,13 +351,13 @@ DREAM_INLINE mixer_id_t play_sound(const play_sound_t *params)
 	return id;
 }
 
-DREAM_INLINE uint32_t samples_from_seconds(float seconds)
+fn_local uint32_t samples_from_seconds(float seconds)
 {
 	uint32_t result = (uint32_t)(seconds*WAVE_SAMPLE_RATE);
 	return result;
 }
 
-DREAM_INLINE void stop_sound_harsh(mixer_id_t id)
+fn_local void stop_sound_harsh(mixer_id_t id)
 {
 	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
 
@@ -368,7 +368,7 @@ DREAM_INLINE void stop_sound_harsh(mixer_id_t id)
 	push_mix_command(&command);
 }
 
-DREAM_INLINE void stop_sound(mixer_id_t id)
+fn_local void stop_sound(mixer_id_t id)
 {
 	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
 
@@ -385,7 +385,7 @@ DREAM_INLINE void stop_sound(mixer_id_t id)
 	});
 }
 
-DREAM_INLINE void fade_out_sound(mixer_id_t id, float fade_time)
+fn_local void fade_out_sound(mixer_id_t id, float fade_time)
 {
 	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
 
@@ -404,7 +404,7 @@ DREAM_INLINE void fade_out_sound(mixer_id_t id, float fade_time)
 	});
 }
 
-DREAM_INLINE void mixer_set_listener(v3_t p, v3_t d)
+fn_local void mixer_set_listener(v3_t p, v3_t d)
 {
 	push_mix_command(&(mix_command_t){
 		.kind = MIX_UPDATE_LISTENER,
@@ -415,7 +415,7 @@ DREAM_INLINE void mixer_set_listener(v3_t p, v3_t d)
 	});
 }
 
-DREAM_INLINE void set_sound_position(mixer_id_t id, v3_t p)
+fn_local void set_sound_position(mixer_id_t id, v3_t p)
 {
 	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
 
@@ -428,7 +428,7 @@ DREAM_INLINE void set_sound_position(mixer_id_t id, v3_t p)
 	});
 }
 
-DREAM_INLINE void update_playing_sound_flags(mixer_id_t id, uint32_t unset_flags, uint32_t set_flags)
+fn_local void update_playing_sound_flags(mixer_id_t id, uint32_t unset_flags, uint32_t set_flags)
 {
     if (!mixer_id_valid(id)) return;
 	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
@@ -443,6 +443,6 @@ DREAM_INLINE void update_playing_sound_flags(mixer_id_t id, uint32_t unset_flags
 	});
 }
 
-DREAM_LOCAL void mix_samples(uint32_t frames_to_mix, float *buffer);
+fn void mix_samples(uint32_t frames_to_mix, float *buffer);
 
 #endif

@@ -21,4 +21,6 @@ static inline void bit_scan_reverse64(unsigned long *index, uint64_t mask)
 #endif
 }
 
+#define read_cpu_timer __rdtsc
+
 #endif /* INTRIN_H */

@@ -44,13 +44,13 @@ typedef struct player_t
     float crouch_t;
 } player_t;
 
-DREAM_LOCAL v3_t player_view_origin(player_t *player);
-DREAM_LOCAL v3_t player_view_direction(player_t *player);
-DREAM_LOCAL void player_noclip(player_t *player, float dt);
+fn v3_t player_view_origin(player_t *player);
+fn v3_t player_view_direction(player_t *player);
+fn void player_noclip(player_t *player, float dt);
 fn void init_view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view);
 
 // frown
-DREAM_LOCAL bool g_cursor_locked;
+fn bool g_cursor_locked;
 
 #include "world.h"
 

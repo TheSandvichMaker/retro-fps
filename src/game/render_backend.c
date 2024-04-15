@@ -15,7 +15,7 @@ uint32_t r_vertex_format_size[R_VERTEX_FORMAT_COUNT] = {
     [R_VERTEX_FORMAT_BRUSH]     = sizeof(r_vertex_brush_t),
 };
 
-DREAM_LOCAL uint64_t r_encode_command_depth(float depth)
+fn uint64_t r_encode_command_depth(float depth)
 {
     float    depth_normalized = saturate(depth / R_COMMAND_DEPTH_FAR_PLANE);
     uint64_t result           = (F32_AS_U32(depth_normalized) >> 3) & MASK_BITS(20);

@@ -3,18 +3,18 @@
 
 #include "api_types.h"
 
-string_t fs_read_entire_file (arena_t *arena, string_t path);
-bool     fs_write_entire_file(string_t path, string_t file);
+fn string_t fs_read_entire_file (arena_t *arena, string_t path);
+fn bool     fs_write_entire_file(string_t path, string_t file);
 
-bool fs_copy(string_t source, string_t destination);
-bool fs_move(string_t source, string_t destination);
+fn bool fs_copy(string_t source, string_t destination);
+fn bool fs_move(string_t source, string_t destination);
 
-bool fs_copy_directory(string_t source, string_t destination);
+fn bool fs_copy_directory(string_t source, string_t destination);
 
 typedef enum fs_entry_kind_t
 {
-    FS_ENTRY_FILE,
-    FS_ENTRY_DIRECTORY,
+    FsEntryKind_file,
+    FsEntryKind_directory,
 } fs_entry_kind_t;
 
 typedef struct fs_entry_t
@@ -36,8 +36,8 @@ typedef struct fs_entry_t
 
 typedef enum fs_scan_directory_flags_t
 {
-    FS_SCAN_RECURSIVE          = 1 << 0,
-    FS_SCAN_DONT_SKIP_DOTFILES = 1 << 1,
+    FsScanDirectory_recursive          = 1 << 0,
+    FsScanDirectory_dont_skip_dotfiles = 1 << 1,
 } fs_scan_directory_flags_t;
 
 fs_entry_t *fs_scan_directory(arena_t *arena, string_t path, int flags);
@@ -45,16 +45,16 @@ fs_entry_t *fs_entry_next(fs_entry_t *entry);
 
 typedef enum fs_create_directory_result_t
 {
-    CREATE_DIRECTORY_SUCCESS,
-    CREATE_DIRECTORY_ALREADY_EXISTS,
-    CREATE_DIRECTORY_PATH_NOT_FOUND,
+    FsCreateDirectory_success,
+    FsCreateDirectory_already_exists,
+    FsCreateDirectory_path_not_found,
 } fs_create_directory_result_t;
 
-fs_create_directory_result_t fs_create_directory(string_t directory);
-fs_create_directory_result_t fs_create_directory_recursive(string_t directory);
+fn fs_create_directory_result_t fs_create_directory(string_t directory);
+fn fs_create_directory_result_t fs_create_directory_recursive(string_t directory);
 
-string_t fs_full_path(arena_t *arena, string_t relative_path);
+fn string_t fs_full_path(arena_t *arena, string_t relative_path);
 
-uint64_t fs_get_last_write_time(string_t path);
+fn uint64_t fs_get_last_write_time(string_t path);
 
 #endif /* FILESYSTEM_H */

@@ -20,6 +20,6 @@ typedef struct collision_geometry_t
     collision_hull_t *hulls;
 } collision_geometry_t;
 
-DREAM_LOCAL collision_geometry_t collision_geometry_from_map(arena_t *arena, struct map_t *map);
+fn collision_geometry_t collision_geometry_from_map(arena_t *arena, struct map_t *map);
 
 #endif /* COLLISION_GEOMETRY_H */

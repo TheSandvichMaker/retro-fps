@@ -79,7 +79,7 @@ bool phys_intersect(phys_body_t *body_a, phys_body_t *body_b, phys_contact_t *co
     return result;
 }
 
-DREAM_INLINE void phys_resolve_contact(const phys_contact_t *contact)
+fn_local void phys_resolve_contact(const phys_contact_t *contact)
 {
     phys_body_t *body_a = contact->body_a;
     phys_body_t *body_b = contact->body_b;
@@ -142,7 +142,7 @@ void phys_body_update(phys_body_t *body, float dt)
     
 }
 
-DREAM_INLINE phys_body_t *phys_add_body(phys_scene_t *scene, phys_shape_t *shape)
+fn_local phys_body_t *phys_add_body(phys_scene_t *scene, phys_shape_t *shape)
 {
     phys_body_t *result = NULL;
     if (ALWAYS(scene->bodies_count < MAX_PHYS_BODIES))
@@ -155,7 +155,7 @@ DREAM_INLINE phys_body_t *phys_add_body(phys_scene_t *scene, phys_shape_t *shape
     return result;
 }
 
-DREAM_INLINE void phys_init_sphere(phys_sphere_t *sphere, float radius)
+fn_local void phys_init_sphere(phys_sphere_t *sphere, float radius)
 {
     zero_struct(sphere);
     sphere->kind   = PHYS_SHAPE_SPHERE;
@@ -170,7 +170,7 @@ DREAM_INLINE void phys_init_sphere(phys_sphere_t *sphere, float radius)
     sphere->inv_inertia_tensor.e[2][2] = 1.0f / (2.0f*sphere->radius*sphere->radius / 5.0f);
 }
 
-DREAM_INLINE void initialize_phys_scene(phys_scene_t *scene, world_t *world)
+fn_local void initialize_phys_scene(phys_scene_t *scene, world_t *world)
 {
     camera_t *camera = world->primary_camera;
     ASSERT(camera);

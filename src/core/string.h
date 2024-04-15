@@ -6,7 +6,7 @@
 size_t string_count(const char *string);
 size_t string16_count(const wchar_t *string);
 
-DREAM_INLINE bool string_empty(string_t string)
+fn_local bool string_empty(string_t string)
 {
 	return string.count == 0 || !string.data;
 }
@@ -66,7 +66,7 @@ string_t string_strip_extension(string_t string);
 string_t string_normalize_path(arena_t *arena, string_t path);
 string_t string_path_leaf(string_t path);
 string_t string_path_directory(string_t path);
-DREAM_GLOBAL bool string_path_strip_root(string_t path, string_t *out_root, string_t *out_remainder);
+fn bool string_path_strip_root(string_t path, string_t *out_root, string_t *out_remainder);
 
 bool string_match(string_t a, string_t b);
 bool string_match_nocase(string_t a, string_t b);
@@ -132,7 +132,7 @@ typedef struct string_storage_overlay_t
 	char data[1];
 } string_storage_overlay_t;
 
-DREAM_GLOBAL void string_storage_append_impl(string_storage_overlay_t *storage, size_t capacity, string_t string);
+fn void string_storage_append_impl(string_storage_overlay_t *storage, size_t capacity, string_t string);
 #define string_storage_append(storage, string) (string_storage_append_impl((string_storage_overlay_t *)(storage), ARRAY_COUNT((storage)->data), string))
 
 #endif /* DREAM_STRING_H */

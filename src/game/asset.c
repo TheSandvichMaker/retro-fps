@@ -64,7 +64,7 @@ typedef struct asset_slot_t
 
 #if 0
 // asset_blob is an image_t, or waveform_t, etc depending on asset kind
-DREAM_INLINE void asset__update_slot(asset_slot_t *slot, void *asset_blob)
+fn_local void asset__update_slot(asset_slot_t *slot, void *asset_blob)
 {
 	asset_node_t *node = m_alloc_struct(&slot->arena, asset_node_t);
 	node->asset_blob = asset_blob;
@@ -124,14 +124,14 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 		{
 			asset_state_t state = asset->state;
 
-			if (!(state & ASSET_STATE_BEING_LOADED))
+			if (!(state & AssetState_being_loaded))
 				break;
 
 			bool loaded_successfully = true;
 
 			switch (asset->kind)
 			{
-				case ASSET_KIND_IMAGE:
+				case AssetKind_image:
 				{
 					asset->image = load_image_from_disk(&asset->arena, string_from_storage(asset->path), 4);
 					asset->image.renderer_handle = render->upload_texture(&(r_upload_texture_t){
@@ -149,12 +149,12 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 					});
 				} break;
 
-				case ASSET_KIND_WAVEFORM:
+				case AssetKind_waveform:
 				{
 					asset->waveform = load_waveform_from_disk(&asset->arena, string_from_storage(asset->path));
 				} break;
 
-				case ASSET_KIND_MAP:
+				case AssetKind_map:
 				{
 					INVALID_CODE_PATH; // TODO: handle
 				} break;
@@ -168,7 +168,7 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 
 			if (loaded_successfully)
 			{
-				asset->state = (state & ~ASSET_STATE_BEING_LOADED) | ASSET_STATE_RESIDENT;
+				asset->state = (state & ~AssetState_being_loaded) | AssetState_resident;
 			}
 		} break;
 
@@ -182,7 +182,7 @@ static void preload_asset_info(asset_slot_t *asset)
 {
 	switch (asset->kind)
 	{
-		case ASSET_KIND_IMAGE:
+		case AssetKind_image:
 		{
 			image_info_t *info = &asset->image.info;
 
@@ -202,12 +202,12 @@ static void preload_asset_info(asset_slot_t *asset)
 			}
 		} break;
 
-        case ASSET_KIND_WAVEFORM:
+        case AssetKind_waveform:
         {
             asset->waveform = load_waveform_info_from_disk(string_from_storage(asset->path));
         } break;
 
-		case ASSET_KIND_MAP:
+		case AssetKind_map:
 		{
 			// do nothing, for now
 		} break;
@@ -215,7 +215,7 @@ static void preload_asset_info(asset_slot_t *asset)
         INVALID_DEFAULT_CASE;
 	}
 
-	atomic_or_u32(&asset->state, ASSET_STATE_INFO_RESIDENT);
+	atomic_or_u32(&asset->state, AssetState_info_resident);
 }
 
 void initialize_asset_system(const asset_config_t *config)
@@ -224,29 +224,29 @@ void initialize_asset_system(const asset_config_t *config)
 
 	m_scoped_temp
 	{
-		for (fs_entry_t *entry = fs_scan_directory(temp, S("gamedata"), FS_SCAN_RECURSIVE);
+		for (fs_entry_t *entry = fs_scan_directory(temp, S("gamedata"), FsScanDirectory_recursive);
 			 entry;
 			 entry = fs_entry_next(entry))
 		{
-			if (entry->kind == FS_ENTRY_DIRECTORY)
+			if (entry->kind == FsEntryKind_directory)
 				continue;
 
-			asset_kind_t kind = ASSET_KIND_NONE;
+			asset_kind_t kind = AssetKind_none;
 
 			string_t ext = string_extension(entry->name);
 			if (string_match_nocase(ext, S(".png")) ||
 			    string_match_nocase(ext, S(".jpg")) ||
 				string_match_nocase(ext, S(".tga")))
 			{
-				kind = ASSET_KIND_IMAGE;
+				kind = AssetKind_image;
 			}
 			else if (string_match_nocase(ext, S(".wav")))
 			{
-				kind = ASSET_KIND_WAVEFORM;
+				kind = AssetKind_waveform;
 			}
 			else if (string_match_nocase(ext, S(".map")))
 			{
-				kind = ASSET_KIND_MAP;
+				kind = AssetKind_map;
 			}
 
 			if (kind)
@@ -254,7 +254,7 @@ void initialize_asset_system(const asset_config_t *config)
 				asset_slot_t *asset = pool_add(&asset_store);
 				asset->hash  = asset_hash_from_string(entry->path);
 				asset->kind  = kind;
-				asset->state = ASSET_STATE_ON_DISK;
+				asset->state = AssetState_on_disk;
 				string_into_storage(asset->path, entry->path);
 
 				table_insert_object(&asset_index, asset->hash.value, asset);
@@ -268,7 +268,7 @@ void initialize_asset_system(const asset_config_t *config)
 	file_watcher_add_directory(&asset_watcher, S("gamedata"));
 }
 
-DREAM_INLINE string_t stringify_flag(string_t total_string, uint32_t flags, uint32_t flag, string_t flag_string)
+fn_local string_t stringify_flag(string_t total_string, uint32_t flags, uint32_t flag, string_t flag_string)
 {
 	string_t result = total_string;
 
@@ -323,7 +323,7 @@ string_t get_asset_path_on_disk(asset_hash_t hash)
 	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
 
     int64_t state = asset->state;
-    if (state >= ASSET_STATE_ON_DISK) // not sure this greater than thing is a great(er than) idea
+    if (state >= AssetState_on_disk) // not sure this greater than thing is a great(er than) idea
     {
         result = string_from_storage(asset->path);
     }
@@ -337,9 +337,9 @@ static asset_slot_t *get_or_load_asset_async(asset_hash_t hash, asset_kind_t kin
 	if (asset && asset->kind == kind)
 	{
 		uint32_t state     = asset->state;
-		uint32_t new_state = state | ASSET_STATE_BEING_LOADED;
+		uint32_t new_state = state | AssetState_being_loaded;
 
-		bool should_load = (state & ASSET_STATE_ON_DISK) && !(state & (ASSET_STATE_RESIDENT|ASSET_STATE_BEING_LOADED));
+		bool should_load = (state & AssetState_on_disk) && !(state & (AssetState_resident|AssetState_being_loaded));
 
 		if (should_load &&
 			atomic_cas_u32(&asset->state, new_state, state) == state)
@@ -360,9 +360,9 @@ static asset_slot_t *get_or_load_asset_blocking(asset_hash_t hash, asset_kind_t 
 	if (asset && asset->kind == kind)
 	{
 		uint32_t state     = asset->state;
-		uint32_t new_state = state | ASSET_STATE_BEING_LOADED;
+		uint32_t new_state = state | AssetState_being_loaded;
 
-		bool should_load = (state & ASSET_STATE_ON_DISK) && !(state & (ASSET_STATE_RESIDENT|ASSET_STATE_BEING_LOADED));
+		bool should_load = (state & AssetState_on_disk) && !(state & (AssetState_being_loaded));
 
 		if (should_load &&
 			atomic_cas_u32(&asset->state, new_state, state) == state)
@@ -385,9 +385,9 @@ void reload_asset(asset_hash_t hash)
 	if (asset)
 	{
 		uint32_t state     = asset->state;
-		uint32_t new_state = state | ASSET_STATE_BEING_LOADED;
+		uint32_t new_state = state | AssetState_being_loaded;
 
-		bool should_load = (state & ASSET_STATE_ON_DISK) && !(state & ASSET_STATE_BEING_LOADED);
+		bool should_load = (state & AssetState_on_disk) && !(state & AssetState_being_loaded);
 
 		if (should_load &&
 			atomic_cas_u32(&asset->state, new_state, state) == state)
@@ -405,7 +405,7 @@ image_t *get_image(asset_hash_t hash)
 {
 	image_t *result = &missing_image;
 
-	asset_slot_t *asset = get_or_load_asset_async(hash, ASSET_KIND_IMAGE);
+	asset_slot_t *asset = get_or_load_asset_async(hash, AssetKind_image);
 	if (asset)
 	{
 		result = &asset->image;
@@ -419,7 +419,7 @@ image_info_t *get_image_info(asset_hash_t hash)
 	image_info_t *result = &missing_image.info;
 
 	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
-	if (asset && asset->kind == ASSET_KIND_IMAGE)
+	if (asset && asset->kind == AssetKind_image)
 	{
 		result = &asset->image.info;
 	}
@@ -432,7 +432,7 @@ image_t *get_image_blocking(asset_hash_t hash)
 {
 	image_t *image = &missing_image;
 
-	asset_slot_t *asset = get_or_load_asset_blocking(hash, ASSET_KIND_IMAGE);
+	asset_slot_t *asset = get_or_load_asset_blocking(hash, AssetKind_image);
 	if (asset)
 	{
 		image = &asset->image;
@@ -445,7 +445,7 @@ waveform_t *get_waveform(asset_hash_t hash)
 {
 	waveform_t *waveform = &missing_waveform;
 
-	asset_slot_t *asset = get_or_load_asset_async(hash, ASSET_KIND_WAVEFORM);
+	asset_slot_t *asset = get_or_load_asset_async(hash, AssetKind_waveform);
 	if (asset)
 	{
 		waveform = &asset->waveform;
@@ -458,7 +458,7 @@ waveform_t *get_waveform_blocking(asset_hash_t hash)
 {
 	waveform_t *waveform = &missing_waveform;
 
-	asset_slot_t *asset = get_or_load_asset_blocking(hash, ASSET_KIND_WAVEFORM);
+	asset_slot_t *asset = get_or_load_asset_blocking(hash, AssetKind_waveform);
 	if (asset)
 	{
 		waveform = &asset->waveform;

@@ -3,7 +3,7 @@
 
 #include "core/api_types.h"
 
-DREAM_INLINE size_t dyn_string_space_remaining(dynamic_string_t *d)
+fn_local size_t dyn_string_space_remaining(dynamic_string_t *d)
 {
 	size_t result = 0;
 
@@ -15,7 +15,7 @@ DREAM_INLINE size_t dyn_string_space_remaining(dynamic_string_t *d)
 	return result;
 }
 
-DREAM_INLINE bool dyn_string_appendc(dynamic_string_t *d, char c)
+fn_local bool dyn_string_appendc(dynamic_string_t *d, char c)
 {
 	bool result = false;
 
@@ -28,7 +28,7 @@ DREAM_INLINE bool dyn_string_appendc(dynamic_string_t *d, char c)
 	return result;
 }
 
-DREAM_INLINE bool dyn_string_insertc(dynamic_string_t *d, size_t index, char c)
+fn_local bool dyn_string_insertc(dynamic_string_t *d, size_t index, char c)
 {
 	bool result = false;
 
@@ -46,7 +46,7 @@ DREAM_INLINE bool dyn_string_insertc(dynamic_string_t *d, size_t index, char c)
 	return result;
 }
 
-DREAM_INLINE bool dyn_string_appends(dynamic_string_t *d, string_t s)
+fn_local bool dyn_string_appends(dynamic_string_t *d, string_t s)
 {
 	size_t space = dyn_string_space_remaining(d);
 	size_t append_count = MIN(s.count, space);
@@ -61,12 +61,12 @@ DREAM_INLINE bool dyn_string_appends(dynamic_string_t *d, string_t s)
 	return result;
 }
 
-DREAM_INLINE void dyn_string_clear(dynamic_string_t *d)
+fn_local void dyn_string_clear(dynamic_string_t *d)
 {
 	d->count = 0;
 }
 
-DREAM_INLINE void dyn_string_remove_range(dynamic_string_t *d, size_t start, size_t count)
+fn_local void dyn_string_remove_range(dynamic_string_t *d, size_t start, size_t count)
 {
 	if (d->count == 0)
 	{
@@ -85,7 +85,7 @@ DREAM_INLINE void dyn_string_remove_range(dynamic_string_t *d, size_t start, siz
 	d->count -= remove_count;
 }
 
-DREAM_INLINE void dyn_string_remove_at(dynamic_string_t *d, size_t index)
+fn_local void dyn_string_remove_at(dynamic_string_t *d, size_t index)
 {
 	if (index >= d->count)
 	{

@@ -229,7 +229,7 @@ typedef struct platform_event_t
 	};
 } platform_event_t;
 
-DREAM_INLINE platform_event_t *platform_event_next(platform_event_t *event)
+fn_local platform_event_t *platform_event_next(platform_event_t *event)
 {
 	if (!event) return NULL;
 
@@ -243,7 +243,7 @@ DREAM_INLINE platform_event_t *platform_event_next(platform_event_t *event)
 	return result;
 }
 
-DREAM_INLINE platform_event_t *platform_event_iter(platform_event_t *event)
+fn_local platform_event_t *platform_event_iter(platform_event_t *event)
 {
 	if (!event) return NULL;
 
@@ -257,7 +257,7 @@ DREAM_INLINE platform_event_t *platform_event_iter(platform_event_t *event)
 	return result;
 }
 
-DREAM_INLINE void platform_consume_event(platform_event_t *event)
+fn_local void platform_consume_event(platform_event_t *event)
 {
 	event->consumed = true;
 }
@@ -324,6 +324,6 @@ typedef struct platform_hooks_t
 	void (*tick_audio)(size_t frame_count, float *frames);
 } platform_hooks_t;
 
-DREAM_DLLEXPORT void platform_init(size_t argc, string_t *argv, platform_hooks_t *hooks);
+fn_export void platform_init(size_t argc, string_t *argv, platform_hooks_t *hooks);
 
 #endif
