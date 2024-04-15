@@ -18,7 +18,8 @@
 
 #include "core/core.c"
 #include "game/game.c"
-#include "win32/d3d11.c"
+
+#include "d3d11.c"
 
 static arena_t win32_arena;
 static platform_hooks_t hooks;

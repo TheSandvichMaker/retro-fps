@@ -7,5 +7,5 @@
 #include "platform.h"
 
 #if PLATFORM_WIN32
-#include "win32/d3d11.h"
+#include "d3d11.h"
 #endif
