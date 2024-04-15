@@ -1,7 +1,8 @@
-#ifndef INTERSECT_H
-#define INTERSECT_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
+#pragma once
 
 float ray_intersect_rect3    (v3_t o, v3_t d, rect3_t rect);
 bool  ray_intersect_rect3_bvh(v3_t o, v3_t d, rect3_t rect, float max_t);
@@ -35,5 +36,3 @@ typedef struct intersect_params_t
 } intersect_params_t;
 
 bool intersect_map(struct map_t *map, const intersect_params_t *params, intersect_result_t *result);
-
-#endif /* INTERSECT_H */

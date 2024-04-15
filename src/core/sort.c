@@ -1,7 +1,10 @@
-#include "core.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 void radix_sort_u32(uint32_t *array, size_t count)
 {
+
     m_scoped_temp
     {
         uint32_t *src = array;

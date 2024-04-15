@@ -1,11 +1,9 @@
-#include "convar.h"
-#include "core/common.h"
-#include "core/string.h"
-#include "core/pool.h"
-#include "core/hashtable.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-static pool_t g_convars = INIT_POOL(convar_t);
-static table_t g_convar_from_key;
+global pool_t g_convars = INIT_POOL(convar_t);
+global table_t g_convar_from_key;
 
 void con_register(string_t key, const convar_t *var)
 {

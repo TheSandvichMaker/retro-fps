@@ -1,14 +1,8 @@
-#ifndef DREAM_UI_H
-#define DREAM_UI_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
-
-#include "platform.h"
-#include "font.h"
-
-//
-//
-//
+#pragma once
 
 #define UI_SLOW (1 && DREAM_SLOW)
 
@@ -612,9 +606,3 @@ fn void debug_notif_va(v4_t color, float time, string_t fmt, va_list args);
 
 // internal use
 fn void debug_notif_replicate(debug_notif_t *notif);
-
-//
-//
-//
-
-#endif

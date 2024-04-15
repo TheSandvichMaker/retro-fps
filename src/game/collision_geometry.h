@@ -1,5 +1,8 @@
-#ifndef DREAM_COLLISION_GEOMETRY_H
-#define DREAM_COLLISION_GEOMETRY_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
+#pragma once
 
 #include "core/api_types.h"
 
@@ -21,5 +24,3 @@ typedef struct collision_geometry_t
 } collision_geometry_t;
 
 fn collision_geometry_t collision_geometry_from_map(arena_t *arena, struct map_t *map);
-
-#endif /* COLLISION_GEOMETRY_H */

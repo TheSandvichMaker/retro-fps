@@ -1,3 +1,7 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 #pragma once
 
 typedef struct cmd_args_t

@@ -1,7 +1,9 @@
-#include "camera.h"
-#include "input.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 void compute_camera_axes(camera_t *camera)
+
 {
     v3_t forward = forward_vector_from_pitch_yaw(camera->pitch, camera->yaw);
     basis_vectors(forward, make_v3(0, 0, 1), &camera->computed_x, &camera->computed_y, &camera->computed_z);

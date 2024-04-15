@@ -1,6 +1,11 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 wchar_t *win32_format_error(HRESULT error)
 {
     wchar_t *message = NULL;
+
 
     FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER| 
                    FORMAT_MESSAGE_FROM_SYSTEM|

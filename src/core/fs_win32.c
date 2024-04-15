@@ -1,6 +1,11 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 string_t fs_read_entire_file(arena_t *arena, string_t path)
 {
     string_t result = { 0 };
+
 
 	arena_t *temp = m_get_temp(&arena, 1);
 

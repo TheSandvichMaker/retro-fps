@@ -1,5 +1,8 @@
-#include "freeverb.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
+#include "freeverb.h"
 
 #define undenormalize(n) { if (xabs(n) < 1e-37) { (n) = 0; } }
 

@@ -1,3 +1,7 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 #ifndef ATOMICS_H
 #define ATOMICS_H
 

@@ -1,6 +1,6 @@
-#include "core/thread.h"
-#include "core/atomics.h"
-#include "core/assert.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 // Wait group implementation referenced (more accurately: copied) from Odin's standard library
 

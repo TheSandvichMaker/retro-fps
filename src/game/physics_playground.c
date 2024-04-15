@@ -1,12 +1,9 @@
-#include "physics_playground.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "game.h"
-#include "map.h"
-#include "camera.h"
-#include "render.h"
-
-static phys_scene_t g_phys_scene;
-static bool g_phys_scene_initialized = false;
+global phys_scene_t g_phys_scene;
+global bool g_phys_scene_initialized = false;
 
 v3_t phys_get_center_of_mass_world(phys_body_t *body)
 {

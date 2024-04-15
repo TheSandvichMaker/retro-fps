@@ -1,17 +1,6 @@
-#include <float.h>
-
-//
-//
-//
-
-#include "core/math.h"
-
-#include "intersect.h"
-#include "map.h"
-
-//
-//
-//
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 // TODO: Figure out compiler-independent warning disabling
 #pragma warning(push)

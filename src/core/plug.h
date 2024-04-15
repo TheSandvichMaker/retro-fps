@@ -1,5 +1,8 @@
-#ifndef PLUG_H
-#define PLUG_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
+#pragma once
 
 #include "core/api_types.h"
 
@@ -17,5 +20,3 @@ typedef void (*plug_unload_t)(plug_io_t *io);
 #define DREAM_DECLARE_PLUG(name)           \
 	fn_export DREAM_PLUG_LOAD(name); \
 	fn_export DREAM_PLUG_UNLOAD(name);
-
-#endif /* PLUG_H */

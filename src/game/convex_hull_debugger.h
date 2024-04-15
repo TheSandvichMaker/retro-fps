@@ -1,10 +1,8 @@
-#ifndef DREAM_CONVEX_HULL_DEBUGGER_H
-#define DREAM_CONVEX_HULL_DEBUGGER_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
-
-#include "ui.h"
-#include "mesh.h"
+#pragma once
 
 typedef struct convex_hull_debugger_t
 {
@@ -40,5 +38,3 @@ typedef struct convex_hull_debugger_t
 
 fn void convex_hull_debugger_window_proc(struct ui_window_t *);
 fn void convex_hull_debugger_update_and_render(convex_hull_debugger_t *debugger, struct r_context_t *rc, r_view_index_t game_view);
-
-#endif

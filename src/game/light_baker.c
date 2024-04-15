@@ -1,15 +1,6 @@
-#include <stdlib.h>
-
-#include "core/core.h"
-#include "core/random.h"
-#include "core/thread.h"
-
-#include "map.h"
-#include "asset.h"
-#include "intersect.h"
-#include "job_queues.h"
-#include "light_baker.h"
-#include "render.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 v3_t map_to_cosine_weighted_hemisphere(v2_t sample)
 {

@@ -1,7 +1,12 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 #include "core.h"
 
 #include "arena.c"
 #include "args_parser.c"
+
 #include "hashtable.c"
 #include "math.c"
 #include "pool.c"

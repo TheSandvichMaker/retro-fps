@@ -1,9 +1,6 @@
-#include "core/common.h"
-#include "core/math.h"
-#include "core/arena.h"
-#include "core/stretchy_buffer.h"
-
-#include "mesh.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 //
 // gift-wrapping convex hull

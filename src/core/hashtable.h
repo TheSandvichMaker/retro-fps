@@ -1,7 +1,8 @@
-#ifndef TABLE_H
-#define TABLE_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "api_types.h"
+#pragma once
 
 enum { TABLE_UNUSED_KEY_VALUE = 0 };
 
@@ -91,5 +92,3 @@ fn_local bool table_iter_next(table_iter_t *it)
 
     return result;
 }
-
-#endif /* TABLE_H */

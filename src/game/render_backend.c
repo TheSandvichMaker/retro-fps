@@ -1,7 +1,8 @@
-#include "render_backend.h"
-#include "core/math.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-static render_api_i inst;
+global render_api_i inst;
 const render_api_i *const render = &inst;
 
 void equip_render_api(render_api_i *api)
@@ -15,7 +16,7 @@ uint32_t r_vertex_format_size[R_VERTEX_FORMAT_COUNT] = {
     [R_VERTEX_FORMAT_BRUSH]     = sizeof(r_vertex_brush_t),
 };
 
-fn uint64_t r_encode_command_depth(float depth)
+uint64_t r_encode_command_depth(float depth)
 {
     float    depth_normalized = saturate(depth / R_COMMAND_DEPTH_FAR_PLANE);
     uint64_t result           = (F32_AS_U32(depth_normalized) >> 3) & MASK_BITS(20);

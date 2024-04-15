@@ -1,9 +1,8 @@
-#include "hashtable.h"
-#include "common.h"
-#include "assert.h"
-#include "vm.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-static void table_init(table_t *table)
+fn_local void table_init(table_t *table)
 {
     ASSERT(!table->entries);
 
@@ -14,7 +13,7 @@ static void table_init(table_t *table)
     table->load = 0;
 }
 
-static void table_grow(table_t *table)
+fn_local void table_grow(table_t *table)
 {
     table_entry_t *new_entries, *old_entries;
 
@@ -50,7 +49,7 @@ static void table_grow(table_t *table)
     copy_struct(table, &new_table);
 }
 
-static bool table_find_slot(const table_t *table, uint64_t key, uint64_t *slot)
+fn_local bool table_find_slot(const table_t *table, uint64_t key, uint64_t *slot)
 {
     if (!table->entries)
         return false;

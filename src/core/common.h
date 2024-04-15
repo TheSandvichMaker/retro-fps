@@ -1,11 +1,8 @@
-#ifndef COMMON_H
-#define COMMON_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include <stdalign.h>
-
-#include "api_types.h"
-#include "tls.h"
-#include "assert.h"
+#pragma once
 
 #define array_expand(type, ...) ARRAY_COUNT(((type[]){ __VA_ARGS__ })), (type[]){ __VA_ARGS__ }
 
@@ -100,19 +97,17 @@
 #define has_flags_any(field, flags) (!!((field) & (flags)))
 #define has_flags_all(field, flags) (((field) & (flags)) == (flags))
 
-void set_memory(void *memory, size_t size, char value);
+fn void set_memory(void *memory, size_t size, char value);
 #define zero_memory(memory, size) set_memory(memory, size, 0)
 #define zero_struct(memory)       set_memory(memory, sizeof(*memory), 0)
 #define zero_array(memory, count) set_memory(memory, (count)*sizeof(*memory), 0)
 
-void copy_memory(void *dst, const void *src, size_t size);
+fn void copy_memory(void *dst, const void *src, size_t size);
 #define copy_struct(dst, src)       do { void *__dst = dst; copy_memory(__dst, src, sizeof(*(dst))); } while(0)
 #define copy_array(dst, src, count) copy_memory(dst, src, (count)*sizeof(*(dst)))
 
-uintptr_t align_forward(uintptr_t address, uintptr_t align);
-uintptr_t align_backward(uintptr_t address, uintptr_t align);
-void *align_address(void *address, uintptr_t align);
+fn uintptr_t align_forward(uintptr_t address, uintptr_t align);
+fn uintptr_t align_backward(uintptr_t address, uintptr_t align);
+fn void *align_address(void *address, uintptr_t align);
 
 #define for_array(it, arr) for (size_t it = 0; it < ARRAY_COUNT(arr); it++)
-
-#endif /* COMMON_H */

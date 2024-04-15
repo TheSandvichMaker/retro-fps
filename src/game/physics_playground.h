@@ -1,7 +1,8 @@
-#ifndef DREAM_PHYS_PLAYGROUND_H
-#define DREAM_PHYS_PLAYGROUND_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
+#pragma once
 
 typedef enum phys_shape_kind_t
 {
@@ -70,5 +71,3 @@ typedef struct phys_scene_t
 } phys_scene_t;
 
 fn void update_and_render_physics_playground(struct r_context_t *rc, struct world_t *world, float dt);
-
-#endif

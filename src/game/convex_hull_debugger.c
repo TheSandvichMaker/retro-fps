@@ -1,9 +1,8 @@
-#include "convex_hull_debugger.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "render.h"
-#include "render_helpers.h"
-
-static void generate_new_random_convex_hull(convex_hull_debugger_t *debugger, size_t point_count, random_series_t *r)
+fn_local void generate_new_random_convex_hull(convex_hull_debugger_t *debugger, size_t point_count, random_series_t *r)
 {
 	triangle_mesh_t *mesh  = &debugger->mesh;
 	hull_debug_t    *debug = &debugger->debug;
@@ -36,7 +35,7 @@ static void generate_new_random_convex_hull(convex_hull_debugger_t *debugger, si
 	}
 }
 
-static void hull_render_debug_triangles(convex_hull_debugger_t *debugger, r_context_t *rc, hull_debug_step_t *step, bool final_step, bool render_degenerate, bool render_wireframe)
+fn_local void hull_render_debug_triangles(convex_hull_debugger_t *debugger, r_context_t *rc, hull_debug_step_t *step, bool final_step, bool render_degenerate, bool render_wireframe)
 {
 	hull_debug_t             *debug     = &debugger->debug;
 	hull_diagnostic_result_t *diag      = debug->diagnostics;

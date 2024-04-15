@@ -1,5 +1,8 @@
-#ifndef DREAM_WORLD_H
-#define DREAM_WORLD_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
+#pragma once
 
 typedef struct world_t
 {
@@ -12,5 +15,3 @@ typedef struct world_t
     float fade_t;
     float fade_target_t;
 } world_t;
-
-#endif

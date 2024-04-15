@@ -1,4 +1,6 @@
-#include "core.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 void m_init_with_memory(arena_t *arena, void *memory, size_t size)
 {
@@ -190,7 +192,7 @@ void m_scope_end(arena_t *arena)
 	}
 }
 
-static thread_local arena_t temp_arenas[4];
+global thread_local arena_t temp_arenas[4];
 
 arena_t *m_get_temp(arena_t **conflicts, size_t conflict_count)
 {

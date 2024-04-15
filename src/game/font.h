@@ -1,8 +1,9 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 #ifndef DREAM_FONT_H
 #define DREAM_FONT_H
-
-#include "core/api_types.h"
-#include "render.h"
 
 typedef struct font_glyph_t
 {

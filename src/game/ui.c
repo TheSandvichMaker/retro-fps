@@ -1,5 +1,6 @@
-#include "core/math.h"
-#include "ui.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 //
 // IDs

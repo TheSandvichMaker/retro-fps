@@ -1,3 +1,7 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 #define COBJMACROS
 #define NOMINMAX
 

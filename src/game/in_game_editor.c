@@ -1,19 +1,8 @@
-#include "core/core.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "render.h"
-#include "render_helpers.h"
-#include "light_baker.h"
-#include "in_game_editor.h"
-#include "game.h"
-#include "map.h"
-#include "ui.h"
-#include "intersect.h"
-#include "asset.h"
-#include "audio.h"
-#include "mesh.h"
-#include "convex_hull_debugger.h"
-
-static void push_poly_wireframe(r_context_t *rc, map_t *map, map_poly_t *poly, v4_t color)
+fn_local void push_poly_wireframe(r_context_t *rc, map_t *map, map_poly_t *poly, v4_t color)
 {
     uint16_t *indices   = map->indices          + poly->first_index;
     v3_t     *positions = map->vertex.positions + poly->first_vertex;
@@ -30,7 +19,7 @@ static void push_poly_wireframe(r_context_t *rc, map_t *map, map_poly_t *poly, v
     }
 }
 
-static void push_brush_wireframe(r_context_t *rc, map_t *map, map_brush_t *brush, v4_t color)
+fn_local void push_brush_wireframe(r_context_t *rc, map_t *map, map_brush_t *brush, v4_t color)
 {
     for (size_t poly_index = 0; poly_index < brush->plane_poly_count; poly_index++)
     {
@@ -48,8 +37,8 @@ typedef enum editor_kind_t
 	EDITOR_COUNT,
 } editor_kind_t;
 
-static void ui_demo_proc         (ui_window_t *);
-static void lightmap_editor_proc (ui_window_t *);
+fn_local void ui_demo_proc         (ui_window_t *);
+fn_local void lightmap_editor_proc (ui_window_t *);
 
 typedef struct ui_demo_panel_t
 {
@@ -104,7 +93,7 @@ typedef struct editor_state_t
 	ui_demo_panel_t ui_demo;
 } editor_state_t;
 
-static editor_state_t editor = {
+global editor_state_t editor = {
     .show_timings = false,
 
     .lm_editor = {
@@ -148,7 +137,7 @@ static editor_state_t editor = {
 	},
 };
 
-static void lightmap_editor_proc(ui_window_t *window)
+fn_local void lightmap_editor_proc(ui_window_t *window)
 {
 	(void)window;
 
@@ -171,14 +160,14 @@ static void lightmap_editor_proc(ui_window_t *window)
 	{
 		ui_header(S("Bake Quality"));
 
-		static int bake_preset              = 0;
-		static int ray_count                = 2;
-		static int ray_recursion            = 2;
-		static int fog_light_sample_count   = 2;
-		static int fogmap_scale_index       = 1;
-		static bool use_dynamic_sun_shadows = true;
+		local_persist int bake_preset              = 0;
+		local_persist int ray_count                = 2;
+		local_persist int ray_recursion            = 2;
+		local_persist int fog_light_sample_count   = 2;
+		local_persist int fogmap_scale_index       = 1;
+		local_persist bool use_dynamic_sun_shadows = true;
 
-		static string_t preset_labels[] = { Sc("Crappy"), Sc("Acceptable"), Sc("Excessive") };
+		local_persist string_t preset_labels[] = { Sc("Crappy"), Sc("Acceptable"), Sc("Excessive") };
 		if (ui_option_buttons(S("Preset"), &bake_preset, ARRAY_COUNT(preset_labels), preset_labels))
 		{
 			switch (bake_preset)
@@ -213,11 +202,11 @@ static void lightmap_editor_proc(ui_window_t *window)
 		ui_slider_int(S("Max Recursion"), &ray_recursion, 1, 8);
 		ui_slider_int(S("Fog Light Sample Count"), &fog_light_sample_count, 1, 8);
 
-		static int fogmap_scales[] = {
+		local_persist int fogmap_scales[] = {
 			32, 16, 8, 4,
 		};
 
-		static string_t fogmap_scale_labels[] = {
+		local_persist string_t fogmap_scale_labels[] = {
 			Sc("32"), Sc("16"), Sc("8"), Sc("4"),
 		};
 
@@ -453,7 +442,7 @@ static void lightmap_editor_proc(ui_window_t *window)
 	}
 }
 
-static void render_lm_editor(r_context_t *rc)
+fn_local void render_lm_editor(r_context_t *rc)
 {
     world_t *world = g_world;
     player_t *player = world->player;
@@ -712,14 +701,14 @@ fn_local void ui_demo_proc(ui_window_t *window)
 
 	ui_demo_panel_t *demo = &editor.ui_demo;
 
-	static bool check_me = false;
+	local_persist bool check_me = false;
 	ui_hover_tooltip(S("This checkbox does nothing! GOOD DAY SIR!!"));
 	ui_checkbox(S("Checkbox That Does Nothing"), &check_me);
 
 	ui_slider    (S("Float Slider"), &demo->slider_f32, -1.0f, 1.0f);
 	ui_slider_int(S("Int Slider"), &demo->slider_i32, 0, 8);
 
-	static int font_size = 18;
+	local_persist int font_size = 18;
 	if (ui_slider_int(S("UI Font Size"), &font_size, 8, 32))
 	{
 		ui_set_font_height((float)font_size);
@@ -750,8 +739,8 @@ fn_local void ui_demo_proc(ui_window_t *window)
 
 	if (ui_button(S("Toggle Music")))
 	{
-		static bool       is_playing = false;
-		static mixer_id_t music_handle;
+		local_persist bool       is_playing = false;
+		local_persist mixer_id_t music_handle;
 
 		if (is_playing)
 		{
@@ -779,9 +768,9 @@ fn_local void ui_demo_proc(ui_window_t *window)
 
 	ui_slider(S("Filter Test"), &mixer.filter_test, -1.0f, 1.0f);
 
-	static size_t selection_index = 0;
+	local_persist size_t selection_index = 0;
 
-	static string_t options[] = {
+	local_persist string_t options[] = {
 		Sc("Option A"),
 		Sc("Option B"),
 		Sc("Option C"),

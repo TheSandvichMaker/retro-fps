@@ -1,7 +1,10 @@
-#include "core/core.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 void *sb__alloc(arena_t *arena, unsigned capacity, size_t item_size)
 {
+
     sb_t *sb = m_alloc(arena, sizeof(sb_t) + capacity*item_size, 16);
     sb->arena    = arena;
     sb->count    = 0;

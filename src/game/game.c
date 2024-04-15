@@ -1,3 +1,7 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 #include "game.h"
 
 #include "asset.c"
@@ -357,7 +361,7 @@ fn void init_view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
 void game_init(void)
 {
 	initialize_asset_system(&(asset_config_t){
-        .mix_sample_rate = WAVE_SAMPLE_RATE,
+        .mix_sample_rate = DREAM_MIX_SAMPLE_RATE,
     });
 
 	init_game_job_queues();

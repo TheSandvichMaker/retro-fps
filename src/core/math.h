@@ -1,17 +1,12 @@
-#ifndef CORE_MATH_H
-#define CORE_MATH_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
+#pragma once
 
 #include <xmmintrin.h>
 #include <float.h>
 #include <math.h>
-
-//
-
-#include "api_types.h"
-
-//
-//
-//
 
 typedef __m128 v4sf;  // vector of 4 float (sse1)
 
@@ -1815,11 +1810,26 @@ fn_local float tetrahedron_signed_volume(v3_t a, v3_t b, v3_t c, v3_t d)
 	return volume;
 }
 
+#include "geometric_algebra.h"
+
+fn_local v3_t forward_vector_from_pitch_yaw(float pitch, float yaw)
+{
+    rotor3_t r_pitch = rotor3_from_plane_angle(PLANE_ZX, DEG_TO_RAD*pitch);
+    rotor3_t r_yaw   = rotor3_from_plane_angle(PLANE_YZ, DEG_TO_RAD*yaw  );
+
+    v3_t forward = { 1, 0, 0 };
+    forward = rotor3_rotatev(r_pitch, forward);
+    forward = rotor3_rotatev(r_yaw,   forward);
+
+    return forward;
+}
+
 // Steam hardware survey says SSE2 availability is 100%
 // That seems good enough to me.
 #define USE_SSE2
 
 // below is Julien Pommier's sse_mathfun.h (http://gruntthepeon.free.fr/ssemath/) with minor alterations:
+// copyright/license applies as follows:
 
 /* SIMD (SSE1+MMX or SSE2) implementation of sin, cos, exp and log
 
@@ -2528,19 +2538,3 @@ void sincos_ps(v4sf x, v4sf *s, v4sf *c) {
 }
 
 // #pragma optimize("", on)
-
-#include "geometric_algebra.h"
-
-fn_local v3_t forward_vector_from_pitch_yaw(float pitch, float yaw)
-{
-    rotor3_t r_pitch = rotor3_from_plane_angle(PLANE_ZX, DEG_TO_RAD*pitch);
-    rotor3_t r_yaw   = rotor3_from_plane_angle(PLANE_YZ, DEG_TO_RAD*yaw  );
-
-    v3_t forward = { 1, 0, 0 };
-    forward = rotor3_rotatev(r_pitch, forward);
-    forward = rotor3_rotatev(r_yaw,   forward);
-
-    return forward;
-}
-
-#endif /* CORE_MATH_H */

@@ -1,7 +1,10 @@
-#include "core/core.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 #ifdef NO_STD_LIB
 extern inline float logf(float x);
+
 extern inline float expf(float x);
 extern inline float sinf(float x);
 extern inline float cosf(float x);
@@ -16,7 +19,7 @@ void fatal_math_error(const char *message)
     FATAL_ERROR(message);
 }
 
-static void mat_swap(mat_t *m, int row_a, int row_b)
+fn_local void mat_swap(mat_t *m, int row_a, int row_b)
 {
     for (int j = 0; j < m->m; j++)
     {
@@ -24,7 +27,7 @@ static void mat_swap(mat_t *m, int row_a, int row_b)
     }
 }
 
-static void mat_scale(mat_t *m, int row, float scale)
+fn_local void mat_scale(mat_t *m, int row, float scale)
 {
     for (int j = 0; j < m->m; j++)
     {
@@ -32,7 +35,7 @@ static void mat_scale(mat_t *m, int row, float scale)
     }
 }
 
-static void mat_add(mat_t *m, int row_a, int row_b, float scale)
+fn_local void mat_add(mat_t *m, int row_a, int row_b, float scale)
 {
     for (int j = 0; j < m->m; j++)
     {
@@ -40,7 +43,7 @@ static void mat_add(mat_t *m, int row_a, int row_b, float scale)
     }
 }
 
-static int find_max_pivot(mat_t *m, int k)
+fn_local int find_max_pivot(mat_t *m, int k)
 {
     int result = k;
     float max = abs_ss(M(m, k, k));
@@ -57,7 +60,7 @@ static int find_max_pivot(mat_t *m, int k)
     return result;
 }
 
-static void back_substitute(mat_t *m, float *x)
+fn_local void back_substitute(mat_t *m, float *x)
 {
     zero_array(x, m->n);
 

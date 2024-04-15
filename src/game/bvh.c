@@ -1,4 +1,6 @@
-#include "bvh.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 void bvh_iter_init(bvh_iter_t *it, bvh_node_t *nodes, uint32_t node_count)
 {

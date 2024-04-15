@@ -1,12 +1,11 @@
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-
-#include "file_watcher.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 // Somewhat shamelessly copied from the Jai File_Watcher module!
 
 typedef struct file_watcher_os_t
+
 {
 	DWORD buffer_size;
 } file_watcher_os_t;

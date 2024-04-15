@@ -1,6 +1,8 @@
-#pragma once
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
+#pragma once
 
 DEFINE_HANDLE_TYPE(texture_handle_t);
 DEFINE_HANDLE_TYPE(mesh_handle_t);

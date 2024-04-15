@@ -1,4 +1,6 @@
-#include "job_queues.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 job_queue_t high_priority_job_queue;
 job_queue_t low_priority_job_queue;

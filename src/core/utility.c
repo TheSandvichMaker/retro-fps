@@ -1,7 +1,14 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 #include "core.h"
+
+
 
 uintptr_t align_forward(uintptr_t address, uintptr_t align)
 {
+
     uintptr_t result = (address + (align-1)) & (-(intptr_t)align);
     return result;
 }

@@ -1,4 +1,6 @@
-#include "render.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 #define SCREENSPACE_VIEW_INDEX (1)
 

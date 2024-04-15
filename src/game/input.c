@@ -1,7 +1,10 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 #include "input.h"
 
 static input_kind_t input_kind;
-
 static uint64_t buttons_down;
 static uint64_t buttons_pressed;
 static uint64_t buttons_released;

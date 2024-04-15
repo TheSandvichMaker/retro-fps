@@ -1,7 +1,8 @@
-#ifndef STRING_LIST_H
-#define STRING_LIST_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "api_types.h"
+#pragma once
 
 fn_local bool slist_empty(string_list_t *list)
 {
@@ -59,5 +60,3 @@ fn void slist_split_words(string_list_t *list, arena_t *arena, string_t string);
 fn void slist_split_lines(string_list_t *list, arena_t *arena, string_t string);
 
 fn string_list_t slist_from_array(arena_t *arena, size_t count, string_t *array);
-
-#endif /* STRING_LIST_H */

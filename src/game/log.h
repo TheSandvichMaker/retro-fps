@@ -1,7 +1,8 @@
-#ifndef DREAM_LOG_H
-#define DREAM_LOG_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
+#pragma once
 
 typedef enum log_level_t
 {
@@ -38,8 +39,6 @@ typedef struct log_loc_t
 #define log(cat, level, message)       log_    (MAKE_LOG_LOCATION, cat, level, message)
 #define logf(cat, level, fmt, ...)     logf_   (MAKE_LOG_LOCATION, cat, level, fmt, ##__VA_ARGS__)
 #define logf_va(cat, level, fmt, args) logf_va_(MAKE_LOG_LOCATION, cat, level, fmt, args)
-void log_    (const log_loc_t *loc, log_category_t cat, log_level_t level, string_t message);
-void logf_   (const log_loc_t *loc, log_category_t cat, log_level_t level, const char *fmt, ...);
-void logf_va_(const log_loc_t *loc, log_category_t cat, log_level_t level, const char *fmt, va_list args);
-
-#endif
+fn void log_    (const log_loc_t *loc, log_category_t cat, log_level_t level, string_t message);
+fn void logf_   (const log_loc_t *loc, log_category_t cat, log_level_t level, const char *fmt, ...);
+fn void logf_va_(const log_loc_t *loc, log_category_t cat, log_level_t level, const char *fmt, va_list args);

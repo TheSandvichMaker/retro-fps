@@ -1,8 +1,9 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 #ifndef SUBSET_ITER_H
 #define SUBSET_ITER_H
-
-#include "api_types.h"
-#include "arena.h"
 
 typedef struct subset_iter_t
 {
@@ -16,7 +17,7 @@ typedef struct subset_iter_t
 // if this was a co-routine there would be a yield inbetween
 // the pre and post blocks
 
-static inline void subset__pre(subset_iter_t *iter)
+fn_local void subset__pre(subset_iter_t *iter)
 {
     if (iter->i < 0) return;
 
@@ -30,7 +31,7 @@ static inline void subset__pre(subset_iter_t *iter)
     iter->i = j - 1;
 }
 
-static inline void subset__post(subset_iter_t *iter)
+fn_local void subset__post(subset_iter_t *iter)
 {
     while (iter->indices[iter->i] == iter->i + iter->n - iter->k)
     {
@@ -41,7 +42,7 @@ static inline void subset__post(subset_iter_t *iter)
         iter->indices[iter->i] += 1;
 }
 
-static inline subset_iter_t iterate_subsets(arena_t *arena, size_t n, int k)
+fn_local subset_iter_t iterate_subsets(arena_t *arena, size_t n, int k)
 {
     subset_iter_t iter = {
         .i = n >= k ? 0 : -1,
@@ -54,12 +55,12 @@ static inline subset_iter_t iterate_subsets(arena_t *arena, size_t n, int k)
     return iter;
 }
 
-static inline bool subset_valid(subset_iter_t *iter)
+fn_local bool subset_valid(subset_iter_t *iter)
 {
     return iter->i >= 0;
 }
 
-static inline void subset_next(subset_iter_t *iter)
+fn_local void subset_next(subset_iter_t *iter)
 {
     subset__post(iter);
     subset__pre(iter);

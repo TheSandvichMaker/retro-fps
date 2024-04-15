@@ -1,7 +1,10 @@
-#include "log.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 string_t log_level_to_string[] = {
 	[LogLevel_Info]    = Sc("Info"),
+
 	[LogLevel_Warning] = Sc("Warning"),
 	[LogLevel_Error]   = Sc("Error"),
 };
@@ -21,7 +24,7 @@ typedef struct log_context_t
 	int dummy;
 } log_context_t;
 
-static thread_local log_context_t log_ctx;
+global thread_local log_context_t log_ctx;
 
 void log_(const log_loc_t *loc, log_category_t cat, log_level_t level, string_t message)
 {

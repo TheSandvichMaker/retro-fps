@@ -1,3 +1,7 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 #ifndef DREAM_AUDIO_H
 #define DREAM_AUDIO_H
 
@@ -250,7 +254,7 @@ typedef struct delay_t
 	float    feedback;
 	uint32_t index;
 	uint32_t delay_time;
-	float    buffer[WAVE_SAMPLE_RATE];
+	float    buffer[DREAM_MIX_SAMPLE_RATE];
 } delay_t;
 
 typedef struct reverb_t
@@ -260,8 +264,8 @@ typedef struct reverb_t
 	uint32_t index_r;
 	uint32_t delay_time_l;
 	uint32_t delay_time_r;
-	float    buffer_l[WAVE_SAMPLE_RATE];
-	float    buffer_r[WAVE_SAMPLE_RATE];
+	float    buffer_l[DREAM_MIX_SAMPLE_RATE];
+	float    buffer_r[DREAM_MIX_SAMPLE_RATE];
 	float    mix_matrix[2][2];
 } reverb_t;
 
@@ -353,7 +357,7 @@ fn_local mixer_id_t play_sound(const play_sound_t *params)
 
 fn_local uint32_t samples_from_seconds(float seconds)
 {
-	uint32_t result = (uint32_t)(seconds*WAVE_SAMPLE_RATE);
+	uint32_t result = (uint32_t)(seconds*DREAM_MIX_SAMPLE_RATE);
 	return result;
 }
 

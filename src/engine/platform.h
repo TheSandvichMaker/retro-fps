@@ -1,7 +1,8 @@
-#ifndef DREAM_PLATFORM_H
-#define DREAM_PLATFORM_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
+#pragma once
 
 typedef uint32_t platform_mouse_buttons_t;
 typedef enum platform_mouse_button_enum_t
@@ -325,5 +326,3 @@ typedef struct platform_hooks_t
 } platform_hooks_t;
 
 fn_export void platform_init(size_t argc, string_t *argv, platform_hooks_t *hooks);
-
-#endif

@@ -1,7 +1,8 @@
-#ifndef LIGTABLE_BAKER_H
-#define LIGTABLE_BAKER_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
+#pragma once
 
 typedef struct lum_params_t
 {
@@ -137,5 +138,3 @@ fn_local float bake_progress(lum_bake_state_t *state)
 {
 	return (float)state->jobs_completed / (float)state->job_count;
 }
-
-#endif /* LIGTABLE_BAKER_H */

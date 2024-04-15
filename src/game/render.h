@@ -1,8 +1,8 @@
-#ifndef RENDER_H
-#define RENDER_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
-#include "render_backend.h"
+#pragma once
 
 typedef struct render_settings_t
 {
@@ -97,5 +97,3 @@ fn void r_push_layer(r_context_t *rc, r_screen_layer_t layer);
 fn void r_pop_layer(r_context_t *rc);
 
 #define R_LAYER(rc, layer) DEFER_LOOP(r_push_layer(rc, layer), r_pop_layer(rc))
-
-#endif /* RENDER_H */

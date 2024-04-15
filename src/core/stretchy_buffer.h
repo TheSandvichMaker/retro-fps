@@ -1,3 +1,7 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 #ifndef STRETCHY_BUFFER_H
 #define STRETCHY_BUFFER_H
 

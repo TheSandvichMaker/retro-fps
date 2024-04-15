@@ -1,3 +1,7 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 #ifndef GAME_JOB_QUEUES_H
 #define GAME_JOB_QUEUES_H
 

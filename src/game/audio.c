@@ -1,12 +1,8 @@
-#include "core/common.h"
-#include "core/arena.h"
-#include "core/pool.h"
-#include "core/hashtable.h"
-#include "core/math.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "asset.h"
-#include "audio.h"
-#include "freeverb.h"
+#pragma once
 
 #define MIXER_FLUSH_DENORMALS 1
 

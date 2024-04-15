@@ -1,3 +1,7 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 fn wchar_t *win32_format_error(HRESULT error);
 fn void win32_display_last_error(void);
 fn void win32_output_last_error(string16_t prefix);

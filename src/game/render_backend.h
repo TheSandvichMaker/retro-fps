@@ -1,5 +1,8 @@
-#ifndef RENDER_BACKEND_H
-#define RENDER_BACKEND_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
+#pragma once
 
 //
 // texture stuff
@@ -438,5 +441,3 @@ typedef struct render_api_i
 
 void equip_render_api(render_api_i *api);
 extern const render_api_i *const render;
-
-#endif /* RENDER_BACKEND_H */

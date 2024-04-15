@@ -1,7 +1,8 @@
-#ifndef FILESYSTEM_H
-#define FILESYSTEM_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "api_types.h"
+#pragma once
 
 fn string_t fs_read_entire_file (arena_t *arena, string_t path);
 fn bool     fs_write_entire_file(string_t path, string_t file);
@@ -56,5 +57,3 @@ fn fs_create_directory_result_t fs_create_directory_recursive(string_t directory
 fn string_t fs_full_path(arena_t *arena, string_t relative_path);
 
 fn uint64_t fs_get_last_write_time(string_t path);
-
-#endif /* FILESYSTEM_H */

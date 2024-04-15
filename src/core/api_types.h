@@ -1,3 +1,7 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 #pragma once
 
 #include <stdint.h>
@@ -17,6 +21,7 @@
 #define fn_export extern __declspec(dllexport)
 
 #define global static
+#define local_persist static
 
 #define SUPPRESS_UNUSED_WARNING(x) (void)(x)
 

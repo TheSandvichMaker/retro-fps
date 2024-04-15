@@ -1,7 +1,9 @@
-// the temp macro can clash even though core.h is included after,
-// because I also support unity builds
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 #pragma push_macro("temp")
+
 #undef temp
 
 #define STB_SPRINTF_IMPLEMENTATION
@@ -11,8 +13,6 @@
 #include "xxhash/xxhash.h"
 
 #pragma pop_macro("temp")
-
-#include "core.h"
 
 size_t string_count(const char *string)
 {

@@ -1,21 +1,12 @@
-#define NOMINMAX
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-
-//
-//
-//
-
-#include "core/thread.h"
-#include "core/atomics.h"
-#include "core/arena.h"
-#include "core/assert.h"
-#include "core/common.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 bool wait_on_address(volatile void *address, void *compare_address, size_t address_size)
 {
 	return WaitOnAddress(address, compare_address, address_size, INFINITE);
 }
+
 
 void wake_by_address(void *address)
 {

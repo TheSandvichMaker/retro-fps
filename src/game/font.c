@@ -1,8 +1,10 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 #define STBRP_STATIC
 #define STB_RECT_PACK_IMPLEMENTATION
 #include "stb_rect_pack.h"
-
-#include "core/arena.h"
 
 #define STBTT_malloc(size, userdata) m_alloc_nozero((arena_t *)userdata, size, 16)
 #define STBTT_free(pointer, userdata) ((void)pointer, (void)userdata, 0)
@@ -10,9 +12,6 @@
 #define STBTT_STATIC
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
-
-#include "font.h"
-#include "render.h"
 
 font_atlas_t make_font_atlas(string_t path, size_t range_count, font_range_t *ranges, float font_size)
 {

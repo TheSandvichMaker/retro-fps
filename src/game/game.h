@@ -1,3 +1,7 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 #pragma once
 
 #include "asset.h"
@@ -6,11 +10,9 @@
 #include "camera.h"
 #include "collision_geometry.h"
 #include "convar.h"
-#include "convex_hull_debugger.h"
 #include "dream.h"
 #include "font.h"
 #include "freeverb.h"
-#include "in_game_editor.h"
 #include "input.h"
 #include "intersect.h"
 #include "job_queues.h"
@@ -19,10 +21,12 @@
 #include "map.h"
 #include "mesh.h"
 #include "physics_playground.h"
-#include "render.h"
 #include "render_backend.h"
+#include "render.h"
 #include "render_helpers.h"
 #include "ui.h"
+#include "in_game_editor.h"
+#include "convex_hull_debugger.h"
 
 typedef enum player_move_mode_t
 {

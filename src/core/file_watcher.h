@@ -1,7 +1,8 @@
-#ifndef CORE_FILE_WATCHER_H
-#define CORE_FILE_WATCHER_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
+#pragma once
 
 typedef struct file_watcher_directory_os_t file_watcher_directory_os_t;
 
@@ -54,5 +55,3 @@ fn void file_watcher_release(file_watcher_t *watcher);
 
 fn void file_watcher_add_directory(file_watcher_t *watcher, string_t directory);
 fn file_event_t *file_watcher_get_events(file_watcher_t *watcher, arena_t *arena);
-
-#endif

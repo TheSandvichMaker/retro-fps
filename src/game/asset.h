@@ -1,8 +1,10 @@
-#ifndef ASSET_H
-#define ASSET_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
-#include "core/string.h"
+#pragma once
+
+#define DREAM_MIX_SAMPLE_RATE 44100
 
 //
 // streaming asset API
@@ -145,11 +147,7 @@ fn image_t load_image_from_disk  (arena_t *arena, string_t path, unsigned nchann
 
 fn bool split_image_into_cubemap(const image_t *source, cubemap_t *cubemap);
 
-#define WAVE_SAMPLE_RATE 44100
-
 fn waveform_t load_waveform_info_from_memory(string_t file_data);
 fn waveform_t load_waveform_info_from_disk  (string_t path);
 fn waveform_t load_waveform_from_memory(arena_t *arena, string_t file_data);
 fn waveform_t load_waveform_from_disk  (arena_t *arena, string_t path);
-
-#endif /* ASSET_H */

@@ -1,14 +1,19 @@
-static void *stbi_malloc(size_t size);
-static void *stbi_realloc(void *ptr, size_t new_size);
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
+fn void *stbi_malloc(size_t size);
+fn void *stbi_realloc(void *ptr, size_t new_size);
 
 #define STBI_MALLOC(sz)          stbi_malloc(size)
+
 #define STBI_REALLOC(ptr, newsz) stbi_realloc(ptr, newsz)
 #define STBI_FREE(ptr)           (void)ptr
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-static thread_local arena_t *stbi_arena;
+global thread_local arena_t *stbi_arena;
 
 void *stbi_malloc(size_t size)
 {
@@ -648,9 +653,9 @@ bool parse_waveform_header_internal(string_t file,
 		goto bail; // unexpected bits per sample (I may later allow other bit depths)
 	}
 
-	if (fmt_chunk->sample_rate != WAVE_SAMPLE_RATE)
+	if (fmt_chunk->sample_rate != DREAM_MIX_SAMPLE_RATE)
 	{
-		LOG_ERROR("Unsupported sample rate while loading .wav (expected %u, got %u)", WAVE_SAMPLE_RATE, fmt_chunk->sample_rate);
+		LOG_ERROR("Unsupported sample rate while loading .wav (expected %u, got %u)", DREAM_MIX_SAMPLE_RATE, fmt_chunk->sample_rate);
 		goto bail;
 	}
 

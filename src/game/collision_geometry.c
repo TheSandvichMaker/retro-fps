@@ -1,7 +1,6 @@
-#include "collision_geometry.h"
-
-#include "map.h"
-#include "mesh.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 #if 0
 typedef struct hull_node_t

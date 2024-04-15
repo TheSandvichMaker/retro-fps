@@ -1,5 +1,8 @@
-#ifndef NODE_ITER_H
-#define NODE_ITER_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
+#pragma once
 
 static inline void *node_next_depth_first_pre_order(void *node_void)
 {
@@ -28,5 +31,3 @@ static inline void *node_next_depth_first_pre_order(void *node_void)
 
     return next;
 }
-
-#endif /* NODE_ITER_H */

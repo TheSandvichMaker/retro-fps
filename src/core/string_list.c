@@ -1,12 +1,6 @@
-#include "common.h"
-
-#include "string.h"
-#include "string_list.h"
-#include "arena.h"
-
-//
-//
-//
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 void slist_appends_nocopy(string_list_t *list, arena_t *arena, string_t string)
 {

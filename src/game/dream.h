@@ -1,4 +1,4 @@
-#ifndef DREAM_H
-#define DREAM_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#endif

@@ -1,6 +1,8 @@
-#pragma once
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
+#pragma once
 
 fn size_t query_processor_count(void);
 

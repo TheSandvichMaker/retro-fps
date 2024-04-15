@@ -1,7 +1,8 @@
-#ifndef DREAM_MESH_H
-#define DREAM_MESH_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
+#pragma once
 
 typedef struct hull_debug_edge_t
 {
@@ -80,5 +81,3 @@ typedef struct triangle_mesh_t
 fn triangle_mesh_t calculate_convex_hull      (arena_t *arena, size_t count, v3_t *points);
 fn triangle_mesh_t calculate_convex_hull_debug(arena_t *arena, size_t count, v3_t *points, hull_debug_t *debug);
 fn void convex_hull_do_extended_diagnostics   (triangle_mesh_t *mesh, hull_debug_t *debug);
-
-#endif

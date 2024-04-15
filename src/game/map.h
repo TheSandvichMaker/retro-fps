@@ -1,11 +1,8 @@
-#ifndef MAP_H
-#define MAP_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/core.h"
-
-#include "render.h"
-#include "collision_geometry.h"
-#include "asset.h"
+#pragma once
 
 #if DEBUG
 #define LIGHTMAP_SCALE 8
@@ -163,5 +160,3 @@ string_t value_from_key(map_t *map, map_entity_t *entity, string_t key);
 int      int_from_key  (map_t *map, map_entity_t *entity, string_t key);
 float    float_from_key(map_t *map, map_entity_t *entity, string_t key);
 v3_t     v3_from_key   (map_t *map, map_entity_t *entity, string_t key);
-
-#endif /* MAP_H */

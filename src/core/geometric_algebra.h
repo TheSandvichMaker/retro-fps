@@ -1,7 +1,8 @@
-#ifndef GEOMETRIC_ALGEBRA_H
-#define GEOMETRIC_ALGEBRA_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "api_types.h"
+#pragma once
 
 // based on the article from marc ten bosch https://marctenbosch.com/quaternions/
 // and the code snippet he provides https://marctenbosch.com/quaternions/code.htm
@@ -191,5 +192,3 @@ static inline rotor3_t rotor3_rotate(rotor3_t q, rotor3_t r)
 {
     return rotor3_product(rotor3_product(q, r), rotor3_reverse(q));
 }
-
-#endif /* GEOMETRIC_ALGEBRA_H */

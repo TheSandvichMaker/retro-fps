@@ -1,7 +1,8 @@
-#ifndef ASSERT_H
-#define ASSERT_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
+#pragma once
 
 #define ASSERT(expr) ((expr) ? true : (fatal_error(__LINE__, strlit(__FILE__), "Assertion failed: " #expr), false))
 #define ASSERT_MSG(expr, msg, ...) ((expr) ? true : (fatal_error(__LINE__, strlit(__FILE__), msg, ##__VA_ARGS__), false))
@@ -27,5 +28,3 @@
 
 void fatal_error(int line, string_t file, const char *fmt, ...);
 void fatal_error_va(int line, string_t file, const char *fmt, va_list args);
-
-#endif /* ASSERT_H */

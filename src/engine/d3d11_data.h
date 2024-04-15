@@ -1,5 +1,8 @@
-#ifndef D3D11_DATA_H
-#define D3D11_DATA_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
+#pragma once
 
 static const float g_skybox_vertices[] = {
     // positions          
@@ -45,5 +48,3 @@ static const float g_skybox_vertices[] = {
     -1.0f, -1.0f,  1.0f,
      1.0f, -1.0f,  1.0f
 };
-
-#endif /* D3D11_DATA_H */

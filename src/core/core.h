@@ -1,3 +1,7 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 #pragma once
 
 #include "api_types.h"
@@ -27,6 +31,7 @@
 #include "sort.h"
 #include "stretchy_buffer.h"
 #include "string.h"
+#include "subset_iter.h"
 #include "string_list.h"
 #include "thread.h"
 #include "tls.h"

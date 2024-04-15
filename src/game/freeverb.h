@@ -1,5 +1,6 @@
-#ifndef FREEVERB_H
-#define FREEVERB_H
+#pragma once
+
+// freeverb re-implementation by rxi: https://gist.github.com/rxi/e5488c6660154329ddfc4a7a7d2997f8 
 
 /*
 ** freeverb v0.1
@@ -71,5 +72,3 @@ void fv_set_damp(fv_Context *ctx, float value);
 void fv_set_wet(fv_Context *ctx, float value);
 void fv_set_dry(fv_Context *ctx, float value);
 void fv_set_width(fv_Context *ctx, float value);
-
-#endif

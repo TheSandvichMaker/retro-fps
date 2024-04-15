@@ -1,7 +1,8 @@
-#ifndef DREAM_CORE_DYNAMIC_STRING_H
-#define DREAM_CORE_DYNAMIC_STRING_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
+#pragma once
 
 fn_local size_t dyn_string_space_remaining(dynamic_string_t *d)
 {
@@ -94,5 +95,3 @@ fn_local void dyn_string_remove_at(dynamic_string_t *d, size_t index)
 
 	dyn_string_remove_range(d, index, 1);
 }
-
-#endif

@@ -4,5 +4,5 @@
 
 #pragma once
 
-fn void radix_sort_u32(uint32_t *array, size_t size);
-fn void radix_sort_u64(uint64_t *array, size_t size);
+typedef void (*audio_output_callback_t)(size_t frame_count, float *frames);
+fn void start_audio_thread(audio_output_callback_t callback);

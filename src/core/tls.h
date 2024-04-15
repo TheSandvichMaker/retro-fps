@@ -1,8 +1,8 @@
-#ifndef THREAD_CONTEXT_H
-#define THREAD_CONTEXT_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
-#include "core/assert.h"
+#pragma once
 
 typedef struct thread_context_t
 {
@@ -17,5 +17,3 @@ typedef struct thread_context_t
 
 extern thread_local thread_context_t __thread_context;
 #define THREAD_CONTEXT (&__thread_context)
-
-#endif /* THREAD_CONTEXT_H */

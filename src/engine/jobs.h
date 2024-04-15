@@ -1,6 +1,8 @@
-#pragma once
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "engine/api_types.h"
+#pragma once
 
 typedef struct job_context_t
 {

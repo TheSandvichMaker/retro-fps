@@ -1,7 +1,8 @@
-#ifndef BVH_H
-#define BVH_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
+#pragma once
 
 typedef struct bvh_node_t
 {
@@ -26,5 +27,3 @@ typedef struct bvh_iter_t
 } bvh_iter_t;
 
 fn void bvh_iter_init(bvh_iter_t *it, bvh_node_t *nodes, uint32_t node_count);
-
-#endif /* BVH_H */

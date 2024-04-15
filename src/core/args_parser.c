@@ -1,3 +1,7 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 fn void init_args(cmd_args_t *args, int argc, char **argv)
 {
     args->error = false;

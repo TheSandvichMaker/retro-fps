@@ -1,5 +1,6 @@
-#include "render_helpers.h"
-#include "render.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 void r_immediate_line(r_context_t *rc, v3_t start, v3_t end, v4_t color)
 {

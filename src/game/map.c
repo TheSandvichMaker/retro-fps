@@ -1,18 +1,6 @@
-#include <stdlib.h>
-#include <float.h>
-
-//
-//
-//
-
-#include "core/subset_iter.h"
-#include "core/pool.h"
-#include "core/sort.h"
-#include "core/hashtable.h"
-
-#include "map.h"
-#include "asset.h"
-#include "render.h"
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
 //
 // .map parser

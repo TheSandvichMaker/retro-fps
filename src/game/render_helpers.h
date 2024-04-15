@@ -1,8 +1,8 @@
-#ifndef RENDER_HELPERS_H
-#define RENDER_HELPERS_H
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
 
-#include "core/api_types.h"
-#include "render.h"
+#pragma once
 
 // all r_immediate_* calls just push the vertices/indices, they don't dispatch a draw call. it's up to you to make sure
 // the immediate draw call is set up correctly
@@ -28,5 +28,3 @@ fn void make_quad_vertices(v3_t pos, v2_t size, quat_t rotation, v4_t color,
 
 // This one actually does a draw call by itself
 fn void r_draw_text(r_context_t *rc, const struct bitmap_font_t *font, v2_t p, v4_t color, string_t string);
-
-#endif /* RENDER_HELPERS_H */

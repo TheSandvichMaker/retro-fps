@@ -1,7 +1,9 @@
+// ============================================================
+// Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
+// ============================================================
+
 #ifndef DREAM_POOL_H
 #define DREAM_POOL_H
-
-#include "api_types.h"
 
 #define POOL_RESERVE_SIZE GB(16)
 #define POOL_COMMIT_SIZE  KB(16)
