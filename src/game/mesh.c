@@ -3,7 +3,7 @@
 #include "core/arena.h"
 #include "core/stretchy_buffer.h"
 
-#include "dream/mesh.h"
+#include "mesh.h"
 
 //
 // gift-wrapping convex hull

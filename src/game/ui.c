@@ -1,5 +1,5 @@
 #include "core/math.h"
-#include "dream/ui.h"
+#include "ui.h"
 
 //
 // IDs

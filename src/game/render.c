@@ -37,7 +37,9 @@ void r_init_render_context(r_context_t *rc, r_command_buffer_t *commands)
     zero_struct(rc);
 
     rc->commands = commands;
+#if DREAM_SLOW
     m_reset_and_decommit(&rc->commands->debug_render_data_arena);
+#endif
 
     rc->commands->views_count        = 0;
     rc->commands->commands_count     = 0;

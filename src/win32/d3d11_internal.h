@@ -1,12 +1,4 @@
-#ifndef D3D11_INTERNAL_H
-#define D3D11_INTERNAL_H
-
-#include "core/core.h"
-#include "dream/render.h"
-#include "dream/asset.h"
-
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#pragma once
 
 #define D3D_SAFE_RELEASE(x) if (x) { IUnknown_Release((IUnknown *)(x)); (x) = NULL; }
 
@@ -305,5 +297,3 @@ DREAM_LOCAL void render_model(const render_pass_t *pass);
 
 DREAM_LOCAL d3d_rendertarget_t d3d_create_rendertarget(const d3d_create_rendertarget_t *params);
 DREAM_LOCAL void d3d_release_rendertarget(d3d_rendertarget_t *rt);
-
-#endif /* D3D11_INTERNAL_H */

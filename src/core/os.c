@@ -1,23 +1,3 @@
-#pragma warning(push, 0)
-
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
-#include <shellapi.h>
-
-#include <stdio.h>
-
-#pragma comment(lib, "synchronization.lib")
-
-#pragma warning(pop)
-
-#include "core.h"
-
-static arena_t api_arena;
-static bool cursor_locked;
-static bool has_focus;
-static HWND window;
-
 static wchar_t *format_error(HRESULT error)
 {
     wchar_t *message = NULL;
@@ -111,7 +91,7 @@ void fatal_error(int line, string_t file, const char *fmt, ...)
     va_list args;
     va_start(args, fmt);
     fatal_error_va(line, file, fmt, args);
-    // va_end(args);
+    va_end(args);
 }
 
 void fatal_error_va(int line, string_t file, const char *fmt, va_list args)
@@ -126,8 +106,11 @@ void fatal_error_va(int line, string_t file, const char *fmt, va_list args)
 
     __debugbreak();
 
-    // @ThreadSafety: Make sure threads are in a known state before exiting!
-    ExitProcess(1);
+	if (formatted.count > 0)
+	{
+		// @ThreadSafety: Make sure threads are in a known state before exiting!
+		ExitProcess(1);
+	}
 }
 
 void *vm_reserve(void *address, size_t size)

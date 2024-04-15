@@ -1,10 +1,3 @@
-#include "asset.h"
-
-// FIXME: Figure out threading for assets!!
-// FIXME: Figure out threading for assets!!
-// FIXME: Figure out threading for assets!!
-// FIXME: Figure out threading for assets!!
-
 static void *stbi_malloc(size_t size);
 static void *stbi_realloc(void *ptr, size_t new_size);
 
@@ -14,27 +7,6 @@ static void *stbi_realloc(void *ptr, size_t new_size);
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
-
-//
-//
-//
-
-#include "core/common.h"
-#include "core/arena.h"
-#include "core/fs.h"
-#include "core/pool.h"
-#include "core/hashtable.h"
-#include "core/math.h"
-#include "core/atomics.h"
-#include "core/file_watcher.h"
-
-#include "dream/job_queues.h"
-#include "dream/render.h"
-#include "dream/log.h"
-
-//
-// stbi support
-//
 
 static thread_local arena_t *stbi_arena;
 
@@ -139,7 +111,12 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 	asset_slot_t *asset = job->asset;
 
 	bool success = mutex_try_lock(&asset->mutex);
-	ASSERT(success);
+	ASSERT(success); // there should be no contention on assets...
+
+	if (!success)
+	{
+		mutex_lock(&asset->mutex); // but if there is, don't break stuff if asserts are compiled out! just wait!
+	}
 
 	switch (job->kind)
 	{
@@ -614,7 +591,7 @@ typedef struct wave_data_chunk_t
 {
 	uint32_t chunk_id;
 	uint32_t chunk_size;
-	int16_t  data[];
+	int16_t  data[1];
 } wave_data_chunk_t;
 
 #define LOG_ERROR(fmt, ...) logf(LogCat_Asset, LogLevel_Error, fmt, ##__VA_ARGS__)

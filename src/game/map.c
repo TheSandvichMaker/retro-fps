@@ -10,9 +10,9 @@
 #include "core/sort.h"
 #include "core/hashtable.h"
 
-#include "dream/map.h"
-#include "dream/asset.h"
-#include "dream/render.h"
+#include "map.h"
+#include "asset.h"
+#include "render.h"
 
 //
 // .map parser

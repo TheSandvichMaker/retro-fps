@@ -3,9 +3,9 @@
 
 #include "core/core.h"
 
-#include "dream/render.h"
-#include "dream/collision_geometry.h"
-#include "dream/asset.h"
+#include "render.h"
+#include "collision_geometry.h"
+#include "asset.h"
 
 #if DEBUG
 #define LIGHTMAP_SCALE 8

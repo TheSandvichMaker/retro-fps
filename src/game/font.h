@@ -2,7 +2,7 @@
 #define DREAM_FONT_H
 
 #include "core/api_types.h"
-#include "dream/render.h"
+#include "render.h"
 
 typedef struct font_glyph_t
 {

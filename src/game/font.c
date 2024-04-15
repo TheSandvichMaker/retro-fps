@@ -11,8 +11,8 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
 
-#include "dream/font.h"
-#include "dream/render.h"
+#include "font.h"
+#include "render.h"
 
 font_atlas_t make_font_atlas(string_t path, size_t range_count, font_range_t *ranges, float font_size)
 {

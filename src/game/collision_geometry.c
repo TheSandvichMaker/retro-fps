@@ -1,7 +1,7 @@
 #include "collision_geometry.h"
 
-#include "dream/map.h"
-#include "dream/mesh.h"
+#include "map.h"
+#include "mesh.h"
 
 #if 0
 typedef struct hull_node_t

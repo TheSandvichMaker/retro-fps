@@ -1,24 +1,27 @@
-#include <stdlib.h>
-
-#include "core/core.h"
-#include "core/random.h"
-
-#include "platform.h"
 #include "game.h"
-#include "map.h"
-#include "input.h"
-#include "asset.h"
-#include "intersect.h"
-#include "ui.h"
-#include "in_game_editor.h"
-#include "audio.h"
-#include "job_queues.h"
-#include "mesh.h"
-#include "light_baker.h"
-#include "render.h"
-#include "render_helpers.h"
-#include "camera.h"
-#include "physics_playground.h"
+
+#include "asset.c"
+#include "audio.c"
+#include "bvh.c"
+#include "camera.c"
+#include "collision_geometry.c"
+#include "convar.c"
+#include "convex_hull_debugger.c"
+#include "font.c"
+#include "freeverb.c"
+#include "in_game_editor.c"
+#include "input.c"
+#include "intersect.c"
+#include "job_queues.c"
+#include "light_baker.c"
+#include "log.c"
+#include "map.c"
+#include "mesh.c"
+#include "physics_playground.c"
+#include "render.c"
+#include "render_backend.c"
+#include "render_helpers.c"
+#include "ui.c"
 
 #define UI_FORCE_ONE_DRAW_CALL_PER_RECT_SLOW_DEBUG_STUFF 0
 
@@ -32,7 +35,6 @@ static bool initialized = false;
 
 bool g_cursor_locked;
 
-static world_t *g_world;
 static texture_handle_t skybox;
 static bitmap_font_t debug_font;
 static waveform_t *test_waveform;
@@ -67,7 +69,7 @@ v3_t player_view_direction(player_t *player)
     return dir;
 }
 
-void player_freecam(player_t *player, float dt)
+void player_noclip(player_t *player, float dt)
 {
     camera_t *camera = player->attached_camera;
 
@@ -334,7 +336,7 @@ static camera_t g_camera = {
     .vfov = 60.0f,
 };
 
-static void init_view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
+fn void init_view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
 {
     view->clip_rect = viewport;
     view->camera_p  = camera->p;
@@ -760,7 +762,7 @@ static void game_tick(platform_io_t *io)
     if (button_pressed(BUTTON_TOGGLE_NOCLIP))
     {
         if (player->move_mode == PLAYER_MOVE_NORMAL)
-            player->move_mode = PLAYER_MOVE_FREECAM;
+            player->move_mode = PLAYER_MOVE_NOCLIP;
         else
             player->move_mode = PLAYER_MOVE_NORMAL;
     }
@@ -771,7 +773,7 @@ static void game_tick(platform_io_t *io)
     switch (player->move_mode)
     {
         case PLAYER_MOVE_NORMAL:  player_movement(map, player, dt); break;
-        case PLAYER_MOVE_FREECAM: player_freecam(player, dt); break;
+        case PLAYER_MOVE_NOCLIP: player_noclip(player, dt); break;
     }
 
 	mixer_set_listener(camera->p, negate(camera->computed_z));

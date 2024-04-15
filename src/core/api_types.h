@@ -1,5 +1,4 @@
-#ifndef API_TYPES_H
-#define API_TYPES_H
+#pragma once
 
 #include <stdint.h>
 #include <stddef.h>
@@ -12,6 +11,8 @@
 
 // TODO: Cursed? DON'T DO IT??
 #define USING(type, name) union { type; type name; }
+
+#define fn static
 
 #ifdef SINGLE_TRANSLATION_UNIT_BUILD
 #define DREAM_API    extern  // deprecated
@@ -108,12 +109,6 @@ typedef struct dynamic_string_t
 		string_t string;
 	};
 } dynamic_string_t;
-
-typedef struct string_storage_overlay_t
-{
-	size_t count;
-	char data[1];
-} string_storage_overlay_t;
 
 #define string_storage_t(size) struct { size_t count; char data[size]; }
 #define string_from_storage(storage) (string_t) { (storage).count, (storage).data }
@@ -422,6 +417,33 @@ typedef struct plane_t
     float d;
 } plane_t;
 
+typedef struct random_series_t
+{
+    uint32_t state;
+} random_series_t;
+
+typedef struct mutex_t
+{
+	void *opaque; // legal to be zero-initialized
+} mutex_t;
+
+typedef struct cond_t
+{
+	void *opaque; // legal to be zero-initialized
+} cond_t;
+
+typedef struct wait_group_t
+{
+	int64_t counter;
+	mutex_t mutex;
+	cond_t  cond;
+} wait_group_t;
+
+typedef struct hires_time_t
+{
+    uint64_t value;
+} hires_time_t;
+
 typedef union resource_handle_t 
 { 
     struct
@@ -444,37 +466,8 @@ typedef union resource_handle_t
 
 #define CAST_HANDLE(type, handle) (type){ .value = (handle).value }
 
-DEFINE_HANDLE_TYPE(texture_handle_t);
-DEFINE_HANDLE_TYPE(mesh_handle_t);
-
 #define NULL_HANDLE(type_t) ((type_t){0})
 #define NULL_RESOURCE_HANDLE ((resource_handle_t){0})
-#define NULL_TEXTURE_HANDLE ((texture_handle_t){0})
-#define NULL_MESH_HANDLE ((mesh_handle_t){0})
 #define NULLIFY_HANDLE(handle) ((handle).value = 0)
 #define RESOURCE_HANDLE_VALID(x) ((x).index != 0)
 #define RESOURCE_HANDLES_EQUAL(a, b) ((a).value == (b).value)
-
-typedef struct random_series_t
-{
-    uint32_t state;
-} random_series_t;
-
-typedef struct mutex_t
-{
-	void *opaque; // legal to be zero-initialized
-} mutex_t;
-
-typedef struct cond_t
-{
-	void *opaque; // legal to be zero-initialized
-} cond_t;
-
-typedef struct hires_time_t
-{
-    uint64_t value;
-} hires_time_t;
-
-typedef unsigned char r_view_index_t;
-
-#endif /* API_TYPES_H */

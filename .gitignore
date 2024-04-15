@@ -5,6 +5,7 @@ build
 *.exe.lnk
 *.dll
 *.wav
+*.raddbgi
 
 .vs
 ctm

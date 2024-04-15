@@ -4,12 +4,12 @@
 #include "core/random.h"
 #include "core/thread.h"
 
-#include "dream/map.h"
-#include "dream/asset.h"
-#include "dream/intersect.h"
-#include "dream/job_queues.h"
-#include "dream/light_baker.h"
-#include "dream/render.h"
+#include "map.h"
+#include "asset.h"
+#include "intersect.h"
+#include "job_queues.h"
+#include "light_baker.h"
+#include "render.h"
 
 v3_t map_to_cosine_weighted_hemisphere(v2_t sample)
 {

@@ -28,7 +28,7 @@ long _InterlockedOr(long volatile *destination, long value);
 
 // ------------------------------------------------------------------
 
-static inline int64_t atomic_add64(int64_t volatile *addend, int64_t value)
+static inline int64_t atomic_add_i64(int64_t volatile *addend, int64_t value)
 {
     return _InterlockedExchangeAdd64((long long volatile *)addend, value) - value;
 }

@@ -6,8 +6,8 @@
 
 #include "core/math.h"
 
-#include "dream/intersect.h"
-#include "dream/map.h"
+#include "intersect.h"
+#include "map.h"
 
 //
 //

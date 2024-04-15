@@ -1,24 +1,33 @@
-#ifndef DREAM_CORE_H
-#define DREAM_CORE_H
+#pragma once
 
-#include "common.h"
-#include "atomics.h"
-#include "intrin.h"
+#include "api_types.h"
+
+// TODO: Remove all cases of include order dependence
+#include "assert.h"
 #include "math.h"
-#include "geometric_algebra.h"
-#include "os.h"
-#include "vm.h"
+
 #include "arena.h"
-#include "log.h"
+#include "args_parser.h"
+#include "array.h"
+#include "atomics.h"
+#include "common.h"
+#include "core.h"
+#include "dynamic_string.h"
+#include "file_watcher.h"
 #include "fs.h"
-#include "tls.h"
+#include "geometric_algebra.h"
+#include "hashtable.h"
+#include "heap.h"
+#include "intrin.h"
+#include "log.h"
+#include "os.h"
+#include "pool.h"
+#include "plug.h"
+#include "random.h"
+#include "sort.h"
+#include "stretchy_buffer.h"
 #include "string.h"
 #include "string_list.h"
-#include "dynamic_string.h"
-#include "pool.h"
-#include "stretchy_buffer.h"
-#include "hashtable.h"
 #include "thread.h"
-#include "random.h"
-
-#endif /* DREAM_CORE_H */
+#include "tls.h"
+#include "vm.h"

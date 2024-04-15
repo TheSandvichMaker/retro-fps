@@ -126,6 +126,12 @@ string_t   utf8_from_utf16(arena_t *arena, string16_t string);
 uint64_t string_hash(string_t string);
 uint64_t string_hash_with_seed(string_t string, uint64_t seed);
 
+typedef struct string_storage_overlay_t
+{
+	size_t count;
+	char data[1];
+} string_storage_overlay_t;
+
 DREAM_GLOBAL void string_storage_append_impl(string_storage_overlay_t *storage, size_t capacity, string_t string);
 #define string_storage_append(storage, string) (string_storage_append_impl((string_storage_overlay_t *)(storage), ARRAY_COUNT((storage)->data), string))
 
