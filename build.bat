@@ -2,7 +2,7 @@
 
 if not exist build mkdir build
 
-set flags=/nologo /Zi /WX /W4 /wd4201 /wd4115 /wd4013 /wd4116 /std:c11 /I..\src /I..\external\include /DUNICODE=1 /D_CRT_SECURE_NO_WARNINGS /DPLATFORM_WIN32=1
+set flags=/nologo /Z7 /WX /W4 /wd4201 /wd4115 /wd4013 /wd4116 /std:c11 /I..\src /I..\external\include /DUNICODE=1 /D_CRT_SECURE_NO_WARNINGS /DPLATFORM_WIN32=1
 set debug_flags=/Od /MTd /DDREAM_SLOW=1
 set release_flags=/O2 /MT
 set linker_flags=/opt:ref /incremental:no
@@ -13,9 +13,9 @@ pushd build
 rem ========================================================================================================================
 
 echo]
-echo ===================
-echo RETRO - DEBUG BUILD
-echo ===================
+echo =========================
+echo    RETRO - DEBUG BUILD
+echo =========================
 echo]
 
 ..\tools\ctime -begin win32_retro_debug.ctm
@@ -30,9 +30,9 @@ if %last_error% neq 0 goto bail
 rem ========================================================================================================================
 
 echo]
-echo =====================
-echo RETRO - RELEASE BUILD
-echo =====================
+echo =========================
+echo   RETRO - RELEASE BUILD
+echo =========================
 echo]
 
 ..\tools\ctime -begin win32_retro_release.ctm
