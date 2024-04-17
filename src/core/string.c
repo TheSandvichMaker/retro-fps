@@ -2,17 +2,11 @@
 // Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
 // ============================================================
 
-#pragma push_macro("temp")
-
-#undef temp
-
 #define STB_SPRINTF_IMPLEMENTATION
 #include <stb_sprintf.h>
 
 #define XXH_INLINE_ALL
 #include "xxhash/xxhash.h"
-
-#pragma pop_macro("temp")
 
 size_t string_count(const char *string)
 {
@@ -25,6 +19,27 @@ size_t string16_count(const wchar_t *string)
 {
     size_t result = 0;
     for (const wchar_t *c = string; *c; c++) result++;
+    return result;
+}
+
+bool string_empty(string_t string)
+{
+	return string.count == 0 || !string.data;
+}
+
+null_term_string_t string_from_cstr(char *string)
+{
+    string_t result;
+    result.count = string_count(string);
+    result.data  = string;
+    return result;
+}
+
+null_term_string16_t string16_from_cstr(wchar_t *string)
+{
+    string16_t result;
+    result.count = string16_count(string);
+    result.data  = string;
     return result;
 }
 
@@ -55,10 +70,10 @@ string_t string_copy_cstr(arena_t *arena, const char *string)
         copy_memory(data, string, count);
     }
 
-    return (string_t){ count, data };
+    return (string_t){ data, count };
 }
 
-char *string_null_terminate(arena_t *arena, string_t string)
+string_t string_null_terminate(arena_t *arena, string_t string)
 {
     char *data = m_alloc_string(arena, string.count + 1);
 
@@ -68,10 +83,10 @@ char *string_null_terminate(arena_t *arena, string_t string)
         data[string.count] = 0;
     }
 
-    return data;
+    return (string_t){ data, string.count };
 }
 
-wchar_t *string16_null_terminate(arena_t *arena, string16_t string)
+string16_t string16_null_terminate(arena_t *arena, string16_t string)
 {
     wchar_t *data = m_alloc_string16(arena, string.count + 1);
 
@@ -81,7 +96,7 @@ wchar_t *string16_null_terminate(arena_t *arena, string16_t string)
         data[string.count] = 0;
     }
 
-    return data;
+    return (string16_t){ data, string.count };
 }
 
 string_t string_format(arena_t *arena, const char *fmt, ...)
@@ -134,8 +149,8 @@ string_t string_format_into_buffer_va(char *buffer, size_t size, const char *fmt
     int len = stbsp_vsnprintf(buffer, (int)size, fmt, args);
 
     string_t result = {
-        .count = (size_t)len,
         .data  = buffer,
+        .count = (size_t)len,
     };
 
     return result;
@@ -147,8 +162,8 @@ string_t substring(string_t string, size_t first, size_t count)
     count = MIN(string.count - first, count);
 
     return (string_t) {
-        .count = count,
         .data  = string.data + first,
+        .count = count,
     };
 }
 
@@ -557,7 +572,7 @@ bool string_parse_float(string_t *string, float *value)
 
 	m_scoped_temp
 	{
-		const char *null_terminated = string_null_terminate(temp, *string);
+		char *null_terminated = string_null_terminate(temp, *string).data;
 
 		const char *strtod_end = NULL;
 		*value = (float)strtod(null_terminated, &strtod_end);

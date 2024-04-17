@@ -1945,7 +1945,7 @@ ID3DBlob *d3d_compile_shader(string_t hlsl_file, string_t hlsl, const char *entr
     ID3DBlob* error;
 
     ID3DBlob* blob = NULL;
-    HRESULT hr = D3DCompile(hlsl.data, hlsl.count, string_null_terminate(temp, hlsl_file), NULL, D3D_COMPILE_STANDARD_FILE_INCLUDE, entry_point, kind, flags, 0, &blob, &error);
+    HRESULT hr = D3DCompile(hlsl.data, hlsl.count, string_null_terminate(temp, hlsl_file).data, NULL, D3D_COMPILE_STANDARD_FILE_INCLUDE, entry_point, kind, flags, 0, &blob, &error);
     if (FAILED(hr))
     {
         const char* message = ID3D10Blob_GetBufferPointer(error);

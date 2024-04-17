@@ -7,43 +7,27 @@
 fn size_t string_count(const char *string);
 fn size_t string16_count(const wchar_t *string);
 
-// TODO: remove from header
-fn_local bool string_empty(string_t string)
-{
-	return string.count == 0 || !string.data;
-}
+fn bool string_empty(string_t string);
 
-fn_local string_t string_from_cstr(char *string)
-{
-    string_t result;
-    result.count = string_count(string);
-    result.data  = string;
-    return result;
-}
+fn null_term_string_t   string_from_cstr  (char *string);
+fn null_term_string16_t string16_from_cstr(wchar_t *string);
 
-fn_local string16_t string16_from_cstr(wchar_t *string)
-{
-    string16_t result;
-    result.count = string16_count(string);
-    result.data  = string;
-    return result;
-}
-
-fn string_t string_copy(arena_t *arena, string_t string);
+fn string_t string_copy     (arena_t *arena, string_t string);
 fn string_t string_copy_cstr(arena_t *arena, const char *string);
-fn char *string_null_terminate(arena_t *arena, string_t string);
-fn wchar_t *string16_null_terminate(arena_t *arena, string16_t string);
 
-fn string_t string_format(arena_t *arena, const char *fmt, ...);
-fn string_t string_format_va(arena_t *arena, const char *fmt, va_list args);
+fn null_term_string_t   string_null_terminate(arena_t *arena, string_t string);
+fn null_term_string16_t string16_null_terminate(arena_t *arena, string16_t string);
+
+fn null_term_string_t string_format   (arena_t *arena, const char *fmt, ...);
+fn null_term_string_t string_format_va(arena_t *arena, const char *fmt, va_list args);
 
 #define Sf(fmt, ...) string_format(m_get_temp(NULL, 0), fmt, ##__VA_ARGS__)
 
-fn string_t string_format_into_buffer(char *buffer, size_t buffer_size, const char *fmt, ...);
+fn string_t string_format_into_buffer   (char *buffer, size_t buffer_size, const char *fmt, ...);
 fn string_t string_format_into_buffer_va(char *buffer, size_t buffer_size, const char *fmt, va_list args);
 
-// string16_t string16_format(arena_t *arena, const wchar_t *fmt, ...);
-// string16_t string16_format_va(arena_t *arena, const wchar_t *fmt, va_list args);
+// null_term_string16_t string16_format   (arena_t *arena, const wchar_t *fmt, ...);
+// null_term_string16_t string16_format_va(arena_t *arena, const wchar_t *fmt, va_list args);
 
 #define STRING_NPOS SIZE_MAX
 
@@ -124,8 +108,8 @@ fn string_t string_split_line(string_t *string);
 fn bool string_parse_int(string_t *string, int64_t *value);
 fn bool string_parse_float(string_t *string, float *value);
 
-fn string16_t utf16_from_utf8(arena_t *arena, string_t   string);
-fn string_t   utf8_from_utf16(arena_t *arena, string16_t string);
+fn null_term_string16_t utf16_from_utf8(arena_t *arena, string_t   string);
+fn null_term_string_t   utf8_from_utf16(arena_t *arena, string16_t string);
 
 fn uint64_t string_hash(string_t string);
 fn uint64_t string_hash_with_seed(string_t string, uint64_t seed);

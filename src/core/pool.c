@@ -165,6 +165,8 @@ bool pool_rem_item(pool_t *pool, void *item)
 
 resource_handle_t pool_get_handle(pool_t *pool, void *item)
 {
+	if (!item) return NULL_RESOURCE_HANDLE;
+
     if (NEVER(!pool->buffer))  return NULL_RESOURCE_HANDLE;
 
     pool_item_t *pool_item = pool_item_from_item(item);

@@ -2,7 +2,7 @@
 // Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
 // ============================================================
 
-wchar_t *win32_format_error(HRESULT error)
+wchar_t *win32_format_error_wide(HRESULT error)
 {
     wchar_t *message = NULL;
 
@@ -19,10 +19,18 @@ wchar_t *win32_format_error(HRESULT error)
     return message;
 }
 
+string_t win32_format_error(arena_t *arena, HRESULT error)
+{
+	wchar_t *message = win32_format_error_wide(error);
+	string_t result = utf8_from_utf16(arena, string16_from_cstr(message));
+	LocalFree(message);
+	return result;
+}
+
 void win32_display_last_error(void)
 {
     DWORD error = GetLastError() & 0xFFFF;
-    wchar_t *message = win32_format_error(error);
+    wchar_t *message = win32_format_error_wide(error);
     MessageBoxW(0, message, L"Error", MB_OK);
     LocalFree(message);
     __debugbreak();
@@ -30,10 +38,10 @@ void win32_display_last_error(void)
 
 void win32_output_last_error(string16_t prefix)
 {
-	wchar_t *message = win32_format_error(GetLastError());
+	wchar_t *message = win32_format_error_wide(GetLastError());
 
 	m_scoped_temp
-	OutputDebugStringW(string16_null_terminate(temp, prefix));
+	OutputDebugStringW(string16_null_terminate(temp, prefix).data);
 
 	OutputDebugStringW(L": ");
 	OutputDebugStringW(message);
@@ -91,6 +99,27 @@ string_t utf8_from_utf16(arena_t *arena, string16_t utf16)
     return result;
 }
 
+void loud_error(int line, string_t file, const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    loud_error_va(line, file, fmt, args);
+    va_end(args);
+}
+
+void loud_error_va(int line, string_t file, const char *fmt, va_list args)
+{
+    char buffer[4096];
+
+    string_t message   = string_format_into_buffer_va(buffer, sizeof(buffer), fmt, args);
+    string_t formatted = string_format_into_buffer(buffer + message.count, sizeof(buffer) - message.count, 
+                                                   "Error: %.*s\nLine: %d\nFile: %.*s\n", strexpand(message), line, strexpand(file));
+
+    MessageBoxA(NULL, formatted.data, "Fatal Error", MB_OK);
+
+    __debugbreak();
+}
+
 void fatal_error(int line, string_t file, const char *fmt, ...)
 {
     va_list args;
@@ -111,10 +140,31 @@ void fatal_error_va(int line, string_t file, const char *fmt, va_list args)
 
     __debugbreak();
 
+	// Trick to stop "unreachable code" warnings
 	if (formatted.count > 0)
 	{
 		// @ThreadSafety: Make sure threads are in a known state before exiting!
 		ExitProcess(1);
+	}
+}
+
+void win32_hresult_error_box(HRESULT hr, const char *message, ...)
+{
+	va_list args;
+	va_start(args, message);
+	win32_hresult_error_box_va(hr, message, args);
+	va_end(args);
+}
+
+void win32_hresult_error_box_va(HRESULT hr, const char *message_fmt, va_list args)
+{
+	m_scoped_temp
+	{
+		string_t message = string_format_va  (temp, message_fmt, args);
+		string_t error   = win32_format_error(temp, hr);
+
+		string_t final = string_format(temp, "%.*s.\nHRESULT: 0x%X\nExplanation: %.*s", Sx(message), hr, Sx(error));
+		MessageBoxA(NULL, final.data, "Win32 Error", MB_OK);
 	}
 }
 
@@ -178,7 +228,7 @@ string_t os_get_working_directory(arena_t *arena)
 			wchar_t *data = m_alloc_string16(temp, count);
 			GetCurrentDirectory(count, data);
 
-			result = utf8_from_utf16(arena, (string16_t) { count-1, data });
+			result = utf8_from_utf16(arena, (string16_t) { data, count-1 });
 		}
     }
 
@@ -361,23 +411,23 @@ bool os_execute_capture(string_t command, int *exit_code, arena_t *arena, string
 
         enum { BUFFER_SIZE = 4096 };
         char buffer[BUFFER_SIZE];
-        DWORD read;
+        DWORD bytes_read;
         BOOL success;
 
         for (;;)
         {
-            success = ReadFile(stdout_read, buffer, BUFFER_SIZE, &read, NULL);
-            if (!success || read == 0)  break;
+            success = ReadFile(stdout_read, buffer, BUFFER_SIZE, &bytes_read, NULL);
+            if (!success || bytes_read == 0)  break;
 
-            slist_appends(&out_list, temp, (string_t){read, buffer});
+            slist_appends(&out_list, temp, (string_t){buffer, bytes_read});
         }
 
         for (;;)
         {
-            success = ReadFile(stderr_read, buffer, BUFFER_SIZE, &read, NULL);
-            if (!success || read == 0)  break;
+            success = ReadFile(stderr_read, buffer, BUFFER_SIZE, &bytes_read, NULL);
+            if (!success || bytes_read == 0)  break;
 
-            slist_appends(&err_list, temp, (string_t){read, buffer});
+            slist_appends(&err_list, temp, (string_t){buffer, bytes_read});
         }
 
         *out = slist_flatten(&out_list, arena);

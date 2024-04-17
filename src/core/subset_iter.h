@@ -2,8 +2,7 @@
 // Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
 // ============================================================
 
-#ifndef SUBSET_ITER_H
-#define SUBSET_ITER_H
+#pragma once
 
 typedef struct subset_iter_t
 {
@@ -65,5 +64,3 @@ fn_local void subset_next(subset_iter_t *iter)
     subset__post(iter);
     subset__pre(iter);
 }
-
-#endif /* SUBSET_ITER_H */

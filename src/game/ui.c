@@ -2724,7 +2724,7 @@ void debug_notif_va(v4_t color, float time, string_t fmt, va_list args)
 {
 	m_scoped_temp
 	{
-		string_t text = string_format(ui_frame_arena(), string_null_terminate(temp, fmt), args);
+		string_t text = string_format(ui_frame_arena(), string_null_terminate(temp, fmt).data, args);
 
 		debug_notif_t *notif = m_alloc_struct(ui_frame_arena(), debug_notif_t);
 		notif->id            = ui_id_u64(ui.next_notif_id++);

@@ -343,7 +343,7 @@ string_t fs_full_path(arena_t *arena, string_t relative_path)
 			wchar_t *data = m_alloc_string16(temp, count);
 			GetFullPathNameW(data, count, data, NULL);
 
-			result = utf8_from_utf16(arena, (string16_t) { count-1, data });
+			result = utf8_from_utf16(arena, (string16_t) { data, count-1 });
 		}
 	}
 

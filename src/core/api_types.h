@@ -68,17 +68,34 @@
 
 typedef struct string_t
 {
+    char  *data;
     size_t count;
-    char *data;
 } string_t;
 
-#define strinit(text) { sizeof(text)-1, (char *)("" text) }
-#define Sc(text) { sizeof(text)-1, (char *)("" text) }
-#define strlit(text) ((string_t) { sizeof(text)-1, (char *)("" text) })
-#define S(text) strlit(text) // new laziness thing, will it stick? answer: yes. I like it
+// if a function returns this type, it means the .data pointer points to a null terminated string.
+// don't use this type locally, it's just for documentation
+typedef string_t null_term_string_t;
+
+#define strinit(text)                 { .data = (char *)("" text), .count = sizeof(text)-1 }
+#define Sc(text)                      { .data = (char *)("" text), .count = sizeof(text)-1 }
+#define strlit(text)      ((string_t) { .data = (char *)("" text), .count = sizeof(text)-1 })
+#define S(text)           ((string_t) { .data = (char *)("" text), .count = sizeof(text)-1 }) 
 #define strexpand(string) (int)(string).count, (string).data
-#define Sx(text) strexpand(text)
-#define strnull (string_t){ 0 }
+#define Sx(string)        (int)(string).count, (string).data
+#define strnull           (string_t){ 0 }
+
+typedef struct string16_t
+{
+    wchar_t *data;
+    size_t   count;
+} string16_t;
+
+// if a function returns this type, it means the .data pointer points to a null terminated string.
+// don't use this type locally, it's just for documentation
+typedef string16_t null_term_string16_t;
+
+#define strlit16(text) (string16_t) { (wchar_t *)(L"" text), sizeof(text) / sizeof(wchar_t) - 1 }
+#define strnull16 (string16_t){ 0 }
 
 typedef struct string_node_t
 {
@@ -108,7 +125,7 @@ typedef struct dynamic_string_t
 } dynamic_string_t;
 
 #define string_storage_t(size) struct { size_t count; char data[size]; }
-#define string_from_storage(storage) (string_t) { (storage).count, (storage).data }
+#define string_from_storage(storage) (string_t) { (storage).data, (storage.count) }
 #define string_into_storage(storage, string) (copy_memory((storage).data, (string).data, MIN(ARRAY_COUNT((storage).data), (string).count)), (storage).count = (string).count)
 #define string_storage_size(storage) ARRAY_COUNT((storage).data)
 
@@ -203,15 +220,6 @@ typedef struct dynamic_string_t
 
 #define stack_reset(stack) \
 	((stack).at = 0)
-
-typedef struct string16_t
-{
-    size_t count;
-    const wchar_t *data;
-} string16_t;
-
-#define strlit16(text) (string16_t) { sizeof(text) / sizeof(wchar_t) - 1, (const wchar_t *)(L"" text) }
-#define strnull16 (string16_t){ 0 }
 
 typedef struct arena_marker_t
 {

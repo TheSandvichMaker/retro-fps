@@ -26,6 +26,17 @@
 #include "audio_playback_win32.c"
 #include "d3d11.c"
 
+//
+//
+//
+
+#include "rhi/rhi_d3d12.h"
+#include "rhi/rhi_d3d12.c"
+
+//
+//
+//
+
 global arena_t win32_arena;
 global platform_hooks_t hooks;
 
@@ -219,6 +230,19 @@ int wWinMain(HINSTANCE instance,
     }
 
     ShowWindow(window, command_show);
+
+	// it's d3d12 time
+
+#if 0
+	bool d3d12_success = rhi_init_d3d12(&(rhi_init_params_d3d12_t){
+		.enable_debug_layer = true
+	});
+
+	if (d3d12_success)
+	{
+		rhi_init_window_d3d12(window);
+	}
+#endif
 
     // initialize d3d11
     {

@@ -22,3 +22,6 @@ fn void *vm_reserve (void *address, size_t size);
 fn bool  vm_commit  (void *address, size_t size);
 fn void  vm_decommit(void *address, size_t size);
 fn void  vm_release (void *address);
+
+fn void os_show_loud_error   (const char *fmt, ...);
+fn void os_show_loud_error_va(const char *fmt, va_list args);

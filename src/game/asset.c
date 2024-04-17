@@ -198,7 +198,7 @@ static void preload_asset_info(asset_slot_t *asset)
 				string_t path = string_from_storage(asset->path);
 
 				int x, y, comp;
-				if (stbi_info(string_null_terminate(temp, path), &x, &y, &comp))
+				if (stbi_info(string_null_terminate(temp, path).data, &x, &y, &comp))
 				{
 					info->w             = (uint32_t)x;
 					info->h             = (uint32_t)y;
@@ -309,7 +309,7 @@ void process_asset_changes(void)
 
 		string_t path = string_normalize_path(temp, event->path);
 
-		logf(LogCat_Asset, LogLevel_Info, "File event for '%.*s': %.*s\n", Sx(path), Sx(flags_string));
+		log(Asset, Info, "File event for '%.*s': %.*s", Sx(path), Sx(flags_string));
 
 		reload_asset(asset_hash_from_string(path));
 	}
@@ -499,7 +499,7 @@ image_t load_image_from_disk(arena_t *arena, string_t path, unsigned nchannels)
 		stbi_arena = temp;
 
 		int w = 0, h = 0, n = 0;
-		unsigned char *pixels = stbi_load(string_null_terminate(temp, path), &w, &h, &n, nchannels);
+		unsigned char *pixels = stbi_load(string_null_terminate(temp, path).data, &w, &h, &n, nchannels);
 
 		result = (image_t){
 			.info.w             = (unsigned)w,
@@ -599,7 +599,7 @@ typedef struct wave_data_chunk_t
 	int16_t  data[1];
 } wave_data_chunk_t;
 
-#define LOG_ERROR(fmt, ...) logf(LogCat_Asset, LogLevel_Error, fmt, ##__VA_ARGS__)
+#define LOG_ERROR(fmt, ...) log(Asset, Error, fmt, ##__VA_ARGS__)
 #define PRINT_RIFF_ID(id) 4, (char *)&id
 
 bool parse_waveform_header_internal(string_t file, 

@@ -6,7 +6,7 @@ set flags=/nologo /Z7 /WX /W4 /wd4201 /wd4115 /wd4013 /wd4116 /std:c11 /I..\src 
 set debug_flags=/Od /MTd /DDREAM_SLOW=1
 set release_flags=/O2 /MT
 set linker_flags=/opt:ref /incremental:no
-set libraries=user32.lib dxguid.lib d3d11.lib dxgi.lib d3dcompiler.lib gdi32.lib user32.lib ole32.lib ksuser.lib shell32.lib Synchronization.lib DbgHelp.lib
+set libraries=user32.lib dxguid.lib d3d11.lib dxgi.lib d3dcompiler.lib gdi32.lib user32.lib ole32.lib ksuser.lib shell32.lib Synchronization.lib DbgHelp.lib d3d12.lib
 
 pushd build
 

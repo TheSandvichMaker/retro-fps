@@ -21,6 +21,7 @@ typedef enum log_category_t
 	LogCat_Mixer         = 2,
 	LogCat_Renderer      = 3,
 	LogCat_Renderer_DX11 = 4,
+	LogCat_RHI_D3D12     = 5,
 	LogCat_Game          = 10,
 
 	LogCat_Max,
@@ -36,9 +37,9 @@ typedef struct log_loc_t
 
 #define MAKE_LOG_LOCATION &(log_loc_t){ .file = __FILE__, .line = __LINE__ }
 
-#define log(cat, level, message)       log_    (MAKE_LOG_LOCATION, cat, level, message)
-#define logf(cat, level, fmt, ...)     logf_   (MAKE_LOG_LOCATION, cat, level, fmt, ##__VA_ARGS__)
-#define logf_va(cat, level, fmt, args) logf_va_(MAKE_LOG_LOCATION, cat, level, fmt, args)
-fn void log_    (const log_loc_t *loc, log_category_t cat, log_level_t level, string_t message);
-fn void logf_   (const log_loc_t *loc, log_category_t cat, log_level_t level, const char *fmt, ...);
-fn void logf_va_(const log_loc_t *loc, log_category_t cat, log_level_t level, const char *fmt, va_list args);
+#define logs(cat, level, message)     logs_  (MAKE_LOG_LOCATION, LogCat_##cat, LogLevel_##level, message)
+#define log(cat, level, fmt, ...)     log_   (MAKE_LOG_LOCATION, LogCat_##cat, LogLevel_##level, fmt, ##__VA_ARGS__)
+#define log_va(cat, level, fmt, args) log_va_(MAKE_LOG_LOCATION, LogCat_##cat, LogLevel_##level, fmt, args)
+fn void logs_  (const log_loc_t *loc, log_category_t cat, log_level_t level, string_t message);
+fn void log_   (const log_loc_t *loc, log_category_t cat, log_level_t level, const char *fmt, ...);
+fn void log_va_(const log_loc_t *loc, log_category_t cat, log_level_t level, const char *fmt, va_list args);
