@@ -2,6 +2,21 @@
 // Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
 // ============================================================
 
+fn_local D3D12_CPU_DESCRIPTOR_HANDLE d3d12_get_cpu_descriptor_handle(ID3D12DescriptorHeap *heap, 
+																	 D3D12_DESCRIPTOR_HEAP_TYPE heap_type, 
+																	 size_t index)
+{
+	const D3D12_CPU_DESCRIPTOR_HANDLE heap_start;
+	ID3D12DescriptorHandle_GetCPUDescriptorHandleForHeapStart(heap, &heap_start);
+
+	const uint32_t stride = ID3D12Device_GetDescriptorHandleIncrementSize(g_rhi.device, heap_type);
+	D3D12_CPU_DESCRIPTOR_HANDLE result = {
+		heap_start.ptr + index * stride,
+	};
+
+	return result;
+}
+
 bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 {
 	g_rhi.windows = (pool_t)INIT_POOL(d3d12_window_t);
@@ -18,6 +33,19 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 	ID3D12CommandQueue *command_queue = NULL;
 
 	bool result = false;
+
+	//
+	// Validate Parameters
+	//
+
+	if (params->base.frame_buffer_count == 0 ||
+		params->base.frame_buffer_count >  3)
+	{
+		log(RHI_D3D12, Error, "Invalid frame buffer count %u (should between 1 and 3)", params->base.frame_buffer_count);
+		goto bail;
+	}
+
+	g_rhi.frame_buffer_count = params->base.frame_buffer_count;
 
 	//
 	// Enable Debug Layer
@@ -195,7 +223,17 @@ bail:
 
 rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 {
+	rhi_window_t result = {0};
+
 	HRESULT hr;
+
+	IDXGISwapChain1      *swap_chain       = NULL;
+	ID3D12DescriptorHeap *rtv_heap         = NULL;
+	ID3D12Resource       *frame_buffers[3] = {NULL};
+
+	//
+	// Initialize swapchain
+	//
 
 	DXGI_SWAP_CHAIN_DESC1 desc = {
 		.Format      = DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -209,17 +247,77 @@ rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 	IDXGISwapChain1 *swap_chain = NULL;
 
 	hr = IDXGIFactory6_CreateSwapChainForHwnd(g_rhi.dxgi_factory, (IUnknown*)g_rhi.command_queue, hwnd, &desc, NULL, NULL, &swap_chain);
-	D3D12_LOG_FAILURE(hr, "Failed to create swap chain for window");
+	D3D12_CHECK_HR(hr, goto bail);
 
-	rhi_window_t result = {0};
+	IDXGIFactory4_MakeWindowAssociation(g_rhi.dxgi_factory, hwnd, DXGI_MWA_NO_ALT_ENTER);
 
-	if (SUCCEEDED(hr))
+	//
+	// Create RTV Descriptor Heap
+	//
+
+	{
+		D3D12_DESCRIPTOR_HEAP_DESC desc = {
+			.NumDescriptors = g_rhi.frame_buffer_count,
+			.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+		};
+
+		hr = ID3D12Device_CreateDescriptorHeap(g_rhi.device, &desc, &IID_ID3D12DescriptorHeap, &g_rhi.rtv_descriptor_heap);
+		D3D12_CHECK_HR(hr, goto bail);
+	}
+
+	//
+	// Create RTVs
+	//
+
+	ID3D12Resource *frame_buffers[3];
+
+	{
+		const uint32_t rtv_descriptor_stride = 
+			ID3D12Device_GetDescriptorHandleIncrementSize(g_rhi.device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+		D3D12_CPU_DESCRIPTOR_HANDLE rtv_descriptor_handle =
+			d3d12_get_cpu_descriptor_handle(g_rhi.rtv_descriptor_heap, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 0);
+
+		for (size_t i = 0; i < g_rhi.frame_buffer_count; i++)
+		{
+			hr = IDXGISwapChain1_GetBuffer(swap_chain, (uint32_t)i, &IID_ID3D12Resource, &frame_buffers[i]);
+			D3D12_CHECK_HR(hr, goto bail);
+
+			ID3D12Device_CreateRenderTargetView(g_rhi.device, frame_buffers[i], NULL, rtv_descriptor_handle);
+			rtv_descriptor_handle.ptr += rtv_descriptor_stride;
+		}
+	}
+
+	//
+	// Success
+	//
+
 	{
 		d3d12_window_t *window = pool_add(&g_rhi.windows);
 		window->hwnd       = hwnd;
-		window->swap_chain = swap_chain;
+		window->swap_chain = swap_chain; swap_chain = NULL;
+		window->rtv_heap   = rtv_heap;   rtv_heap   = NULL;
+		
+		for (size_t i = 0; i < g_rhi.frame_buffer_count; i++)
+		{
+			window->frame_buffers[i] = frame_buffers[i];
+			frame_buffers[i] = NULL;
+		}
 
 		result = CAST_HANDLE(rhi_window_t, pool_get_handle(&g_rhi.windows, window));
+	}
+
+	//
+	//
+	//
+
+bail:
+	COM_SAFE_RELEASE(swap_chain);
+	COM_SAFE_RELEASE(rtv_heap);
+
+	for (size_t i = 0; i < g_rhi.frame_buffer_count; i++)
+	{
+		COM_SAFE_RELEASE(frame_buffers[i]);
 	}
 
 	return result;

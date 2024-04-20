@@ -27,6 +27,8 @@ typedef struct rhi_state_d3d12_t
 
 	ID3D12CommandQueue *command_queue;
 
+	uint32_t frame_buffer_count;
+
 	pool_t windows;
 } rhi_state_d3d12_t;
 
@@ -43,7 +45,9 @@ typedef struct rhi_init_params_d3d12_t
 typedef struct d3d12_window_t
 {
 	HWND hwnd;
-	IDXGISwapChain1 *swap_chain;
+	IDXGISwapChain1      *swap_chain;
+	ID3D12DescriptorHeap *rtv_heap;
+	ID3D12Resource       *frame_buffers[3];
 } d3d12_window_t;
 
 fn bool         rhi_init_d3d12(const rhi_init_params_d3d12_t *params);

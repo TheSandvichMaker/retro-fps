@@ -6,7 +6,7 @@
 
 typedef struct rhi_init_params_t
 {
-	int dummy;
+	uint32_t frame_buffer_count;
 } rhi_init_params_t;
 
 typedef enum rhi_backend_t
