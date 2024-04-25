@@ -117,8 +117,8 @@ typedef struct dynamic_string_t
 	{
 		struct
 		{
-			size_t count;
 			char  *data;
+			size_t count;
 		};
 		string_t string;
 	};

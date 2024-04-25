@@ -233,8 +233,11 @@ int wWinMain(HINSTANCE instance,
 
 	// it's d3d12 time
 
-#if 0
+#if 1
 	bool d3d12_success = rhi_init_d3d12(&(rhi_init_params_d3d12_t){
+		.base = {
+			.frame_buffer_count = 2,
+		},
 		.enable_debug_layer = true
 	});
 

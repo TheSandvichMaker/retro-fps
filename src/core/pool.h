@@ -8,7 +8,7 @@
 #define POOL_RESERVE_SIZE GB(16)
 #define POOL_COMMIT_SIZE  KB(16)
 
-enum { POOL_FREE_BIT = 1 << 31 };
+#define POOL_FREE_BIT (1 << 31)
 
 typedef struct pool_item_t
 {

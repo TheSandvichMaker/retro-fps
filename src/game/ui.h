@@ -240,9 +240,12 @@ typedef enum ui_style_color_t
     UI_COLOR_COUNT,
 } ui_style_color_t;
 
+DEFINE_POOL(ui_anim_t, ui_anim, 2048);
+
 typedef struct ui_style_t
 {
-	pool_t animation_state;
+	// pool_t animation_state;
+	ui_anim_pool_t animation_state;
 	table_t animation_index;
 
 	float base_scalars[UI_SCALAR_COUNT];

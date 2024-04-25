@@ -592,7 +592,10 @@ ui_anim_t *ui_get_anim(ui_id_t id, v4_t init_value)
 
 	if (!result)
 	{
+		/*
 		result = pool_add(&ui.style.animation_state);
+		*/
+		ui_anim_pool_allocate(&ui.style.animation_state, &result);
 		result->id        = id;
 		result->t_target  = init_value;
 		result->t_current = init_value;
@@ -2271,9 +2274,11 @@ void ui_hover_tooltip(string_t text)
 ui_t ui = {
 	.state = INIT_POOL(ui_state_t),
 
+	/*
 	.style = {
 		.animation_state = INIT_POOL(ui_anim_t),
 	},
+	*/
 };
 
 bool ui_is_cold(ui_id_t id)
@@ -2489,11 +2494,12 @@ bool ui_begin(float dt)
 		}
 	}
 
-	for (pool_iter_t it = pool_iter(&ui.style.animation_state); 
-		 pool_iter_valid(&it); 
-		 pool_iter_next(&it))
+	for_pool(it, &ui.style.animation_state)
 	{
-		ui_anim_t *anim = it.data;
+		// TODO: Figure out the situation with pool_free taking a handle but
+		// we don't have a handle when iterating?
+		ui_anim_handle_t handle = ui_anim_handle_from_index(&ui.style.animation_state, it);
+		ui_anim_t *anim = &ui.style.animation_state.items[it];
 
 		if (anim->last_touched_frame_index >= ui.frame_index)
 		{
@@ -2525,11 +2531,10 @@ bool ui_begin(float dt)
 		}
 		else
 		{
-			table_remove (&ui.style.animation_index, anim->id.value);
-			pool_rem_item(&ui.style.animation_state, anim);
+			table_remove(&ui.style.animation_index, anim->id.value);
+			ui_anim_pool_free(&ui.style.animation_state, handle);
 		}
 	}
-
 
 	ui.frame_index += 1;
 	

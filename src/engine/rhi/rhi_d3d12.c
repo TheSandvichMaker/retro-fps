@@ -6,8 +6,8 @@ fn_local D3D12_CPU_DESCRIPTOR_HANDLE d3d12_get_cpu_descriptor_handle(ID3D12Descr
 																	 D3D12_DESCRIPTOR_HEAP_TYPE heap_type, 
 																	 size_t index)
 {
-	const D3D12_CPU_DESCRIPTOR_HANDLE heap_start;
-	ID3D12DescriptorHandle_GetCPUDescriptorHandleForHeapStart(heap, &heap_start);
+	D3D12_CPU_DESCRIPTOR_HANDLE heap_start;
+	ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &heap_start);
 
 	const uint32_t stride = ID3D12Device_GetDescriptorHandleIncrementSize(g_rhi.device, heap_type);
 	D3D12_CPU_DESCRIPTOR_HANDLE result = {
@@ -244,8 +244,6 @@ rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 		.SwapEffect  = DXGI_SWAP_EFFECT_FLIP_DISCARD,
 	};
 
-	IDXGISwapChain1 *swap_chain = NULL;
-
 	hr = IDXGIFactory6_CreateSwapChainForHwnd(g_rhi.dxgi_factory, (IUnknown*)g_rhi.command_queue, hwnd, &desc, NULL, NULL, &swap_chain);
 	D3D12_CHECK_HR(hr, goto bail);
 
@@ -261,7 +259,7 @@ rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 			.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
 		};
 
-		hr = ID3D12Device_CreateDescriptorHeap(g_rhi.device, &desc, &IID_ID3D12DescriptorHeap, &g_rhi.rtv_descriptor_heap);
+		hr = ID3D12Device_CreateDescriptorHeap(g_rhi.device, &desc, &IID_ID3D12DescriptorHeap, &rtv_heap);
 		D3D12_CHECK_HR(hr, goto bail);
 	}
 
@@ -269,14 +267,12 @@ rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 	// Create RTVs
 	//
 
-	ID3D12Resource *frame_buffers[3];
-
 	{
 		const uint32_t rtv_descriptor_stride = 
 			ID3D12Device_GetDescriptorHandleIncrementSize(g_rhi.device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
 		D3D12_CPU_DESCRIPTOR_HANDLE rtv_descriptor_handle =
-			d3d12_get_cpu_descriptor_handle(g_rhi.rtv_descriptor_heap, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 0);
+			d3d12_get_cpu_descriptor_handle(rtv_heap, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 0);
 
 		for (size_t i = 0; i < g_rhi.frame_buffer_count; i++)
 		{
@@ -305,6 +301,11 @@ rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 		}
 
 		result = CAST_HANDLE(rhi_window_t, pool_get_handle(&g_rhi.windows, window));
+
+		char window_title[512];
+		GetWindowTextA(hwnd, window_title, sizeof(window_title));
+
+		log(RHI_D3D12, Info, "Successfully initialized swapchain for window '%s'", window_title);
 	}
 
 	//
