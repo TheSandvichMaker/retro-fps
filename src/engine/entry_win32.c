@@ -233,7 +233,8 @@ int wWinMain(HINSTANCE instance,
 
 	// it's d3d12 time
 
-#if 1
+#define D3D12_TEST 0
+#if D3D12_TEST
 	bool d3d12_success = rhi_init_d3d12(&(rhi_init_params_d3d12_t){
 		.base = {
 			.frame_buffer_count = 2,
@@ -241,12 +242,29 @@ int wWinMain(HINSTANCE instance,
 		.enable_debug_layer = true
 	});
 
+	rhi_window_t d3d12_window = { 0 };
+
 	if (d3d12_success)
 	{
-		rhi_init_window_d3d12(window);
-	}
-#endif
+		d3d12_window = rhi_init_window_d3d12(window);
 
+		if (RESOURCE_HANDLE_VALID(d3d12_window))
+		{
+			if (!rhi_init_test_window_resources(16.0f / 9.0f))
+			{
+				return 1;
+			}
+		}
+		else
+		{
+			return 1;
+		}
+	}
+	else
+	{
+		return 1;
+	}
+#else
     // initialize d3d11
     {
         int result = init_d3d11(window);
@@ -255,10 +273,6 @@ int wWinMain(HINSTANCE instance,
             FATAL_ERROR("D3D11 initialization failed.");
         }
     }
-
-    POINT prev_cursor_point;
-    GetCursorPos(&prev_cursor_point);
-    ScreenToClient(window, &prev_cursor_point);
 
     r_command_buffer_t r_commands = {
         .views_capacity        = R_VIEWS_CAPACITY,
@@ -279,6 +293,11 @@ int wWinMain(HINSTANCE instance,
         .ui_rects_capacity     = R_UI_RECTS_CAPACITY,
         .ui_rects              = m_alloc_array_nozero(&win32_arena, R_UI_RECTS_CAPACITY, r_ui_rect_t),
     };
+#endif
+
+    POINT prev_cursor_point;
+    GetCursorPos(&prev_cursor_point);
+    ScreenToClient(window, &prev_cursor_point);
 
 	platform_cursor_t cursor      = PLATFORM_CURSOR_ARROW;
 	platform_cursor_t last_cursor = cursor;
@@ -470,6 +489,14 @@ int wWinMain(HINSTANCE instance,
 
         prev_cursor_point = cursor_point;
 
+#if D3D12_TEST
+		(void)last_cursor;
+		(void)width;
+		(void)mouse_dp;
+		(void)cursor_is_in_client_rect;
+
+		rhi_draw_test_window(d3d12_window);
+#else
 		platform_io_t tick_io = {
 			.has_focus   = has_focus,
 
@@ -532,6 +559,7 @@ int wWinMain(HINSTANCE instance,
         {
             running = false;
         }
+#endif
 
 		m_reset_temp_arenas();
 
