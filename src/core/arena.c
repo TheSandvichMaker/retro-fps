@@ -6,7 +6,7 @@ void m_init_with_memory(arena_t *arena, void *memory, size_t size)
 {
     ASSERT(arena->buffer == NULL);
     
-    arena->buffer    = memory;
+    arena->buffer    = (char *)memory;
     arena->at        = arena->buffer;
     arena->end       = arena->buffer + size;
     arena->committed = arena->end;
@@ -18,7 +18,7 @@ void *m_alloc_nozero(arena_t *arena, size_t size, size_t align)
 {
     if (!arena->buffer)
     {
-        arena->buffer    = vm_reserve(NULL, ARENA_CAPACITY);
+        arena->buffer    = (char *)vm_reserve(NULL, ARENA_CAPACITY);
         arena->at        = arena->buffer;
         arena->end       = arena->buffer + ARENA_CAPACITY;
         arena->committed = arena->buffer;

@@ -2,10 +2,6 @@
 // Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
 // ============================================================
 
-#include "core.h"
-
-
-
 uintptr_t align_forward(uintptr_t address, uintptr_t align)
 {
 

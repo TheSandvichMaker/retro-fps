@@ -2,6 +2,8 @@
 // Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
 // ============================================================
 
+#include "dxc.h"
+
 fn_local D3D12_CPU_DESCRIPTOR_HANDLE d3d12_get_cpu_descriptor_handle(ID3D12DescriptorHeap *heap, 
 																	 D3D12_DESCRIPTOR_HEAP_TYPE heap_type, 
 																	 size_t index)
@@ -37,7 +39,7 @@ fn_local void d3d12_wait_for_frame(d3d12_window_t *window)
 		WaitForSingleObject(g_rhi.fence_event, INFINITE);
 	}
 
-	window->frame_index = IDXGISwapChain3_GetCurrentBackBufferIndex(window->swap_chain);
+	window->backbuffer_index = IDXGISwapChain3_GetCurrentBackBufferIndex(window->swap_chain);
 }
 
 bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
@@ -224,6 +226,38 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 	}
 
 	//
+	// Create per-frame state
+	//
+
+	for (size_t i = 0; i < g_rhi.frame_buffer_count; i++)
+	{
+		d3d12_frame_state_t *frame = m_alloc_struct(&g_rhi.arena, d3d12_frame_state_t);
+
+		{
+			hr = ID3D12Device_CreateCommandAllocator(device, 
+													 D3D12_COMMAND_LIST_TYPE_DIRECT, 
+													 &IID_ID3D12CommandAllocator, 
+													 &frame->command_allocator);
+			D3D12_CHECK_HR(hr, goto bail);
+		}
+
+		{
+			hr = ID3D12Device_CreateCommandList(device,
+												0,
+												D3D12_COMMAND_LIST_TYPE_DIRECT,
+												frame->command_allocator,
+												NULL,
+												&IID_ID3D12GraphicsCommandList,
+												&frame->command_list);
+			D3D12_CHECK_HR(hr, goto bail);
+
+			ID3D12GraphicsCommandList_Close(frame->command_list);
+		}
+
+		g_rhi.frames[i] = frame;
+	}
+
+	//
 	// Create fence / event
 	//
 
@@ -277,23 +311,9 @@ bool rhi_init_test_window_resources(float aspect)
 
 	HRESULT hr;
 
-	ID3D12CommandAllocator *command_allocator = NULL;
-	ID3D12GraphicsCommandList      *command_list      = NULL;
-	ID3D12RootSignature    *root_signature    = NULL;
-	ID3D12PipelineState    *pso               = NULL;
-	ID3D12Resource         *vertex_buffer     = NULL;
-
-	//
-	// Create Command Allocator
-	//
-
-	{
-		hr = ID3D12Device_CreateCommandAllocator(g_rhi.device, 
-												 D3D12_COMMAND_LIST_TYPE_DIRECT, 
-												 &IID_ID3D12CommandAllocator, 
-												 &command_allocator);
-		D3D12_CHECK_HR(hr, goto bail);
-	}
+	ID3D12RootSignature       *root_signature    = NULL;
+	ID3D12PipelineState       *pso               = NULL;
+	ID3D12Resource            *vertex_buffer     = NULL;
 
 	//
 	// Create PSO
@@ -325,24 +345,9 @@ bool rhi_init_test_window_resources(float aspect)
 		D3D12_CHECK_HR(hr, goto bail);
 	}
 
+	m_scoped_temp
 	{
-		string_t shader_source = S(
-			"void main_vs("                                 "\n"
-			"	in  float4 in_position  : POSITION0, "      "\n"
-			"	in  float4 in_color     : COLOR0,"          "\n"
-			"	out float4 out_position : SV_POSITION,"     "\n"
-			"	out float4 out_color    : COLOR)"           "\n"
-			"{"                                             "\n"
-			"	out_position = in_position;"                "\n"
-			"	out_color    = in_color;"                   "\n"
-			"}"                                             "\n"
-			""                                              "\n"
-			"float4 main_ps("                               "\n"
-			"	in float4 in_position : SV_POSITION,"       "\n"
-			"	in float4 in_color    : COLOR) : SV_Target" "\n"
-			"{"                                             "\n"
-			"	return in_color;"                           "\n"
-			"}"                                             "\n");
+		string_t shader_source = fs_read_entire_file(temp, S("../src/shaders/bindless_draft.hlsl"));
 
 		UINT compile_flags = 0;
 
@@ -352,42 +357,43 @@ bool rhi_init_test_window_resources(float aspect)
 			compile_flags |= D3DCOMPILE_SKIP_OPTIMIZATION;
 		}
 
+
 		ID3DBlob *error = NULL;
 
-		ID3DBlob *vs = NULL;
-		hr = D3DCompile(shader_source.data, 
-						shader_source.count, 
-						NULL, NULL, NULL, 
-						"main_vs", "vs_4_0", 
-						compile_flags, 
-						0, 
-						&vs, &error);
+		wchar_t *vs_args[] = { L"-E", L"MainVS", L"-T", L"vs_6_6", L"-WX", L"-Zi" };
 
-		if (FAILED(hr))
+		ID3DBlob *vs = NULL;
+		hr = dxc_compile(shader_source.data, (uint32_t)shader_source.count, vs_args, ARRAY_COUNT(vs_args), &vs, &error);
+
+		if (error && ID3D10Blob_GetBufferSize(error) > 0)
 		{
 			const char* message = ID3D10Blob_GetBufferPointer(error);
 
 			OutputDebugStringA(message);
-			FATAL_ERROR("Failed to compile vertex shader:\n\n%s", message);
+
+			if (!vs)
+			{
+				FATAL_ERROR("Failed to compile vertex shader:\n\n%s", message);
+			}
 
 			COM_SAFE_RELEASE(error);
 		}
 
-		ID3DBlob *ps = NULL;
-		hr = D3DCompile(shader_source.data, 
-						shader_source.count, 
-						NULL, NULL, NULL, 
-						"main_ps", "ps_4_0", 
-						compile_flags, 
-						0, 
-						&ps, &error);
+		wchar_t *ps_args[] = { L"-E", L"MainPS", L"-T", L"ps_6_6", L"-WX", L"-Zi" };
 
-		if (FAILED(hr))
+		ID3DBlob *ps = NULL;
+		hr = dxc_compile(shader_source.data, (uint32_t)shader_source.count, ps_args, ARRAY_COUNT(ps_args), &ps, &error);
+
+		if (error && ID3D10Blob_GetBufferSize(error) > 0)
 		{
 			const char* message = ID3D10Blob_GetBufferPointer(error);
 
 			OutputDebugStringA(message);
-			FATAL_ERROR("Failed to compile pixel shader:\n\n%s", message);
+
+			if (!ps)
+			{
+				FATAL_ERROR("Failed to compile pixel shader:\n\n%s", message);
+			}
 
 			COM_SAFE_RELEASE(error);
 		}
@@ -441,23 +447,6 @@ bool rhi_init_test_window_resources(float aspect)
 													  &IID_ID3D12PipelineState,
 													  &pso);
 		D3D12_CHECK_HR(hr, goto bail);
-	}
-
-	//
-	// Create Command List
-	//
-
-	{
-		hr = ID3D12Device_CreateCommandList(g_rhi.device,
-											0,
-											D3D12_COMMAND_LIST_TYPE_DIRECT,
-											command_allocator,
-											pso,
-											&IID_ID3D12GraphicsCommandList,
-											&command_list);
-		D3D12_CHECK_HR(hr, goto bail);
-
-		ID3D12GraphicsCommandList_Close(command_list);
 	}
 
 	//
@@ -519,17 +508,13 @@ bool rhi_init_test_window_resources(float aspect)
 	//
 	//
 
-	g_rhi.test.command_allocator = command_allocator; command_allocator = NULL;
-	g_rhi.test.command_list = command_list; command_list = NULL;
 	g_rhi.test.root_signature = root_signature; root_signature = NULL;
-	g_rhi.test.pso = pso; pso = NULL;
-	g_rhi.test.vertex_buffer = vertex_buffer; vertex_buffer = NULL;
+	g_rhi.test.pso            = pso;            pso            = NULL;
+	g_rhi.test.vertex_buffer  = vertex_buffer;  vertex_buffer  = NULL;
 
 	result = true;
 
 bail:
-	COM_SAFE_RELEASE(command_allocator);
-	COM_SAFE_RELEASE(command_list);
 	COM_SAFE_RELEASE(root_signature);
 	COM_SAFE_RELEASE(pso);
 	COM_SAFE_RELEASE(vertex_buffer);
@@ -656,11 +641,13 @@ void rhi_draw_test_window(rhi_window_t window_handle)
 
 	d3d12_wait_for_frame(window);
 
-	ID3D12CommandAllocator_Reset(g_rhi.test.command_allocator);
+	d3d12_frame_state_t *frame = g_rhi.frames[g_rhi.frame_index];
 
-	ID3D12GraphicsCommandList *list = g_rhi.test.command_list;
+	ID3D12CommandAllocator *allocator = frame->command_allocator;
+	ID3D12CommandAllocator_Reset(allocator);
 
-	ID3D12GraphicsCommandList_Reset(list, g_rhi.test.command_allocator, g_rhi.test.pso);
+	ID3D12GraphicsCommandList *list = frame->command_list;
+	ID3D12GraphicsCommandList_Reset(list, allocator, g_rhi.test.pso);
 
 	D3D12_VIEWPORT viewport = {
 		.Width  = (float)window->w,
@@ -680,7 +667,7 @@ void rhi_draw_test_window(rhi_window_t window_handle)
 		D3D12_RESOURCE_BARRIER barrier = {
 			.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
 			.Transition = {
-				.pResource   = window->frame_buffers[window->frame_index],
+				.pResource   = window->frame_buffers[window->backbuffer_index],
 				.StateBefore = D3D12_RESOURCE_STATE_PRESENT,
 				.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET,
 				.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
@@ -692,7 +679,7 @@ void rhi_draw_test_window(rhi_window_t window_handle)
 
 	D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle = d3d12_get_cpu_descriptor_handle(window->rtv_heap,
 																			 D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-																			 window->frame_index);
+																			 window->backbuffer_index);
 	ID3D12GraphicsCommandList_OMSetRenderTargets(list, 1, &rtv_handle, FALSE, NULL);
 
 	float clear_color[] = { 0.05f, 0.05f, 0.05f, 1.0f };
@@ -706,7 +693,7 @@ void rhi_draw_test_window(rhi_window_t window_handle)
 		D3D12_RESOURCE_BARRIER barrier = {
 			.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
 			.Transition = {
-				.pResource   = window->frame_buffers[window->frame_index],
+				.pResource   = window->frame_buffers[window->backbuffer_index],
 				.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET,
 				.StateAfter  = D3D12_RESOURCE_STATE_PRESENT,
 				.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,

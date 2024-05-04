@@ -15,11 +15,19 @@
 #include "rhi_api.h"
 #include "d3d12_helpers.h"
 
+typedef struct d3d12_frame_state_t
+{
+	ID3D12CommandAllocator    *command_allocator;
+	ID3D12GraphicsCommandList *command_list;
+} d3d12_frame_state_t;
+
 typedef struct rhi_state_d3d12_t
 {
 	bool initialized;
 	bool debug_layer_enabled;
 	bool gpu_based_validation_enabled;
+
+	arena_t arena;
 
 	IDXGIFactory6 *dxgi_factory;
 	IDXGIAdapter1 *dxgi_adapter;
@@ -31,6 +39,12 @@ typedef struct rhi_state_d3d12_t
 
 	ID3D12CommandQueue *command_queue;
 
+	d3d12_frame_state_t *frames[3];
+	uint32_t frame_buffer_count;
+	uint32_t frame_index;
+
+	pool_t windows;
+
 	struct
 	{
 		ID3D12CommandAllocator    *command_allocator;
@@ -41,10 +55,6 @@ typedef struct rhi_state_d3d12_t
 
 		D3D12_VERTEX_BUFFER_VIEW vbv;
 	} test;
-
-	uint32_t frame_buffer_count;
-
-	pool_t windows;
 } rhi_state_d3d12_t;
 
 global rhi_state_d3d12_t g_rhi;
@@ -60,13 +70,12 @@ typedef struct rhi_init_params_d3d12_t
 typedef struct d3d12_window_t
 {
 	uint32_t w, h;
+	uint32_t backbuffer_index;
 
 	HWND hwnd;
 	IDXGISwapChain4      *swap_chain;
 	ID3D12DescriptorHeap *rtv_heap;
 	ID3D12Resource       *frame_buffers[3];
-
-	uint32_t              frame_index;
 } d3d12_window_t;
 
 fn bool         rhi_init_d3d12(const rhi_init_params_d3d12_t *params);
