@@ -100,8 +100,7 @@ typedef struct rhi_graphics_pass_params_t
 fn void *rhi_allocate_parameters_(rhi_command_list_t *list, uint32_t size);
 #define  rhi_allocate_parameters(list, type) rhi_allocate_parameters_(list, sizeof(type))
 
-fn void rhi_set_parameters     (rhi_command_list_t *list, uint32_t slot, void *parameters);
-fn void rhi_set_draw_parameters(rhi_command_list_t *list, void *parameters, uint32_t size);
+fn void rhi_set_parameters(rhi_command_list_t *list, uint32_t slot, void *parameters, uint32_t size);
 
 fn void                rhi_begin_frame        (void);
 fn rhi_command_list_t *rhi_get_command_list   (void);

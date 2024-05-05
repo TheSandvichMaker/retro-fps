@@ -80,11 +80,12 @@ fn void rhi_api_test_triangle_draw(rhi_window_t window, rhi_command_list_t *list
 		// .topology = RhiPrimitiveTopology_triangle_list,
 	});
 
-	pass_parameters_t *pass_parameters = rhi_allocate_parameters(list, pass_parameters_t);
-	pass_parameters->positions = g_positions_srv;
-	pass_parameters->colors    = g_colors_srv;
+	pass_parameters_t pass_parameters = {
+		.positions = g_positions_srv,
+		.colors    = g_colors_srv,
+	};
 
-	rhi_set_parameters(list, 1, pass_parameters);
+	rhi_set_parameters(list, 1, &pass_parameters, sizeof(pass_parameters));
 
 	static float animation_time = 0.0f;
 
@@ -99,7 +100,7 @@ fn void rhi_api_test_triangle_draw(rhi_window_t window, rhi_command_list_t *list
 
 	for (size_t i = 0; i < ARRAY_COUNT(triangle_parameters); i++)
 	{
-		rhi_set_draw_parameters(list, &triangle_parameters[i], sizeof(triangle_parameters));
+		rhi_set_parameters(list, 0, &triangle_parameters[i], sizeof(triangle_parameters));
 		rhi_command_list_draw(list, 3);
 	}
 

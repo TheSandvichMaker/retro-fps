@@ -1068,36 +1068,35 @@ void *rhi_allocate_parameters_(rhi_command_list_t *list, uint32_t size)
 	return parameters.cpu;
 }
 
-void rhi_set_parameters(rhi_command_list_t *list, uint32_t slot, void *parameters)
+void rhi_set_parameters(rhi_command_list_t *list, uint32_t slot, void *parameters, uint32_t size)
 {
-	ASSERT(slot >= 1 && slot <= 3);
+	ASSERT(slot <= 3);
 
-	d3d12_frame_state_t  *frame = g_rhi.frames[g_rhi.frame_index];
-	d3d12_buffer_arena_t *arena = &frame->upload_arena;
-
-	ASSERT((uint64_t)parameters >= (uint64_t)arena->cpu_base &&
-		   (uint64_t)parameters <  (uint64_t)arena->cpu_base + arena->capacity);
-
-	uint64_t gpu_address = (uint64_t)parameters - (uint64_t)arena->cpu_base + arena->gpu_base;
-
-	ID3D12GraphicsCommandList_SetGraphicsRootConstantBufferView(list->d3d, slot, gpu_address);
-}
-
-void rhi_set_draw_parameters(rhi_command_list_t *list, void *parameters, uint32_t size)
-{
-	if (NEVER(size % sizeof(uint32_t) != 0))
+	if (slot == 0)
 	{
-		log(RHI_D3D12, Error, "called rhi_set_draw_parameters with a parameter size that is not a multiple of 4, which is not allowed");
-		return;
+		if (NEVER(size % sizeof(uint32_t) != 0))
+		{
+			log(RHI_D3D12, Error, "called rhi_set_parameters on slot 0 with a parameter size that is not a multiple of 4, which is not allowed");
+			return;
+		}
+
+		const uint32_t constants_count = size / sizeof(uint32_t);
+
+		ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstants(list->d3d, 
+																D3d12BindlessRootParameter_32bitconstants, 
+																constants_count, 
+																parameters, 
+																0);
 	}
+	else
+	{
+		d3d12_frame_state_t *frame = g_rhi.frames[g_rhi.frame_index];
 
-	const uint32_t constants_count = size / sizeof(uint32_t);
+		d3d12_buffer_allocation_t alloc = d3d12_arena_alloc(&frame->upload_arena, size, 256);
+		memcpy(alloc.cpu, parameters, size);
 
-	ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstants(list->d3d, 
-															D3d12BindlessRootParameter_32bitconstants, 
-															constants_count, 
-															parameters, 
-															0);
+		ID3D12GraphicsCommandList_SetGraphicsRootConstantBufferView(list->d3d, slot, alloc.gpu);
+	}
 }
 
 void rhi_command_list_draw(rhi_command_list_t *list, uint32_t vertex_count)
