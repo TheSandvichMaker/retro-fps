@@ -44,6 +44,7 @@ static bool dxc_initialized()
 
 		dxc_init_state = DxcInitState_Success;
 fail:;
+		 // I'm too lazy to release stuff on failure, who cares... if we failed here we're fucked anyway
 	}
 
 	return dxc_init_state == DxcInitState_Success;
@@ -73,12 +74,9 @@ int dxc_compile(const char *source, uint32_t source_count, const wchar_t **argum
 
 		if (SUCCEEDED(hr))
 		{
-			if (errors && errors->GetStringLength() > 0)
+			if (errors && error_blob)
 			{
-				if (error_blob)
-				{
-					*error_blob = (ID3D10Blob *)errors;
-				}
+				*error_blob = (ID3D10Blob *)errors;
 			}
 
 			if (compile_result->HasOutput(DXC_OUT_OBJECT))

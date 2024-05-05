@@ -34,4 +34,6 @@ struct Sampler
 	}
 };
 
+sampler s_linear_wrap : register(s0, space100);
+
 }

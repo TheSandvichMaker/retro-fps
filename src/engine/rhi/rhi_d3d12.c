@@ -1,8 +1,131 @@
+//
 // ============================================================
 // Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
 // ============================================================
 
 #include "dxc.h"
+
+ID3D12Resource *d3d12_create_upload_buffer(uint32_t size, void *initial_data)
+{
+	D3D12_HEAP_PROPERTIES heap_properties = {
+		.Type = D3D12_HEAP_TYPE_UPLOAD,
+	};
+
+	D3D12_RESOURCE_DESC desc = {
+		.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER,
+		.Width            = size,
+		.Height           = 1,
+		.DepthOrArraySize = 1,
+		.MipLevels        = 1,
+		.SampleDesc       = { .Count = 1, .Quality = 0 },
+		.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+		.Format           = DXGI_FORMAT_UNKNOWN,
+	};
+
+	ID3D12Resource *buffer;
+	HRESULT hr = ID3D12Device_CreateCommittedResource(g_rhi.device,
+													  &heap_properties,
+													  D3D12_HEAP_FLAG_NONE,
+													  &desc,
+													  D3D12_RESOURCE_STATE_COMMON,
+													  NULL,
+													  &IID_ID3D12Resource,
+													  &buffer);
+	D3D12_CHECK_HR(hr, return NULL);
+
+	if (initial_data)
+	{
+		void *mapped = NULL;
+
+		hr = ID3D12Resource_Map(buffer, 0, &(D3D12_RANGE){ 0 }, &mapped);
+		D3D12_CHECK_HR(hr, return NULL);
+
+		memcpy(mapped, initial_data, size);
+
+		ID3D12Resource_Unmap(buffer, 0, NULL);
+	}
+
+	return buffer;
+}
+
+void d3d12_descriptor_arena_init(d3d12_descriptor_arena_t *arena, 
+								D3D12_DESCRIPTOR_HEAP_TYPE type, 
+								UINT capacity, 
+								bool shader_visible)
+{
+	D3D12_DESCRIPTOR_HEAP_DESC desc = {
+		.Type           = type,
+		.NumDescriptors = capacity,
+		.Flags          = shader_visible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : 0,
+	};
+
+	HRESULT hr;
+
+	hr = ID3D12Device_CreateDescriptorHeap(g_rhi.device, &desc, &IID_ID3D12DescriptorHeap, &arena->heap);
+	D3D12_CHECK_HR(hr, return); // TODO: think about proper error (non-)recovery
+
+	ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(arena->heap, &arena->cpu_base);
+
+	if (shader_visible)
+	{
+		ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(arena->heap, &arena->gpu_base);
+	}
+
+	arena->at       = 0;
+	arena->capacity = capacity;
+	arena->stride   = ID3D12Device_GetDescriptorHandleIncrementSize(g_rhi.device, type);
+}
+
+void d3d12_descriptor_arena_release(d3d12_descriptor_arena_t *arena)
+{
+	COM_SAFE_RELEASE(arena->heap);
+}
+
+d3d12_descriptor_t d3d12_descriptor_arena_allocate(d3d12_descriptor_arena_t *arena)
+{
+	d3d12_descriptor_t result = {0};
+
+	if (ALWAYS(arena->at < arena->capacity))
+	{
+		const uint32_t at     = arena->at;
+		const uint32_t stride = arena->stride;
+		const uint32_t offset = at * stride;
+
+		result = (d3d12_descriptor_t){
+			.cpu    = { arena->cpu_base.ptr + offset },
+			.gpu    = { arena->gpu_base.ptr + offset },
+			.index  = at,
+		};
+
+		arena->at += 1;
+	}
+
+	return result;
+}
+
+d3d12_descriptor_range_t d3d12_descriptor_arena_allocate_range(d3d12_descriptor_arena_t *arena, uint32_t count)
+{
+	d3d12_descriptor_range_t result = {0};
+
+	if (ALWAYS(arena->at + count <= arena->capacity))
+	{
+		const uint32_t at     = arena->at;
+		const uint32_t stride = arena->stride;
+		const uint32_t offset = at * stride;
+
+		result = (d3d12_descriptor_range_t){
+			.cpu    = { arena->cpu_base.ptr + offset },
+			.gpu    = { arena->gpu_base.ptr + offset },
+			.count  = count,
+			.stride = stride,
+			.index  = at,
+		};
+
+		arena->at += 1;
+	}
+
+	return result;
+}
 
 fn_local D3D12_CPU_DESCRIPTOR_HANDLE d3d12_get_cpu_descriptor_handle(ID3D12DescriptorHeap *heap, 
 																	 D3D12_DESCRIPTOR_HEAP_TYPE heap_type, 
@@ -254,6 +377,8 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 			ID3D12GraphicsCommandList_Close(frame->command_list);
 		}
 
+		// d3d12_descriptor_arena_init(&frame->cbv_srv_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, RhiMaxDescriptors, true);
+
 		g_rhi.frames[i] = frame;
 	}
 
@@ -292,6 +417,7 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 	g_rhi.fence             = fence;             fence             = NULL;
 
 	result = true;
+	g_rhi.initialized = true;
 
 	log(RHI_D3D12, Info, "Successfully initialized D3D12");
 
@@ -315,6 +441,9 @@ bool rhi_init_test_window_resources(float aspect)
 	ID3D12PipelineState       *pso               = NULL;
 	ID3D12Resource            *vertex_buffer     = NULL;
 
+	// TEMPORARY
+	d3d12_descriptor_arena_init(&g_rhi.cbv_srv_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, RhiMaxDescriptors, true);
+
 	//
 	// Create PSO
 	//
@@ -325,7 +454,20 @@ bool rhi_init_test_window_resources(float aspect)
 		D3D12_VERSIONED_ROOT_SIGNATURE_DESC desc = {
 			.Version = D3D_ROOT_SIGNATURE_VERSION_1_0,
 			.Desc_1_0 = {
-				.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT,
+				.NumParameters = 1,
+				.pParameters = (D3D12_ROOT_PARAMETER[]){
+					[0] = {
+						.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+						.Constants = {
+							.ShaderRegister = 0,
+							.RegisterSpace  = 0,
+							.Num32BitValues = 64,
+						},
+					},
+				},
+				.Flags = 
+					D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT|
+					D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED,
 			},
 		};
 
@@ -347,7 +489,7 @@ bool rhi_init_test_window_resources(float aspect)
 
 	m_scoped_temp
 	{
-		string_t shader_source = fs_read_entire_file(temp, S("../src/shaders/bindless_draft.hlsl"));
+		string_t shader_source = fs_read_entire_file(temp, S("../src/shaders/bindless_triangle.hlsl"));
 
 		UINT compile_flags = 0;
 
@@ -421,21 +563,6 @@ bool rhi_init_test_window_resources(float aspect)
 				.CullMode        = D3D12_CULL_MODE_BACK,
 				.DepthClipEnable = TRUE,
 			},
-			.InputLayout = {
-				.pInputElementDescs = (D3D12_INPUT_ELEMENT_DESC[]){
-					{
-						.SemanticName   = "POSITION",
-						.Format         = DXGI_FORMAT_R32G32B32_FLOAT,
-						.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-					},
-					{
-						.SemanticName   = "COLOR",
-						.Format         = DXGI_FORMAT_R32G32B32A32_FLOAT,
-						.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-					},
-				},
-				.NumElements = 2,
-			},
 			.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
 			.NumRenderTargets = 1,
 			.RTVFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
@@ -454,54 +581,50 @@ bool rhi_init_test_window_resources(float aspect)
 	//
 
 	{
-		float vertices[] = {
-			// pos  						color
-			 0.00f,  0.25f * aspect, 0.0f,	1,0,0,0,
-			 0.25f, -0.25f * aspect, 0.0f, 	0,1,0,0,
-			-0.25f, -0.25f * aspect, 0.0f, 	0,0,1,0,
+		v3_t positions[] = {
+			{  0.00f,  0.25f * aspect, 0.0f },
+			{  0.25f, -0.25f * aspect, 0.0f },
+			{ -0.25f, -0.25f * aspect, 0.0f },
 		};
 
-		D3D12_HEAP_PROPERTIES heap_properties = {
-			.Type = D3D12_HEAP_TYPE_UPLOAD,
+		v4_t colors[] = {
+			{ 1, 0, 0 },
+			{ 0, 1, 0 },
+			{ 0, 0, 1 },
 		};
 
-		D3D12_RESOURCE_DESC desc = {
-			.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER,
-			.Width            = sizeof(vertices),
-			.Height           = 1,
-			.DepthOrArraySize = 1,
-			.MipLevels        = 1,
-			.SampleDesc       = { .Count = 1, .Quality = 0 },
-			.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-			.Format           = DXGI_FORMAT_UNKNOWN,
-		};
+		g_rhi.test.positions      = d3d12_create_upload_buffer(sizeof(positions), positions);
+		g_rhi.test.colors         = d3d12_create_upload_buffer(sizeof(colors), colors);
+		g_rhi.test.desc_positions = d3d12_descriptor_arena_allocate(&g_rhi.cbv_srv_uav);
+		g_rhi.test.desc_colors    = d3d12_descriptor_arena_allocate(&g_rhi.cbv_srv_uav);
 
-		hr = ID3D12Device_CreateCommittedResource(g_rhi.device,
-												  &heap_properties,
-												  D3D12_HEAP_FLAG_NONE,
-												  &desc,
-												  D3D12_RESOURCE_STATE_GENERIC_READ,
-												  NULL,
-												  &IID_ID3D12Resource,
-												  &vertex_buffer);
-		D3D12_CHECK_HR(hr, goto bail);
+		{
+			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
+				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+				.ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
+				.Buffer = {
+					.FirstElement        = 0,
+					.NumElements         = ARRAY_COUNT(positions),
+					.StructureByteStride = sizeof(positions[0]),
+				},
+			};
 
-		void *mapped = NULL;
+			ID3D12Device_CreateShaderResourceView(g_rhi.device, g_rhi.test.positions, &desc, g_rhi.test.desc_positions.cpu);
+		}
 
-		hr = ID3D12Resource_Map(vertex_buffer, 0, &(D3D12_RANGE){ 0 }, &mapped);
-		D3D12_CHECK_HR(hr, goto bail);
+		{
+			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
+				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+				.ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
+				.Buffer = {
+					.FirstElement        = 0,
+					.NumElements         = ARRAY_COUNT(colors),
+					.StructureByteStride = sizeof(colors[0]),
+				},
+			};
 
-		memcpy(mapped, vertices, sizeof(vertices));
-
-		ID3D12Resource_Unmap(vertex_buffer, 0, NULL);
-
-		D3D12_VERTEX_BUFFER_VIEW vbv = {
-			.BufferLocation = ID3D12Resource_GetGPUVirtualAddress(vertex_buffer),
-			.StrideInBytes  = sizeof(float) * (3 + 4),
-			.SizeInBytes    = sizeof(vertices),
-		};
-
-		g_rhi.test.vbv = vbv;
+			ID3D12Device_CreateShaderResourceView(g_rhi.device, g_rhi.test.colors, &desc, g_rhi.test.desc_colors.cpu);
+		}
 	}
 
 	//
@@ -510,7 +633,6 @@ bool rhi_init_test_window_resources(float aspect)
 
 	g_rhi.test.root_signature = root_signature; root_signature = NULL;
 	g_rhi.test.pso            = pso;            pso            = NULL;
-	g_rhi.test.vertex_buffer  = vertex_buffer;  vertex_buffer  = NULL;
 
 	result = true;
 
@@ -659,6 +781,7 @@ void rhi_draw_test_window(rhi_window_t window_handle)
 		.bottom = window->h,
 	};
 
+	ID3D12GraphicsCommandList_SetDescriptorHeaps(list, 1, &g_rhi.cbv_srv_uav.heap);
 	ID3D12GraphicsCommandList_SetGraphicsRootSignature(list, g_rhi.test.root_signature);
 	ID3D12GraphicsCommandList_RSSetViewports(list, 1, &viewport);
 	ID3D12GraphicsCommandList_RSSetScissorRects(list, 1, &scissor_rect);
@@ -685,8 +808,14 @@ void rhi_draw_test_window(rhi_window_t window_handle)
 	float clear_color[] = { 0.05f, 0.05f, 0.05f, 1.0f };
 	ID3D12GraphicsCommandList_ClearRenderTargetView(list, rtv_handle, clear_color, 0, NULL);
 
+	uint32_t root_constants[] = { 
+		g_rhi.test.desc_positions.index,
+		g_rhi.test.desc_colors   .index,
+	};
+
+	ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstants(list, 0, ARRAY_COUNT(root_constants), root_constants, 0);
+
 	ID3D12GraphicsCommandList_IASetPrimitiveTopology(list, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	ID3D12GraphicsCommandList_IASetVertexBuffers(list, 0, 1, &g_rhi.test.vbv);
 	ID3D12GraphicsCommandList_DrawInstanced(list, 3, 1, 0, 0);
 
 	{

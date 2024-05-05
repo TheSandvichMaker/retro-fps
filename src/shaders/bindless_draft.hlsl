@@ -1,52 +1,15 @@
-namespace df
-{
+#include "bindless.hlsli"
 
-template <typename T>
-struct Resource
-{
-	uint index;
-
-	T Get()
-	{
-		return ResourceDescriptorHeap[index];
-	}
-
-	T GetNonUniform()
-	{
-		return ResourceDescriptorHeap[NonUniformResourceIndex(index)];
-	}
-};
-
-struct Sampler
-{
-	uint index;
-
-	sampler Get()
-	{
-		return SamplerDescriptorHeap[index];
-	}
-
-	sampler GetNonUniform()
-	{
-		return SamplerDescriptorHeap[NonUniformResourceIndex(index)];
-	}
-};
-
-}
-
-struct ViewConstants
+struct ViewParameters
 {
 	float4x4 world_to_clip;
 };
 
-struct PassConstants
+struct PassParameters
 {
-	df::Resource< Texture2D > albedo;
-	df::Sampler               albedo_sampler;
-
 	df::Resource< StructuredBuffer<float3> > position_buffer;
-	df::Resource< StructuredBuffer<float4> > color_buffer;
-	df::Resource< StructuredBuffer<float2> > uv_buffer;
+	df::Resource< StructuredBuffer<float2> > texcoord_buffer;
+	df::Resource< StructuredBuffer<float2> > ligtmap_texcoord_buffer;
 };
 
 struct Vertex
@@ -58,49 +21,39 @@ struct Vertex
 
 struct ShaderParameters
 {
-	df::Resource< ConstantBuffer<ViewConstants> > view;
-	df::Resource< ConstantBuffer<PassConstants> > pass;
+	ConstantBuffer<ViewParameters> view : register(b0);
+	ConstantBuffer<PassParameters> pass : register(b1);
 
-	float4x4 transform;
+	df::Resource< Texture2D > albedo;
+	df::Resource< Texture2D > lightmap;
 };
 
-ConstantBuffer<ShaderParameters> parameters : register(b0);
+ConstantBuffer<ShaderParameters> parameters : register(b2);
 
 struct VS_OUT
 {
-	float4 position : SV_Position;
-	float4 color    : COLOR;
-	float2 uv       : TEXCOORD;
+	float4 position          : SV_Position;
+	float4 texcoord          : TEXCOORD;
+	float2 lightmap_texcoord : LIGHTMAP_TEXCOORD;
 };
 
 VS_OUT MainVS(uint vertex_index : SV_VertexID)
 {
-	ConstantBuffer< ViewConstants > view = parameters.view.Get();
-	ConstantBuffer< PassConstants > pass = parameters.pass.Get();
-
-	float3 position = pass.position_buffer.Get().Load(vertex_index);
-	float4 color    = pass.color_buffer   .Get().Load(vertex_index);
-	float2 uv       = pass.uv_buffer      .Get().Load(vertex_index);
-
-	float4x4 mvp = mul(view.world_to_clip, parameters.transform);
+	float3 position          = pass.position_buffer         .Get().Load(vertex_index);
+	float2 texcoord          = pass.texcoord_buffer         .Get().Load(vertex_index);
+	float2 lightmap_texcoord = pass.lightmap_texcoord_buffer.Get().Load(vertex_index);
 
 	VS_OUT OUT;
-	OUT.position = mul(mvp, float4(position, 1));
-	OUT.color    = color;
-	OUT.uv       = uv;
+	OUT.position          = mul(view.world_to_clip, float4(position, 1));
+	OUT.texcoord          = texcoord;
+	OUT.lightmap_texcoord = lightmap_texcoord;
 	return OUT;
 }
 
 float4 MainPS(VS_OUT IN) : SV_Target
 {
-	ConstantBuffer< PassConstants > pass = parameters.pass.Get();
+	float3 albedo = parameters.albedo  .Get().Sample(df::s_linear_wrap, IN.texcoord).rgb;
+	float3 light  = parameters.lightmap.Get().Sample(df::s_linear_wrap, IN.lightmap_texcoord).rgb;
 
-	Texture2D albedo_texture = pass.albedo.Get();
-	sampler   albedo_sampler = pass.albedo_sampler.Get();
-
-	float4 albedo = albedo_texture.Sample(albedo_sampler, IN.uv);
-	float4 color  = albedo * IN.color;
-
-	return color;
+	return float4(albedo * light, 1);
 }
-
