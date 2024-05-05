@@ -14,8 +14,16 @@
 
 #include "rhi_api.h"
 #include "d3d12_helpers.h"
+#include "d3d12_buffer_arena.h"
 
 enum { RhiMaxDescriptors = 4096 };
+
+typedef enum d3d12_bindless_root_parameters_t
+{
+	D3d12BindlessRootParameter_32bitconstants = 0,
+	D3d12BindlessRootParameter_pass_cbv       = 1,
+	D3d12BindlessRootParameter_view_cbv       = 2,
+} d3d12_bindless_root_parameters_t;
 
 typedef struct d3d12_descriptor_arena_t
 {
@@ -52,12 +60,20 @@ fn void d3d12_descriptor_arena_release(d3d12_descriptor_arena_t *arena);
 fn d3d12_descriptor_t d3d12_descriptor_arena_allocate(d3d12_descriptor_arena_t *arena);
 fn d3d12_descriptor_range_t d3d12_descriptor_arena_allocate_range(d3d12_descriptor_arena_t *arena, uint32_t count);
 
+typedef struct rhi_command_list_t
+{
+	ID3D12GraphicsCommandList *d3d;
+
+	uint8_t render_target_mask;
+	rhi_texture_t render_targets[8];
+} rhi_command_list_t;
+
 typedef struct d3d12_frame_state_t
 {
-	ID3D12CommandAllocator    *command_allocator;
-	ID3D12GraphicsCommandList *command_list;
+	ID3D12CommandAllocator *command_allocator;
+	rhi_command_list_t      command_list;
 
-	// d3d12_descriptor_arena_t cbv_srv_uav;
+	d3d12_buffer_arena_t upload_arena;
 } d3d12_frame_state_t;
 
 typedef struct rhi_state_d3d12_t
@@ -82,16 +98,17 @@ typedef struct rhi_state_d3d12_t
 	uint32_t frame_buffer_count;
 	uint32_t frame_index;
 
+	ID3D12RootSignature *rs_bindless;
+
 	d3d12_descriptor_arena_t cbv_srv_uav;
 
 	pool_t windows;
+	pool_t buffers;
+	pool_t textures;
 
 	struct
 	{
-		ID3D12CommandAllocator    *command_allocator;
-		ID3D12GraphicsCommandList *command_list;
-		ID3D12RootSignature       *root_signature;
-		ID3D12PipelineState       *pso;
+		ID3D12PipelineState *pso;
 
 		ID3D12Resource *positions;
 		ID3D12Resource *colors;
@@ -117,12 +134,29 @@ typedef struct d3d12_window_t
 	uint32_t backbuffer_index;
 
 	HWND hwnd;
-	IDXGISwapChain4      *swap_chain;
-	ID3D12DescriptorHeap *rtv_heap;
-	ID3D12Resource       *frame_buffers[3];
+	IDXGISwapChain4         *swap_chain;
+	d3d12_descriptor_arena_t rtv_arena;
+	rhi_texture_t            frame_buffers[3];
 } d3d12_window_t;
+
+typedef struct d3d12_buffer_t
+{
+	ID3D12Resource *resource;
+	d3d12_descriptor_t srv;
+	d3d12_descriptor_t uav;
+} d3d12_buffer_t;
+
+typedef struct d3d12_texture_t
+{
+	ID3D12Resource    *resource;
+	uint32_t           usage_flags;
+	d3d12_descriptor_t srv;
+	d3d12_descriptor_t uav;
+	d3d12_descriptor_t rtv;
+} d3d12_texture_t;
 
 fn bool         rhi_init_d3d12(const rhi_init_params_d3d12_t *params);
 fn rhi_window_t rhi_init_window_d3d12(HWND hwnd);
-fn bool         rhi_init_test_window_resources(float aspect);
-fn void         rhi_draw_test_window(rhi_window_t window);
+fn bool         rhi_init_test_window_resources(void);
+// fn void         rhi_draw_test_window(rhi_window_t window);
+

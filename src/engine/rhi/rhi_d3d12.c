@@ -5,48 +5,8 @@
 
 #include "dxc.h"
 
-ID3D12Resource *d3d12_create_upload_buffer(uint32_t size, void *initial_data)
-{
-	D3D12_HEAP_PROPERTIES heap_properties = {
-		.Type = D3D12_HEAP_TYPE_UPLOAD,
-	};
-
-	D3D12_RESOURCE_DESC desc = {
-		.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER,
-		.Width            = size,
-		.Height           = 1,
-		.DepthOrArraySize = 1,
-		.MipLevels        = 1,
-		.SampleDesc       = { .Count = 1, .Quality = 0 },
-		.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-		.Format           = DXGI_FORMAT_UNKNOWN,
-	};
-
-	ID3D12Resource *buffer;
-	HRESULT hr = ID3D12Device_CreateCommittedResource(g_rhi.device,
-													  &heap_properties,
-													  D3D12_HEAP_FLAG_NONE,
-													  &desc,
-													  D3D12_RESOURCE_STATE_COMMON,
-													  NULL,
-													  &IID_ID3D12Resource,
-													  &buffer);
-	D3D12_CHECK_HR(hr, return NULL);
-
-	if (initial_data)
-	{
-		void *mapped = NULL;
-
-		hr = ID3D12Resource_Map(buffer, 0, &(D3D12_RANGE){ 0 }, &mapped);
-		D3D12_CHECK_HR(hr, return NULL);
-
-		memcpy(mapped, initial_data, size);
-
-		ID3D12Resource_Unmap(buffer, 0, NULL);
-	}
-
-	return buffer;
-}
+#include "d3d12_helpers.c"
+#include "d3d12_buffer_arena.c"
 
 void d3d12_descriptor_arena_init(d3d12_descriptor_arena_t *arena, 
 								D3D12_DESCRIPTOR_HEAP_TYPE type, 
@@ -71,7 +31,7 @@ void d3d12_descriptor_arena_init(d3d12_descriptor_arena_t *arena,
 		ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(arena->heap, &arena->gpu_base);
 	}
 
-	arena->at       = 0;
+	arena->at       = 1; // 0 is reserved to indicate a null descriptor
 	arena->capacity = capacity;
 	arena->stride   = ID3D12Device_GetDescriptorHandleIncrementSize(g_rhi.device, type);
 }
@@ -142,7 +102,7 @@ fn_local D3D12_CPU_DESCRIPTOR_HANDLE d3d12_get_cpu_descriptor_handle(ID3D12Descr
 	return result;
 }
 
-fn_local void d3d12_wait_for_frame(d3d12_window_t *window)
+fn_local void d3d12_wait_for_frame(void)
 {
 	uint64_t value = g_rhi.fence_value;
 
@@ -161,13 +121,13 @@ fn_local void d3d12_wait_for_frame(d3d12_window_t *window)
 		}
 		WaitForSingleObject(g_rhi.fence_event, INFINITE);
 	}
-
-	window->backbuffer_index = IDXGISwapChain3_GetCurrentBackBufferIndex(window->swap_chain);
 }
 
 bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 {
-	g_rhi.windows = (pool_t)INIT_POOL(d3d12_window_t);
+	g_rhi.windows  = (pool_t)INIT_POOL(d3d12_window_t);
+	g_rhi.buffers  = (pool_t)INIT_POOL(d3d12_buffer_t);
+	g_rhi.textures = (pool_t)INIT_POOL(d3d12_texture_t);
 
 	//
 	//
@@ -371,10 +331,16 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 												frame->command_allocator,
 												NULL,
 												&IID_ID3D12GraphicsCommandList,
-												&frame->command_list);
+												&frame->command_list.d3d);
 			D3D12_CHECK_HR(hr, goto bail);
 
-			ID3D12GraphicsCommandList_Close(frame->command_list);
+			ID3D12GraphicsCommandList_Close(frame->command_list.d3d);
+
+			m_scoped_temp
+			{
+				string_t name = string_format(temp, "frame upload arena #%zu", i);
+				d3d12_arena_init(device, &frame->upload_arena, MB(128), utf16_from_utf8(temp, name).data);
+			}
 		}
 
 		// d3d12_descriptor_arena_init(&frame->cbv_srv_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, RhiMaxDescriptors, true);
@@ -410,11 +376,11 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 	// Successfully Initialized D3D12
 	//
 
-	g_rhi.dxgi_factory      = dxgi_factory;      dxgi_factory      = NULL;
-	g_rhi.dxgi_adapter      = dxgi_adapter;      dxgi_adapter      = NULL;
-	g_rhi.device            = device;            device            = NULL;
-	g_rhi.command_queue     = command_queue;     command_queue     = NULL;
-	g_rhi.fence             = fence;             fence             = NULL;
+	g_rhi.dxgi_factory      = dxgi_factory;  dxgi_factory      = NULL;
+	g_rhi.dxgi_adapter      = dxgi_adapter;  dxgi_adapter      = NULL;
+	g_rhi.device            = device;        device            = NULL;
+	g_rhi.command_queue     = command_queue; command_queue     = NULL;
+	g_rhi.fence             = fence;         fence             = NULL;
 
 	result = true;
 	g_rhi.initialized = true;
@@ -431,7 +397,7 @@ bail:
 	return result;
 }
 
-bool rhi_init_test_window_resources(float aspect)
+bool rhi_init_test_window_resources(void)
 {
 	bool result = false;
 
@@ -451,23 +417,37 @@ bool rhi_init_test_window_resources(float aspect)
 	{
 		// Create root signature
 
-		D3D12_VERSIONED_ROOT_SIGNATURE_DESC desc = {
-			.Version = D3D_ROOT_SIGNATURE_VERSION_1_0,
-			.Desc_1_0 = {
-				.NumParameters = 1,
-				.pParameters = (D3D12_ROOT_PARAMETER[]){
-					[0] = {
-						.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
-						.Constants = {
-							.ShaderRegister = 0,
-							.RegisterSpace  = 0,
-							.Num32BitValues = 64,
-						},
-					},
+		D3D12_ROOT_PARAMETER1 parameters[] = {
+			[D3d12BindlessRootParameter_32bitconstants] = {
+				.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+				.Constants = {
+					.ShaderRegister = 0,
+					.RegisterSpace  = 0,
+					.Num32BitValues = 60,
 				},
-				.Flags = 
-					D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT|
-					D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED,
+			},
+			[D3d12BindlessRootParameter_pass_cbv] = {
+				.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
+				.Descriptor = {
+					.ShaderRegister = 1,
+					.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE,
+				},
+			},
+			[D3d12BindlessRootParameter_view_cbv] = {
+				.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
+				.Descriptor = {
+					.ShaderRegister = 2,
+					.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE,
+				},
+			},
+		};
+
+		D3D12_VERSIONED_ROOT_SIGNATURE_DESC desc = {
+			.Version = D3D_ROOT_SIGNATURE_VERSION_1_1,
+			.Desc_1_1 = {
+				.NumParameters = ARRAY_COUNT(parameters),
+				.pParameters   = parameters,
+				.Flags         = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED,
 			},
 		};
 
@@ -502,7 +482,7 @@ bool rhi_init_test_window_resources(float aspect)
 
 		ID3DBlob *error = NULL;
 
-		wchar_t *vs_args[] = { L"-E", L"MainVS", L"-T", L"vs_6_6", L"-WX", L"-Zi" };
+		wchar_t *vs_args[] = { L"-E", L"MainVS", L"-T", L"vs_6_6", L"-WX", L"-Zi", L"-I", L"../src/shaders" };
 
 		ID3DBlob *vs = NULL;
 		hr = dxc_compile(shader_source.data, (uint32_t)shader_source.count, vs_args, ARRAY_COUNT(vs_args), &vs, &error);
@@ -521,7 +501,7 @@ bool rhi_init_test_window_resources(float aspect)
 			COM_SAFE_RELEASE(error);
 		}
 
-		wchar_t *ps_args[] = { L"-E", L"MainPS", L"-T", L"ps_6_6", L"-WX", L"-Zi" };
+		wchar_t *ps_args[] = { L"-E", L"MainPS", L"-T", L"ps_6_6", L"-WX", L"-Zi", L"-I", L"../src/shaders" };
 
 		ID3DBlob *ps = NULL;
 		hr = dxc_compile(shader_source.data, (uint32_t)shader_source.count, ps_args, ARRAY_COUNT(ps_args), &ps, &error);
@@ -580,6 +560,7 @@ bool rhi_init_test_window_resources(float aspect)
 	// Create Vertex Buffer
 	//
 
+#if 0
 	{
 		v3_t positions[] = {
 			{  0.00f,  0.25f * aspect, 0.0f },
@@ -593,8 +574,8 @@ bool rhi_init_test_window_resources(float aspect)
 			{ 0, 0, 1 },
 		};
 
-		g_rhi.test.positions      = d3d12_create_upload_buffer(sizeof(positions), positions);
-		g_rhi.test.colors         = d3d12_create_upload_buffer(sizeof(colors), colors);
+		g_rhi.test.positions      = d3d12_create_upload_buffer(g_rhi.device, sizeof(positions), positions);
+		g_rhi.test.colors         = d3d12_create_upload_buffer(g_rhi.device, sizeof(colors), colors);
 		g_rhi.test.desc_positions = d3d12_descriptor_arena_allocate(&g_rhi.cbv_srv_uav);
 		g_rhi.test.desc_colors    = d3d12_descriptor_arena_allocate(&g_rhi.cbv_srv_uav);
 
@@ -626,13 +607,14 @@ bool rhi_init_test_window_resources(float aspect)
 			ID3D12Device_CreateShaderResourceView(g_rhi.device, g_rhi.test.colors, &desc, g_rhi.test.desc_colors.cpu);
 		}
 	}
+#endif
 
 	//
 	//
 	//
 
-	g_rhi.test.root_signature = root_signature; root_signature = NULL;
-	g_rhi.test.pso            = pso;            pso            = NULL;
+	g_rhi.rs_bindless = root_signature; root_signature = NULL;
+	g_rhi.test.pso    = pso;            pso            = NULL;
 
 	result = true;
 
@@ -648,11 +630,12 @@ rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 {
 	rhi_window_t result = {0};
 
+	d3d12_window_t *window = pool_add(&g_rhi.windows);
+	ASSERT(window);
+
 	HRESULT hr;
 
-	IDXGISwapChain4      *swap_chain       = NULL;
-	ID3D12DescriptorHeap *rtv_heap         = NULL;
-	ID3D12Resource       *frame_buffers[3] = {NULL};
+	IDXGISwapChain4 *swap_chain = NULL;
 
 	//
 	// Initialize swapchain
@@ -676,34 +659,25 @@ rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 	// Create RTV Descriptor Heap
 	//
 
-	{
-		D3D12_DESCRIPTOR_HEAP_DESC desc = {
-			.NumDescriptors = g_rhi.frame_buffer_count,
-			.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-		};
-
-		hr = ID3D12Device_CreateDescriptorHeap(g_rhi.device, &desc, &IID_ID3D12DescriptorHeap, &rtv_heap);
-		D3D12_CHECK_HR(hr, goto bail);
-	}
+	d3d12_descriptor_arena_init(&window->rtv_arena, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, g_rhi.frame_buffer_count + 1, false);
 
 	//
 	// Create RTVs
 	//
 
 	{
-		const uint32_t rtv_descriptor_stride = 
-			ID3D12Device_GetDescriptorHandleIncrementSize(g_rhi.device, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-
-		D3D12_CPU_DESCRIPTOR_HANDLE rtv_descriptor_handle =
-			d3d12_get_cpu_descriptor_handle(rtv_heap, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 0);
-
 		for (size_t i = 0; i < g_rhi.frame_buffer_count; i++)
 		{
-			hr = IDXGISwapChain1_GetBuffer(swap_chain, (uint32_t)i, &IID_ID3D12Resource, &frame_buffers[i]);
+			d3d12_texture_t *frame_buffer = pool_add(&g_rhi.textures);
+			frame_buffer->usage_flags |= RhiTextureUsage_render_target;
+
+			hr = IDXGISwapChain1_GetBuffer(swap_chain, (uint32_t)i, &IID_ID3D12Resource, &frame_buffer->resource);
 			D3D12_CHECK_HR(hr, goto bail);
 
-			ID3D12Device_CreateRenderTargetView(g_rhi.device, frame_buffers[i], NULL, rtv_descriptor_handle);
-			rtv_descriptor_handle.ptr += rtv_descriptor_stride;
+			frame_buffer->rtv = d3d12_descriptor_arena_allocate(&window->rtv_arena);
+			ID3D12Device_CreateRenderTargetView(g_rhi.device, frame_buffer->resource, NULL, frame_buffer->rtv.cpu);
+
+			window->frame_buffers[i] = CAST_HANDLE(rhi_texture_t, pool_get_handle(&g_rhi.textures, frame_buffer));
 		}
 	}
 
@@ -715,19 +689,11 @@ rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 		RECT client_rect;
 		GetClientRect(hwnd, &client_rect);
 
-		d3d12_window_t *window = pool_add(&g_rhi.windows);
 		window->w          = (uint32_t)(client_rect.right - client_rect.left);
 		window->h          = (uint32_t)(client_rect.bottom - client_rect.top);
 		window->hwnd       = hwnd;
 		window->swap_chain = swap_chain; swap_chain = NULL;
-		window->rtv_heap   = rtv_heap;   rtv_heap   = NULL;
 		
-		for (size_t i = 0; i < g_rhi.frame_buffer_count; i++)
-		{
-			window->frame_buffers[i] = frame_buffers[i];
-			frame_buffers[i] = NULL;
-		}
-
 		result = CAST_HANDLE(rhi_window_t, pool_get_handle(&g_rhi.windows, window));
 
 		char window_title[512];
@@ -742,16 +708,11 @@ rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 
 bail:
 	COM_SAFE_RELEASE(swap_chain);
-	COM_SAFE_RELEASE(rtv_heap);
-
-	for (size_t i = 0; i < g_rhi.frame_buffer_count; i++)
-	{
-		COM_SAFE_RELEASE(frame_buffers[i]);
-	}
 
 	return result;
 }
 
+#if 0
 void rhi_draw_test_window(rhi_window_t window_handle)
 {
 	d3d12_window_t *window = pool_get(&g_rhi.windows, window_handle);
@@ -761,14 +722,17 @@ void rhi_draw_test_window(rhi_window_t window_handle)
 		return;
 	}
 
-	d3d12_wait_for_frame(window);
+	d3d12_wait_for_frame();
+	window->backbuffer_index = IDXGISwapChain3_GetCurrentBackBufferIndex(window->swap_chain);
 
 	d3d12_frame_state_t *frame = g_rhi.frames[g_rhi.frame_index];
+
+	d3d12_arena_reset(&frame->upload_arena);
 
 	ID3D12CommandAllocator *allocator = frame->command_allocator;
 	ID3D12CommandAllocator_Reset(allocator);
 
-	ID3D12GraphicsCommandList *list = frame->command_list;
+	ID3D12GraphicsCommandList *list = frame->command_list.d3d;
 	ID3D12GraphicsCommandList_Reset(list, allocator, g_rhi.test.pso);
 
 	D3D12_VIEWPORT viewport = {
@@ -782,7 +746,7 @@ void rhi_draw_test_window(rhi_window_t window_handle)
 	};
 
 	ID3D12GraphicsCommandList_SetDescriptorHeaps(list, 1, &g_rhi.cbv_srv_uav.heap);
-	ID3D12GraphicsCommandList_SetGraphicsRootSignature(list, g_rhi.test.root_signature);
+	ID3D12GraphicsCommandList_SetGraphicsRootSignature(list, g_rhi.rs_bindless);
 	ID3D12GraphicsCommandList_RSSetViewports(list, 1, &viewport);
 	ID3D12GraphicsCommandList_RSSetScissorRects(list, 1, &scissor_rect);
 
@@ -808,15 +772,37 @@ void rhi_draw_test_window(rhi_window_t window_handle)
 	float clear_color[] = { 0.05f, 0.05f, 0.05f, 1.0f };
 	ID3D12GraphicsCommandList_ClearRenderTargetView(list, rtv_handle, clear_color, 0, NULL);
 
-	uint32_t root_constants[] = { 
-		g_rhi.test.desc_positions.index,
-		g_rhi.test.desc_colors   .index,
+	d3d12_buffer_allocation_t pass_alloc = d3d12_arena_alloc(&frame->upload_arena, sizeof(shader_parameters_t), 256);
+
+	pass_parameters_t *pass_parameters = pass_alloc.cpu;
+	pass_parameters->positions = g_rhi.test.desc_positions.index;
+	pass_parameters->colors    = g_rhi.test.desc_colors.index;
+
+	ID3D12GraphicsCommandList_SetGraphicsRootConstantBufferView(list, D3d12BindlessRootParameter_pass_cbv, pass_alloc.gpu);
+
+	static float animation_time = 0.0f;
+
+	const float animation_t = sin_ss(animation_time);
+	animation_time += 1.0f / 60.0f;
+
+	shader_parameters_t triangle_parameters[] = {
+		{ { animation_t * -0.1,  0.0 }, { 1, 0, 0, 1 } },
+		{ { animation_t *  0.1,  0.2 }, { 0, 1, 0, 1 } },
+		{ { animation_t * -0.3, -0.3 }, { 0, 0, 1, 1 } },
 	};
 
-	ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstants(list, 0, ARRAY_COUNT(root_constants), root_constants, 0);
+	for (size_t i = 0; i < ARRAY_COUNT(triangle_parameters); i++)
+	{
+		const uint32_t constants_count = sizeof(shader_parameters_t) / sizeof(uint32_t);
+		ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstants(list, 
+																D3d12BindlessRootParameter_32bitconstants, 
+																constants_count, 
+																&triangle_parameters[i], 
+																0);
 
-	ID3D12GraphicsCommandList_IASetPrimitiveTopology(list, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	ID3D12GraphicsCommandList_DrawInstanced(list, 3, 1, 0, 0);
+		ID3D12GraphicsCommandList_IASetPrimitiveTopology(list, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		ID3D12GraphicsCommandList_DrawInstanced(list, 3, 1, 0, 0);
+	}
 
 	{
 		D3D12_RESOURCE_BARRIER barrier = {
@@ -839,4 +825,354 @@ void rhi_draw_test_window(rhi_window_t window_handle)
 
 	DXGI_PRESENT_PARAMETERS present_parameters = { 0 };
 	IDXGISwapChain1_Present1(window->swap_chain, 1, 0, &present_parameters);
+}
+#endif
+
+//
+// API implementation
+//
+
+rhi_texture_t rhi_get_current_backbuffer(rhi_window_t handle)
+{
+	rhi_texture_t result = {0};
+
+	d3d12_window_t *window = pool_get(&g_rhi.windows, handle);
+
+	if (ALWAYS(window))
+	{
+		result = window->frame_buffers[window->backbuffer_index];
+	}
+
+	return result;
+}
+
+rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
+{
+	rhi_buffer_t result = {0};
+
+	if (NEVER(!params)) 
+	{
+		log(RHI_D3D12, Error, "Called rhi_create_buffer without parameters");
+		return result;
+	}
+
+	d3d12_buffer_t *buffer = pool_add(&g_rhi.buffers);
+	result = CAST_HANDLE(rhi_buffer_t, pool_get_handle(&g_rhi.buffers, buffer));
+
+	m_scoped_temp
+	{
+		string16_t debug_name_wide = {0};
+
+		if (params->debug_name.count > 0)
+		{
+			debug_name_wide = utf16_from_utf8(temp, params->debug_name);
+		}
+
+		buffer->resource = d3d12_create_upload_buffer(g_rhi.device, params->size, NULL, debug_name_wide.data);
+
+		const rhi_initial_data_t *data = &params->initial_data;
+
+		if (data->ptr && ALWAYS(data->offset + data->size <= params->size))
+		{
+			char *mapped = NULL;
+
+			// TODO: error handling...
+			ID3D12Resource_Map(buffer->resource, 0, &(D3D12_RANGE){ 0 }, (void **)&mapped);
+			memcpy(mapped + data->offset, data->ptr, data->size);
+			ID3D12Resource_Unmap(buffer->resource, 0, NULL);
+		}
+	}
+
+	if (params->srv)
+	{
+		d3d12_descriptor_t descriptor = d3d12_descriptor_arena_allocate(&g_rhi.cbv_srv_uav);
+		buffer->srv = descriptor;
+
+		{
+			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
+				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+				.ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
+				.Buffer = {
+					.FirstElement        = params->srv->first_element,
+					.NumElements         = params->srv->element_count,
+					.StructureByteStride = params->srv->element_stride,
+				},
+			};
+
+			ID3D12Device_CreateShaderResourceView(g_rhi.device, buffer->resource, &desc, descriptor.cpu);
+		}
+	}
+
+	return result;
+}
+
+rhi_buffer_srv_t rhi_get_buffer_srv(rhi_buffer_t handle)
+{
+	rhi_buffer_srv_t result = {0};
+
+	d3d12_buffer_t *buffer = pool_get(&g_rhi.buffers, handle);
+
+	if (ALWAYS(buffer))
+	{
+		result.index = buffer->srv.index;
+	}
+
+	return result;
+}
+
+void rhi_begin_frame(void)
+{
+	d3d12_wait_for_frame();
+
+	for (pool_iter_t it = pool_iter(&g_rhi.windows);
+		 pool_iter_valid(&it);
+		 pool_iter_next(&it))
+	{
+		d3d12_window_t *window = it.data;
+		window->backbuffer_index = IDXGISwapChain3_GetCurrentBackBufferIndex(window->swap_chain);
+	}
+
+	d3d12_frame_state_t *frame = g_rhi.frames[g_rhi.frame_index];
+
+	d3d12_arena_reset(&frame->upload_arena);
+
+	ID3D12CommandAllocator *allocator = frame->command_allocator;
+	ID3D12CommandAllocator_Reset(allocator);
+
+	ID3D12GraphicsCommandList *list = frame->command_list.d3d;
+	ID3D12GraphicsCommandList_Reset(list, allocator, g_rhi.test.pso);
+
+	ID3D12GraphicsCommandList_SetDescriptorHeaps(list, 1, &g_rhi.cbv_srv_uav.heap);
+	ID3D12GraphicsCommandList_SetGraphicsRootSignature(list, g_rhi.rs_bindless);
+
+	// TODO: move this to begin pass
+	ID3D12GraphicsCommandList_IASetPrimitiveTopology(list, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	// TODO: move this to begin pass
+
+	for (pool_iter_t it = pool_iter(&g_rhi.windows);
+		 pool_iter_valid(&it);
+		 pool_iter_next(&it))
+	{
+		d3d12_window_t *window = it.data;
+
+		D3D12_VIEWPORT viewport = {
+			.Width  = (float)window->w,
+			.Height = (float)window->h,
+		};
+
+		D3D12_RECT scissor_rect = {
+			.right  = window->w,
+			.bottom = window->h,
+		};
+
+		ID3D12GraphicsCommandList_RSSetViewports(list, 1, &viewport);
+		ID3D12GraphicsCommandList_RSSetScissorRects(list, 1, &scissor_rect);
+
+		if (window)
+		{
+			break;
+		}
+	}
+}
+
+rhi_command_list_t *rhi_get_command_list(void)
+{
+	d3d12_frame_state_t *frame = g_rhi.frames[g_rhi.frame_index];
+	return &frame->command_list;
+}
+
+void rhi_graphics_pass_begin(rhi_command_list_t *list, const rhi_graphics_pass_params_t *params)
+{
+	ASSERT_MSG(list->render_target_mask == 0, "You can't begin a graphics pass without ending the previous one!");
+
+	uint32_t active_render_target_count = 0;
+	D3D12_CPU_DESCRIPTOR_HANDLE rt_descriptors[8];
+
+	for (size_t i = 0; i < RhiMaxRenderTargetCount; i++)
+	{
+		rhi_texture_t texture_handle = params->render_targets[i].texture;
+
+		if (RESOURCE_HANDLE_VALID(texture_handle))
+		{
+			d3d12_texture_t *texture = pool_get(&g_rhi.textures, texture_handle);
+
+			ASSERT(texture);
+			ASSERT(texture->usage_flags & RhiTextureUsage_render_target);
+
+			list->render_target_mask |= (1u << i);
+			list->render_targets[i] = texture_handle;
+
+			rt_descriptors[active_render_target_count] = texture->rtv.cpu;
+
+			active_render_target_count += 1;
+		}
+	}
+
+	if (active_render_target_count > 0)
+	{
+		m_scoped_temp
+		{
+			D3D12_RESOURCE_BARRIER *barriers = m_alloc_array(temp, active_render_target_count, D3D12_RESOURCE_BARRIER);
+
+			uint32_t render_targets_left = active_render_target_count;
+
+			for (size_t i = 0; i < RhiMaxRenderTargetCount; i++)
+			{
+				if (!list->render_target_mask & (1u << i))
+				{
+					continue;
+				}
+
+				rhi_texture_t    texture_handle = list->render_targets[i];
+				d3d12_texture_t *texture        = pool_get(&g_rhi.textures, texture_handle);
+
+				D3D12_RESOURCE_BARRIER *barrier = &barriers[i];
+				barrier->Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+				barrier->Transition.pResource   = texture->resource;
+				barrier->Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+				barrier->Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+				barrier->Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+				render_targets_left -= 1;
+
+				if (render_targets_left == 0)
+				{
+					break;
+				}
+			}
+
+			ID3D12GraphicsCommandList_ResourceBarrier(list->d3d, active_render_target_count, barriers);
+		}
+	}
+
+	ID3D12GraphicsCommandList_OMSetRenderTargets(list->d3d, active_render_target_count, rt_descriptors, FALSE, NULL);
+
+	for (size_t i = 0; i < active_render_target_count; i++)
+	{
+		if (params->render_targets[i].op == RhiPassOp_clear)
+		{
+			v4_t clear_color = params->render_targets[i].clear_color;
+			ID3D12GraphicsCommandList_ClearRenderTargetView(list->d3d, rt_descriptors[i], &clear_color.e[0], 0, NULL);
+		}
+	}
+}
+
+void *rhi_allocate_parameters_(rhi_command_list_t *list, uint32_t size)
+{
+	(void)list;
+
+	d3d12_frame_state_t *frame = g_rhi.frames[g_rhi.frame_index];
+
+	d3d12_buffer_allocation_t parameters = d3d12_arena_alloc(&frame->upload_arena, size, 256);
+	return parameters.cpu;
+}
+
+void rhi_set_parameters(rhi_command_list_t *list, uint32_t slot, void *parameters)
+{
+	ASSERT(slot >= 1 && slot <= 3);
+
+	d3d12_frame_state_t  *frame = g_rhi.frames[g_rhi.frame_index];
+	d3d12_buffer_arena_t *arena = &frame->upload_arena;
+
+	ASSERT((uint64_t)parameters >= (uint64_t)arena->cpu_base &&
+		   (uint64_t)parameters <  (uint64_t)arena->cpu_base + arena->capacity);
+
+	uint64_t gpu_address = (uint64_t)parameters - (uint64_t)arena->cpu_base + arena->gpu_base;
+
+	ID3D12GraphicsCommandList_SetGraphicsRootConstantBufferView(list->d3d, slot, gpu_address);
+}
+
+void rhi_set_draw_parameters(rhi_command_list_t *list, void *parameters, uint32_t size)
+{
+	if (NEVER(size % sizeof(uint32_t) != 0))
+	{
+		log(RHI_D3D12, Error, "called rhi_set_draw_parameters with a parameter size that is not a multiple of 4, which is not allowed");
+		return;
+	}
+
+	const uint32_t constants_count = size / sizeof(uint32_t);
+
+	ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstants(list->d3d, 
+															D3d12BindlessRootParameter_32bitconstants, 
+															constants_count, 
+															parameters, 
+															0);
+}
+
+void rhi_command_list_draw(rhi_command_list_t *list, uint32_t vertex_count)
+{
+	ID3D12GraphicsCommandList_DrawInstanced(list->d3d, vertex_count, 1, 0, 0);
+}
+
+void rhi_graphics_pass_end(rhi_command_list_t *list)
+{
+	// TODO: count bits intrinsic?
+	uint32_t active_render_target_count = 0;
+	for (size_t i = 0; i < RhiMaxRenderTargetCount; i++)
+	{
+		if (list->render_target_mask & (1u << i))
+		{
+			active_render_target_count += 1;
+		}
+	}
+
+	if (active_render_target_count > 0)
+	{
+		m_scoped_temp
+		{
+			D3D12_RESOURCE_BARRIER *barriers = m_alloc_array(temp, active_render_target_count, D3D12_RESOURCE_BARRIER);
+
+			uint32_t render_targets_left = active_render_target_count;
+			for (size_t i = 0; i < RhiMaxRenderTargetCount; i++)
+			{
+				if (!list->render_target_mask & (1u << i))
+				{
+					continue;
+				}
+
+				rhi_texture_t    texture_handle = list->render_targets[i];
+				d3d12_texture_t *texture        = pool_get(&g_rhi.textures, texture_handle);
+
+				D3D12_RESOURCE_BARRIER *barrier = &barriers[i];
+				barrier->Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+				barrier->Transition.pResource   = texture->resource;
+				barrier->Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+				barrier->Transition.StateAfter  = D3D12_RESOURCE_STATE_PRESENT;
+				barrier->Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+				render_targets_left -= 1;
+
+				if (render_targets_left == 0)
+				{
+					break;
+				}
+			}
+
+			ID3D12GraphicsCommandList_ResourceBarrier(list->d3d, active_render_target_count, barriers);
+		}
+	}
+
+	list->render_target_mask = 0;
+}
+
+void rhi_end_frame(void)
+{
+	d3d12_frame_state_t *frame = g_rhi.frames[g_rhi.frame_index];
+
+	ID3D12GraphicsCommandList *list = frame->command_list.d3d;
+	ID3D12GraphicsCommandList_Close(list);
+
+	ID3D12CommandList *lists[] = { (ID3D12CommandList *)list };
+	ID3D12CommandQueue_ExecuteCommandLists(g_rhi.command_queue, 1, lists);
+
+	for (pool_iter_t it = pool_iter(&g_rhi.windows);
+		 pool_iter_valid(&it);
+		 pool_iter_next(&it))
+	{
+		d3d12_window_t *window = it.data;
+
+		DXGI_PRESENT_PARAMETERS present_parameters = { 0 };
+		IDXGISwapChain1_Present1(window->swap_chain, 1, 0, &present_parameters);
+	}
 }

@@ -1,0 +1,107 @@
+global rhi_buffer_t g_positions;
+global rhi_buffer_t g_colors;
+
+global rhi_buffer_srv_t g_positions_srv;
+global rhi_buffer_srv_t g_colors_srv;
+
+typedef struct pass_parameters_t
+{
+	rhi_buffer_srv_t positions;
+	rhi_buffer_srv_t colors;
+} pass_parameters_t;
+
+typedef struct shader_parameters_t
+{
+	v4_t offset;
+	v4_t color;
+} shader_parameters_t;
+
+fn void rhi_api_test_triangle_init(void)
+{
+	const float aspect = 16.0f / 9.0f;
+
+	v3_t positions[] = {
+		{  0.00f,  0.25f * aspect, 0.0f },
+		{  0.25f, -0.25f * aspect, 0.0f },
+		{ -0.25f, -0.25f * aspect, 0.0f },
+	};
+
+	v4_t colors[] = {
+		{ 1, 0, 0, 1 },
+		{ 0, 1, 0, 1 },
+		{ 0, 0, 1, 1 },
+	};
+
+	g_positions = rhi_create_buffer(&(rhi_create_buffer_params_t){
+		.debug_name = S("triangle positions"),
+		.size = sizeof(positions),
+		.initial_data = {
+			.ptr    = positions,
+			.offset = 0,
+			.size   = sizeof(positions),
+		},
+		.srv = &(rhi_create_buffer_srv_params_t){
+			.first_element  = 0,
+			.element_count  = ARRAY_COUNT(positions),
+			.element_stride = sizeof(positions[0]),
+		},
+	});
+
+	g_positions_srv = rhi_get_buffer_srv(g_positions);
+
+	g_colors = rhi_create_buffer(&(rhi_create_buffer_params_t){
+		.debug_name = S("triangle colors"),
+		.size = sizeof(colors),
+		.initial_data = {
+			.ptr    = colors,
+			.offset = 0,
+			.size   = sizeof(colors),
+		},
+		.srv = &(rhi_create_buffer_srv_params_t){
+			.first_element  = 0,
+			.element_count  = ARRAY_COUNT(colors),
+			.element_stride = sizeof(colors[0]),
+		},
+	});
+
+	g_colors_srv = rhi_get_buffer_srv(g_colors);
+}
+
+fn void rhi_api_test_triangle_draw(rhi_window_t window, rhi_command_list_t *list)
+{
+	rhi_texture_t render_target = rhi_get_current_backbuffer(window);
+
+	rhi_graphics_pass_begin(list, &(rhi_graphics_pass_params_t){
+		.render_targets[0] = {
+			.texture     = render_target,
+			.op          = RhiPassOp_clear,
+			.clear_color = make_v4(0.15f, 0.25f, 0.15f, 1.0f),
+		},
+		// .topology = RhiPrimitiveTopology_triangle_list,
+	});
+
+	pass_parameters_t *pass_parameters = rhi_allocate_parameters(list, pass_parameters_t);
+	pass_parameters->positions = g_positions_srv;
+	pass_parameters->colors    = g_colors_srv;
+
+	rhi_set_parameters(list, 1, pass_parameters);
+
+	static float animation_time = 0.0f;
+
+	const float animation_t = sin_ss(animation_time);
+	animation_time += 1.0f / 60.0f;
+
+	shader_parameters_t triangle_parameters[] = {
+		{ { animation_t * -0.1,  0.0 }, { 1, 0, 0, 1 } },
+		{ { animation_t *  0.1,  0.2 }, { 0, 1, 0, 1 } },
+		{ { animation_t * -0.3, -0.3 }, { 0, 0, 1, 1 } },
+	};
+
+	for (size_t i = 0; i < ARRAY_COUNT(triangle_parameters); i++)
+	{
+		rhi_set_draw_parameters(list, &triangle_parameters[i], sizeof(triangle_parameters));
+		rhi_command_list_draw(list, 3);
+	}
+
+	rhi_graphics_pass_end(list);
+}

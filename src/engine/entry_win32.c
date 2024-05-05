@@ -32,6 +32,7 @@
 
 #include "rhi/rhi_d3d12.h"
 #include "rhi/rhi_d3d12.c"
+#include "rhi/rhi_api_test_triangle.c"
 
 //
 //
@@ -251,10 +252,11 @@ int wWinMain(HINSTANCE instance,
 
 		if (RESOURCE_HANDLE_VALID(d3d12_window))
 		{
-			if (!rhi_init_test_window_resources(16.0f / 9.0f))
+			if (!rhi_init_test_window_resources())
 			{
 				return 1;
 			}
+
 		}
 		else
 		{
@@ -265,6 +267,8 @@ int wWinMain(HINSTANCE instance,
 	{
 		return 1;
 	}
+
+	rhi_api_test_triangle_init();
 #else
     // initialize d3d11
     {
@@ -496,7 +500,14 @@ int wWinMain(HINSTANCE instance,
 		(void)mouse_dp;
 		(void)cursor_is_in_client_rect;
 
-		rhi_draw_test_window(d3d12_window);
+		// rhi_draw_test_window(d3d12_window);
+
+		rhi_begin_frame();
+
+		rhi_command_list_t *command_list = rhi_get_command_list();
+		rhi_api_test_triangle_draw(d3d12_window, command_list);
+
+		rhi_end_frame();
 #else
 		platform_io_t tick_io = {
 			.has_focus   = has_focus,
