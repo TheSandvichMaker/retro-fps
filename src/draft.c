@@ -61,7 +61,7 @@ void render_map(rhi_command_list_t *list)
 			.clear_color = make_v4(0.05f, 0.05f, 0.05f, 1.0f),
 		},
 		.depth_stencil = depth,
-		.topology      = RhiPrimitiveTopology_triangle_list,
+		.topology rhi_priRhiPrimitiveTopologyType_     = RhiPrimitiveTopology_triangle_list,
 	});
 
 	r_stream_set_pso(stream, pso);

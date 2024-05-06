@@ -4,6 +4,8 @@ global rhi_buffer_t g_colors;
 global rhi_buffer_srv_t g_positions_srv;
 global rhi_buffer_srv_t g_colors_srv;
 
+global rhi_pso_t g_pso;
+
 typedef struct pass_parameters_t
 {
 	rhi_buffer_srv_t positions;
@@ -65,6 +67,37 @@ fn void rhi_api_test_triangle_init(void)
 	});
 
 	g_colors_srv = rhi_get_buffer_srv(g_colors);
+
+	m_scoped_temp
+	{
+		string_t shader_source = fs_read_entire_file(temp, S("../src/shaders/bindless_triangle.hlsl"));
+
+		rhi_shader_bytecode_t vs = rhi_compile_shader(temp,
+													  shader_source, 
+													  S("bindless_triangle.hlsl"),
+													  S("MainVS"),
+													  S("vs_6_6"));
+
+		rhi_shader_bytecode_t ps = rhi_compile_shader(temp,
+													  shader_source, 
+													  S("bindless_triangle.hlsl"),
+													  S("MainPS"),
+													  S("ps_6_6"));
+
+		g_pso = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
+			.vs = vs,
+			.ps = ps,
+			.blend = {
+				.render_target[0] = {
+					.write_mask = RhiColorWriteEnable_all,
+				},
+				.sample_mask = 0xFFFFFFFF,
+			},
+			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
+			.render_target_count     = 1,
+			.rtv_formats[0]          = RhiPixelFormat_r8g8b8a8_unorm,
+		});
+	}
 }
 
 fn void rhi_api_test_triangle_draw(rhi_window_t window, rhi_command_list_t *list)
@@ -79,6 +112,8 @@ fn void rhi_api_test_triangle_draw(rhi_window_t window, rhi_command_list_t *list
 		},
 		// .topology = RhiPrimitiveTopology_triangle_list,
 	});
+
+	rhi_set_pso(list, g_pso);
 
 	pass_parameters_t pass_parameters = {
 		.positions = g_positions_srv,

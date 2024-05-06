@@ -15,6 +15,7 @@
 #include "rhi_api.h"
 #include "d3d12_helpers.h"
 #include "d3d12_buffer_arena.h"
+#include "d3d12_constants.h"
 
 enum { RhiMaxDescriptors = 4096 };
 
@@ -105,6 +106,7 @@ typedef struct rhi_state_d3d12_t
 	pool_t windows;
 	pool_t buffers;
 	pool_t textures;
+	pool_t psos;
 
 	struct
 	{
@@ -154,6 +156,11 @@ typedef struct d3d12_texture_t
 	d3d12_descriptor_t uav;
 	d3d12_descriptor_t rtv;
 } d3d12_texture_t;
+
+typedef struct d3d12_pso_t
+{
+	ID3D12PipelineState *d3d;
+} d3d12_pso_t;
 
 fn bool         rhi_init_d3d12(const rhi_init_params_d3d12_t *params);
 fn rhi_window_t rhi_init_window_d3d12(HWND hwnd);

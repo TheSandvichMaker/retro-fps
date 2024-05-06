@@ -7,6 +7,7 @@
 
 #include "d3d12_helpers.c"
 #include "d3d12_buffer_arena.c"
+#include "d3d12_constants.c"
 
 void d3d12_descriptor_arena_init(d3d12_descriptor_arena_t *arena, 
 								D3D12_DESCRIPTOR_HEAP_TYPE type, 
@@ -128,6 +129,7 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 	g_rhi.windows  = (pool_t)INIT_POOL(d3d12_window_t);
 	g_rhi.buffers  = (pool_t)INIT_POOL(d3d12_buffer_t);
 	g_rhi.textures = (pool_t)INIT_POOL(d3d12_texture_t);
+	g_rhi.psos     = (pool_t)INIT_POOL(d3d12_pso_t);
 
 	//
 	//
@@ -277,8 +279,6 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 			D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
 			D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE,
 			D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE,
-			// This is a temporary fix for Windows 11 due to a bug that has not been fixed yet
-			// D3D12_MESSAGE_ID_RESOURCE_BARRIER_MISMATCHING_COMMAND_LIST_TYPE,
 		};
 
 		D3D12_INFO_QUEUE_FILTER filter = {
@@ -442,12 +442,30 @@ bool rhi_init_test_window_resources(void)
 			},
 		};
 
+		D3D12_STATIC_SAMPLER_DESC static_samplers[] = {
+			[0] = {
+				.Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+				.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+				.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+				.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+				.MipLODBias       = 0.0f,
+				.MaxAnisotropy    = 16,
+				.MinLOD           = 0.0f,
+				.MaxLOD           = D3D12_FLOAT32_MAX,
+				.ShaderRegister   = 0,
+				.RegisterSpace    = 100,
+				.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
+			},
+		};
+
 		D3D12_VERSIONED_ROOT_SIGNATURE_DESC desc = {
 			.Version = D3D_ROOT_SIGNATURE_VERSION_1_1,
 			.Desc_1_1 = {
-				.NumParameters = ARRAY_COUNT(parameters),
-				.pParameters   = parameters,
-				.Flags         = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED,
+				.NumParameters     = ARRAY_COUNT(parameters),
+				.pParameters       = parameters,
+				.NumStaticSamplers = ARRAY_COUNT(static_samplers),
+				.pStaticSamplers   = static_samplers,
+				.Flags             = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED,
 			},
 		};
 
@@ -555,59 +573,6 @@ bool rhi_init_test_window_resources(void)
 													  &pso);
 		D3D12_CHECK_HR(hr, goto bail);
 	}
-
-	//
-	// Create Vertex Buffer
-	//
-
-#if 0
-	{
-		v3_t positions[] = {
-			{  0.00f,  0.25f * aspect, 0.0f },
-			{  0.25f, -0.25f * aspect, 0.0f },
-			{ -0.25f, -0.25f * aspect, 0.0f },
-		};
-
-		v4_t colors[] = {
-			{ 1, 0, 0 },
-			{ 0, 1, 0 },
-			{ 0, 0, 1 },
-		};
-
-		g_rhi.test.positions      = d3d12_create_upload_buffer(g_rhi.device, sizeof(positions), positions);
-		g_rhi.test.colors         = d3d12_create_upload_buffer(g_rhi.device, sizeof(colors), colors);
-		g_rhi.test.desc_positions = d3d12_descriptor_arena_allocate(&g_rhi.cbv_srv_uav);
-		g_rhi.test.desc_colors    = d3d12_descriptor_arena_allocate(&g_rhi.cbv_srv_uav);
-
-		{
-			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
-				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-				.ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
-				.Buffer = {
-					.FirstElement        = 0,
-					.NumElements         = ARRAY_COUNT(positions),
-					.StructureByteStride = sizeof(positions[0]),
-				},
-			};
-
-			ID3D12Device_CreateShaderResourceView(g_rhi.device, g_rhi.test.positions, &desc, g_rhi.test.desc_positions.cpu);
-		}
-
-		{
-			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
-				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-				.ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
-				.Buffer = {
-					.FirstElement        = 0,
-					.NumElements         = ARRAY_COUNT(colors),
-					.StructureByteStride = sizeof(colors[0]),
-				},
-			};
-
-			ID3D12Device_CreateShaderResourceView(g_rhi.device, g_rhi.test.colors, &desc, g_rhi.test.desc_colors.cpu);
-		}
-	}
-#endif
 
 	//
 	//
@@ -940,7 +905,7 @@ void rhi_begin_frame(void)
 	ID3D12CommandAllocator_Reset(allocator);
 
 	ID3D12GraphicsCommandList *list = frame->command_list.d3d;
-	ID3D12GraphicsCommandList_Reset(list, allocator, g_rhi.test.pso);
+	ID3D12GraphicsCommandList_Reset(list, allocator, NULL);
 
 	ID3D12GraphicsCommandList_SetDescriptorHeaps(list, 1, &g_rhi.cbv_srv_uav.heap);
 	ID3D12GraphicsCommandList_SetGraphicsRootSignature(list, g_rhi.rs_bindless);
@@ -974,6 +939,117 @@ void rhi_begin_frame(void)
 			break;
 		}
 	}
+}
+
+fn_local D3D12_RENDER_TARGET_BLEND_DESC to_d3d12_rt_blend_desc(const rhi_render_target_blend_t *desc)
+{
+	D3D12_RENDER_TARGET_BLEND_DESC result = {
+		.BlendEnable           = desc->blend_enable,
+		.LogicOpEnable         = desc->logic_op_enable,
+		.SrcBlend              = to_d3d12_blend   (desc->src_blend),
+		.DestBlend             = to_d3d12_blend   (desc->dst_blend),
+		.BlendOp               = to_d3d12_blend_op(desc->blend_op),
+		.SrcBlendAlpha         = to_d3d12_blend   (desc->src_blend_alpha),
+		.DestBlendAlpha        = to_d3d12_blend   (desc->dst_blend_alpha),
+		.BlendOpAlpha          = to_d3d12_blend_op(desc->blend_op_alpha),
+		.LogicOp               = to_d3d12_logic_op(desc->logic_op),
+		.RenderTargetWriteMask = desc->write_mask,
+	};
+
+	return result;
+}
+
+fn_local D3D12_DEPTH_STENCILOP_DESC to_d3d12_depth_stencil_op_desc(const rhi_depth_stencil_op_desc_t *desc)
+{
+	D3D12_DEPTH_STENCILOP_DESC result = {
+		.StencilFailOp      = to_d3d12_stencil_op     (desc->stencil_fail_op),
+		.StencilDepthFailOp = to_d3d12_stencil_op     (desc->stencil_depth_fail_op),
+		.StencilPassOp      = to_d3d12_stencil_op     (desc->stencil_pass_op),
+		.StencilFunc        = to_d3d12_comparison_func(desc->stencil_func),
+	};
+
+	return result;
+}
+
+rhi_pso_t rhi_create_graphics_pso(const rhi_create_graphics_pso_params_t *params)
+{
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = {
+		.pRootSignature = g_rhi.rs_bindless,
+		.VS = {
+			.pShaderBytecode = params->vs.bytes,
+			.BytecodeLength  = (uint32_t)params->vs.count,
+		},
+		.PS = {
+			.pShaderBytecode = params->ps.bytes,
+			.BytecodeLength  = (uint32_t)params->ps.count,
+		},
+		.BlendState = {
+			.AlphaToCoverageEnable  = params->blend.alpha_to_coverage_enable,
+			.IndependentBlendEnable = params->blend.independent_blend_enable,
+			.RenderTarget[0] = to_d3d12_rt_blend_desc(&params->blend.render_target[0]),
+			.RenderTarget[1] = to_d3d12_rt_blend_desc(&params->blend.render_target[1]),
+			.RenderTarget[2] = to_d3d12_rt_blend_desc(&params->blend.render_target[2]),
+			.RenderTarget[3] = to_d3d12_rt_blend_desc(&params->blend.render_target[3]),
+			.RenderTarget[4] = to_d3d12_rt_blend_desc(&params->blend.render_target[4]),
+			.RenderTarget[5] = to_d3d12_rt_blend_desc(&params->blend.render_target[5]),
+			.RenderTarget[6] = to_d3d12_rt_blend_desc(&params->blend.render_target[6]),
+			.RenderTarget[7] = to_d3d12_rt_blend_desc(&params->blend.render_target[7]),
+		},
+		.SampleMask = params->blend.sample_mask,
+		.RasterizerState = {
+			.FillMode              = to_d3d12_fill_mode(params->rasterizer.fill_mode),
+			.CullMode              = to_d3d12_cull_mode(params->rasterizer.cull_mode),
+			.FrontCounterClockwise = (params->rasterizer.front_winding == RhiWinding_ccw),
+			.DepthClipEnable       = params->rasterizer.depth_clip_enable,
+			.MultisampleEnable     = params->rasterizer.multisample_enable,
+			.AntialiasedLineEnable = params->rasterizer.anti_aliased_line_enable,
+			.ConservativeRaster    = params->rasterizer.conservative_rasterization,
+		},
+		.DepthStencilState = {
+			.DepthEnable      = params->depth_stencil.depth_test_enable,
+			.DepthWriteMask   = params->depth_stencil.depth_write,
+			.DepthFunc        = to_d3d12_comparison_func(params->depth_stencil.depth_func),
+			.StencilEnable    = params->depth_stencil.stencil_test_enable,
+			.StencilReadMask  = params->depth_stencil.stencil_read_mask,
+			.StencilWriteMask = params->depth_stencil.stencil_write_mask,
+			.FrontFace        = to_d3d12_depth_stencil_op_desc(&params->depth_stencil.front),
+			.BackFace         = to_d3d12_depth_stencil_op_desc(&params->depth_stencil.front),
+		},
+		.PrimitiveTopologyType = to_d3d12_primitive_topology_type(params->primitive_topology_type),
+		.NumRenderTargets = params->render_target_count,
+		.RTVFormats[0] = to_dxgi_format(params->rtv_formats[0]),
+		.RTVFormats[1] = to_dxgi_format(params->rtv_formats[1]),
+		.RTVFormats[2] = to_dxgi_format(params->rtv_formats[2]),
+		.RTVFormats[3] = to_dxgi_format(params->rtv_formats[3]),
+		.RTVFormats[4] = to_dxgi_format(params->rtv_formats[4]),
+		.RTVFormats[5] = to_dxgi_format(params->rtv_formats[5]),
+		.RTVFormats[6] = to_dxgi_format(params->rtv_formats[6]),
+		.RTVFormats[7] = to_dxgi_format(params->rtv_formats[7]),
+		.DSVFormat = to_dxgi_format(params->dsv_format),
+		.SampleDesc = { .Count = MAX(1, params->multisample_count), .Quality = params->multisample_quality },
+	};
+
+	ID3D12PipelineState *d3d_pso;
+	HRESULT hr = ID3D12Device_CreateGraphicsPipelineState(g_rhi.device,
+														  &pso_desc,
+														  &IID_ID3D12PipelineState,
+														  &d3d_pso);
+
+	rhi_pso_t result = {0};
+
+	if (SUCCEEDED(hr))
+	{
+		d3d12_pso_t *pso = pool_add(&g_rhi.psos);
+		pso->d3d = d3d_pso;
+
+		result = CAST_HANDLE(rhi_pso_t, pool_get_handle(&g_rhi.psos, pso));
+	}
+	else
+	{
+		log(RHI_D3D12, Error, "Failed to create PSO (TODO: Further details)");
+	}
+
+	return result;
 }
 
 rhi_command_list_t *rhi_get_command_list(void)
@@ -1055,6 +1131,20 @@ void rhi_graphics_pass_begin(rhi_command_list_t *list, const rhi_graphics_pass_p
 			v4_t clear_color = params->render_targets[i].clear_color;
 			ID3D12GraphicsCommandList_ClearRenderTargetView(list->d3d, rt_descriptors[i], &clear_color.e[0], 0, NULL);
 		}
+	}
+}
+
+void rhi_set_pso(rhi_command_list_t *list, rhi_pso_t pso_handle)
+{
+	d3d12_pso_t *pso = pool_get(&g_rhi.psos, pso_handle);
+
+	if (ALWAYS(pso))
+	{
+		ID3D12GraphicsCommandList_SetPipelineState(list->d3d, pso->d3d);
+	}
+	else
+	{
+		log(RHI_D3D12, Error, "Tried to assign invalid PSO");
 	}
 }
 
@@ -1174,4 +1264,61 @@ void rhi_end_frame(void)
 		DXGI_PRESENT_PARAMETERS present_parameters = { 0 };
 		IDXGISwapChain1_Present1(window->swap_chain, 1, 0, &present_parameters);
 	}
+}
+
+rhi_shader_bytecode_t rhi_compile_shader(arena_t *arena, string_t shader_source, string_t file_name, string_t entry_point, string_t shader_model)
+{
+	rhi_shader_bytecode_t result = {0};
+
+	arena_t *temp = m_get_temp_scope_begin(&arena, 1);
+	{
+		wchar_t *args[] = { 
+			L"-E", utf16_from_utf8(temp, entry_point).data, 
+			L"-T", utf16_from_utf8(temp, shader_model).data, 
+			L"-I", L"../src/shaders",
+			L"-WX", 
+			L"-Zi", 
+		};
+
+		HRESULT hr;
+
+		ID3DBlob *error    = NULL;
+		ID3DBlob *bytecode = NULL;
+		hr = dxc_compile(shader_source.data, (uint32_t)shader_source.count, args, ARRAY_COUNT(args), &bytecode, &error);
+
+		if (error && ID3D10Blob_GetBufferSize(error) > 0)
+		{
+			const char* message = ID3D10Blob_GetBufferPointer(error);
+
+			string_t formatted_message = string_format(temp, "Shader compilation %s for '%.*s:%.*s' (%.*s):\n\n%s", 
+													   bytecode ? "warning" : "error", 
+													   Sx(file_name), 
+													   Sx(entry_point), 
+													   Sx(shader_model), 
+													   message);
+
+			logs(RHI_D3D12, Error, formatted_message);
+
+			if (!bytecode)
+			{
+				FATAL_ERROR("%.*s", Sx(formatted_message));
+			}
+
+			COM_SAFE_RELEASE(error);
+		}
+		
+		if (bytecode)
+		{
+			void     *bytecode_bytes = ID3D10Blob_GetBufferPointer(bytecode);
+			uint32_t  bytecode_size  = ID3D10Blob_GetBufferSize(bytecode);
+
+			result.bytes = m_copy(arena, bytecode_bytes, bytecode_size);
+			result.count = bytecode_size;
+
+			COM_SAFE_RELEASE(bytecode);
+		}
+	}
+	m_scope_end(temp);
+
+	return result;
 }
