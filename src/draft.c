@@ -48,7 +48,7 @@ void init_map_rendering_resources(map_t *map)
 }
 
 rhi_viewport_t viewport;
-rect2_t        scissor_rect;
+rect2i_t       scissor_rect;
 
 void render_map(rhi_command_list_t *list)
 {

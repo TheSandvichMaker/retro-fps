@@ -34,9 +34,31 @@ fn rhi_texture_t rhi_get_current_backbuffer(rhi_window_t window);
 typedef enum rhi_texture_usage_t
 {
 	RhiTextureUsage_render_target = 0x1,
-	RhiTextureUsage_uav           = 0x2,
-	RhiTextureUsage_srv           = 0x4,
+	RhiTextureUsage_depth_stencil = 0x2,
+	RhiTextureUsage_uav           = 0x4,
+	RhiTextureUsage_srv           = 0x8, // TODO: switch to deny_srv, matching D3D12? allowing srv by default seems good
 } rhi_texture_usage_t;
+
+typedef enum rhi_texture_dimension_t
+{
+	RhiTextureDimension_1d = 0,
+	RhiTextureDimension_2d = 1,
+	RhiTextureDimension_3d = 2,
+} rhi_texture_dimension_t;
+
+typedef struct rhi_texture_desc_t
+{
+	rhi_texture_dimension_t dimension;
+	uint32_t                width;
+	uint32_t                height;
+	uint32_t                depth;
+	uint32_t                mip_levels;
+	rhi_pixel_format_t      format;
+	uint32_t                sample_count;
+	rhi_texture_usage_t     usage_flags;
+} rhi_texture_desc_t;
+
+fn const rhi_texture_desc_t *rhi_get_texture_desc(rhi_texture_t texture);
 
 typedef struct rhi_buffer_srv_t
 {
@@ -218,6 +240,21 @@ typedef enum rhi_primitive_topology_type_t
 	RhiPrimitiveTopologyType_COUNT,
 } rhi_primitive_topology_type_t;
 
+typedef enum rhi_primitive_topology_t
+{
+	RhiPrimitiveTopology_undefined         = 0,
+	RhiPrimitiveTopology_pointlist         = 1,
+	RhiPrimitiveTopology_linelist          = 2,
+	RhiPrimitiveTopology_linestrip         = 3,
+	RhiPrimitiveTopology_trianglelist      = 4,
+	RhiPrimitiveTopology_trianglestrip     = 5,
+	RhiPrimitiveTopology_linelist_adj      = 6,
+	RhiPrimitiveTopology_linestrip_adj     = 7,
+	RhiPrimitiveTopology_trianglelist_adj  = 8,
+	RhiPrimitiveTopology_trianglestrip_adj = 9,
+	RhiPrimitiveTopology_COUNT,
+} rhi_primitive_topology_t;
+
 typedef enum rhi_stencil_op_t 
 {
 	RhiStencilOp_none     = 0,
@@ -302,6 +339,16 @@ typedef enum rhi_pass_op_t
 	RhiPassOp_COUNT,
 } rhi_pass_op_t;
 
+typedef struct rhi_viewport_t
+{
+	float min_x;
+	float min_y;
+	float width;
+	float height;
+	float min_depth;
+	float max_depth;
+} rhi_viewport_t;
+
 typedef struct rhi_graphics_pass_params_t
 {
 	struct
@@ -310,6 +357,10 @@ typedef struct rhi_graphics_pass_params_t
 		rhi_pass_op_t op;
 		v4_t          clear_color;
 	} render_targets[RhiMaxRenderTargetCount];
+
+	rhi_primitive_topology_t topology;
+	rhi_viewport_t           viewport;
+	rect2i_t                 scissor_rect;
 } rhi_graphics_pass_params_t;
 
 fn void *rhi_allocate_parameters_(rhi_command_list_t *list, uint32_t size);

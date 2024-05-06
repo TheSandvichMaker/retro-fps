@@ -151,10 +151,11 @@ typedef struct d3d12_buffer_t
 typedef struct d3d12_texture_t
 {
 	ID3D12Resource    *resource;
-	uint32_t           usage_flags;
 	d3d12_descriptor_t srv;
 	d3d12_descriptor_t uav;
 	d3d12_descriptor_t rtv;
+
+	rhi_texture_desc_t desc;
 } d3d12_texture_t;
 
 typedef struct d3d12_pso_t

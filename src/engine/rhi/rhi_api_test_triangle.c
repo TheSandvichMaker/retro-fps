@@ -104,13 +104,24 @@ fn void rhi_api_test_triangle_draw(rhi_window_t window, rhi_command_list_t *list
 {
 	rhi_texture_t render_target = rhi_get_current_backbuffer(window);
 
+	const rhi_texture_desc_t *rt_desc = rhi_get_texture_desc(render_target);
+
 	rhi_graphics_pass_begin(list, &(rhi_graphics_pass_params_t){
 		.render_targets[0] = {
 			.texture     = render_target,
 			.op          = RhiPassOp_clear,
 			.clear_color = make_v4(0.15f, 0.25f, 0.15f, 1.0f),
 		},
-		// .topology = RhiPrimitiveTopology_triangle_list,
+		.topology = RhiPrimitiveTopology_trianglelist,
+		.viewport = {
+			.width  = (float)rt_desc->width,
+			.height = (float)rt_desc->height,
+			.min_depth = 0.0f,
+			.max_depth = 1.0f,
+		},
+		.scissor_rect = {
+			.max = { (int32_t)rt_desc->width, (int32_t)rt_desc->height },
+		},
 	});
 
 	rhi_set_pso(list, g_pso);
