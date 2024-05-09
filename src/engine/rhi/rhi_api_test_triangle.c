@@ -147,7 +147,7 @@ fn void rhi_api_test_triangle_draw(rhi_window_t window, rhi_command_list_t *list
 	for (size_t i = 0; i < ARRAY_COUNT(triangle_parameters); i++)
 	{
 		rhi_set_parameters(list, 0, &triangle_parameters[i], sizeof(triangle_parameters));
-		rhi_command_list_draw(list, 3);
+		rhi_draw(list, 3);
 	}
 
 	rhi_graphics_pass_end(list);

@@ -238,7 +238,7 @@ int wWinMain(HINSTANCE instance,
 #if D3D12_TEST
 	bool d3d12_success = rhi_init_d3d12(&(rhi_init_params_d3d12_t){
 		.base = {
-			.frame_buffer_count = 2,
+			.frame_latency = 2,
 		},
 		.enable_debug_layer          = true,
 		.enable_gpu_based_validation = true,
@@ -250,15 +250,7 @@ int wWinMain(HINSTANCE instance,
 	{
 		d3d12_window = rhi_init_window_d3d12(window);
 
-		if (RESOURCE_HANDLE_VALID(d3d12_window))
-		{
-			if (!rhi_init_test_window_resources())
-			{
-				return 1;
-			}
-
-		}
-		else
+		if (!RESOURCE_HANDLE_VALID(d3d12_window))
 		{
 			return 1;
 		}

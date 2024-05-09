@@ -10,7 +10,7 @@ enum { RhiMaxRenderTargetCount = 8 };
 
 typedef struct rhi_init_params_t
 {
-	uint32_t frame_buffer_count;
+	uint32_t frame_latency;
 } rhi_init_params_t;
 
 typedef enum rhi_backend_t
@@ -349,14 +349,17 @@ typedef struct rhi_viewport_t
 	float max_depth;
 } rhi_viewport_t;
 
+typedef struct rhi_graphics_pass_color_attachment_t
+{
+	rhi_texture_t texture;
+	rhi_pass_op_t op;
+	v4_t          clear_color;
+} rhi_graphics_pass_color_attachment_t;
+
 typedef struct rhi_graphics_pass_params_t
 {
-	struct
-	{
-		rhi_texture_t texture;
-		rhi_pass_op_t op;
-		v4_t          clear_color;
-	} render_targets[RhiMaxRenderTargetCount];
+	rhi_graphics_pass_color_attachment_t render_targets[RhiMaxRenderTargetCount];
+	rhi_texture_t depth_stencil;
 
 	rhi_primitive_topology_t topology;
 	rhi_viewport_t           viewport;
@@ -372,6 +375,6 @@ fn void                rhi_begin_frame        (void);
 fn rhi_command_list_t *rhi_get_command_list   (void);
 fn void                rhi_graphics_pass_begin(rhi_command_list_t *list, const rhi_graphics_pass_params_t *params);
 fn void                rhi_set_pso            (rhi_command_list_t *list, rhi_pso_t pso);
-fn void                rhi_command_list_draw  (rhi_command_list_t *list, uint32_t vertex_count);
+fn void                rhi_draw               (rhi_command_list_t *list, uint32_t vertex_count);
 fn void                rhi_graphics_pass_end  (rhi_command_list_t *list);
 fn void                rhi_end_frame          (void);

@@ -52,11 +52,11 @@ fail:;
 
 int dxc_compile(const char *source, uint32_t source_count, const wchar_t **arguments, uint32_t arguments_count, ID3D10Blob **result_blob, ID3D10Blob **error_blob)
 {
-	HRESULT hr = E_FAIL;
+	HRESULT result_hr = E_FAIL;
 
 	if (!dxc_initialized())
 	{
-		return hr;
+		return result_hr;
 	}
 
 	DxcBuffer source_buffer;
@@ -64,11 +64,15 @@ int dxc_compile(const char *source, uint32_t source_count, const wchar_t **argum
 	source_buffer.Size     = source_count;
 	source_buffer.Encoding = 0;
 
+	HRESULT hr;
+
 	IDxcResult *compile_result = nullptr;
 	hr = dxc_compiler->Compile(&source_buffer, arguments, arguments_count, dxc_include_handler, IID_PPV_ARGS(&compile_result));
 
 	if (SUCCEEDED(hr))
 	{
+		hr = compile_result->GetStatus(&result_hr);
+
 		IDxcBlobUtf8 *errors = nullptr;
 		hr = compile_result->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errors), nullptr);
 
@@ -94,5 +98,5 @@ int dxc_compile(const char *source, uint32_t source_count, const wchar_t **argum
 		compile_result->Release();
 	}
 
-	return hr;
+	return result_hr;
 }

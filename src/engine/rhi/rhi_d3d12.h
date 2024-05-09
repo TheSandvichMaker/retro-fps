@@ -15,9 +15,11 @@
 #include "rhi_api.h"
 #include "d3d12_helpers.h"
 #include "d3d12_buffer_arena.h"
+#include "d3d12_descriptor_heap.h" 
 #include "d3d12_constants.h"
 
-enum { RhiMaxDescriptors = 4096 };
+enum { RhiMaxDescriptors  = 4096 };
+enum { RhiMaxFrameLatency = 3 };
 
 typedef enum d3d12_bindless_root_parameters_t
 {
@@ -26,46 +28,11 @@ typedef enum d3d12_bindless_root_parameters_t
 	D3d12BindlessRootParameter_view_cbv       = 2,
 } d3d12_bindless_root_parameters_t;
 
-typedef struct d3d12_descriptor_arena_t
-{
-	ID3D12DescriptorHeap *heap;
-	D3D12_CPU_DESCRIPTOR_HANDLE cpu_base;
-	D3D12_GPU_DESCRIPTOR_HANDLE gpu_base;
-	uint32_t at;
-	uint32_t capacity;
-	uint32_t stride;
-} d3d12_descriptor_arena_t;
-
-typedef struct d3d12_descriptor_t
-{
-	D3D12_CPU_DESCRIPTOR_HANDLE cpu;
-	D3D12_GPU_DESCRIPTOR_HANDLE gpu;
-	uint32_t stride;
-	uint32_t index;
-} d3d12_descriptor_t;
-
-typedef struct d3d12_descriptor_range_t
-{
-	D3D12_CPU_DESCRIPTOR_HANDLE cpu;
-	D3D12_GPU_DESCRIPTOR_HANDLE gpu;
-	uint32_t count;
-	uint32_t stride;
-	uint32_t index;
-} d3d12_descriptor_range_t;
-
-fn void d3d12_descriptor_arena_init(d3d12_descriptor_arena_t *arena, 
-									D3D12_DESCRIPTOR_HEAP_TYPE type, 
-									UINT capacity, 
-									bool shader_visible);
-fn void d3d12_descriptor_arena_release(d3d12_descriptor_arena_t *arena);
-fn d3d12_descriptor_t d3d12_descriptor_arena_allocate(d3d12_descriptor_arena_t *arena);
-fn d3d12_descriptor_range_t d3d12_descriptor_arena_allocate_range(d3d12_descriptor_arena_t *arena, uint32_t count);
-
 typedef struct rhi_command_list_t
 {
 	ID3D12GraphicsCommandList *d3d;
 
-	uint8_t render_target_mask;
+	uint32_t render_target_count;
 	rhi_texture_t render_targets[8];
 } rhi_command_list_t;
 
@@ -73,6 +40,8 @@ typedef struct d3d12_frame_state_t
 {
 	ID3D12CommandAllocator *command_allocator;
 	rhi_command_list_t      command_list;
+
+	uint32_t fence_value;
 
 	d3d12_buffer_arena_t upload_arena;
 } d3d12_frame_state_t;
@@ -95,9 +64,9 @@ typedef struct rhi_state_d3d12_t
 
 	ID3D12CommandQueue *command_queue;
 
-	d3d12_frame_state_t *frames[3];
-	uint32_t frame_buffer_count;
-	uint32_t frame_index;
+	d3d12_frame_state_t *frames[RhiMaxFrameLatency];
+	uint32_t frame_latency;
+	uint64_t frame_index;
 
 	ID3D12RootSignature *rs_bindless;
 
@@ -107,17 +76,6 @@ typedef struct rhi_state_d3d12_t
 	pool_t buffers;
 	pool_t textures;
 	pool_t psos;
-
-	struct
-	{
-		ID3D12PipelineState *pso;
-
-		ID3D12Resource *positions;
-		ID3D12Resource *colors;
-
-		d3d12_descriptor_t desc_positions;
-		d3d12_descriptor_t desc_colors;
-	} test;
 } rhi_state_d3d12_t;
 
 global rhi_state_d3d12_t g_rhi;
@@ -143,6 +101,8 @@ typedef struct d3d12_window_t
 
 typedef struct d3d12_buffer_t
 {
+	D3D12_RESOURCE_STATES state;
+
 	ID3D12Resource *resource;
 	d3d12_descriptor_t srv;
 	d3d12_descriptor_t uav;
@@ -150,10 +110,13 @@ typedef struct d3d12_buffer_t
 
 typedef struct d3d12_texture_t
 {
+	D3D12_RESOURCE_STATES state;
+
 	ID3D12Resource    *resource;
 	d3d12_descriptor_t srv;
 	d3d12_descriptor_t uav;
 	d3d12_descriptor_t rtv;
+	d3d12_descriptor_t dsv;
 
 	rhi_texture_desc_t desc;
 } d3d12_texture_t;
@@ -165,6 +128,3 @@ typedef struct d3d12_pso_t
 
 fn bool         rhi_init_d3d12(const rhi_init_params_d3d12_t *params);
 fn rhi_window_t rhi_init_window_d3d12(HWND hwnd);
-fn bool         rhi_init_test_window_resources(void);
-// fn void         rhi_draw_test_window(rhi_window_t window);
-

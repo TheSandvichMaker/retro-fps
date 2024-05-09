@@ -7,115 +7,20 @@
 
 #include "d3d12_helpers.c"
 #include "d3d12_buffer_arena.c"
+#include "d3d12_descriptor_heap.c" 
 #include "d3d12_constants.c"
 
-void d3d12_descriptor_arena_init(d3d12_descriptor_arena_t *arena, 
-								D3D12_DESCRIPTOR_HEAP_TYPE type, 
-								UINT capacity, 
-								bool shader_visible)
+fn_local d3d12_frame_state_t *d3d12_get_frame_state(uint32_t frame_index)
 {
-	D3D12_DESCRIPTOR_HEAP_DESC desc = {
-		.Type           = type,
-		.NumDescriptors = capacity,
-		.Flags          = shader_visible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : 0,
-	};
-
-	HRESULT hr;
-
-	hr = ID3D12Device_CreateDescriptorHeap(g_rhi.device, &desc, &IID_ID3D12DescriptorHeap, &arena->heap);
-	D3D12_CHECK_HR(hr, return); // TODO: think about proper error (non-)recovery
-
-	ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(arena->heap, &arena->cpu_base);
-
-	if (shader_visible)
-	{
-		ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(arena->heap, &arena->gpu_base);
-	}
-
-	arena->at       = 1; // 0 is reserved to indicate a null descriptor
-	arena->capacity = capacity;
-	arena->stride   = ID3D12Device_GetDescriptorHandleIncrementSize(g_rhi.device, type);
+	return g_rhi.frames[frame_index % g_rhi.frame_latency];
 }
 
-void d3d12_descriptor_arena_release(d3d12_descriptor_arena_t *arena)
+fn_local void d3d12_wait_for_frame(uint32_t fence_value)
 {
-	COM_SAFE_RELEASE(arena->heap);
-}
-
-d3d12_descriptor_t d3d12_descriptor_arena_allocate(d3d12_descriptor_arena_t *arena)
-{
-	d3d12_descriptor_t result = {0};
-
-	if (ALWAYS(arena->at < arena->capacity))
-	{
-		const uint32_t at     = arena->at;
-		const uint32_t stride = arena->stride;
-		const uint32_t offset = at * stride;
-
-		result = (d3d12_descriptor_t){
-			.cpu    = { arena->cpu_base.ptr + offset },
-			.gpu    = { arena->gpu_base.ptr + offset },
-			.index  = at,
-		};
-
-		arena->at += 1;
-	}
-
-	return result;
-}
-
-d3d12_descriptor_range_t d3d12_descriptor_arena_allocate_range(d3d12_descriptor_arena_t *arena, uint32_t count)
-{
-	d3d12_descriptor_range_t result = {0};
-
-	if (ALWAYS(arena->at + count <= arena->capacity))
-	{
-		const uint32_t at     = arena->at;
-		const uint32_t stride = arena->stride;
-		const uint32_t offset = at * stride;
-
-		result = (d3d12_descriptor_range_t){
-			.cpu    = { arena->cpu_base.ptr + offset },
-			.gpu    = { arena->gpu_base.ptr + offset },
-			.count  = count,
-			.stride = stride,
-			.index  = at,
-		};
-
-		arena->at += 1;
-	}
-
-	return result;
-}
-
-fn_local D3D12_CPU_DESCRIPTOR_HANDLE d3d12_get_cpu_descriptor_handle(ID3D12DescriptorHeap *heap, 
-																	 D3D12_DESCRIPTOR_HEAP_TYPE heap_type, 
-																	 size_t index)
-{
-	D3D12_CPU_DESCRIPTOR_HANDLE heap_start;
-	ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &heap_start);
-
-	const uint32_t stride = ID3D12Device_GetDescriptorHandleIncrementSize(g_rhi.device, heap_type);
-	D3D12_CPU_DESCRIPTOR_HANDLE result = {
-		heap_start.ptr + index * stride,
-	};
-
-	return result;
-}
-
-fn_local void d3d12_wait_for_frame(void)
-{
-	uint64_t value = g_rhi.fence_value;
-
-	HRESULT hr = ID3D12CommandQueue_Signal(g_rhi.command_queue, g_rhi.fence, value);
-	D3D12_CHECK_HR(hr, return);
-
-	g_rhi.fence_value += 1;
-
 	uint64_t completed = ID3D12Fence_GetCompletedValue(g_rhi.fence);
-	if (completed < value)
+	if (completed < fence_value)
 	{
-		hr = ID3D12Fence_SetEventOnCompletion(g_rhi.fence, value, g_rhi.fence_event);
+		HRESULT hr = ID3D12Fence_SetEventOnCompletion(g_rhi.fence, fence_value, g_rhi.fence_event);
 		if (FAILED(hr))
 		{
 			log(RHI_D3D12, Error, "Failed to set event on completion flag: 0x%X\n", hr);
@@ -142,6 +47,7 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 	ID3D12Device           *device            = NULL;
 	ID3D12CommandQueue     *command_queue     = NULL;
 	ID3D12Fence            *fence             = NULL;
+	ID3D12RootSignature    *root_signature    = NULL;
 
 	bool result = false;
 
@@ -149,14 +55,14 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 	// Validate Parameters
 	//
 
-	if (params->base.frame_buffer_count == 0 ||
-		params->base.frame_buffer_count >  3)
+	if (params->base.frame_latency == 0 ||
+		params->base.frame_latency >  RhiMaxFrameLatency)
 	{
-		log(RHI_D3D12, Error, "Invalid frame buffer count %u (should between 1 and 3)", params->base.frame_buffer_count);
+		log(RHI_D3D12, Error, "Invalid frame latency %u (should between 1 and 3)", params->base.frame_latency);
 		goto bail;
 	}
 
-	g_rhi.frame_buffer_count = params->base.frame_buffer_count;
+	g_rhi.frame_latency = params->base.frame_latency;
 
 	//
 	// Enable Debug Layer
@@ -312,7 +218,7 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 	// Create per-frame state
 	//
 
-	for (size_t i = 0; i < g_rhi.frame_buffer_count; i++)
+	for (size_t i = 0; i < g_rhi.frame_latency; i++)
 	{
 		d3d12_frame_state_t *frame = m_alloc_struct(&g_rhi.arena, d3d12_frame_state_t);
 
@@ -343,80 +249,14 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 			}
 		}
 
-		// d3d12_descriptor_arena_init(&frame->cbv_srv_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, RhiMaxDescriptors, true);
-
 		g_rhi.frames[i] = frame;
 	}
 
 	//
-	// Create fence / event
-	//
-
-	g_rhi.fence_value = 0;
-
-	{
-		hr = ID3D12Device_CreateFence(device,
-									  g_rhi.fence_value,
-									  D3D12_FENCE_FLAG_NONE,
-									  &IID_ID3D12Fence,
-									  &fence);
-		D3D12_CHECK_HR(hr, goto bail);
-
-		g_rhi.fence_value += 1;
-
-		g_rhi.fence_event = CreateEvent(0, FALSE, FALSE, NULL);
-		if (!g_rhi.fence_event)
-		{
-			hr = HRESULT_FROM_WIN32(GetLastError());
-			D3D12_CHECK_HR(hr, goto bail);
-		}
-	}
-
-	//
-	// Successfully Initialized D3D12
-	//
-
-	g_rhi.dxgi_factory      = dxgi_factory;  dxgi_factory      = NULL;
-	g_rhi.dxgi_adapter      = dxgi_adapter;  dxgi_adapter      = NULL;
-	g_rhi.device            = device;        device            = NULL;
-	g_rhi.command_queue     = command_queue; command_queue     = NULL;
-	g_rhi.fence             = fence;         fence             = NULL;
-
-	result = true;
-	g_rhi.initialized = true;
-
-	log(RHI_D3D12, Info, "Successfully initialized D3D12");
-
-bail:
-	COM_SAFE_RELEASE(dxgi_factory);
-	COM_SAFE_RELEASE(dxgi_adapter);
-	COM_SAFE_RELEASE(device);
-	COM_SAFE_RELEASE(command_queue);
-	COM_SAFE_RELEASE(fence);
-
-	return result;
-}
-
-bool rhi_init_test_window_resources(void)
-{
-	bool result = false;
-
-	HRESULT hr;
-
-	ID3D12RootSignature       *root_signature    = NULL;
-	ID3D12PipelineState       *pso               = NULL;
-	ID3D12Resource            *vertex_buffer     = NULL;
-
-	// TEMPORARY
-	d3d12_descriptor_arena_init(&g_rhi.cbv_srv_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, RhiMaxDescriptors, true);
-
-	//
-	// Create PSO
+	// Create bindless root signature
 	//
 
 	{
-		// Create root signature
-
 		D3D12_ROOT_PARAMETER1 parameters[] = {
 			[D3d12BindlessRootParameter_32bitconstants] = {
 				.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
@@ -474,7 +314,7 @@ bool rhi_init_test_window_resources(void)
 		hr = D3D12SerializeVersionedRootSignature(&desc, &serialized_desc, NULL);
 		D3D12_CHECK_HR(hr, goto bail);
 
-		hr = ID3D12Device_CreateRootSignature(g_rhi.device,
+		hr = ID3D12Device_CreateRootSignature(device,
 											  0,
 											  ID3D10Blob_GetBufferPointer(serialized_desc),
 											  ID3D10Blob_GetBufferSize(serialized_desc),
@@ -485,108 +325,56 @@ bool rhi_init_test_window_resources(void)
 		D3D12_CHECK_HR(hr, goto bail);
 	}
 
-	m_scoped_temp
+	//
+	// Create fence / event
+	//
+
+	g_rhi.fence_value = 0;
+
 	{
-		string_t shader_source = fs_read_entire_file(temp, S("../src/shaders/bindless_triangle.hlsl"));
-
-		UINT compile_flags = 0;
-
-		if (g_rhi.debug_layer_enabled)
-		{
-			compile_flags |= D3DCOMPILE_DEBUG;
-			compile_flags |= D3DCOMPILE_SKIP_OPTIMIZATION;
-		}
-
-
-		ID3DBlob *error = NULL;
-
-		wchar_t *vs_args[] = { L"-E", L"MainVS", L"-T", L"vs_6_6", L"-WX", L"-Zi", L"-I", L"../src/shaders" };
-
-		ID3DBlob *vs = NULL;
-		hr = dxc_compile(shader_source.data, (uint32_t)shader_source.count, vs_args, ARRAY_COUNT(vs_args), &vs, &error);
-
-		if (error && ID3D10Blob_GetBufferSize(error) > 0)
-		{
-			const char* message = ID3D10Blob_GetBufferPointer(error);
-
-			OutputDebugStringA(message);
-
-			if (!vs)
-			{
-				FATAL_ERROR("Failed to compile vertex shader:\n\n%s", message);
-			}
-
-			COM_SAFE_RELEASE(error);
-		}
-
-		wchar_t *ps_args[] = { L"-E", L"MainPS", L"-T", L"ps_6_6", L"-WX", L"-Zi", L"-I", L"../src/shaders" };
-
-		ID3DBlob *ps = NULL;
-		hr = dxc_compile(shader_source.data, (uint32_t)shader_source.count, ps_args, ARRAY_COUNT(ps_args), &ps, &error);
-
-		if (error && ID3D10Blob_GetBufferSize(error) > 0)
-		{
-			const char* message = ID3D10Blob_GetBufferPointer(error);
-
-			OutputDebugStringA(message);
-
-			if (!ps)
-			{
-				FATAL_ERROR("Failed to compile pixel shader:\n\n%s", message);
-			}
-
-			COM_SAFE_RELEASE(error);
-		}
-
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = {
-			.pRootSignature = root_signature,
-			.VS = {
-				.pShaderBytecode = ID3D10Blob_GetBufferPointer(vs),
-				.BytecodeLength  = ID3D10Blob_GetBufferSize(vs),
-			},
-			.PS = {
-				.pShaderBytecode = ID3D10Blob_GetBufferPointer(ps),
-				.BytecodeLength  = ID3D10Blob_GetBufferSize(ps),
-			},
-			.BlendState = {
-				.RenderTarget[0] = {
-					.BlendEnable           = FALSE,
-					.LogicOpEnable         = FALSE,
-					.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL,
-				},
-			},
-			.SampleMask = 0xFFFFFFFF,
-			.RasterizerState = {
-				.FillMode        = D3D12_FILL_MODE_SOLID,
-				.CullMode        = D3D12_CULL_MODE_BACK,
-				.DepthClipEnable = TRUE,
-			},
-			.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
-			.NumRenderTargets = 1,
-			.RTVFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
-			.SampleDesc = { .Count = 1 },
-		};
-
-		hr = ID3D12Device_CreateGraphicsPipelineState(g_rhi.device,
-													  &pso_desc,
-													  &IID_ID3D12PipelineState,
-													  &pso);
+		hr = ID3D12Device_CreateFence(device,
+									  g_rhi.fence_value,
+									  D3D12_FENCE_FLAG_NONE,
+									  &IID_ID3D12Fence,
+									  &fence);
 		D3D12_CHECK_HR(hr, goto bail);
+
+		g_rhi.fence_value += 1;
+
+		g_rhi.fence_event = CreateEvent(0, FALSE, FALSE, NULL);
+		if (!g_rhi.fence_event)
+		{
+			hr = HRESULT_FROM_WIN32(GetLastError());
+			D3D12_CHECK_HR(hr, goto bail);
+		}
 	}
 
+	// TEMPORARY:
+	d3d12_descriptor_arena_init(device, &g_rhi.cbv_srv_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 4096, true);
+
 	//
-	//
+	// Successfully Initialized D3D12
 	//
 
-	g_rhi.rs_bindless = root_signature; root_signature = NULL;
-	g_rhi.test.pso    = pso;            pso            = NULL;
+	g_rhi.dxgi_factory      = dxgi_factory;   dxgi_factory   = NULL;
+	g_rhi.dxgi_adapter      = dxgi_adapter;   dxgi_adapter   = NULL;
+	g_rhi.device            = device;         device         = NULL;
+	g_rhi.command_queue     = command_queue;  command_queue  = NULL;
+	g_rhi.fence             = fence;          fence          = NULL;
+	g_rhi.rs_bindless       = root_signature; root_signature = NULL;
 
 	result = true;
+	g_rhi.initialized = true;
+
+	log(RHI_D3D12, Info, "Successfully initialized D3D12");
 
 bail:
+	COM_SAFE_RELEASE(dxgi_factory);
+	COM_SAFE_RELEASE(dxgi_adapter);
+	COM_SAFE_RELEASE(device);
+	COM_SAFE_RELEASE(command_queue);
+	COM_SAFE_RELEASE(fence);
 	COM_SAFE_RELEASE(root_signature);
-	COM_SAFE_RELEASE(pso);
-	COM_SAFE_RELEASE(vertex_buffer);
 
 	return result;
 }
@@ -655,16 +443,18 @@ rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 	// Create RTV Descriptor Heap
 	//
 
-	d3d12_descriptor_arena_init(&window->rtv_arena, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, g_rhi.frame_buffer_count + 1, false);
+	d3d12_descriptor_arena_init(g_rhi.device, &window->rtv_arena, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 
+								g_rhi.frame_latency + 1, false);
 
 	//
 	// Create RTVs
 	//
 
 	{
-		for (size_t i = 0; i < g_rhi.frame_buffer_count; i++)
+		for (size_t i = 0; i < g_rhi.frame_latency; i++)
 		{
 			d3d12_texture_t *frame_buffer = pool_add(&g_rhi.textures);
+			frame_buffer->state = D3D12_RESOURCE_STATE_COMMON|D3D12_RESOURCE_STATE_PRESENT;
 
 			hr = IDXGISwapChain1_GetBuffer(swap_chain, (uint32_t)i, &IID_ID3D12Resource, &frame_buffer->resource);
 			D3D12_CHECK_HR(hr, goto bail);
@@ -819,7 +609,9 @@ rhi_buffer_srv_t rhi_get_buffer_srv(rhi_buffer_t handle)
 
 void rhi_begin_frame(void)
 {
-	d3d12_wait_for_frame();
+	d3d12_frame_state_t *frame = d3d12_get_frame_state(g_rhi.frame_index);
+
+	d3d12_wait_for_frame(frame->fence_value);
 
 	for (pool_iter_t it = pool_iter(&g_rhi.windows);
 		 pool_iter_valid(&it);
@@ -828,8 +620,6 @@ void rhi_begin_frame(void)
 		d3d12_window_t *window = it.data;
 		window->backbuffer_index = IDXGISwapChain3_GetCurrentBackBufferIndex(window->swap_chain);
 	}
-
-	d3d12_frame_state_t *frame = g_rhi.frames[g_rhi.frame_index];
 
 	d3d12_arena_reset(&frame->upload_arena);
 
@@ -956,81 +746,103 @@ rhi_pso_t rhi_create_graphics_pso(const rhi_create_graphics_pso_params_t *params
 
 rhi_command_list_t *rhi_get_command_list(void)
 {
-	d3d12_frame_state_t *frame = g_rhi.frames[g_rhi.frame_index];
+	d3d12_frame_state_t *frame = d3d12_get_frame_state(g_rhi.frame_index);
 	return &frame->command_list;
+}
+
+fn_local bool d3d12_transition_state(ID3D12Resource *resource, 
+									 D3D12_RESOURCE_STATES *dst_state, 
+									 D3D12_RESOURCE_STATES desired_state, 
+									 D3D12_RESOURCE_BARRIER* barrier)
+{
+	ASSERT(resource);
+	ASSERT(dst_state);
+	ASSERT(barrier);
+
+	bool result = false;
+	if (*dst_state != desired_state)
+	{
+		*barrier = (D3D12_RESOURCE_BARRIER){
+			.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+			.Transition = {
+				.pResource   = resource,
+				.StateBefore = *dst_state,
+				.StateAfter  = desired_state,
+				.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+			},
+		};
+
+		*dst_state = desired_state;
+
+		result = true;
+	}
+
+	return result;
 }
 
 void rhi_graphics_pass_begin(rhi_command_list_t *list, const rhi_graphics_pass_params_t *params)
 {
-	ASSERT_MSG(list->render_target_mask == 0, "You can't begin a graphics pass without ending the previous one!");
+	const rhi_graphics_pass_color_attachment_t *attachments[8];
 
-	uint32_t active_render_target_count = 0;
-	D3D12_CPU_DESCRIPTOR_HANDLE rt_descriptors[8];
-
+	list->render_target_count = 0;
 	for (size_t i = 0; i < RhiMaxRenderTargetCount; i++)
 	{
 		rhi_texture_t texture_handle = params->render_targets[i].texture;
 
 		if (RESOURCE_HANDLE_VALID(texture_handle))
 		{
-			d3d12_texture_t *texture = pool_get(&g_rhi.textures, texture_handle);
+			uint32_t index = list->render_target_count++;
+
+			list->render_targets[index] = texture_handle;
+			attachments         [index] = &params->render_targets[i];
+		}
+	}
+
+	D3D12_CPU_DESCRIPTOR_HANDLE rt_descriptors[8];
+
+	if (list->render_target_count > 0)
+	{
+		uint32_t barrier_count = 0;
+		D3D12_RESOURCE_BARRIER barriers[8];
+
+		for (size_t i = 0; i < list->render_target_count; i++)
+		{
+			const rhi_graphics_pass_color_attachment_t *attachment = &params->render_targets[i];
+
+			rhi_texture_t    texture_handle = attachment->texture;
+			d3d12_texture_t *texture        = pool_get(&g_rhi.textures, texture_handle);
 
 			ASSERT(texture);
 			ASSERT(texture->desc.usage_flags & RhiTextureUsage_render_target);
 
-			list->render_target_mask |= (1u << i);
-			list->render_targets[i] = texture_handle;
+			rt_descriptors[i] = texture->rtv.cpu;
 
-			rt_descriptors[active_render_target_count] = texture->rtv.cpu;
+			barrier_count += d3d12_transition_state(texture->resource, &texture->state, 
+													D3D12_RESOURCE_STATE_RENDER_TARGET, &barriers[i]);
+		}
 
-			active_render_target_count += 1;
+		if (barrier_count > 0)
+		{
+			ID3D12GraphicsCommandList_ResourceBarrier(list->d3d, barrier_count, barriers);
 		}
 	}
 
-	if (active_render_target_count > 0)
+	D3D12_CPU_DESCRIPTOR_HANDLE *dsv = NULL;
+	if (RESOURCE_HANDLE_VALID(params->depth_stencil))
 	{
-		m_scoped_temp
-		{
-			D3D12_RESOURCE_BARRIER *barriers = m_alloc_array(temp, active_render_target_count, D3D12_RESOURCE_BARRIER);
+		d3d12_texture_t *texture = pool_get(&g_rhi.textures, params->depth_stencil);
+		ASSERT(texture);
 
-			uint32_t render_targets_left = active_render_target_count;
-
-			for (size_t i = 0; i < RhiMaxRenderTargetCount; i++)
-			{
-				if (!list->render_target_mask & (1u << i))
-				{
-					continue;
-				}
-
-				rhi_texture_t    texture_handle = list->render_targets[i];
-				d3d12_texture_t *texture        = pool_get(&g_rhi.textures, texture_handle);
-
-				D3D12_RESOURCE_BARRIER *barrier = &barriers[i];
-				barrier->Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-				barrier->Transition.pResource   = texture->resource;
-				barrier->Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-				barrier->Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
-				barrier->Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-
-				render_targets_left -= 1;
-
-				if (render_targets_left == 0)
-				{
-					break;
-				}
-			}
-
-			ID3D12GraphicsCommandList_ResourceBarrier(list->d3d, active_render_target_count, barriers);
-		}
+		dsv = &texture->dsv.cpu;
 	}
 
-	ID3D12GraphicsCommandList_OMSetRenderTargets(list->d3d, active_render_target_count, rt_descriptors, FALSE, NULL);
+	ID3D12GraphicsCommandList_OMSetRenderTargets(list->d3d, list->render_target_count, rt_descriptors, FALSE, dsv);
 
-	for (size_t i = 0; i < active_render_target_count; i++)
+	for (size_t i = 0; i < list->render_target_count; i++)
 	{
-		if (params->render_targets[i].op == RhiPassOp_clear)
+		if (attachments[i]->op == RhiPassOp_clear)
 		{
-			v4_t clear_color = params->render_targets[i].clear_color;
+			v4_t clear_color = attachments[i]->clear_color;
 			ID3D12GraphicsCommandList_ClearRenderTargetView(list->d3d, rt_descriptors[i], &clear_color.e[0], 0, NULL);
 		}
 	}
@@ -1056,6 +868,29 @@ void rhi_graphics_pass_begin(rhi_command_list_t *list, const rhi_graphics_pass_p
 	ID3D12GraphicsCommandList_RSSetScissorRects(list->d3d, 1, &scissor_rect);
 }
 
+void rhi_graphics_pass_end(rhi_command_list_t *list)
+{
+	uint32_t barrier_count = 0;
+	D3D12_RESOURCE_BARRIER barriers[8];
+
+	for (size_t i = 0; i < list->render_target_count; i++)
+	{
+		rhi_texture_t    texture_handle = list->render_targets[i];
+		d3d12_texture_t *texture        = pool_get(&g_rhi.textures, texture_handle);
+
+		ASSERT(texture);
+		ASSERT(texture->desc.usage_flags & RhiTextureUsage_render_target);
+
+		barrier_count += d3d12_transition_state(texture->resource, &texture->state, 
+												D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, &barriers[i]);
+	}
+
+	if (barrier_count > 0)
+	{
+		ID3D12GraphicsCommandList_ResourceBarrier(list->d3d, barrier_count, barriers);
+	}
+}
+
 void rhi_set_pso(rhi_command_list_t *list, rhi_pso_t pso_handle)
 {
 	d3d12_pso_t *pso = pool_get(&g_rhi.psos, pso_handle);
@@ -1074,7 +909,7 @@ void *rhi_allocate_parameters_(rhi_command_list_t *list, uint32_t size)
 {
 	(void)list;
 
-	d3d12_frame_state_t *frame = g_rhi.frames[g_rhi.frame_index];
+	d3d12_frame_state_t *frame = d3d12_get_frame_state(g_rhi.frame_index);
 
 	d3d12_buffer_allocation_t parameters = d3d12_arena_alloc(&frame->upload_arena, size, 256);
 	return parameters.cpu;
@@ -1102,7 +937,7 @@ void rhi_set_parameters(rhi_command_list_t *list, uint32_t slot, void *parameter
 	}
 	else
 	{
-		d3d12_frame_state_t *frame = g_rhi.frames[g_rhi.frame_index];
+		d3d12_frame_state_t *frame = d3d12_get_frame_state(g_rhi.frame_index);
 
 		d3d12_buffer_allocation_t alloc = d3d12_arena_alloc(&frame->upload_arena, size, 256);
 		memcpy(alloc.cpu, parameters, size);
@@ -1111,71 +946,40 @@ void rhi_set_parameters(rhi_command_list_t *list, uint32_t slot, void *parameter
 	}
 }
 
-void rhi_command_list_draw(rhi_command_list_t *list, uint32_t vertex_count)
+void rhi_draw(rhi_command_list_t *list, uint32_t vertex_count)
 {
 	ID3D12GraphicsCommandList_DrawInstanced(list->d3d, vertex_count, 1, 0, 0);
 }
 
-void rhi_graphics_pass_end(rhi_command_list_t *list)
-{
-	// TODO: count bits intrinsic?
-	uint32_t active_render_target_count = 0;
-	for (size_t i = 0; i < RhiMaxRenderTargetCount; i++)
-	{
-		if (list->render_target_mask & (1u << i))
-		{
-			active_render_target_count += 1;
-		}
-	}
-
-	if (active_render_target_count > 0)
-	{
-		m_scoped_temp
-		{
-			D3D12_RESOURCE_BARRIER *barriers = m_alloc_array(temp, active_render_target_count, D3D12_RESOURCE_BARRIER);
-
-			uint32_t render_targets_left = active_render_target_count;
-			for (size_t i = 0; i < RhiMaxRenderTargetCount; i++)
-			{
-				if (!list->render_target_mask & (1u << i))
-				{
-					continue;
-				}
-
-				rhi_texture_t    texture_handle = list->render_targets[i];
-				d3d12_texture_t *texture        = pool_get(&g_rhi.textures, texture_handle);
-
-				D3D12_RESOURCE_BARRIER *barrier = &barriers[i];
-				barrier->Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-				barrier->Transition.pResource   = texture->resource;
-				barrier->Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-				barrier->Transition.StateAfter  = D3D12_RESOURCE_STATE_PRESENT;
-				barrier->Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-
-				render_targets_left -= 1;
-
-				if (render_targets_left == 0)
-				{
-					break;
-				}
-			}
-
-			ID3D12GraphicsCommandList_ResourceBarrier(list->d3d, active_render_target_count, barriers);
-		}
-	}
-
-	list->render_target_mask = 0;
-}
-
 void rhi_end_frame(void)
 {
-	d3d12_frame_state_t *frame = g_rhi.frames[g_rhi.frame_index];
+	d3d12_frame_state_t *frame = d3d12_get_frame_state(g_rhi.frame_index);
 
 	ID3D12GraphicsCommandList *list = frame->command_list.d3d;
+
+	for (pool_iter_t it = pool_iter(&g_rhi.windows);
+		 pool_iter_valid(&it);
+		 pool_iter_next(&it))
+	{
+		d3d12_window_t  *window     = it.data;
+		d3d12_texture_t *backbuffer = pool_get(&g_rhi.textures, window->frame_buffers[window->backbuffer_index]);
+
+		D3D12_RESOURCE_BARRIER barrier;
+		if (d3d12_transition_state(backbuffer->resource, &backbuffer->state, D3D12_RESOURCE_STATE_PRESENT, &barrier))
+		{
+			ID3D12GraphicsCommandList_ResourceBarrier(list, 1, &barrier);
+		}
+	}
+
 	ID3D12GraphicsCommandList_Close(list);
 
 	ID3D12CommandList *lists[] = { (ID3D12CommandList *)list };
 	ID3D12CommandQueue_ExecuteCommandLists(g_rhi.command_queue, 1, lists);
+
+	frame->fence_value = g_rhi.fence_value++;
+
+	HRESULT hr = ID3D12CommandQueue_Signal(g_rhi.command_queue, g_rhi.fence, frame->fence_value);
+	D3D12_CHECK_HR(hr, return);
 
 	for (pool_iter_t it = pool_iter(&g_rhi.windows);
 		 pool_iter_valid(&it);
@@ -1186,6 +990,8 @@ void rhi_end_frame(void)
 		DXGI_PRESENT_PARAMETERS present_parameters = { 0 };
 		IDXGISwapChain1_Present1(window->swap_chain, 1, 0, &present_parameters);
 	}
+
+	g_rhi.frame_index += 1;
 }
 
 rhi_shader_bytecode_t rhi_compile_shader(arena_t *arena, string_t shader_source, string_t file_name, string_t entry_point, string_t shader_model)
@@ -1212,16 +1018,25 @@ rhi_shader_bytecode_t rhi_compile_shader(arena_t *arena, string_t shader_source,
 		{
 			const char* message = ID3D10Blob_GetBufferPointer(error);
 
-			string_t formatted_message = string_format(temp, "Shader compilation %s for '%.*s:%.*s' (%.*s):\n\n%s", 
-													   bytecode ? "warning" : "error", 
+			bool is_fatal = FAILED(hr); 
+			string_t formatted_message = string_format(temp, "Shader compilation %s for '%.*s:%.*s' (%.*s):\n%s", 
+													   is_fatal ? "error" : "warning", 
 													   Sx(file_name), 
 													   Sx(entry_point), 
 													   Sx(shader_model), 
 													   message);
 
-			logs(RHI_D3D12, Error, formatted_message);
+			// A downside of these log macros is that the category and level can't be changed at runtime
+			if (is_fatal)
+			{
+				logs(RHI_D3D12, Error, formatted_message);
+			}
+			else
+			{
+				logs(RHI_D3D12, Warning, formatted_message);
+			}
 
-			if (!bytecode)
+			if (is_fatal)
 			{
 				FATAL_ERROR("%.*s", Sx(formatted_message));
 			}
