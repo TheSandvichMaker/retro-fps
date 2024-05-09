@@ -27,7 +27,7 @@ fn bool args_match(cmd_args_t *args, const char *arg)
 
 fn void args_error(cmd_args_t *args, string_t failure_reason)
 {
-    fprintf(stderr, "argument parse error: %.*s", strexpand(failure_reason));
+    fprintf(stderr, "argument parse error: %.*s", Sx(failure_reason));
     args->error = true;
 }
 
@@ -42,7 +42,7 @@ fn string_t args_next(cmd_args_t *args)
     else
     {
         args_error(args, S("expected another argument"));
-        return strnull;
+        return (string_t){0};
     }
 }
 

@@ -510,9 +510,9 @@ fn_local r_view_index_t render_map(r_context_t *rc, camera_t *camera, map_t *map
             {
                 map_entity_t *entity = &map->entities[entity_index];
 
-                if (is_class(map, entity, strlit("point_light")))
+                if (is_class(map, entity, S("point_light")))
                 {
-                    v3_t origin = v3_from_key(map, entity, strlit("origin"));
+                    v3_t origin = v3_from_key(map, entity, S("origin"));
                     r_immediate_rect3_outline(rc, rect3_center_radius(origin, make_v3(8, 8, 8)), COLORF_YELLOW);
                 }
             }

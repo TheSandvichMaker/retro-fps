@@ -167,7 +167,7 @@ fn_local fs_entry_t *fs_scan_directory_(arena_t *arena, string_t path, int flags
 	arena_t *temp = m_get_temp(&arena, 1);
 	m_scope_begin(temp);
 
-    string16_t path16 = utf16_from_utf8(temp, string_format(temp, "%.*s\\*", strexpand(path)));
+    string16_t path16 = utf16_from_utf8(temp, string_format(temp, "%.*s\\*", Sx(path)));
 
     fs_entry_t *first = NULL;
     fs_entry_t *last  = NULL;
@@ -199,11 +199,11 @@ fn_local fs_entry_t *fs_scan_directory_(arena_t *arena, string_t path, int flags
 
                 if (entry->parent)
                 {
-                    entry->path = string_format(arena, "%.*s/%.*s", strexpand(entry->parent->path), strexpand(entry->name));
+                    entry->path = string_format(arena, "%.*s/%.*s", Sx(entry->parent->path), Sx(entry->name));
                 }
                 else
                 {
-                    entry->path = string_format(arena, "%.*s/%.*s", strexpand(path), strexpand(entry->name));
+                    entry->path = string_format(arena, "%.*s/%.*s", Sx(path), Sx(entry->name));
                 }
 
                 ULARGE_INTEGER last_write_time = {
@@ -333,7 +333,7 @@ fs_create_directory_result_t fs_create_directory_recursive(string_t directory)
 
 string_t fs_full_path(arena_t *arena, string_t relative_path)
 {
-    string_t result = strnull;
+    string_t result = {0};
 
 	m_scoped_temp
 	{

@@ -113,7 +113,7 @@ void loud_error_va(int line, string_t file, const char *fmt, va_list args)
 
     string_t message   = string_format_into_buffer_va(buffer, sizeof(buffer), fmt, args);
     string_t formatted = string_format_into_buffer(buffer + message.count, sizeof(buffer) - message.count, 
-                                                   "Error: %.*s\nLine: %d\nFile: %.*s\n", strexpand(message), line, strexpand(file));
+                                                   "Error: %.*s\nLine: %d\nFile: %.*s\n", Sx(message), line, Sx(file));
 
     MessageBoxA(NULL, formatted.data, "Fatal Error", MB_OK);
 
@@ -134,7 +134,7 @@ void fatal_error_va(int line, string_t file, const char *fmt, va_list args)
 
     string_t message   = string_format_into_buffer_va(buffer, sizeof(buffer), fmt, args);
     string_t formatted = string_format_into_buffer(buffer + message.count, sizeof(buffer) - message.count, 
-                                                   "Fatal error: %.*s\nLine: %d\nFile: %.*s\n", strexpand(message), line, strexpand(file));
+                                                   "Fatal error: %.*s\nLine: %d\nFile: %.*s\n", Sx(message), line, Sx(file));
 
     MessageBoxA(NULL, formatted.data, "Fatal Error", MB_OK);
 
@@ -216,7 +216,7 @@ void debug_print(const char *fmt, ...)
 
 string_t os_get_working_directory(arena_t *arena)
 {
-    string_t result = strnull;
+    string_t result = {0};
 
     DWORD count = GetCurrentDirectoryW(0, NULL);
     if (ALWAYS(count > 0))

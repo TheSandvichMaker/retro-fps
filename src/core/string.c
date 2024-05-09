@@ -421,7 +421,7 @@ string_t string_split_word(string_t *string)
 
 string_t string_split_line(string_t *string)
 {
-    return string_split(string, strlit("\n"));
+    return string_split(string, S("\n"));
 }
 
 char to_lowercase_table[256] = {

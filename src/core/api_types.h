@@ -76,13 +76,9 @@ typedef struct string_t
 // don't use this type locally, it's just for documentation
 typedef string_t null_term_string_t;
 
-#define strinit(text)                 { .data = (char *)("" text), .count = sizeof(text)-1 }
-#define Sc(text)                      { .data = (char *)("" text), .count = sizeof(text)-1 }
-#define strlit(text)      ((string_t) { .data = (char *)("" text), .count = sizeof(text)-1 })
-#define S(text)           ((string_t) { .data = (char *)("" text), .count = sizeof(text)-1 }) 
-#define strexpand(string) (int)(string).count, (string).data
+#define Sc(text)                      { .data = (char *)(u8"" text), .count = sizeof(u8"" text)-1 }
+#define S(text)           ((string_t) { .data = (char *)(u8"" text), .count = sizeof(u8"" text)-1 }) 
 #define Sx(string)        (int)(string).count, (string).data
-#define strnull           (string_t){ 0 }
 
 typedef struct string16_t
 {

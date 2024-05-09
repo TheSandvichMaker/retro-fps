@@ -119,7 +119,7 @@ void map_parse_error(map_parser_t *parser, string_t error)
         }
     }
 
-    debug_print("parser error at line %d col %d: %.*s\n", line, col, strexpand(error));
+    debug_print("parser error at line %d col %d: %.*s\n", line, col, Sx(error));
     longjmp(THREAD_CONTEXT->jmp, 1);
 }
 
@@ -206,7 +206,7 @@ bool map_next_token(map_parser_t *parser)
             }
             else
             {
-                map_parse_error(parser, strlit("unterminated string"));
+                map_parse_error(parser, S("unterminated string"));
             }
         } break;
 
@@ -296,7 +296,7 @@ bool map_match_token(map_parser_t *parser, map_token_kind_t kind)
     }
     else if (parser->token.kind == MTOK_EOF)
     {
-        map_parse_error(parser, strlit("unexpected end of file"));
+        map_parse_error(parser, S("unexpected end of file"));
     }
     return false;
 }
@@ -305,7 +305,7 @@ bool map_require_token(map_parser_t *parser, map_token_kind_t kind)
 {
     if (parser->token.kind != kind)
     {
-        map_parse_error(parser, strlit("required token"));
+        map_parse_error(parser, S("required token"));
     }
     return map_next_token(parser);
 }
@@ -464,7 +464,7 @@ static bool parse_map(arena_t *arena, string_t path, map_parse_result_t *result)
                 }
                 else
                 {
-                    map_parse_error(&parser, strlit("unexpected token"));
+                    map_parse_error(&parser, S("unexpected token"));
                 }
             }
 
@@ -821,8 +821,8 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
 			m_scoped_temp
 			{
 				// TODO: pretty sad... handle file formats properly...
-				asset_hash_t texture_png = asset_hash_from_string(string_format(temp, "gamedata/textures/%.*s.png", strexpand(plane->texture)));
-				asset_hash_t texture_tga = asset_hash_from_string(string_format(temp, "gamedata/textures/%.*s.tga", strexpand(plane->texture)));
+				asset_hash_t texture_png = asset_hash_from_string(string_format(temp, "gamedata/textures/%.*s.png", Sx(plane->texture)));
+				asset_hash_t texture_tga = asset_hash_from_string(string_format(temp, "gamedata/textures/%.*s.tga", Sx(plane->texture)));
 				// TODO ALSO: String + formatting helper function for asset hashes
 
 				image_info_t *image_info = &missing_image.info;
@@ -1169,13 +1169,13 @@ static void gather_lights(arena_t *arena, map_t *map)
     {
         map_entity_t *entity = &map->entities[entity_index];
 
-        if (is_class(map, entity, strlit("point_light")))
+        if (is_class(map, entity, S("point_light")))
         {
-            float brightness = float_from_key(map, entity, strlit("brightness"));
-            v3_t  color      = v3_from_key(map, entity, strlit("_color"));
+            float brightness = float_from_key(map, entity, S("brightness"));
+            v3_t  color      = v3_from_key(map, entity, S("_color"));
 
             map_point_light_t light = {
-                .p     = v3_from_key(map, entity, strlit("origin")),
+                .p     = v3_from_key(map, entity, S("origin")),
                 .color = mul(brightness, color),
             };
             sb_push(lights, light);
@@ -1292,7 +1292,7 @@ map_t *load_map(arena_t *arena, string_t path)
         {
             map_entity_t *e = &map->entities[entity_index];
 
-            if (is_class(map, e, strlit("worldspawn")))
+            if (is_class(map, e, S("worldspawn")))
             {
                 map->worldspawn = e;
                 break;
@@ -1307,7 +1307,7 @@ map_t *load_map(arena_t *arena, string_t path)
 
 	if (map)
 	{
-		debug_print("Map '%.*s' loaded in %.02f seconds.\n", strexpand(path), time);
+		debug_print("Map '%.*s' loaded in %.02f seconds.\n", Sx(path), time);
 	}
 
     // write out map texture manifest
@@ -1345,7 +1345,7 @@ map_t *load_map(arena_t *arena, string_t path)
 
 bool is_class(map_t *map, map_entity_t *entity, string_t classname)
 {
-    return string_match(value_from_key(map, entity, strlit("classname")), classname);
+    return string_match(value_from_key(map, entity, S("classname")), classname);
 }
 
 string_t value_from_key(map_t *map, map_entity_t *entity, string_t key)

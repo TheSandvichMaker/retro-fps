@@ -391,10 +391,10 @@ fn_local rhi_texture_desc_t rhi_texture_desc_from_d3d12_resource_desc(const D3D1
 	}
 
 	rhi_texture_usage_t usage_flags = 0;
-	if (desc->Flags   & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET)    usage_flags |= RhiTextureUsage_render_target;
-	if (desc->Flags   & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)    usage_flags |= RhiTextureUsage_depth_stencil;
-	if (desc->Flags   & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) usage_flags |= RhiTextureUsage_uav;
-	if (!(desc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE))  usage_flags |= RhiTextureUsage_srv;
+	if (desc->Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET)    usage_flags |= RhiTextureUsage_render_target;
+	if (desc->Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)    usage_flags |= RhiTextureUsage_depth_stencil;
+	if (desc->Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) usage_flags |= RhiTextureUsage_uav;
+	if (desc->Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)   usage_flags |= RhiTextureUsage_deny_srv;
 
 	rhi_texture_desc_t result = {
 		.dimension    = dimension,

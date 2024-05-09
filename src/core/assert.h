@@ -22,7 +22,7 @@
 #define NEVER(expr) !ALWAYS(!(expr))
 
 #define FATAL_ERROR(msg, ...) ASSERT_MSG(false, msg, ##__VA_ARGS__)
-#define LOUD_ERROR(msg, ...) loud_error(__LINE__, strlit(__FILE__), msg, ##__VA_ARGS__)
+#define LOUD_ERROR(msg, ...) loud_error(__LINE__, S(__FILE__), msg, ##__VA_ARGS__)
 
 #define INVALID_DEFAULT_CASE default: { FATAL_ERROR("Reached invalid default case!"); } break;
 #define INVALID_CODE_PATH FATAL_ERROR("Invalid code path!");

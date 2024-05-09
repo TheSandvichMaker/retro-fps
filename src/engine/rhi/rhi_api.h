@@ -36,7 +36,7 @@ typedef enum rhi_texture_usage_t
 	RhiTextureUsage_render_target = 0x1,
 	RhiTextureUsage_depth_stencil = 0x2,
 	RhiTextureUsage_uav           = 0x4,
-	RhiTextureUsage_srv           = 0x8, // TODO: switch to deny_srv, matching D3D12? allowing srv by default seems good
+	RhiTextureUsage_deny_srv      = 0x8, // srv is allowed by default :)
 } rhi_texture_usage_t;
 
 typedef enum rhi_texture_dimension_t

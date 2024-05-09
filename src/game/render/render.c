@@ -22,7 +22,14 @@ typedef struct renderer_t
 	} psos;
 } renderer_t;
 
+typedef struct r_view_textures_t
+{
+	rhi_texture_t hdr_color;
+	rhi_texture_t sdr_color;
+} r_view_textures_t;
+
 // TODO: view render targets, depth buffer, pso creation
+// transient resources
 
 void init_renderer(renderer_t *r)
 {
@@ -31,7 +38,6 @@ void init_renderer(renderer_t *r)
 		.height = 1024,
 		.usage  = RhiTextureUsage_depth_stencil,
 		.format = RhiPixelFormat_d24,
-		.per_frame_resource = true,
 	});
 
 	m_scoped_temp

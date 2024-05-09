@@ -116,7 +116,7 @@ typedef struct string_buffer_t
 
 fn_local string_t string_buffer_push(string_buffer_t *buf, string_t string)
 {
-    string_t result = strnull;
+    string_t result = {0};
 
     size_t size_left = buf->capacity - buf->at;
     if (size_left > 0)
