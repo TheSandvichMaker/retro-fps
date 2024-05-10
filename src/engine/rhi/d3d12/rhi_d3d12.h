@@ -12,7 +12,8 @@
 #include <dxgidebug.h>
 #include <d3d12.h>
 
-#include "rhi_api.h"
+#include "engine/rhi/rhi_api.h"
+
 #include "d3d12_helpers.h"
 #include "d3d12_buffer_arena.h"
 #include "d3d12_descriptor_heap.h" 
@@ -70,7 +71,9 @@ typedef struct rhi_state_d3d12_t
 
 	ID3D12RootSignature *rs_bindless;
 
-	d3d12_descriptor_arena_t cbv_srv_uav;
+	d3d12_descriptor_heap_t cbv_srv_uav;
+	d3d12_descriptor_heap_t rtv;
+	d3d12_descriptor_heap_t dsv;
 
 	pool_t windows;
 	pool_t buffers;
@@ -94,9 +97,8 @@ typedef struct d3d12_window_t
 	uint32_t backbuffer_index;
 
 	HWND hwnd;
-	IDXGISwapChain4         *swap_chain;
-	d3d12_descriptor_arena_t rtv_arena;
-	rhi_texture_t            frame_buffers[3];
+	IDXGISwapChain4 *swap_chain;
+	rhi_texture_t    frame_buffers[3];
 } d3d12_window_t;
 
 typedef struct d3d12_buffer_t

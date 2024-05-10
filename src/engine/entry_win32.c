@@ -30,8 +30,8 @@
 //
 //
 
-#include "rhi/rhi_d3d12.h"
-#include "rhi/rhi_d3d12.c"
+#include "rhi/d3d12/rhi_d3d12.h"
+#include "rhi/d3d12/rhi_d3d12.c"
 #include "rhi/rhi_api_test_triangle.c"
 
 //

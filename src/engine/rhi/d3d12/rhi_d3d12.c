@@ -1,4 +1,3 @@
-//
 // ============================================================
 // Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
 // ============================================================
@@ -242,11 +241,7 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 
 			ID3D12GraphicsCommandList_Close(frame->command_list.d3d);
 
-			m_scoped_temp
-			{
-				string_t name = string_format(temp, "frame upload arena #%zu", i);
-				d3d12_arena_init(device, &frame->upload_arena, MB(128), utf16_from_utf8(temp, name).data);
-			}
+			d3d12_arena_init(device, &frame->upload_arena, MB(128), Sf("frame upload arena #%zu", i));
 		}
 
 		g_rhi.frames[i] = frame;
@@ -349,8 +344,20 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 		}
 	}
 
-	// TEMPORARY:
-	d3d12_descriptor_arena_init(device, &g_rhi.cbv_srv_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 4096, true);
+	const uint32_t persistent_descriptor_capacity = 64 * 1024 - 1;
+	const uint32_t transient_descriptor_capacity  = 64 * 1024 - 1;
+
+	d3d12_descriptor_heap_init(device, 
+							   &g_rhi.arena,
+							   &g_rhi.cbv_srv_uav, 
+							   D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 
+							   persistent_descriptor_capacity, 
+							   transient_descriptor_capacity, 
+							   true,
+							   S("cbv_srv_uav"));
+
+	d3d12_descriptor_heap_init(device, &g_rhi.arena, &g_rhi.rtv, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 512, 512, false, S("rtv"));
+	d3d12_descriptor_heap_init(device, &g_rhi.arena, &g_rhi.dsv, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 512, 512, false, S("dsv"));
 
 	//
 	// Successfully Initialized D3D12
@@ -440,13 +447,6 @@ rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 	IDXGIFactory4_MakeWindowAssociation(g_rhi.dxgi_factory, hwnd, DXGI_MWA_NO_ALT_ENTER);
 
 	//
-	// Create RTV Descriptor Heap
-	//
-
-	d3d12_descriptor_arena_init(g_rhi.device, &window->rtv_arena, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 
-								g_rhi.frame_latency + 1, false);
-
-	//
 	// Create RTVs
 	//
 
@@ -464,7 +464,7 @@ rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 
 			frame_buffer->desc = rhi_texture_desc_from_d3d12_resource_desc(&rt_desc);
 
-			frame_buffer->rtv = d3d12_descriptor_arena_allocate(&window->rtv_arena);
+			frame_buffer->rtv = d3d12_allocate_descriptor_persistent(&g_rhi.rtv);
 			ID3D12Device_CreateRenderTargetView(g_rhi.device, frame_buffer->resource, NULL, frame_buffer->rtv.cpu);
 
 			window->frame_buffers[i] = CAST_HANDLE(rhi_texture_t, pool_get_handle(&g_rhi.textures, frame_buffer));
@@ -533,29 +533,108 @@ const rhi_texture_desc_t *rhi_get_texture_desc(rhi_texture_t handle)
 	return result;
 }
 
+rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
+{
+	ASSERT_MSG(params, "Called rhi_create_texture without any parameters!");
+
+	rhi_texture_t result = {0};
+
+	m_scoped_temp
+	{
+		D3D12_RESOURCE_DIMENSION dimension;
+		switch (params->dimension)
+		{
+			case RhiTextureDimension_1d: dimension = D3D12_RESOURCE_DIMENSION_TEXTURE1D; break;
+			case RhiTextureDimension_2d: dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; break;
+			case RhiTextureDimension_3d: dimension = D3D12_RESOURCE_DIMENSION_TEXTURE3D; break;
+			INVALID_DEFAULT_CASE;
+		}
+
+		D3D12_RESOURCE_FLAGS resource_flags = 0;
+		if (params->usage & RhiTextureUsage_render_target) resource_flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+		if (params->usage & RhiTextureUsage_depth_stencil) resource_flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+		if (params->usage & RhiTextureUsage_uav)           resource_flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+		if (params->usage & RhiTextureUsage_deny_srv)      resource_flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+
+		ID3D12Resource *resource = NULL;
+
+		HRESULT hr = ID3D12Device_CreateCommittedResource(
+			g_rhi.device,
+			(&(D3D12_HEAP_PROPERTIES){
+				.Type = D3D12_HEAP_TYPE_DEFAULT,
+			}),
+			0,
+			(&(D3D12_RESOURCE_DESC){
+				.Dimension        = dimension,
+				.Width            = params->width,
+				.Height           = params->height,
+				.DepthOrArraySize = MAX(1, params->depth),
+				.MipLevels        = MAX(1, params->mip_levels),
+				.Format           = to_dxgi_format(params->format),
+				.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+				.Flags            = resource_flags,
+			}),
+			D3D12_RESOURCE_STATE_COMMON,
+			NULL, // TODO: Add to API
+			&IID_ID3D12Resource,
+			&resource);
+
+		if (SUCCEEDED(hr))
+		{
+			d3d12_texture_t *texture = pool_add(&g_rhi.textures);
+			texture->state    = D3D12_RESOURCE_STATE_COMMON;
+			texture->resource = resource;
+
+			d3d12_set_debug_name((ID3D12Object *)texture->resource, params->debug_name);
+
+			D3D12_RESOURCE_DESC desc;
+			ID3D12Resource_GetDesc(texture->resource, &desc);
+
+			texture->desc = rhi_texture_desc_from_d3d12_resource_desc(&desc);
+
+			if (texture->desc.usage_flags & RhiTextureUsage_render_target)
+			{
+				texture->rtv = d3d12_allocate_descriptor_persistent(&g_rhi.rtv);
+				ID3D12Device_CreateRenderTargetView(g_rhi.device, texture->resource, NULL, texture->rtv.cpu);
+			}
+
+			if (texture->desc.usage_flags & RhiTextureUsage_depth_stencil)
+			{
+				texture->dsv = d3d12_allocate_descriptor_persistent(&g_rhi.dsv);
+				ID3D12Device_CreateDepthStencilView(g_rhi.device, texture->resource, NULL, texture->dsv.cpu);
+			}
+
+			if (texture->desc.usage_flags & RhiTextureUsage_uav)
+			{
+				texture->uav = d3d12_allocate_descriptor_persistent(&g_rhi.cbv_srv_uav);
+				ID3D12Device_CreateUnorderedAccessView(g_rhi.device, texture->resource, NULL, NULL, texture->uav.cpu);
+			}
+
+			if (!(texture->desc.usage_flags & RhiTextureUsage_deny_srv))
+			{
+				texture->srv = d3d12_allocate_descriptor_persistent(&g_rhi.cbv_srv_uav);
+				ID3D12Device_CreateShaderResourceView(g_rhi.device, texture->resource, NULL, texture->srv.cpu);
+			}
+
+			result = CAST_HANDLE(rhi_texture_t, pool_get_handle(&g_rhi.textures, texture));
+		}
+	}
+
+	return result;
+}
+
 rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 {
-	rhi_buffer_t result = {0};
+	ASSERT_MSG(params, "Called rhi_create_buffer without any parameters!");
 
-	if (NEVER(!params)) 
-	{
-		log(RHI_D3D12, Error, "Called rhi_create_buffer without parameters");
-		return result;
-	}
+	rhi_buffer_t result = {0};
 
 	d3d12_buffer_t *buffer = pool_add(&g_rhi.buffers);
 	result = CAST_HANDLE(rhi_buffer_t, pool_get_handle(&g_rhi.buffers, buffer));
 
 	m_scoped_temp
 	{
-		string16_t debug_name_wide = {0};
-
-		if (params->debug_name.count > 0)
-		{
-			debug_name_wide = utf16_from_utf8(temp, params->debug_name);
-		}
-
-		buffer->resource = d3d12_create_upload_buffer(g_rhi.device, params->size, NULL, debug_name_wide.data);
+		buffer->resource = d3d12_create_upload_buffer(g_rhi.device, params->size, NULL, params->debug_name);
 
 		const rhi_initial_data_t *data = &params->initial_data;
 
@@ -572,7 +651,7 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 
 	if (params->srv)
 	{
-		d3d12_descriptor_t descriptor = d3d12_descriptor_arena_allocate(&g_rhi.cbv_srv_uav);
+		d3d12_descriptor_t descriptor = d3d12_allocate_descriptor_persistent(&g_rhi.cbv_srv_uav);
 		buffer->srv = descriptor;
 
 		{

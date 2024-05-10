@@ -37,4 +37,5 @@ fn_local void com_safe_release_(IUnknown **obj_ptr)
 	}
 }
 
-fn ID3D12Resource *d3d12_create_upload_buffer(ID3D12Device *device, uint32_t size, void *initial_data, const wchar_t *debug_name);
+fn ID3D12Resource *d3d12_create_upload_buffer(ID3D12Device *device, uint32_t size, void *initial_data, string_t debug_name);
+fn void d3d12_set_debug_name(ID3D12Object *object, string_t name);

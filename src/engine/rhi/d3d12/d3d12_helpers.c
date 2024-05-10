@@ -1,4 +1,4 @@
-ID3D12Resource *d3d12_create_upload_buffer(ID3D12Device *device, uint32_t size, void *initial_data, const wchar_t *debug_name)
+ID3D12Resource *d3d12_create_upload_buffer(ID3D12Device *device, uint32_t size, void *initial_data, string_t debug_name)
 {
 	D3D12_HEAP_PROPERTIES heap_properties = {
 		.Type = D3D12_HEAP_TYPE_UPLOAD,
@@ -38,11 +38,16 @@ ID3D12Resource *d3d12_create_upload_buffer(ID3D12Device *device, uint32_t size, 
 		ID3D12Resource_Unmap(buffer, 0, NULL);
 	}
 
-	if (debug_name)
-	{
-		ID3D12Object_SetName((ID3D12Object *)buffer, debug_name);
-	}
+	d3d12_set_debug_name((ID3D12Object *)buffer, debug_name);
 
 	return buffer;
 }
 
+void d3d12_set_debug_name(ID3D12Object *object, string_t name)
+{
+	if (name.count > 0) m_scoped_temp
+	{
+		string16_t wide = utf16_from_utf8(temp, name);
+		ID3D12Object_SetName(object, wide.data);
+	}
+}

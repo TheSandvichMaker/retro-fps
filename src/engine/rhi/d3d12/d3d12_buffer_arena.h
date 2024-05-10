@@ -15,7 +15,7 @@ typedef struct d3d12_buffer_allocation_t
 	D3D12_GPU_VIRTUAL_ADDRESS gpu;
 } d3d12_buffer_allocation_t;
 
-fn void                      d3d12_arena_init   (ID3D12Device *device, d3d12_buffer_arena_t *arena, uint32_t capacity, const wchar_t *debug_name);
+fn void                      d3d12_arena_init   (ID3D12Device *device, d3d12_buffer_arena_t *arena, uint32_t capacity, string_t debug_name);
 fn void                      d3d12_arena_release(d3d12_buffer_arena_t *arena);
 fn d3d12_buffer_allocation_t d3d12_arena_alloc  (d3d12_buffer_arena_t *arena, uint32_t size, uint32_t alignment);
 fn void                      d3d12_arena_reset  (d3d12_buffer_arena_t *arena);

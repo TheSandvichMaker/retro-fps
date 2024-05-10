@@ -60,6 +60,22 @@ typedef struct rhi_texture_desc_t
 
 fn const rhi_texture_desc_t *rhi_get_texture_desc(rhi_texture_t texture);
 
+typedef struct rhi_create_texture_params_t
+{
+	string_t                debug_name;
+	rhi_texture_dimension_t dimension;
+
+	uint32_t                width;
+	uint32_t                height;
+	uint32_t                depth;
+	uint32_t                mip_levels;
+
+	rhi_texture_usage_t     usage;
+	rhi_pixel_format_t      format;
+} rhi_create_texture_params_t;
+
+fn rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params);
+
 typedef struct rhi_buffer_srv_t
 {
 	uint32_t index;
@@ -82,18 +98,20 @@ typedef struct rhi_create_buffer_srv_params_t
 	uint32_t first_element;
 	uint32_t element_count;
 	uint32_t element_stride;
+	bool     raw;
 } rhi_create_buffer_srv_params_t;
 
 typedef struct rhi_create_buffer_params_t
 {
-	string_t                        debug_name;
-	uint32_t                        size;
-	rhi_initial_data_t              initial_data;
+	string_t           debug_name;
+	uint32_t           size;
+	rhi_initial_data_t initial_data;
+
 	rhi_create_buffer_srv_params_t *srv;
 } rhi_create_buffer_params_t;
 
-fn rhi_buffer_t     rhi_create_buffer (const rhi_create_buffer_params_t *params);
-fn rhi_buffer_srv_t rhi_get_buffer_srv(rhi_buffer_t);
+fn rhi_buffer_t     rhi_create_buffer    (const rhi_create_buffer_params_t *params);
+fn rhi_buffer_srv_t rhi_create_buffer_srv(rhi_buffer_t buffer, const rhi_create_buffer_srv_params_t *params);
 
 typedef struct rhi_shader_bytecode_t
 {
