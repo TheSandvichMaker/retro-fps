@@ -18,6 +18,7 @@
 #include "d3d12_buffer_arena.h"
 #include "d3d12_descriptor_heap.h" 
 #include "d3d12_constants.h"
+#include "d3d12_upload.h"
 
 enum { RhiMaxDescriptors  = 4096 };
 enum { RhiMaxFrameLatency = 3 };
@@ -39,8 +40,11 @@ typedef struct rhi_command_list_t
 
 typedef struct d3d12_frame_state_t
 {
-	ID3D12CommandAllocator *command_allocator;
-	rhi_command_list_t      command_list;
+	ID3D12CommandAllocator *direct_command_allocator;
+	rhi_command_list_t direct_command_list;
+
+	ID3D12CommandAllocator *copy_command_allocator;
+	ID3D12GraphicsCommandList *copy_command_list;
 
 	uint32_t fence_value;
 
@@ -63,7 +67,10 @@ typedef struct rhi_state_d3d12_t
 	ID3D12Fence *fence;
 	HANDLE       fence_event;
 
-	ID3D12CommandQueue *command_queue;
+	ID3D12CommandQueue *direct_command_queue;
+	ID3D12CommandQueue *copy_command_queue;
+
+	d3d12_upload_ring_buffer_t upload_ring_buffer;
 
 	d3d12_frame_state_t *frames[RhiMaxFrameLatency];
 	uint32_t frame_latency;

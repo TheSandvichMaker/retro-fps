@@ -1,15 +1,22 @@
 global rhi_buffer_t g_positions;
 global rhi_buffer_t g_colors;
+global rhi_buffer_t g_uvs;
 
 global rhi_buffer_srv_t g_positions_srv;
 global rhi_buffer_srv_t g_colors_srv;
+global rhi_buffer_srv_t g_uvs_srv;
+
+global rhi_texture_t g_texture;
+global rhi_texture_srv_t g_texture_srv;
 
 global rhi_pso_t g_pso;
 
 typedef struct pass_parameters_t
 {
-	rhi_buffer_srv_t positions;
-	rhi_buffer_srv_t colors;
+	alignas(16) rhi_buffer_srv_t positions;
+	alignas(16) rhi_buffer_srv_t colors;
+	alignas(16) rhi_buffer_srv_t uvs;
+	alignas(16) rhi_texture_srv_t texture;
 } pass_parameters_t;
 
 typedef struct shader_parameters_t
@@ -32,6 +39,12 @@ fn void rhi_api_test_triangle_init(void)
 		{ 1, 0, 0, 1 },
 		{ 0, 1, 0, 1 },
 		{ 0, 0, 1, 1 },
+	};
+
+	v2_t uvs[] = {
+		{ 0.5f, 1.0f },
+		{ 1.0f, 0.0f },
+		{ 0.0f, 0.0f },
 	};
 
 	g_positions = rhi_create_buffer(&(rhi_create_buffer_params_t){
@@ -68,6 +81,23 @@ fn void rhi_api_test_triangle_init(void)
 
 	g_colors_srv = rhi_get_buffer_srv(g_colors);
 
+	g_uvs = rhi_create_buffer(&(rhi_create_buffer_params_t){
+		.debug_name = S("triangle uvs"),
+		.size = sizeof(uvs),
+		.initial_data = {
+			.ptr    = uvs,
+			.offset = 0,
+			.size   = sizeof(uvs),
+		},
+		.srv = &(rhi_create_buffer_srv_params_t){
+			.first_element  = 0,
+			.element_count  = ARRAY_COUNT(uvs),
+			.element_stride = sizeof(uvs[0]),
+		},
+	});
+
+	g_uvs_srv = rhi_get_buffer_srv(g_uvs);
+
 	m_scoped_temp
 	{
 		string_t shader_source = fs_read_entire_file(temp, S("../src/shaders/bindless_triangle.hlsl"));
@@ -98,6 +128,30 @@ fn void rhi_api_test_triangle_init(void)
 			.rtv_formats[0]          = RhiPixelFormat_r8g8b8a8_unorm,
 		});
 	}
+
+	m_scoped_temp
+	{
+		string_t image_path = S("gamedata/textures/environment/makkon_nature_textures/groundsm_red01.tga");
+		image_t  image      = load_image_from_disk(temp, image_path, 4);
+
+		g_texture = rhi_create_texture(&(rhi_create_texture_params_t){
+			.debug_name = S("test texture"),
+			.dimension  = RhiTextureDimension_2d,
+
+			.width      = image.info.w,
+			.height     = image.info.h,
+
+			.format = RhiPixelFormat_r8g8b8a8_unorm_srgb,
+
+			.initial_data = &(rhi_texture_data_t){
+				.subresource       = &image.pixels,
+				.subresource_count = 1,
+				.row_stride        = image.pitch,
+			},
+		});
+
+		g_texture_srv = rhi_get_texture_srv(g_texture);
+	};
 }
 
 fn void rhi_api_test_triangle_draw(rhi_window_t window, rhi_command_list_t *list)
@@ -129,6 +183,8 @@ fn void rhi_api_test_triangle_draw(rhi_window_t window, rhi_command_list_t *list
 	pass_parameters_t pass_parameters = {
 		.positions = g_positions_srv,
 		.colors    = g_colors_srv,
+		.uvs       = g_uvs_srv,
+		.texture   = g_texture_srv,
 	};
 
 	rhi_set_parameters(list, 1, &pass_parameters, sizeof(pass_parameters));

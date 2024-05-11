@@ -31,6 +31,21 @@ fn rhi_texture_t rhi_get_current_backbuffer(rhi_window_t window);
 // resources
 //
 
+typedef struct rhi_texture_srv_t
+{
+	uint32_t index;
+} rhi_texture_srv_t;
+
+typedef struct rhi_buffer_srv_t
+{
+	uint32_t index;
+} rhi_buffer_srv_t;
+
+typedef struct rhi_buffer_uav_t
+{
+	uint32_t index;
+} rhi_buffer_uav_t;
+
 typedef enum rhi_texture_usage_t
 {
 	RhiTextureUsage_render_target = 0x1,
@@ -60,6 +75,13 @@ typedef struct rhi_texture_desc_t
 
 fn const rhi_texture_desc_t *rhi_get_texture_desc(rhi_texture_t texture);
 
+typedef struct rhi_texture_data_t
+{
+	void    **subresource;
+	uint32_t  subresource_count, offset;
+	uint32_t  row_stride, slice_stride;
+} rhi_texture_data_t;
+
 typedef struct rhi_create_texture_params_t
 {
 	string_t                debug_name;
@@ -72,19 +94,13 @@ typedef struct rhi_create_texture_params_t
 
 	rhi_texture_usage_t     usage;
 	rhi_pixel_format_t      format;
+
+	rhi_texture_data_t     *initial_data;
 } rhi_create_texture_params_t;
 
-fn rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params);
-
-typedef struct rhi_buffer_srv_t
-{
-	uint32_t index;
-} rhi_buffer_srv_t;
-
-typedef struct rhi_buffer_uav_t
-{
-	uint32_t index;
-} rhi_buffer_uav_t;
+fn rhi_texture_t     rhi_create_texture     (const rhi_create_texture_params_t *params);
+fn void              rhi_upload_texture_data(rhi_texture_t texture, const rhi_texture_data_t *data);
+fn rhi_texture_srv_t rhi_get_texture_srv    (rhi_texture_t texture);
 
 typedef struct rhi_initial_data_t
 {

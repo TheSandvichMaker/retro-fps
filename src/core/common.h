@@ -6,6 +6,8 @@
 
 #define array_expand(type, ...) ARRAY_COUNT(((type[]){ __VA_ARGS__ })), (type[]){ __VA_ARGS__ }
 
+#define IS_POW2(x) (!((x) & ((x) - 1)))
+
 // linked list macros
 
 #define sll_push(h, n)          do { (n)->next = (h); (h) = (n); } while (0)

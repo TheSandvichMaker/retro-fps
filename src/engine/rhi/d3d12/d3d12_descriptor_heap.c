@@ -123,7 +123,7 @@ void d3d12_descriptor_heap_init(ID3D12Device *device,
 
 	for (size_t i = 0; i < heap->free_count; i++)
 	{
-		heap->free_indices[i] = (uint32_t)(i + 1);
+		heap->free_indices[i] = (uint32_t)(heap->capacity - i);
 	}
 
 	heap->pending_free_count   = 0;
@@ -166,7 +166,7 @@ d3d12_descriptor_t d3d12_allocate_descriptor_persistent(d3d12_descriptor_heap_t 
 {
 	mutex_lock(&heap->mutex);
 
-	uint32_t index = --heap->free_count;
+	uint32_t index = heap->free_indices[--heap->free_count];
 
 	mutex_unlock(&heap->mutex);
 
