@@ -1385,11 +1385,6 @@ void rhi_end_frame(void)
 	ID3D12CommandList *lists[] = { (ID3D12CommandList *)list };
 	ID3D12CommandQueue_ExecuteCommandLists(g_rhi.direct_command_queue, 1, lists);
 
-	frame->fence_value = ++g_rhi.fence_value;
-
-	HRESULT hr = ID3D12CommandQueue_Signal(g_rhi.direct_command_queue, g_rhi.fence, frame->fence_value);
-	D3D12_CHECK_HR(hr, return);
-
 	for (pool_iter_t it = pool_iter(&g_rhi.windows);
 		 pool_iter_valid(&it);
 		 pool_iter_next(&it))
@@ -1399,6 +1394,11 @@ void rhi_end_frame(void)
 		DXGI_PRESENT_PARAMETERS present_parameters = { 0 };
 		IDXGISwapChain1_Present1(window->swap_chain, 1, 0, &present_parameters);
 	}
+
+	frame->fence_value = ++g_rhi.fence_value;
+
+	HRESULT hr = ID3D12CommandQueue_Signal(g_rhi.direct_command_queue, g_rhi.fence, frame->fence_value);
+	D3D12_CHECK_HR(hr, return);
 
 	g_rhi.frame_index += 1;
 }
