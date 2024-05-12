@@ -10,6 +10,10 @@ set release_flags=/O2 /MT
 set linker_flags=/opt:ref /incremental:no
 set libraries=user32.lib dxguid.lib d3d11.lib dxgi.lib d3dcompiler.lib gdi32.lib user32.lib ole32.lib ksuser.lib shell32.lib Synchronization.lib DbgHelp.lib d3d12.lib
 
+rem copy garbage
+
+robocopy external\bin run *.exe *.dll *.pdb /S > NUL
+
 pushd build
 
 if not exist dxc_wrapper_debug.obj (
@@ -37,6 +41,9 @@ set last_error=%ERRORLEVEL%
 
 if %last_error% neq 0 goto bail
 
+rem copy build artifacts
+robocopy . ..\run *_debug.exe *_debug.dll *_debug.pdb /S > NUL
+
 rem ========================================================================================================================
 
 echo]
@@ -53,6 +60,9 @@ set last_error=%ERRORLEVEL%
 ..\tools\ctime -end win32_retro_release.ctm %last_error%
 
 if %last_error% neq 0 goto bail
+
+rem copy build artifacts
+robocopy . ..\run *_release.exe *_release.dll *_release.pdb /S > NUL
 
 rem ========================================================================================================================
 

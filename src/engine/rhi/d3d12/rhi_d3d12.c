@@ -2,6 +2,11 @@
 // Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
 // ============================================================
 
+// Agility SDK...
+
+extern __declspec(dllexport) const uint32_t D3D12SDKVersion = 613;
+extern __declspec(dllexport) const char    *D3D12SDKPath    = u8".\\D3D12\\";
+
 #include "dxc.h"
 
 #include "d3d12_helpers.c"
@@ -399,6 +404,9 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 		log(RHI_D3D12, Error, "Failed to create upload ring buffer");
 		goto bail;
 	}
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12 = {0};
+    ID3D12Device_CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS12, &options12, sizeof(options12));
 
 	//
 	// Successfully Initialized D3D12
