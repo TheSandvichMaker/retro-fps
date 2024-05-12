@@ -582,6 +582,7 @@ int init_d3d11(void *hwnd_)
                          (t3p[i] << 24));
         }
 
+#if 0
         texture_handle_t handle = render->upload_texture(&(r_upload_texture_t){
             .desc = {
                 .format = R_PIXEL_FORMAT_RGBA8,
@@ -593,6 +594,7 @@ int init_d3d11(void *hwnd_)
             },
         });
         d3d.blue_noise = pool_get(&d3d_textures, handle);
+#endif
     }
 
     // create immediate rendering buffers

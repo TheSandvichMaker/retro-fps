@@ -74,3 +74,47 @@ string_t d3d12_get_debug_name(arena_t *arena, ID3D12Object *object)
 
 	return result;
 }
+
+void d3d12_deferred_release(IUnknown *resource)
+{
+	d3d12_deferred_release_queue_t *queue = &g_rhi.deferred_release_queue;
+
+	// TODO: lock-free
+
+	mutex_lock(&queue->mutex);
+
+	d3d12_deferred_release_t *release = &queue->queue[queue->head++ % ARRAY_COUNT(queue->queue)];
+	release->resource    = resource;
+	release->frame_index = g_rhi.fence_value;
+
+	mutex_unlock(&queue->mutex);
+}
+
+void d3d12_flush_deferred_release_queue(uint32_t frame_index)
+{
+	d3d12_deferred_release_queue_t *queue = &g_rhi.deferred_release_queue;
+
+	mutex_lock(&queue->mutex);
+
+	uint32_t head = queue->head;
+
+	mutex_unlock(&queue->mutex);
+
+	uint32_t tail = queue->tail;
+
+	while (tail < head)
+	{
+		d3d12_deferred_release_t *release = &queue->queue[tail++ % ARRAY_COUNT(queue->queue)];
+
+		if (release->frame_index <= frame_index)
+		{
+			COM_SAFE_RELEASE(release->resource);
+		}
+		else
+		{
+			break;
+		}
+	}
+
+	queue->tail = tail;
+}

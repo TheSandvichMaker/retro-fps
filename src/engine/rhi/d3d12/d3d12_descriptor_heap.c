@@ -113,8 +113,6 @@ void d3d12_descriptor_heap_init(ID3D12Device *device,
 
 	heap->debug_name = string_copy(rhi_arena, debug_name);
 
-	heap->frame_index = 0;
-
 	heap->capacity = persistent_capacity;
 	heap->stride   = ID3D12Device_GetDescriptorHandleIncrementSize(device, type);
 
@@ -126,7 +124,8 @@ void d3d12_descriptor_heap_init(ID3D12Device *device,
 		heap->free_indices[i] = (uint32_t)(heap->capacity - i);
 	}
 
-	heap->pending_free_count   = 0;
+	heap->pending_free_tail    = 0;
+	heap->pending_free_head    = 0;
 	heap->pending_free_indices = m_alloc_array_nozero(rhi_arena, heap->capacity, d3d12_pending_free_t);
 }
 
@@ -139,16 +138,16 @@ void d3d12_descriptor_heap_flush_pending_frees(d3d12_descriptor_heap_t *heap, ui
 {
 	mutex_lock(&heap->mutex);
 
-	uint32_t pending_free_count = heap->pending_free_count;
-	uint32_t new_free_count     = heap->free_count;
+	uint32_t new_free_count = heap->free_count;
 
-	for (size_t i = 0; i < pending_free_count; i++)
+	for (size_t i = heap->pending_free_tail; i < heap->pending_free_head; i++)
 	{
-		d3d12_pending_free_t *pending = &heap->pending_free_indices[i];
+		d3d12_pending_free_t *pending = &heap->pending_free_indices[i % heap->capacity];
 
 		if (pending->frame_index <= frame_index)
 		{
 			heap->free_indices[new_free_count++] = pending->index;
+			heap->pending_free_tail += 1;
 		}
 		else
 		{
@@ -157,7 +156,6 @@ void d3d12_descriptor_heap_flush_pending_frees(d3d12_descriptor_heap_t *heap, ui
 	}
 
 	heap->free_count  = new_free_count;
-	heap->frame_index = frame_index;
 
 	mutex_unlock(&heap->mutex);
 }
@@ -186,15 +184,15 @@ d3d12_descriptor_t d3d12_allocate_descriptor_persistent(d3d12_descriptor_heap_t 
 
 void d3d12_free_descriptor_persistent(d3d12_descriptor_heap_t *heap, uint32_t index)
 {
-	if (ALWAYS(index < heap->capacity))
+	if (index > 0 && ALWAYS(index < heap->capacity))
 	{
 		mutex_lock(&heap->mutex);
 
-		uint32_t pending_index = heap->pending_free_count++;
+		uint32_t pending_index = heap->pending_free_head++ % heap->capacity; // TODO: mask pow2
 
 		heap->pending_free_indices[pending_index] = (d3d12_pending_free_t){
 			.index       = index,
-			.frame_index = heap->frame_index,
+			.frame_index = g_rhi.fence_value,
 		};
 
 		mutex_unlock(&heap->mutex);

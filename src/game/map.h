@@ -36,7 +36,6 @@ typedef struct map_poly_t
 {
     uint32_t index_count;
     uint32_t first_index; // NOTE: indices are _not_ absolute. They are relative to the first vertex.
-						  // TODO: Why aren't they absolute?
 
     uint32_t vertex_count;
     uint32_t first_vertex;
@@ -149,7 +148,7 @@ typedef struct map_t
     {
         v3_t *positions;
         v2_t *texcoords;
-        v3_t *lightmap_texcoords;
+        v2_t *lightmap_texcoords;
     } vertex;
 } map_t;
 

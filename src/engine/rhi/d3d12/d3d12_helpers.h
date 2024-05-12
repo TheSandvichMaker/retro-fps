@@ -40,3 +40,26 @@ fn_local void com_safe_release_(IUnknown **obj_ptr)
 fn ID3D12Resource *d3d12_create_upload_buffer(ID3D12Device *device, uint32_t size, void *initial_data, string_t debug_name);
 fn void     d3d12_set_debug_name(ID3D12Object *object, string_t name);
 fn string_t d3d12_get_debug_name(arena_t *arena, ID3D12Object *object);
+
+typedef struct d3d12_deferred_release_t
+{
+	IUnknown *resource;
+	uint64_t  frame_index;
+} d3d12_deferred_release_t;
+
+enum { RhiMaxDeferredReleaseCount = 2048 };
+
+typedef struct d3d12_deferred_release_queue_t
+{
+	// TODO: this could totally be lock-free
+	mutex_t mutex;
+
+	uint32_t frame_index;
+
+	d3d12_deferred_release_t queue[RhiMaxDeferredReleaseCount];
+	uint32_t head;
+	uint32_t tail;
+} d3d12_deferred_release_queue_t;
+
+fn void d3d12_deferred_release(IUnknown *resource);
+fn void d3d12_flush_deferred_release_queue(uint32_t frame_index);

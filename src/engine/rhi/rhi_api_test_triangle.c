@@ -128,7 +128,7 @@ fn void rhi_api_test_triangle_init(void)
 		image_t  image      = load_image_from_disk(temp, image_path, 4);
 
 		g_textures[i] = rhi_create_texture(&(rhi_create_texture_params_t){
-			.debug_name = S("test texture"),
+			.debug_name = image_path,
 			.dimension  = RhiTextureDimension_2d,
 
 			.width      = image.info.w,

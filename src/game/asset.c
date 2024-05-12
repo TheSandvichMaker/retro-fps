@@ -138,6 +138,7 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 			{
 				case AssetKind_image:
 				{
+#if 0
 					asset->image = load_image_from_disk(&asset->arena, string_from_storage(asset->path), 4);
 					asset->image.renderer_handle = render->upload_texture(&(r_upload_texture_t){
 						.upload_flags = R_UPLOAD_TEXTURE_GEN_MIPMAPS,
@@ -152,6 +153,7 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 							.pixels = asset->image.pixels,
 						},
 					});
+#endif
 				} break;
 
 				case AssetKind_waveform:

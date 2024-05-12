@@ -11,6 +11,12 @@
 #include "platform.h"
 #include "profiler.h"
 
-#if PLATFORM_WIN32
+#if DF_USE_RHI_ABSTRACTION
+
+#include "rhi/rhi_api.h"
+
+#elif PLATFORM_WIN32
+
 #include "d3d11.h"
+
 #endif

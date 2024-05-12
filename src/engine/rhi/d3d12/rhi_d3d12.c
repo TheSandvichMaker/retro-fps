@@ -15,7 +15,7 @@ fn_local d3d12_frame_state_t *d3d12_get_frame_state(uint32_t frame_index)
 	return g_rhi.frames[frame_index % g_rhi.frame_latency];
 }
 
-fn_local void d3d12_wait_for_frame(uint32_t fence_value)
+fn_local void d3d12_wait_for_frame(uint64_t fence_value)
 {
 	uint64_t completed = ID3D12Fence_GetCompletedValue(g_rhi.fence);
 	if (completed < fence_value)
@@ -76,7 +76,6 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 	IDXGIAdapter1       *dxgi_adapter         = NULL;
 	ID3D12Device        *device               = NULL;
 	ID3D12CommandQueue  *direct_command_queue = NULL;
-	ID3D12CommandQueue  *copy_command_queue   = NULL;
 	ID3D12Fence         *fence                = NULL;
 	ID3D12RootSignature *root_signature       = NULL;
 
@@ -243,20 +242,8 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 
 		hr = ID3D12Device_CreateCommandQueue(device, &desc, &IID_ID3D12CommandQueue, &direct_command_queue);
 		D3D12_CHECK_HR(hr, goto bail);
-	}
 
-	//
-	// Create the copy command queue
-	//
-
-	{
-		D3D12_COMMAND_QUEUE_DESC desc = {
-			.Type     = D3D12_COMMAND_LIST_TYPE_COPY,
-			.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
-		};
-
-		hr = ID3D12Device_CreateCommandQueue(device, &desc, &IID_ID3D12CommandQueue, &copy_command_queue);
-		D3D12_CHECK_HR(hr, goto bail);
+		d3d12_set_debug_name((ID3D12Object *)direct_command_queue, S("direct_command_queue"));
 	}
 
 	//
@@ -288,24 +275,6 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 			D3D12_CHECK_HR(hr, goto bail);
 
 			ID3D12GraphicsCommandList_Close(frame->direct_command_list.d3d);
-
-			hr = ID3D12Device_CreateCommandAllocator(device, 
-													 D3D12_COMMAND_LIST_TYPE_COPY, 
-													 &IID_ID3D12CommandAllocator, 
-													 &frame->copy_command_allocator);
-			D3D12_CHECK_HR(hr, goto bail);
-
-			hr = ID3D12Device_CreateCommandList(device,
-												0,
-												D3D12_COMMAND_LIST_TYPE_COPY,
-												frame->copy_command_allocator,
-												NULL,
-												&IID_ID3D12GraphicsCommandList,
-												&frame->copy_command_list);
-			D3D12_CHECK_HR(hr, goto bail);
-
-			ID3D12GraphicsCommandList_Close(frame->copy_command_list);
-
 		}
 
 		d3d12_arena_init(device, &frame->upload_arena, MB(128), Sf("frame upload arena #%zu", i));
@@ -439,7 +408,6 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 	g_rhi.dxgi_adapter         = dxgi_adapter;         dxgi_adapter         = NULL;
 	g_rhi.device               = device;               device               = NULL;
 	g_rhi.direct_command_queue = direct_command_queue; direct_command_queue = NULL;
-	g_rhi.copy_command_queue   = copy_command_queue;   copy_command_queue   = NULL;
 	g_rhi.fence                = fence;                fence                = NULL;
 	g_rhi.rs_bindless          = root_signature;       root_signature       = NULL;
 
@@ -452,7 +420,6 @@ bail:
 	COM_SAFE_RELEASE(dxgi_factory);
 	COM_SAFE_RELEASE(dxgi_adapter);
 	COM_SAFE_RELEASE(device);
-	COM_SAFE_RELEASE(copy_command_queue);
 	COM_SAFE_RELEASE(fence);
 	COM_SAFE_RELEASE(root_signature);
 
@@ -532,6 +499,8 @@ rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 			hr = IDXGISwapChain1_GetBuffer(swap_chain, (uint32_t)i, &IID_ID3D12Resource, &frame_buffer->resource);
 			D3D12_CHECK_HR(hr, goto bail);
 
+			d3d12_set_debug_name((ID3D12Object *)frame_buffer->resource, Sf("frame_buffer_%zu", i));
+
 			D3D12_RESOURCE_DESC rt_desc;
 			ID3D12Resource_GetDesc(frame_buffer->resource, &rt_desc);
 
@@ -573,6 +542,49 @@ bail:
 	COM_SAFE_RELEASE(swap_chain);
 
 	return result;
+}
+
+void rhi_resize_window(rhi_window_t handle, uint32_t new_width, uint32_t new_height)
+{
+	d3d12_window_t *window = pool_get(&g_rhi.windows, handle);
+	ASSERT(window);
+
+	d3d12_flush_direct_command_queue();
+
+	HRESULT hr;
+
+	for (size_t i = 0; i < g_rhi.frame_latency; i++)
+	{
+		d3d12_texture_t *frame_buffer = pool_get(&g_rhi.textures, window->frame_buffers[i]);
+		ASSERT(frame_buffer);
+
+		COM_SAFE_RELEASE(frame_buffer->resource);
+	}
+
+	DXGI_SWAP_CHAIN_DESC desc;
+	hr = IDXGISwapChain4_GetDesc(window->swap_chain, &desc);
+	ASSERT(SUCCEEDED(hr)); // SERIOUSLY FIX THE ERROR HANDLING...
+
+	hr = IDXGISwapChain4_ResizeBuffers(window->swap_chain, g_rhi.frame_latency, new_width, new_height, desc.BufferDesc.Format, desc.Flags);
+	ASSERT(SUCCEEDED(hr)); // SERIOUSLY FIX THE ERROR HANDLING...
+
+	for (size_t i = 0; i < g_rhi.frame_latency; i++)
+	{
+		d3d12_texture_t *frame_buffer = pool_get(&g_rhi.textures, window->frame_buffers[i]);
+		ASSERT(frame_buffer);
+
+		hr = IDXGISwapChain1_GetBuffer(window->swap_chain, (uint32_t)i, &IID_ID3D12Resource, &frame_buffer->resource);
+		ASSERT(SUCCEEDED(hr)); // SERIOUSLY FIX THE ERROR HANDLING...
+							   //
+		d3d12_set_debug_name((ID3D12Object *)frame_buffer->resource, Sf("frame_buffer_%zu", i));
+
+		D3D12_RESOURCE_DESC rt_desc;
+		ID3D12Resource_GetDesc(frame_buffer->resource, &rt_desc);
+
+		frame_buffer->desc = rhi_texture_desc_from_d3d12_resource_desc(&rt_desc);
+
+		ID3D12Device_CreateRenderTargetView(g_rhi.device, frame_buffer->resource, NULL, frame_buffer->rtv.cpu);
+	}
 }
 
 //
@@ -724,11 +736,15 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 		D3D12_RESOURCE_DIMENSION dimension = D3D12_RESOURCE_DIMENSION_UNKNOWN;
 		switch (params->dimension)
 		{
-			case RhiTextureDimension_1d: dimension = D3D12_RESOURCE_DIMENSION_TEXTURE1D; break;
-			case RhiTextureDimension_2d: dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; break;
-			case RhiTextureDimension_3d: dimension = D3D12_RESOURCE_DIMENSION_TEXTURE3D; break;
+			case RhiTextureDimension_unknown: dimension = D3D12_RESOURCE_DIMENSION_UNKNOWN;   break;
+			case RhiTextureDimension_1d:      dimension = D3D12_RESOURCE_DIMENSION_TEXTURE1D; break;
+			case RhiTextureDimension_2d:      dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D; break;
+			case RhiTextureDimension_3d:      dimension = D3D12_RESOURCE_DIMENSION_TEXTURE3D; break;
 			INVALID_DEFAULT_CASE;
 		}
+
+		// TODO: Maybe be nice and infer the dimension from the width/height/depth provided?
+		ASSERT_MSG(dimension != D3D12_RESOURCE_DIMENSION_UNKNOWN, "Did you forget to specify a texture dimension?");
 
 		D3D12_RESOURCE_FLAGS resource_flags = 0;
 		if (params->usage & RhiTextureUsage_render_target) resource_flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
@@ -738,8 +754,18 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 
 		ID3D12Resource *resource = NULL;
 
-		D3D12_RESOURCE_STATES initial_state = params->initial_data ? 
-			D3D12_RESOURCE_STATE_COPY_DEST : D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
+		D3D12_RESOURCE_STATES natural_state = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
+
+		// TODO: What combinations of usages are allowed? Clean up the resource state situation!
+		if (params->usage & RhiTextureUsage_render_target) natural_state = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		if (params->usage & RhiTextureUsage_depth_stencil) natural_state = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+
+		D3D12_RESOURCE_STATES initial_state = params->initial_data ? D3D12_RESOURCE_STATE_COPY_DEST : natural_state;
+
+		D3D12_CLEAR_VALUE clear_value = {
+			.Format = to_dxgi_format(params->format),
+			.Color  = { params->optimized_clear_value.x, params->optimized_clear_value.y, params->optimized_clear_value.z, params->optimized_clear_value.w },
+		};
 
 		HRESULT hr = ID3D12Device_CreateCommittedResource(
 			g_rhi.device,
@@ -759,7 +785,7 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 				.SampleDesc       = { .Count = 1 },
 			}),
 			initial_state,
-			NULL, // TODO: Add to API
+			&clear_value,
 			&IID_ID3D12Resource,
 			&resource);
 
@@ -812,6 +838,24 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 	}
 
 	return result;
+}
+
+void rhi_destroy_texture(rhi_texture_t handle)
+{
+	if (RESOURCE_HANDLE_VALID(handle))
+	{
+		d3d12_texture_t *texture = pool_get(&g_rhi.textures, handle);
+		ASSERT(texture);
+
+		d3d12_deferred_release((IUnknown *)texture->resource);
+
+		d3d12_free_descriptor_persistent(&g_rhi.cbv_srv_uav, texture->srv.index);
+		d3d12_free_descriptor_persistent(&g_rhi.cbv_srv_uav, texture->uav.index);
+		d3d12_free_descriptor_persistent(&g_rhi.rtv, texture->rtv.index);
+		d3d12_free_descriptor_persistent(&g_rhi.dsv, texture->dsv.index);
+
+		pool_rem_item(&g_rhi.textures, texture);
+	}
 }
 
 rhi_texture_srv_t rhi_get_texture_srv(rhi_texture_t handle)
@@ -909,6 +953,8 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 			result = CAST_HANDLE(rhi_buffer_t, pool_get_handle(&g_rhi.buffers, buffer));
 
 			buffer->resource = resource;
+			buffer->gpu_address = ID3D12Resource_GetGPUVirtualAddress(buffer->resource);
+			buffer->size = params->size;
 
 			d3d12_set_debug_name((ID3D12Object *)buffer->resource, params->debug_name);
 
@@ -955,11 +1001,10 @@ rhi_buffer_srv_t rhi_get_buffer_srv(rhi_buffer_t handle)
 	rhi_buffer_srv_t result = {0};
 
 	d3d12_buffer_t *buffer = pool_get(&g_rhi.buffers, handle);
+	ASSERT_MSG(buffer, "Buffer does not exist!");
 
-	if (ALWAYS(buffer))
-	{
-		result.index = buffer->srv.index;
-	}
+	result.index = buffer->srv.index;
+	ASSERT_MSG(result.index != 0, "Buffer does not have an SRV!");
 
 	return result;
 }
@@ -969,6 +1014,11 @@ void rhi_begin_frame(void)
 	d3d12_frame_state_t *frame = d3d12_get_frame_state(g_rhi.frame_index);
 
 	d3d12_wait_for_frame(frame->fence_value);
+
+	d3d12_descriptor_heap_flush_pending_frees(&g_rhi.cbv_srv_uav, frame->fence_value);
+	d3d12_descriptor_heap_flush_pending_frees(&g_rhi.rtv, frame->fence_value);
+	d3d12_descriptor_heap_flush_pending_frees(&g_rhi.dsv, frame->fence_value);
+	d3d12_flush_deferred_release_queue(frame->fence_value);
 
 	for (pool_iter_t it = pool_iter(&g_rhi.windows);
 		 pool_iter_valid(&it);
@@ -988,6 +1038,9 @@ void rhi_begin_frame(void)
 
 	ID3D12GraphicsCommandList_SetDescriptorHeaps(list, 1, &g_rhi.cbv_srv_uav.heap);
 	ID3D12GraphicsCommandList_SetGraphicsRootSignature(list, g_rhi.rs_bindless);
+
+	frame->direct_command_list.index_buffer = (rhi_buffer_t){0};
+	frame->direct_command_list.render_target_count = 0;
 }
 
 fn_local D3D12_RENDER_TARGET_BLEND_DESC to_d3d12_rt_blend_desc(const rhi_render_target_blend_t *desc)
@@ -1091,6 +1144,8 @@ rhi_pso_t rhi_create_graphics_pso(const rhi_create_graphics_pso_params_t *params
 		d3d12_pso_t *pso = pool_add(&g_rhi.psos);
 		pso->d3d = d3d_pso;
 
+		d3d12_set_debug_name((ID3D12Object *)pso->d3d, params->debug_name);
+
 		result = CAST_HANDLE(rhi_pso_t, pool_get_handle(&g_rhi.psos, pso));
 	}
 	else
@@ -1126,41 +1181,41 @@ void rhi_graphics_pass_begin(rhi_command_list_t *list, const rhi_graphics_pass_p
 	}
 
 	D3D12_CPU_DESCRIPTOR_HANDLE rt_descriptors[8];
+	D3D12_CPU_DESCRIPTOR_HANDLE *dsv = NULL;
 
-	if (list->render_target_count > 0)
+	uint32_t barrier_count = 0;
+	D3D12_RESOURCE_BARRIER barriers[9];
+
+	for (size_t i = 0; i < list->render_target_count; i++)
 	{
-		uint32_t barrier_count = 0;
-		D3D12_RESOURCE_BARRIER barriers[8];
+		const rhi_graphics_pass_color_attachment_t *attachment = &params->render_targets[i];
 
-		for (size_t i = 0; i < list->render_target_count; i++)
-		{
-			const rhi_graphics_pass_color_attachment_t *attachment = &params->render_targets[i];
+		rhi_texture_t    texture_handle = attachment->texture;
+		d3d12_texture_t *texture        = pool_get(&g_rhi.textures, texture_handle);
 
-			rhi_texture_t    texture_handle = attachment->texture;
-			d3d12_texture_t *texture        = pool_get(&g_rhi.textures, texture_handle);
+		ASSERT(texture);
+		ASSERT(texture->desc.usage_flags & RhiTextureUsage_render_target);
 
-			ASSERT(texture);
-			ASSERT(texture->desc.usage_flags & RhiTextureUsage_render_target);
+		rt_descriptors[i] = texture->rtv.cpu;
 
-			rt_descriptors[i] = texture->rtv.cpu;
-
-			barrier_count += d3d12_transition_state(texture->resource, &texture->state, 
-													D3D12_RESOURCE_STATE_RENDER_TARGET, &barriers[i]);
-		}
-
-		if (barrier_count > 0)
-		{
-			ID3D12GraphicsCommandList_ResourceBarrier(list->d3d, barrier_count, barriers);
-		}
+		barrier_count += d3d12_transition_state(texture->resource, &texture->state, 
+												D3D12_RESOURCE_STATE_RENDER_TARGET, &barriers[i]);
 	}
 
-	D3D12_CPU_DESCRIPTOR_HANDLE *dsv = NULL;
-	if (RESOURCE_HANDLE_VALID(params->depth_stencil))
+	if (RESOURCE_HANDLE_VALID(params->depth_stencil.texture))
 	{
-		d3d12_texture_t *texture = pool_get(&g_rhi.textures, params->depth_stencil);
+		d3d12_texture_t *texture = pool_get(&g_rhi.textures, params->depth_stencil.texture);
 		ASSERT(texture);
 
 		dsv = &texture->dsv.cpu;
+
+		barrier_count += d3d12_transition_state(texture->resource, &texture->state,
+												D3D12_RESOURCE_STATE_DEPTH_WRITE, &barriers[barrier_count]);
+	}
+
+	if (barrier_count > 0)
+	{
+		ID3D12GraphicsCommandList_ResourceBarrier(list->d3d, barrier_count, barriers);
 	}
 
 	ID3D12GraphicsCommandList_OMSetRenderTargets(list->d3d, list->render_target_count, rt_descriptors, FALSE, dsv);
@@ -1172,6 +1227,11 @@ void rhi_graphics_pass_begin(rhi_command_list_t *list, const rhi_graphics_pass_p
 			v4_t clear_color = attachments[i]->clear_color;
 			ID3D12GraphicsCommandList_ClearRenderTargetView(list->d3d, rt_descriptors[i], &clear_color.e[0], 0, NULL);
 		}
+	}
+
+	if (dsv && params->depth_stencil.op == RhiPassOp_clear)
+	{
+		ID3D12GraphicsCommandList_ClearDepthStencilView(list->d3d, *dsv, D3D12_CLEAR_FLAG_DEPTH, params->depth_stencil.clear_value, 0, 0, NULL);
 	}
 
 	ID3D12GraphicsCommandList_IASetPrimitiveTopology(list->d3d, to_d3d12_primitive_topology(params->topology));
@@ -1265,7 +1325,39 @@ void rhi_set_parameters(rhi_command_list_t *list, uint32_t slot, void *parameter
 
 void rhi_draw(rhi_command_list_t *list, uint32_t vertex_count)
 {
+	DEBUG_ASSERT(list);
+
 	ID3D12GraphicsCommandList_DrawInstanced(list->d3d, vertex_count, 1, 0, 0);
+}
+
+void rhi_draw_indexed(rhi_command_list_t *list, rhi_buffer_t index_buffer_handle, uint32_t index_count, uint32_t start_index)
+{
+	DEBUG_ASSERT(list);
+
+	if (!RESOURCE_HANDLES_EQUAL(list->index_buffer, index_buffer_handle))
+	{
+		if (RESOURCE_HANDLE_VALID(index_buffer_handle))
+		{
+			d3d12_buffer_t *index_buffer = pool_get(&g_rhi.buffers, index_buffer_handle);
+			ASSERT(index_buffer);
+
+			D3D12_INDEX_BUFFER_VIEW ibv = {
+				.BufferLocation = index_buffer->gpu_address,
+				.SizeInBytes    = index_buffer->size,
+				.Format         = DXGI_FORMAT_R16_UINT, // TODO: Unhardcode
+			};
+
+			ID3D12GraphicsCommandList_IASetIndexBuffer(list->d3d, &ibv);
+		}
+		else
+		{
+			ID3D12GraphicsCommandList_IASetIndexBuffer(list->d3d, NULL);
+		}
+
+		list->index_buffer = index_buffer_handle;
+	}
+
+	ID3D12GraphicsCommandList_DrawIndexedInstanced(list->d3d, index_count, 1, start_index, 0, 0);
 }
 
 void rhi_end_frame(void)
@@ -1293,7 +1385,7 @@ void rhi_end_frame(void)
 	ID3D12CommandList *lists[] = { (ID3D12CommandList *)list };
 	ID3D12CommandQueue_ExecuteCommandLists(g_rhi.direct_command_queue, 1, lists);
 
-	frame->fence_value = g_rhi.fence_value++;
+	frame->fence_value = ++g_rhi.fence_value;
 
 	HRESULT hr = ID3D12CommandQueue_Signal(g_rhi.direct_command_queue, g_rhi.fence, frame->fence_value);
 	D3D12_CHECK_HR(hr, return);
@@ -1376,4 +1468,14 @@ rhi_shader_bytecode_t rhi_compile_shader(arena_t *arena, string_t shader_source,
 	m_scope_end(temp);
 
 	return result;
+}
+
+void d3d12_flush_direct_command_queue(void)
+{
+	uint64_t fence_value = ID3D12Fence_GetCompletedValue(g_rhi.fence);
+
+	if (fence_value < g_rhi.fence_value)
+	{
+		ID3D12Fence_SetEventOnCompletion(g_rhi.fence, g_rhi.fence_value, NULL);
+	}
 }

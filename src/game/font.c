@@ -131,6 +131,7 @@ font_atlas_t make_font_atlas_from_memory(string_t font_data, size_t range_count,
 			// TODO: Log failure
 		}
 
+#if 0
 		result.texture = render->upload_texture(&(r_upload_texture_t){
 			.debug_name = S("font atlas"),
 			.desc = {
@@ -144,6 +145,7 @@ font_atlas_t make_font_atlas_from_memory(string_t font_data, size_t range_count,
 				.pixels = pixels
 			},
 		});
+#endif
 
 		result.initialized = true;
 	}
@@ -154,7 +156,9 @@ font_atlas_t make_font_atlas_from_memory(string_t font_data, size_t range_count,
 void destroy_font_atlas(font_atlas_t *atlas)
 {
 	m_release(&atlas->arena);
+#if 0
 	render->destroy_texture(atlas->texture);
+#endif
 	zero_struct(atlas);
 }
 

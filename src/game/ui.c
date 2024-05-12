@@ -2590,8 +2590,12 @@ bool ui_begin(float dt)
 
 void ui_end(void)
 {
+#if 0
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);
+#endif
+	int res_x = 1920;
+	int res_y = 1080;
 
 	float font_height = ui_font_height();
 	float at_y = 32.0f;

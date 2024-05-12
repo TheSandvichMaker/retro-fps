@@ -260,8 +260,13 @@ void update_and_render_physics_playground(r_context_t *rc, world_t *world, float
     // render
     //
 
+#if 0
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);
+#else
+	int res_x = 1920;
+	int res_y = 1080;
+#endif
 
     rect2_t viewport = {
         0, 0, (float)res_x, (float)res_y,

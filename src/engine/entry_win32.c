@@ -30,11 +30,10 @@
 //
 //
 
-#include "rhi/rhi_api.h"
-#include "rhi/rhi_api_test_triangle.c"
-
+#if DF_USE_RHI_ABSTRACTION
 #include "rhi/d3d12/rhi_d3d12.h"
 #include "rhi/d3d12/rhi_d3d12.c"
+#endif
 
 //
 //
@@ -91,8 +90,15 @@ fn_local void lock_cursor(bool lock)
     }
 }
 
+typedef struct window_user_data_t
+{
+	rhi_window_t rhi_window;
+} window_user_data_t;
+
 fn_local LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 {
+	window_user_data_t *user = (window_user_data_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+
     switch (message)
     {
         case WM_DESTROY:
@@ -106,6 +112,19 @@ fn_local LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
             return MA_ACTIVATEANDEAT;
         } break;
 #endif
+
+		case WM_SIZE:
+		{
+			uint32_t new_width  = LOWORD(lparam);
+			uint32_t new_height = HIWORD(lparam);
+
+#if DF_USE_RHI_ABSTRACTION
+			if (user)
+			{
+				rhi_resize_window(user->rhi_window, new_width, new_height);
+			}
+#endif
+		} break;
 
         default:
         {
@@ -236,8 +255,7 @@ int wWinMain(HINSTANCE instance,
 
 	// it's d3d12 time
 
-#define D3D12_TEST 1
-#if D3D12_TEST
+#if DF_USE_RHI_ABSTRACTION
 	bool d3d12_success = rhi_init_d3d12(&(rhi_init_params_d3d12_t){
 		.base = {
 			.frame_latency = 2,
@@ -246,13 +264,13 @@ int wWinMain(HINSTANCE instance,
 		.enable_gpu_based_validation = true,
 	});
 
-	rhi_window_t d3d12_window = { 0 };
+	rhi_window_t rhi_window = { 0 };
 
 	if (d3d12_success)
 	{
-		d3d12_window = rhi_init_window_d3d12(window);
+		rhi_window = rhi_init_window_d3d12(window);
 
-		if (!RESOURCE_HANDLE_VALID(d3d12_window))
+		if (!RESOURCE_HANDLE_VALID(rhi_window))
 		{
 			return 1;
 		}
@@ -261,8 +279,6 @@ int wWinMain(HINSTANCE instance,
 	{
 		return 1;
 	}
-
-	rhi_api_test_triangle_init();
 #else
     // initialize d3d11
     {
@@ -272,6 +288,13 @@ int wWinMain(HINSTANCE instance,
             FATAL_ERROR("D3D11 initialization failed.");
         }
     }
+#endif
+
+	window_user_data_t window_user_data = {
+		.rhi_window = rhi_window,
+	};
+
+	SetWindowLongPtrW(window, GWLP_USERDATA, (LONG_PTR)&window_user_data);
 
     r_command_buffer_t r_commands = {
         .views_capacity        = R_VIEWS_CAPACITY,
@@ -292,7 +315,6 @@ int wWinMain(HINSTANCE instance,
         .ui_rects_capacity     = R_UI_RECTS_CAPACITY,
         .ui_rects              = m_alloc_array_nozero(&win32_arena, R_UI_RECTS_CAPACITY, r_ui_rect_t),
     };
-#endif
 
     POINT prev_cursor_point;
     GetCursorPos(&prev_cursor_point);
@@ -462,6 +484,8 @@ int wWinMain(HINSTANCE instance,
         int width  = client_rect.right - client_rect.left;
         int height = client_rect.bottom - client_rect.top;
 
+		(void)width;
+
         POINT cursor_point;
         GetCursorPos(&cursor_point);
         ScreenToClient(window, &cursor_point);
@@ -488,25 +512,21 @@ int wWinMain(HINSTANCE instance,
 
         prev_cursor_point = cursor_point;
 
-#if D3D12_TEST
-		(void)last_cursor;
-		(void)width;
-		(void)mouse_dp;
-		(void)cursor_is_in_client_rect;
-
-		// rhi_draw_test_window(d3d12_window);
-
+#if DF_USE_RHI_ABSTRACTION
 		rhi_begin_frame();
 
 		rhi_command_list_t *command_list = rhi_get_command_list();
-		rhi_api_test_triangle_draw(d3d12_window, command_list);
+#endif
 
-		rhi_end_frame();
-#else
 		platform_io_t tick_io = {
 			.has_focus   = has_focus,
 
 			.dt          = dt,
+
+#if DF_USE_RHI_ABSTRACTION
+			.rhi_window       = rhi_window,
+			.rhi_command_list = command_list,
+#endif
 
             .r_commands  = &r_commands,
 
@@ -558,14 +578,17 @@ int wWinMain(HINSTANCE instance,
 		}
 		last_cursor = cursor;
 
+#if DF_USE_RHI_ABSTRACTION
+		rhi_end_frame();
+#else
         d3d11_execute_command_buffer(&r_commands, width, height);
         d3d11_present();
+#endif
 
         if (tick_io.request_exit)
         {
             running = false;
         }
-#endif
 
 		m_reset_temp_arenas();
 

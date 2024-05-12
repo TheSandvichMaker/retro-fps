@@ -17,8 +17,8 @@ D3D12_CULL_MODE to_d3d12_cull_mode(rhi_cull_mode_t mode)
 {
 	static D3D12_CULL_MODE map[] = {
 		[RhiCullMode_none]  = D3D12_CULL_MODE_NONE,
-		[RhiCullMode_back]  = D3D12_CULL_MODE_FRONT,
-		[RhiCullMode_front] = D3D12_CULL_MODE_BACK,
+		[RhiCullMode_back]  = D3D12_CULL_MODE_BACK,
+		[RhiCullMode_front] = D3D12_CULL_MODE_FRONT,
 	};
 
 	ASSERT(mode >= 0 && mode < ARRAY_COUNT(map));

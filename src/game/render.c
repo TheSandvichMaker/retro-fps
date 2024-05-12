@@ -15,8 +15,13 @@ v3_t g_debug_colors[] = {
 
 fn_local void r_init_immediate(r_context_t *rc, r_immediate_t *imm)
 {
-	int w, h;
-	render->get_resolution(&w, &h);
+#if 0
+    int w, h;
+    render->get_resolution(&w, &h);
+#else
+    int w = 1920;
+	int h = 1080;
+#endif
 
 	imm->shader     = R_SHADER_FLAT;
 	imm->topology   = R_TOPOLOGY_TRIANGLELIST;
@@ -59,8 +64,13 @@ void r_init_render_context(r_context_t *rc, r_command_buffer_t *commands)
     {
         r_view_t view = {0};
 
-        int w, h;
-        render->get_resolution(&w, &h);
+#if 0
+		int w, h;
+		render->get_resolution(&w, &h);
+#else
+		int w = 1920;
+		int h = 1080;
+#endif
 
         view.clip_rect = (rect2_t) {
             .x0 = 0.0f,
@@ -222,8 +232,13 @@ v3_t r_to_view_space(const r_view_t *view, v3_t p, float w)
     pw = mul(view->proj_matrix, pw);
     pw.xyz = div(pw.xyz, pw.w);
 
-    int width, height;
-    render->get_resolution(&width, &height);
+#if 0
+	int width, height;
+	render->get_resolution(&width, &height);
+#else
+	int width = 1920;
+	int height = 1080;
+#endif
 
     pw.x += 1.0f;
     pw.y += 1.0f;

@@ -3,57 +3,56 @@
 struct ViewParameters
 {
 	float4x4 world_to_clip;
+	float3   sun_direction;
 };
 
 struct PassParameters
 {
-	df::Resource< StructuredBuffer<float3> > position_buffer;
-	df::Resource< StructuredBuffer<float2> > texcoord_buffer;
-	df::Resource< StructuredBuffer<float2> > ligtmap_texcoord_buffer;
+	df::Resource< StructuredBuffer<float3> > positions;
+	df::Resource< StructuredBuffer<float2> > uvs;
+	df::Resource< StructuredBuffer<float2> > lightmap_uvs;
 };
 
-struct Vertex
+struct DrawParameters
 {
-	float4 position;
-	float4 color;
-	float2 uv;
+	float3 normal;
+	uint   vertex_offset;
 };
 
-struct ShaderParameters
-{
-	ConstantBuffer<ViewParameters> view : register(b0);
-	ConstantBuffer<PassParameters> pass : register(b1);
-
-	df::Resource< Texture2D > albedo;
-	df::Resource< Texture2D > lightmap;
-};
-
-ConstantBuffer<ShaderParameters> parameters : register(b2);
+ConstantBuffer<ViewParameters> view : register(b2);
+ConstantBuffer<PassParameters> pass : register(b1);
+ConstantBuffer<DrawParameters> draw : register(b0);
 
 struct VS_OUT
 {
-	float4 position          : SV_Position;
-	float4 texcoord          : TEXCOORD;
-	float2 lightmap_texcoord : LIGHTMAP_TEXCOORD;
+	float4 position    : SV_Position;
+	float2 uv          : TEXCOORD;
+	float2 lightmap_uv : LIGHTMAP_TEXCOORD;
 };
 
 VS_OUT MainVS(uint vertex_index : SV_VertexID)
 {
-	float3 position          = pass.position_buffer         .Get().Load(vertex_index);
-	float2 texcoord          = pass.texcoord_buffer         .Get().Load(vertex_index);
-	float2 lightmap_texcoord = pass.lightmap_texcoord_buffer.Get().Load(vertex_index);
+	uint vertex_offset = draw.vertex_offset;
+
+	float3 position    = pass.positions   .Get().Load(vertex_offset + vertex_index);
+	float2 uv          = pass.uvs         .Get().Load(vertex_offset + vertex_index);
+	float2 lightmap_uv = pass.lightmap_uvs.Get().Load(vertex_offset + vertex_index);
 
 	VS_OUT OUT;
-	OUT.position          = mul(view.world_to_clip, float4(position, 1));
-	OUT.texcoord          = texcoord;
-	OUT.lightmap_texcoord = lightmap_texcoord;
+	OUT.position    = mul(view.world_to_clip, float4(position, 1));
+	OUT.uv          = uv;
+	OUT.lightmap_uv = lightmap_uv;
 	return OUT;
 }
 
 float4 MainPS(VS_OUT IN) : SV_Target
 {
-	float3 albedo = parameters.albedo  .Get().Sample(df::s_linear_wrap, IN.texcoord).rgb;
-	float3 light  = parameters.lightmap.Get().Sample(df::s_linear_wrap, IN.lightmap_texcoord).rgb;
+#if 0
+	float3 albedo = draw.albedo  .Get().Sample(df::s_linear_wrap, IN.uv).rgb;
+	float3 light  = draw.lightmap.Get().Sample(df::s_linear_wrap, IN.lightmap_uv).rgb;
+#endif
 
-	return float4(albedo * light, 1);
+	float3 light = 0.5 + 0.5*dot(draw.normal, view.sun_direction);
+
+	return float4(light, 1);
 }

@@ -261,12 +261,16 @@ fn_local void lightmap_editor_proc(ui_window_t *window)
 					map_poly_t *poly = &map->polys[poly_index];
 					if (RESOURCE_HANDLE_VALID(poly->lightmap))
 					{
+#if 0
 						render->destroy_texture(poly->lightmap);
+#endif
                         NULLIFY_HANDLE(poly->lightmap);
 					}
 				}
 
+#if 0
 				render->destroy_texture(map->fogmap);
+#endif
                 NULLIFY_HANDLE(map->fogmap);
 
 				map->lightmap_state = NULL;
@@ -298,12 +302,16 @@ fn_local void lightmap_editor_proc(ui_window_t *window)
 				map_poly_t *poly = &map->polys[poly_index];
 				if (RESOURCE_HANDLE_VALID(poly->lightmap))
 				{
+#if 0
 					render->destroy_texture(poly->lightmap);
+#endif
 					NULLIFY_HANDLE(poly->lightmap);
 				}
 			}
 
+#if 0
 			render->destroy_texture(map->fogmap);
+#endif
 			NULLIFY_HANDLE(map->fogmap);
 
 			release_bake_state(map->lightmap_state);
@@ -330,6 +338,7 @@ fn_local void lightmap_editor_proc(ui_window_t *window)
 
 			if (lm_editor->selected_poly)
 			{
+#if 0
 				map_poly_t *poly = lm_editor->selected_poly;
 
 				r_texture_desc_t desc;
@@ -423,6 +432,7 @@ fn_local void lightmap_editor_proc(ui_window_t *window)
 						selection_highlight->position_offset[AXIS2_Y] = rect_dim.y - (float)(lm_editor->selected_pixels.min.y + selection_dim.y) * pixel_size.y;
 					}
 				}
+#endif
 #endif
 			}
 		}
@@ -530,6 +540,7 @@ fn_local void render_lm_editor(r_context_t *rc)
 
             if (lm_editor->pixel_selection_active)
             {
+#if 0
                 r_texture_desc_t desc;
                 render->describe_texture(lm_editor->selected_poly->lightmap, &desc);
 
@@ -561,6 +572,7 @@ fn_local void render_lm_editor(r_context_t *rc)
                 r_immediate_line(rc, pixel_v0, pixel_v2, COLORF_RED);
                 r_immediate_line(rc, pixel_v2, pixel_v3, COLORF_RED);
                 r_immediate_line(rc, pixel_v1, pixel_v3, COLORF_RED);
+#endif
             }
         }
 
@@ -676,6 +688,7 @@ fn_local void render_lm_editor(r_context_t *rc)
 
 fn_local void fullscreen_show_timings(void)
 {
+#if 0
     UI_SCALAR(UI_SCALAR_TEXT_ALIGN_X, 0.5f)
     {
         r_timings_t timings;
@@ -690,6 +703,7 @@ fn_local void fullscreen_show_timings(void)
 
         ui_label(Sf("total: %.02fms", 1000.0*total));
     }
+#endif
 }
 
 fn_local void ui_demo_proc(ui_window_t *window)
@@ -934,8 +948,13 @@ void update_and_render_in_game_editor(r_context_t *rc, r_view_index_t game_view)
 	if (&editor.convex_hull_debugger.window.open)
 		convex_hull_debugger_update_and_render(&editor.convex_hull_debugger, rc, game_view);
 
+#if 0
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);
+#else
+    int res_x = 1920;
+	int res_y = 1080;
+#endif
 
     rect2_t fullscreen_rect = {
         .min = { 0, 0 },

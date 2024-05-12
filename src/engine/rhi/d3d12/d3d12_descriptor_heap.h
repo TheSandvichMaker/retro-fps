@@ -60,10 +60,9 @@ typedef struct d3d12_descriptor_heap_t
 	D3D12_CPU_DESCRIPTOR_HANDLE cpu_base;
 	D3D12_GPU_DESCRIPTOR_HANDLE gpu_base;
 
-	uint32_t frame_index;
-
-	uint32_t              pending_free_count;
 	d3d12_pending_free_t *pending_free_indices;
+	uint32_t              pending_free_head;
+	uint32_t              pending_free_tail;
 
 	uint32_t  free_count;
 	uint32_t *free_indices;

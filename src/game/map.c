@@ -924,6 +924,10 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
                 poly->index_count  = triangulated_index_count;
                 poly->vertex_count = triangulated_vertex_count;
 
+				map->index_count  += triangulated_index_count;
+				map->vertex_count += triangulated_vertex_count;
+
+#if 0
                 poly->mesh = render->upload_mesh(&(r_upload_mesh_t) {
                     .vertex_format = R_VERTEX_FORMAT_BRUSH,
                     .index_count   = triangulated_index_count,
@@ -931,6 +935,7 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
                     .vertex_count  = triangulated_vertex_count,
                     .vertices      = triangulated_vertices,
                 });
+#endif
             }
         }
     }

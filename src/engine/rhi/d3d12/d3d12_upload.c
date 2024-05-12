@@ -12,6 +12,8 @@ bool d3d12_upload_ring_buffer_init(ID3D12Device *device, d3d12_upload_ring_buffe
 
 		hr = ID3D12Device_CreateCommandQueue(device, &desc, &IID_ID3D12CommandQueue, &ring_buffer->queue);
 		D3D12_CHECK_HR(hr, return false);
+
+		d3d12_set_debug_name((ID3D12Object *)ring_buffer->queue, S("upload_ring_buffer_copy_command_queue"));
 	}
 
 	for (size_t i = 0; i < RhiMaxUploadSubmissions; i++)
@@ -24,6 +26,8 @@ bool d3d12_upload_ring_buffer_init(ID3D12Device *device, d3d12_upload_ring_buffe
 												 &submission->allocator);
 		D3D12_CHECK_HR(hr, return false);
 
+		d3d12_set_debug_name((ID3D12Object *)submission->allocator, Sf("upload_ring_buffer_submission_%zu_allocator", i));
+
 		hr = ID3D12Device_CreateCommandList(device,
 											0,
 											D3D12_COMMAND_LIST_TYPE_COPY,
@@ -32,6 +36,8 @@ bool d3d12_upload_ring_buffer_init(ID3D12Device *device, d3d12_upload_ring_buffe
 											&IID_ID3D12GraphicsCommandList,
 											&submission->command_list);
 		D3D12_CHECK_HR(hr, return false);
+
+		d3d12_set_debug_name((ID3D12Object *)submission->command_list, Sf("upload_ring_buffer_submission_%zu_command_list", i));
 
 		ID3D12GraphicsCommandList_Close(submission->command_list);
 	}

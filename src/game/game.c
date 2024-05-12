@@ -27,6 +27,8 @@
 #include "render_helpers.c"
 #include "ui.c"
 
+#include "render/render.c"
+
 #define UI_FORCE_ONE_DRAW_CALL_PER_RECT_SLOW_DEBUG_STUFF 0
 
 #if 0
@@ -47,6 +49,8 @@ static waveform_t *short_sound;
 static mixer_id_t music;
 
 static triangle_mesh_t test_convex_hull;
+
+static r1_state_t r1;
 
 v3_t player_view_origin(player_t *player)
 {
@@ -395,6 +399,7 @@ void game_init(void)
 
 		if (is_class(map, e, S("worldspawn")))
 		{
+#if 0
 			string_t skytex = value_from_key(map, e, S("skytex"));
 
 			m_scoped_temp
@@ -428,6 +433,7 @@ void game_init(void)
 					},
 				});
 			}
+#endif
 		}
 		else if (is_class(map, e, S("info_player_start")))
 		{
@@ -435,6 +441,17 @@ void game_init(void)
 		}
 	}
 #endif
+
+	//
+	// R1
+	//
+
+	r1_init(&r1);
+	r1_init_map_resources(&r1, map);
+
+	//
+	//
+	//
 
     initialized = true;
 }
@@ -446,8 +463,13 @@ fn_local r_view_index_t render_map(r_context_t *rc, camera_t *camera, map_t *map
 
     map_entity_t *worldspawn = map->worldspawn;
 
+#if 0
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);
+#else
+	int res_x = 1920;
+	int res_y = 1080;
+#endif
 
     rect2_t viewport = {
         0, 0, (float)res_x, (float)res_y,
@@ -580,8 +602,12 @@ fn_local r_view_index_t render_map(r_context_t *rc, camera_t *camera, map_t *map
 
 fn_local void render_game_ui(r_context_t *rc, world_t *world)
 {
+#if 0
     int res_x, res_y;
     render->get_resolution(&res_x, &res_y);
+#endif
+	int res_x = 1920;
+	int res_y = 1080;
 
     v2_t res = make_v2((float)res_x, (float)res_y);
 
@@ -835,6 +861,48 @@ static void game_tick(platform_io_t *io)
     }
 
 #endif // #if 1
+	
+	//
+	// R1
+	//
+
+	rhi_texture_t backbuffer = rhi_get_current_backbuffer(io->rhi_window);
+
+	const rhi_texture_desc_t *desc = rhi_get_texture_desc(backbuffer);
+
+	rect2_t viewport = {
+		.min = { 0.0f, 0.0f },
+		.max = { (float)desc->width, (float)desc->height },
+	};
+
+    r_view_t view = {0};
+    init_view_for_camera(camera, viewport, &view);
+
+    r_scene_parameters_t *scene = &view.scene;
+
+    map_entity_t *worldspawn = map->worldspawn;
+
+    float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
+    v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
+          sun_color      = mul(sun_brightness, sun_color);
+
+    scene->skybox = skybox;
+    scene->sun_direction   = normalize(make_v3(0.25f, 0.75f, 1));
+    scene->sun_color       = sun_color;
+
+    scene->fogmap          = map->fogmap;
+    scene->fog_offset      = rect3_center(map->bounds);
+    scene->fog_dim         = rect3_dim(map->bounds);
+    scene->fog_absorption  = map->fog_absorption;
+    scene->fog_density     = map->fog_density;
+    scene->fog_scattering  = map->fog_scattering;
+    scene->fog_phase_k     = map->fog_phase_k;
+
+	r1_render_map(&r1, io->rhi_command_list, io->rhi_window, &view, map);
+
+	//
+	//
+	//
 
     if (button_pressed(BUTTON_ESCAPE))
     {

@@ -465,9 +465,12 @@ static void lum_job(job_context_t *job_context, void *userdata)
 
     if (RESOURCE_HANDLE_VALID(poly->lightmap))
     {
+#if 0
         render->destroy_texture(poly->lightmap);
+#endif
     }
 
+#if 0
     poly->lightmap = render->upload_texture(&(r_upload_texture_t){
         .upload_flags = R_UPLOAD_TEXTURE_GEN_MIPMAPS,
         .desc = {
@@ -480,6 +483,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
             .pixels = packed,
         },
     });
+#endif
 
 done:
 	atomic_increment_u32(&state->jobs_completed);
@@ -625,11 +629,14 @@ static void trace_volumetric_lighting_job(job_context_t *job_context, void *user
         *dst++ = (v4_t){.xyz=lighting, .w0=1.0}; // pack_r11g11b10f(lighting);
     }
 
+#if 0
     if (RESOURCE_HANDLE_VALID(map->fogmap))
     {
         render->destroy_texture(map->fogmap);
     }
+#endif
 
+#if 0
     map->fogmap = render->upload_texture(&(r_upload_texture_t) {
         .desc = {
             .type        = R_TEXTURE_TYPE_3D,
@@ -644,6 +651,7 @@ static void trace_volumetric_lighting_job(job_context_t *job_context, void *user
             .pixels      = fogmap,
         },
     });
+#endif
 
 done:
 	atomic_increment_u32(&state->jobs_completed);

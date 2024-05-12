@@ -25,6 +25,7 @@ DEFINE_HANDLE_TYPE(rhi_buffer_t);
 DEFINE_HANDLE_TYPE(rhi_texture_t);
 DEFINE_HANDLE_TYPE(rhi_pso_t);
 
+fn void rhi_resize_window(rhi_window_t window, uint32_t new_width, uint32_t new_height);
 fn rhi_texture_t rhi_get_current_backbuffer(rhi_window_t window);
 
 //
@@ -56,9 +57,10 @@ typedef enum rhi_texture_usage_t
 
 typedef enum rhi_texture_dimension_t
 {
-	RhiTextureDimension_1d = 0,
-	RhiTextureDimension_2d = 1,
-	RhiTextureDimension_3d = 2,
+	RhiTextureDimension_unknown = 0,
+	RhiTextureDimension_1d      = 1,
+	RhiTextureDimension_2d      = 2,
+	RhiTextureDimension_3d      = 3,
 } rhi_texture_dimension_t;
 
 typedef struct rhi_texture_desc_t
@@ -95,10 +97,13 @@ typedef struct rhi_create_texture_params_t
 	rhi_texture_usage_t     usage;
 	rhi_pixel_format_t      format;
 
+	v4_t                    optimized_clear_value;
+
 	rhi_texture_data_t     *initial_data;
 } rhi_create_texture_params_t;
 
 fn rhi_texture_t     rhi_create_texture         (const rhi_create_texture_params_t *params);
+fn void              rhi_destroy_texture        (rhi_texture_t handle);
 fn void              rhi_upload_texture_data    (rhi_texture_t texture, const rhi_texture_data_t *data);
 fn bool              rhi_texture_upload_complete(rhi_texture_t texture);
 fn void              rhi_wait_on_texture_upload (rhi_texture_t texture);
@@ -322,6 +327,8 @@ typedef enum rhi_winding_t
 
 typedef struct rhi_create_graphics_pso_params_t
 {
+	string_t debug_name;
+
 	rhi_shader_bytecode_t vs;
 	rhi_shader_bytecode_t ps;
 
@@ -392,10 +399,17 @@ typedef struct rhi_graphics_pass_color_attachment_t
 	v4_t          clear_color;
 } rhi_graphics_pass_color_attachment_t;
 
+typedef struct rhi_graphics_pass_depth_stencil_attachment_t
+{
+	rhi_texture_t texture;
+	rhi_pass_op_t op;
+	float         clear_value;
+} rhi_graphics_pass_depth_stencil_attachment_t;
+
 typedef struct rhi_graphics_pass_params_t
 {
 	rhi_graphics_pass_color_attachment_t render_targets[RhiMaxRenderTargetCount];
-	rhi_texture_t depth_stencil;
+	rhi_graphics_pass_depth_stencil_attachment_t depth_stencil;
 
 	rhi_primitive_topology_t topology;
 	rhi_viewport_t           viewport;
@@ -409,6 +423,7 @@ fn rhi_command_list_t *rhi_get_command_list   (void);
 fn void                rhi_graphics_pass_begin(rhi_command_list_t *list, const rhi_graphics_pass_params_t *params);
 fn void                rhi_set_pso            (rhi_command_list_t *list, rhi_pso_t pso);
 fn void                rhi_draw               (rhi_command_list_t *list, uint32_t vertex_count);
+fn void                rhi_draw_indexed       (rhi_command_list_t *list, rhi_buffer_t index_buffer_handle, uint32_t index_count, uint32_t start_index);
 fn void                rhi_graphics_pass_end  (rhi_command_list_t *list);
 fn void                rhi_end_frame          (void);
 

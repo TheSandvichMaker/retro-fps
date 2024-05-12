@@ -4,6 +4,10 @@
 
 #pragma once
 
+#define DF_USE_RHI_ABSTRACTION 1
+
+#include "rhi/rhi_api.h"
+
 typedef uint32_t platform_mouse_buttons_t;
 typedef enum platform_mouse_button_enum_t
 {
@@ -294,6 +298,11 @@ typedef struct platform_io_t
 	bool has_focus;
 
 	float dt;
+
+#if DF_USE_RHI_ABSTRACTION
+	rhi_window_t        rhi_window;
+	rhi_command_list_t *rhi_command_list;
+#endif
 
     r_command_buffer_t *r_commands;
 

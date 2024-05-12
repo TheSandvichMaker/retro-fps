@@ -34,6 +34,8 @@ typedef struct rhi_command_list_t
 {
 	ID3D12GraphicsCommandList *d3d;
 
+	rhi_buffer_t index_buffer;
+
 	uint32_t render_target_count;
 	rhi_texture_t render_targets[8];
 } rhi_command_list_t;
@@ -43,10 +45,7 @@ typedef struct d3d12_frame_state_t
 	ID3D12CommandAllocator *direct_command_allocator;
 	rhi_command_list_t direct_command_list;
 
-	ID3D12CommandAllocator *copy_command_allocator;
-	ID3D12GraphicsCommandList *copy_command_list;
-
-	uint32_t fence_value;
+	uint64_t fence_value;
 
 	d3d12_buffer_arena_t upload_arena;
 } d3d12_frame_state_t;
@@ -68,7 +67,6 @@ typedef struct rhi_state_d3d12_t
 	HANDLE       fence_event;
 
 	ID3D12CommandQueue *direct_command_queue;
-	ID3D12CommandQueue *copy_command_queue;
 
 	d3d12_upload_ring_buffer_t upload_ring_buffer;
 
@@ -81,6 +79,8 @@ typedef struct rhi_state_d3d12_t
 	d3d12_descriptor_heap_t cbv_srv_uav;
 	d3d12_descriptor_heap_t rtv;
 	d3d12_descriptor_heap_t dsv;
+
+	d3d12_deferred_release_queue_t deferred_release_queue;
 
 	pool_t windows;
 	pool_t buffers;
@@ -118,6 +118,9 @@ typedef struct d3d12_buffer_t
 	d3d12_descriptor_t srv;
 	d3d12_descriptor_t uav;
 
+	D3D12_GPU_VIRTUAL_ADDRESS gpu_address;
+	uint64_t size;
+
 	uint64_t upload_fence_value;
 } d3d12_buffer_t;
 
@@ -143,3 +146,4 @@ typedef struct d3d12_pso_t
 
 fn bool         rhi_init_d3d12(const rhi_init_params_d3d12_t *params);
 fn rhi_window_t rhi_init_window_d3d12(HWND hwnd);
+fn void         d3d12_flush_direct_command_queue(void);
