@@ -6,7 +6,8 @@
 
 typedef enum log_level_t
 {
-	LogLevel_Info    = 1,
+	LogLevel_Spam    = 1,
+	LogLevel_Info    = 2,
 	LogLevel_Warning = 7,
 	LogLevel_Error   = 10,
 } log_level_t;

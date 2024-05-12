@@ -67,7 +67,12 @@ fn_local void *atomic_cas_ptr(void_t volatile *destination, void *exchange, void
     return (void *)_InterlockedCompareExchange64((int64_t volatile *)destination, (intptr_t)exchange, (intptr_t)comparand);
 }
 
-fn_local int64_t atomic_exchange64(int64_t volatile *target, int64_t value)
+fn_local uint64_t atomic_exchange_u64(uint64_t volatile *target, uint64_t value)
+{
+    return (uint64_t)_InterlockedExchange64((int64_t volatile *)target, (int64_t)value);
+}
+
+fn_local int64_t atomic_exchange_i64(int64_t volatile *target, int64_t value)
 {
     return _InterlockedExchange64(target, value);
 }
@@ -96,6 +101,26 @@ fn_local uint32_t atomic_or_u32(uint32_t volatile *target, uint32_t value)
 {
 	uint32_t result = _InterlockedOr((long volatile *)target, (long)value);
 	return result;
+}
+
+fn_local uint32_t atomic_load_u32(uint32_t volatile *target)
+{
+	return *target;
+}
+
+fn_local void atomic_store_u32(uint32_t volatile *target, uint32_t value)
+{
+	*target = value;
+}
+
+fn_local uint64_t atomic_load_u64(uint64_t volatile *target)
+{
+	return *target;
+}
+
+fn_local void atomic_store_u64(uint64_t volatile *target, uint64_t value)
+{
+	*target = value;
 }
 
 #define COMPILER_BARRIER _ReadWriteBarrier()

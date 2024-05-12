@@ -40,4 +40,4 @@ typedef struct d3d12_upload_context_t
 
 fn bool                   d3d12_upload_ring_buffer_init(ID3D12Device *device, d3d12_upload_ring_buffer_t *ring_buffer);
 fn d3d12_upload_context_t d3d12_upload_begin(size_t size, size_t align);
-fn void                   d3d12_upload_end  (const d3d12_upload_context_t *ctx);
+fn uint64_t               d3d12_upload_end  (const d3d12_upload_context_t *ctx);

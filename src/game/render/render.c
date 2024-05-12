@@ -7,9 +7,9 @@ typedef enum r_parameter_slot_t
 
 typedef struct map_pass_parameters_t
 {
-	rhi_buffer_srv_t positions;
-	rhi_buffer_srv_t uvs;
-	rhi_buffer_srv_t lightmap_uvs;
+	alignas(16) rhi_buffer_srv_t positions;
+	alignas(16) rhi_buffer_srv_t uvs;
+	alignas(16) rhi_buffer_srv_t lightmap_uvs;
 } map_pass_parameters_t;
 
 typedef struct renderer_t

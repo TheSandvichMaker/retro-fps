@@ -22,15 +22,26 @@ d3d12_buffer_allocation_t d3d12_arena_alloc(d3d12_buffer_arena_t *arena, uint32_
 {
 	d3d12_buffer_allocation_t result = { 0 };
 
-	// Assuming a large enough base alignment
-	uint32_t at_aligned = align_forward(arena->at, alignment);
+	uint32_t at;
+	uint32_t at_aligned;
+
+	for (;;)
+	{
+		// TODO: The only reason why this is a CAS loop is because of the align - I could think of ways around that
+		// I could also just have an allocator per thread, but...
+		at         = atomic_load_u32(&arena->at);
+		at_aligned = align_forward(arena->at, alignment);
+
+		if (atomic_cas_u32(&arena->at, at_aligned + size, at) == at)
+		{
+			break;
+		}
+	}
 
 	if (ALWAYS(at_aligned + size <= arena->capacity))
 	{
 		result.cpu = arena->cpu_base + at_aligned;
 		result.gpu = arena->gpu_base + at_aligned;
-
-		arena->at = at_aligned + size;
 	}
 
 	return result;

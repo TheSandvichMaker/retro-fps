@@ -623,6 +623,12 @@ fn_local void d3d12_upload_texture_data(d3d12_texture_t *texture, const rhi_text
 	D3D12_PLACED_SUBRESOURCE_FOOTPRINT dst_layout;
 	ID3D12Device_GetCopyableFootprints(g_rhi.device, &d3d_desc, 0, 1, 0, &dst_layout, NULL, NULL, &dst_size);
 
+	m_scoped_temp
+	{
+		string_t debug_name = d3d12_get_debug_name(temp, (ID3D12Object *)texture->resource);
+		log(RHI_D3D12, Spam, "Uploading texture data for texture '%.*s'", Sx(debug_name));
+	}
+
 	d3d12_upload_context_t ctx = d3d12_upload_begin(dst_size, 512);
 
 	uint8_t *src = data->subresource[0];
@@ -630,7 +636,7 @@ fn_local void d3d12_upload_texture_data(d3d12_texture_t *texture, const rhi_text
 
 	size_t src_stride  = data->row_stride;
 	size_t dst_stride  = dst_layout.Footprint.RowPitch;
-	size_t copy_stride = MIN(src_stride, dst_stride); // TODO: should really be texture width times bytes per pixel but cba right now
+	size_t copy_stride = MIN(src_stride, dst_stride); // TODO: should really be texture width times bytes per pixel
 
 	for (size_t y = 0; y < texture->desc.height; y++)
 	{
@@ -661,6 +667,15 @@ fn_local void d3d12_upload_texture_data(d3d12_texture_t *texture, const rhi_text
 		},
 	};
 
+	{
+		D3D12_RESOURCE_BARRIER barrier;
+
+		if (d3d12_transition_state(texture->resource, &texture->state, D3D12_RESOURCE_STATE_COPY_DEST, &barrier))
+		{
+			ID3D12GraphicsCommandList_ResourceBarrier(ctx.command_list, 1, &barrier);
+		}
+	}
+
 	ID3D12GraphicsCommandList_CopyTextureRegion(ctx.command_list, &dst_loc, 0, 0, 0, &src_loc, NULL);
 
 	{
@@ -670,7 +685,7 @@ fn_local void d3d12_upload_texture_data(d3d12_texture_t *texture, const rhi_text
 		ID3D12GraphicsCommandList_ResourceBarrier(ctx.command_list, 1, &barrier);
 	}
 
-	d3d12_upload_end(&ctx);
+	texture->upload_fence_value = d3d12_upload_end(&ctx);
 }
 
 void rhi_upload_texture_data(rhi_texture_t handle, const rhi_texture_data_t *data)
@@ -679,6 +694,23 @@ void rhi_upload_texture_data(rhi_texture_t handle, const rhi_texture_data_t *dat
 	ASSERT_MSG(texture, "Invalid texture!");
 
 	d3d12_upload_texture_data(texture, data);
+}
+
+bool rhi_texture_upload_complete(rhi_texture_t handle)
+{
+	d3d12_texture_t *texture = pool_get(&g_rhi.textures, handle);
+	ASSERT_MSG(texture, "Invalid texture!");
+
+	uint64_t fence_value = ID3D12Fence_GetCompletedValue(g_rhi.upload_ring_buffer.fence);
+	return texture->upload_fence_value <= fence_value;
+}
+
+void rhi_wait_on_texture_upload(rhi_texture_t handle)
+{
+	d3d12_texture_t *texture = pool_get(&g_rhi.textures, handle);
+	ASSERT_MSG(texture, "Invalid texture!");
+
+	ID3D12Fence_SetEventOnCompletion(g_rhi.upload_ring_buffer.fence, texture->upload_fence_value, NULL);
 }
 
 rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
@@ -794,49 +826,124 @@ rhi_texture_srv_t rhi_get_texture_srv(rhi_texture_t handle)
 	return result;
 }
 
+fn_local void d3d12_upload_buffer_data(d3d12_buffer_t *buffer, uint64_t dst_offset, const rhi_buffer_data_t *data)
+{
+	m_scoped_temp
+	{
+		string_t debug_name = d3d12_get_debug_name(temp, (ID3D12Object *)buffer->resource);
+		log(RHI_D3D12, Spam, "Uploading data for buffer '%.*s'", Sx(debug_name));
+	}
+
+	d3d12_upload_context_t ctx = d3d12_upload_begin(data->size, 256);
+
+	{
+		D3D12_RESOURCE_BARRIER barrier;
+
+		if (d3d12_transition_state(buffer->resource, &buffer->state, D3D12_RESOURCE_STATE_COPY_DEST, &barrier))
+		{
+			ID3D12GraphicsCommandList_ResourceBarrier(ctx.command_list, 1, &barrier);
+		}
+	}
+
+	memcpy(ctx.pointer, data->ptr, data->size);
+	ID3D12GraphicsCommandList_CopyBufferRegion(ctx.command_list, 
+											   buffer->resource, 
+											   dst_offset, 
+											   ctx.buffer, 
+											   ctx.offset, 
+											   data->size);
+
+	{
+		D3D12_RESOURCE_BARRIER barrier;
+
+		ASSERT(d3d12_transition_state(buffer->resource, &buffer->state, D3D12_RESOURCE_STATE_COMMON, &barrier));
+		ID3D12GraphicsCommandList_ResourceBarrier(ctx.command_list, 1, &barrier);
+	}
+
+	buffer->upload_fence_value = d3d12_upload_end(&ctx);
+}
+
+void rhi_upload_buffer_data(rhi_buffer_t handle, size_t dst_offset, const rhi_buffer_data_t *src)
+{
+	d3d12_buffer_t *buffer = pool_get(&g_rhi.buffers, handle);
+	ASSERT_MSG(buffer, "Invalid buffer!");
+
+	d3d12_upload_buffer_data(buffer, dst_offset, src);
+}
+
 rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 {
 	ASSERT_MSG(params, "Called rhi_create_buffer without any parameters!");
 
 	rhi_buffer_t result = {0};
 
-	d3d12_buffer_t *buffer = pool_add(&g_rhi.buffers);
-	result = CAST_HANDLE(rhi_buffer_t, pool_get_handle(&g_rhi.buffers, buffer));
-
 	m_scoped_temp
 	{
-		buffer->resource = d3d12_create_upload_buffer(g_rhi.device, params->size, NULL, params->debug_name);
+		D3D12_HEAP_PROPERTIES heap_properties = {
+			.Type = D3D12_HEAP_TYPE_DEFAULT,
+		};
 
-		const rhi_initial_data_t *data = &params->initial_data;
+		D3D12_RESOURCE_DESC desc = {
+			.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER,
+			.Width            = params->size,
+			.Height           = 1,
+			.DepthOrArraySize = 1,
+			.MipLevels        = 1,
+			.SampleDesc       = { .Count = 1, .Quality = 0 },
+			.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+			.Format           = DXGI_FORMAT_UNKNOWN,
+		};
 
-		if (data->ptr && ALWAYS(data->offset + data->size <= params->size))
+		ID3D12Resource *resource;
+		HRESULT hr = ID3D12Device_CreateCommittedResource(g_rhi.device,
+														  &heap_properties,
+														  D3D12_HEAP_FLAG_NONE,
+														  &desc,
+														  D3D12_RESOURCE_STATE_COMMON,
+														  NULL,
+														  &IID_ID3D12Resource,
+														  &resource);
+		if (SUCCEEDED(hr))
 		{
-			char *mapped = NULL;
+			d3d12_buffer_t *buffer = pool_add(&g_rhi.buffers);
+			result = CAST_HANDLE(rhi_buffer_t, pool_get_handle(&g_rhi.buffers, buffer));
 
-			// TODO: error handling...
-			ID3D12Resource_Map(buffer->resource, 0, &(D3D12_RANGE){ 0 }, (void **)&mapped);
-			memcpy(mapped + data->offset, data->ptr, data->size);
-			ID3D12Resource_Unmap(buffer->resource, 0, NULL);
-		}
-	}
+			buffer->resource = resource;
 
-	if (params->srv)
-	{
-		d3d12_descriptor_t descriptor = d3d12_allocate_descriptor_persistent(&g_rhi.cbv_srv_uav);
-		buffer->srv = descriptor;
+			d3d12_set_debug_name((ID3D12Object *)buffer->resource, params->debug_name);
 
-		{
-			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
-				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-				.ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
-				.Buffer = {
-					.FirstElement        = params->srv->first_element,
-					.NumElements         = params->srv->element_count,
-					.StructureByteStride = params->srv->element_stride,
-				},
-			};
+			if (params->srv)
+			{
+				d3d12_descriptor_t descriptor = d3d12_allocate_descriptor_persistent(&g_rhi.cbv_srv_uav);
+				buffer->srv = descriptor;
 
-			ID3D12Device_CreateShaderResourceView(g_rhi.device, buffer->resource, &desc, descriptor.cpu);
+				{
+					D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
+						.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+						.ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
+						.Buffer = {
+							.FirstElement        = params->srv->first_element,
+							.NumElements         = params->srv->element_count,
+							.StructureByteStride = params->srv->element_stride,
+							.Flags = params->srv->raw ? D3D12_BUFFER_SRV_FLAG_RAW : D3D12_BUFFER_SRV_FLAG_NONE,
+						},
+					};
+
+					ID3D12Device_CreateShaderResourceView(g_rhi.device, buffer->resource, &desc, descriptor.cpu);
+				}
+			}
+
+			const rhi_buffer_data_t *data = &params->initial_data;
+
+			if (data->ptr && ALWAYS(data->size <= params->size))
+			{
+				// Lying about the initial state because I can't set the initial state on the buffer without triggering a
+				// debug layer warning about the initial state being ignored because it's assumed on first use... Ok... That
+				// really makes it easier to do the manual state tracking as the user, for the state to just be ~whatever~ based
+				// on what you do with the resource!
+				buffer->state = D3D12_RESOURCE_STATE_COPY_DEST;
+				d3d12_upload_buffer_data(buffer, 0, &params->initial_data);
+			}
 		}
 	}
 
@@ -1125,16 +1232,6 @@ void rhi_set_pso(rhi_command_list_t *list, rhi_pso_t pso_handle)
 	}
 }
 
-void *rhi_allocate_parameters_(rhi_command_list_t *list, uint32_t size)
-{
-	(void)list;
-
-	d3d12_frame_state_t *frame = d3d12_get_frame_state(g_rhi.frame_index);
-
-	d3d12_buffer_allocation_t parameters = d3d12_arena_alloc(&frame->upload_arena, size, 256);
-	return parameters.cpu;
-}
-
 void rhi_set_parameters(rhi_command_list_t *list, uint32_t slot, void *parameters, uint32_t size)
 {
 	ASSERT(slot <= 3);
@@ -1237,7 +1334,7 @@ rhi_shader_bytecode_t rhi_compile_shader(arena_t *arena, string_t shader_source,
 
 		if (error && ID3D10Blob_GetBufferSize(error) > 0)
 		{
-			const char* message = ID3D10Blob_GetBufferPointer(error);
+			const char *message = ID3D10Blob_GetBufferPointer(error);
 
 			bool is_fatal = FAILED(hr); 
 			string_t formatted_message = string_format(temp, "Shader compilation %s for '%.*s:%.*s' (%.*s):\n%s", 

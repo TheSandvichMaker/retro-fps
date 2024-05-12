@@ -5,13 +5,13 @@ struct PassParameters
 	df::Resource< StructuredBuffer<float3> > positions;
 	df::Resource< StructuredBuffer<float4> > colors;
 	df::Resource< StructuredBuffer<float2> > uvs;
-	df::Resource< Texture2D >                albedo;
 };
 
 struct ShaderParameters
 {
 	float4 offset;
 	float4 color;
+	df::Resource< Texture2D > albedo;
 };
 
 ConstantBuffer<PassParameters>   pass       : register(b1);
@@ -39,6 +39,6 @@ VS_OUT MainVS(uint vertex_index : SV_VertexID)
 
 float4 MainPS(VS_OUT IN) : SV_Target
 {
-	float4 albedo = pass.albedo.Get().SampleLevel(df::s_linear_wrap, IN.uv, 0.0);
-	return albedo * IN.color;
+	float4 albedo = parameters.albedo.Get().SampleLevel(df::s_linear_wrap, IN.uv, 0.0);
+	return albedo;// * IN.color;
 }

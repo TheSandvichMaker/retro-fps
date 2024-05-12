@@ -108,6 +108,8 @@ typedef struct d3d12_window_t
 	rhi_texture_t    frame_buffers[3];
 } d3d12_window_t;
 
+// TODO: Deduplicate between buffer and texture?
+
 typedef struct d3d12_buffer_t
 {
 	D3D12_RESOURCE_STATES state;
@@ -115,6 +117,8 @@ typedef struct d3d12_buffer_t
 	ID3D12Resource *resource;
 	d3d12_descriptor_t srv;
 	d3d12_descriptor_t uav;
+
+	uint64_t upload_fence_value;
 } d3d12_buffer_t;
 
 typedef struct d3d12_texture_t
@@ -126,6 +130,8 @@ typedef struct d3d12_texture_t
 	d3d12_descriptor_t uav;
 	d3d12_descriptor_t rtv;
 	d3d12_descriptor_t dsv;
+
+	uint64_t upload_fence_value;
 
 	rhi_texture_desc_t desc;
 } d3d12_texture_t;

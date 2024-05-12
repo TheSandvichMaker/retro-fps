@@ -98,16 +98,17 @@ typedef struct rhi_create_texture_params_t
 	rhi_texture_data_t     *initial_data;
 } rhi_create_texture_params_t;
 
-fn rhi_texture_t     rhi_create_texture     (const rhi_create_texture_params_t *params);
-fn void              rhi_upload_texture_data(rhi_texture_t texture, const rhi_texture_data_t *data);
-fn rhi_texture_srv_t rhi_get_texture_srv    (rhi_texture_t texture);
+fn rhi_texture_t     rhi_create_texture         (const rhi_create_texture_params_t *params);
+fn void              rhi_upload_texture_data    (rhi_texture_t texture, const rhi_texture_data_t *data);
+fn bool              rhi_texture_upload_complete(rhi_texture_t texture);
+fn void              rhi_wait_on_texture_upload (rhi_texture_t texture);
+fn rhi_texture_srv_t rhi_get_texture_srv        (rhi_texture_t texture);
 
-typedef struct rhi_initial_data_t
+typedef struct rhi_buffer_data_t
 {
 	void     *ptr;
-	uint32_t  offset;
-	uint32_t  size;
-} rhi_initial_data_t;
+	uint64_t  size;
+} rhi_buffer_data_t;
 
 typedef struct rhi_create_buffer_srv_params_t
 {
@@ -121,13 +122,14 @@ typedef struct rhi_create_buffer_params_t
 {
 	string_t           debug_name;
 	uint32_t           size;
-	rhi_initial_data_t initial_data;
+	rhi_buffer_data_t  initial_data;
 
 	rhi_create_buffer_srv_params_t *srv;
 } rhi_create_buffer_params_t;
 
-fn rhi_buffer_t     rhi_create_buffer    (const rhi_create_buffer_params_t *params);
-fn rhi_buffer_srv_t rhi_create_buffer_srv(rhi_buffer_t buffer, const rhi_create_buffer_srv_params_t *params);
+fn rhi_buffer_t     rhi_create_buffer(const rhi_create_buffer_params_t *params);
+fn void             rhi_upload_buffer_data(rhi_buffer_t buffer, size_t dst_offset, const rhi_buffer_data_t *src);
+fn rhi_buffer_srv_t rhi_get_buffer_srv(rhi_buffer_t buffer);
 
 typedef struct rhi_shader_bytecode_t
 {
@@ -400,9 +402,6 @@ typedef struct rhi_graphics_pass_params_t
 	rect2i_t                 scissor_rect;
 } rhi_graphics_pass_params_t;
 
-fn void *rhi_allocate_parameters_(rhi_command_list_t *list, uint32_t size);
-#define  rhi_allocate_parameters(list, type) rhi_allocate_parameters_(list, sizeof(type))
-
 fn void rhi_set_parameters(rhi_command_list_t *list, uint32_t slot, void *parameters, uint32_t size);
 
 fn void                rhi_begin_frame        (void);
@@ -412,3 +411,26 @@ fn void                rhi_set_pso            (rhi_command_list_t *list, rhi_pso
 fn void                rhi_draw               (rhi_command_list_t *list, uint32_t vertex_count);
 fn void                rhi_graphics_pass_end  (rhi_command_list_t *list);
 fn void                rhi_end_frame          (void);
+
+fn_local void rhi_simple_graphics_pass_begin(rhi_command_list_t *list, 
+											 rhi_texture_t render_target,
+											 rhi_texture_t depth_stencil,
+											 rhi_primitive_topology_t topology)
+{
+	const rhi_texture_desc_t *rt_desc = rhi_get_texture_desc(render_target);
+
+	rhi_graphics_pass_begin(list, &(rhi_graphics_pass_params_t){
+		.render_targets[0] = { .texture = render_target, },
+		.depth_stencil     = depth_stencil,
+		.topology          = topology,
+		.viewport = {
+			.width  = (float)rt_desc->width,
+			.height = (float)rt_desc->height,
+			.min_depth = 0.0f,
+			.max_depth = 1.0f,
+		},
+		.scissor_rect = {
+			.max = { (int32_t)rt_desc->width, (int32_t)rt_desc->height },
+		},
+	});
+}

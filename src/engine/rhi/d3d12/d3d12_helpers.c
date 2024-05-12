@@ -51,3 +51,26 @@ void d3d12_set_debug_name(ID3D12Object *object, string_t name)
 		ID3D12Object_SetName(object, wide.data);
 	}
 }
+
+string_t d3d12_get_debug_name(arena_t *arena, ID3D12Object *object)
+{
+	UINT size = 0;
+	ID3D12Object_GetPrivateData(object, &WKPDID_D3DDebugObjectNameW, &size, NULL);
+
+	string_t result = S("<no debug name set>");
+
+	if (size > 0)
+	{
+		wchar_t *data = m_alloc_nozero(arena, size, 16);
+		ID3D12Object_GetPrivateData(object, &WKPDID_D3DDebugObjectNameW, &size, data);
+
+		string16_t name_wide = {
+			.data  = data,
+			.count = size / sizeof(wchar_t),
+		};
+
+		result = utf8_from_utf16(arena, name_wide);
+	}
+
+	return result;
+}

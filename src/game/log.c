@@ -3,8 +3,8 @@
 // ============================================================
 
 string_t log_level_to_string[] = {
+	[LogLevel_Spam]    = Sc("Spam"),
 	[LogLevel_Info]    = Sc("Info"),
-
 	[LogLevel_Warning] = Sc("Warning"),
 	[LogLevel_Error]   = Sc("Error"),
 };
