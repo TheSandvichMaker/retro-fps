@@ -9,7 +9,7 @@ fn D3D12_LOGIC_OP                to_d3d12_logic_op               (rhi_logic_op_t
 fn D3D12_PRIMITIVE_TOPOLOGY      to_d3d12_primitive_topology     (rhi_primitive_topology_t      topology);
 fn D3D12_PRIMITIVE_TOPOLOGY_TYPE to_d3d12_primitive_topology_type(rhi_primitive_topology_type_t type);
 fn D3D12_STENCIL_OP              to_d3d12_stencil_op             (rhi_stencil_op_t              op);
-fn DXGI_FORMAT                   to_dxgi_format                  (rhi_pixel_format_t            pf);
+fn DXGI_FORMAT                   to_dxgi_format                  (pixel_format_t                pf);
 
 fn rhi_fill_mode_t               from_d3d12_fill_mode            (D3D12_FILL_MODE               mode);
 fn rhi_cull_mode_t               from_d3d12_cull_mode            (D3D12_CULL_MODE               mode);
@@ -20,4 +20,4 @@ fn rhi_logic_op_t                from_d3d12_logic_op             (D3D12_LOGIC_OP
 fn rhi_primitive_topology_t      from_d3d12_primitive_topology   (D3D12_PRIMITIVE_TOPOLOGY      topology);
 fn rhi_primitive_topology_type_t from_d3d12_primitive_topology_ty(D3D12_PRIMITIVE_TOPOLOGY_TYPE type);
 fn rhi_stencil_op_t              from_d3d12_stencil_op           (D3D12_STENCIL_OP              op);
-fn rhi_pixel_format_t            from_dxgi_format                (DXGI_FORMAT                   pf);
+fn pixel_format_t                from_dxgi_format                (DXGI_FORMAT                   pf);

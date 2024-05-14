@@ -70,7 +70,7 @@ typedef struct rhi_texture_desc_t
 	uint32_t                height;
 	uint32_t                depth;
 	uint32_t                mip_levels;
-	rhi_pixel_format_t      format;
+	pixel_format_t          format;
 	uint32_t                sample_count;
 	rhi_texture_usage_t     usage_flags;
 } rhi_texture_desc_t;
@@ -79,7 +79,7 @@ fn const rhi_texture_desc_t *rhi_get_texture_desc(rhi_texture_t texture);
 
 typedef struct rhi_texture_data_t
 {
-	void    **subresource;
+	void    **subresources;
 	uint32_t  subresource_count, offset;
 	uint32_t  row_stride, slice_stride;
 } rhi_texture_data_t;
@@ -95,7 +95,7 @@ typedef struct rhi_create_texture_params_t
 	uint32_t                mip_levels;
 
 	rhi_texture_usage_t     usage;
-	rhi_pixel_format_t      format;
+	pixel_format_t          format;
 
 	v4_t                    optimized_clear_value;
 
@@ -366,8 +366,8 @@ typedef struct rhi_create_graphics_pso_params_t
 	rhi_primitive_topology_type_t primitive_topology_type;
 
 	uint32_t           render_target_count;
-	rhi_pixel_format_t rtv_formats[RhiMaxRenderTargetCount];
-	rhi_pixel_format_t dsv_format;
+	pixel_format_t     rtv_formats[RhiMaxRenderTargetCount];
+	pixel_format_t     dsv_format;
 
 	uint32_t           multisample_count;
 	uint32_t           multisample_quality;

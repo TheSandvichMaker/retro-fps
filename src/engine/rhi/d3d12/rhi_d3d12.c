@@ -628,7 +628,7 @@ const rhi_texture_desc_t *rhi_get_texture_desc(rhi_texture_t handle)
 
 fn_local void d3d12_upload_texture_data(d3d12_texture_t *texture, const rhi_texture_data_t *data)
 {
-	ASSERT(data->subresource);
+	ASSERT(data->subresources);
 	ASSERT(data->subresource_count <= 1);
 
 	// TODO: Mipmaps upload
@@ -651,7 +651,7 @@ fn_local void d3d12_upload_texture_data(d3d12_texture_t *texture, const rhi_text
 
 	d3d12_upload_context_t ctx = d3d12_upload_begin(dst_size, 512);
 
-	uint8_t *src = data->subresource[0];
+	uint8_t *src = data->subresources[0];
 	uint8_t *dst = ctx.pointer;
 
 	size_t src_stride  = data->row_stride;
@@ -775,6 +775,8 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 			.Color  = { params->optimized_clear_value.x, params->optimized_clear_value.y, params->optimized_clear_value.z, params->optimized_clear_value.w },
 		};
 
+		bool wants_clear_value = (params->usage & (RhiTextureUsage_render_target|RhiTextureUsage_depth_stencil));
+
 		HRESULT hr = ID3D12Device_CreateCommittedResource(
 			g_rhi.device,
 			(&(D3D12_HEAP_PROPERTIES){
@@ -793,7 +795,7 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 				.SampleDesc       = { .Count = 1 },
 			}),
 			initial_state,
-			&clear_value,
+			wants_clear_value ? &clear_value : NULL,
 			&IID_ID3D12Resource,
 			&resource);
 
@@ -834,7 +836,7 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 				ID3D12Device_CreateShaderResourceView(g_rhi.device, texture->resource, NULL, texture->srv.cpu);
 			}
 
-			rhi_texture_data_t *const initial_data = params->initial_data;
+			rhi_texture_data_t *initial_data = params->initial_data;
 
 			if (initial_data)
 			{
@@ -842,6 +844,8 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 			}
 
 			result = CAST_HANDLE(rhi_texture_t, pool_get_handle(&g_rhi.textures, texture));
+
+			log(RHI_D3D12, Spam, "Added new texture '%.*s' (index: %u, generation: %u)", Sx(params->debug_name), result.index, result.generation);
 		}
 	}
 

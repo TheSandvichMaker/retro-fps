@@ -52,6 +52,8 @@ typedef struct asset_slot_t
 
 	// for the time being, every single asset slot gets its own arena:
 	arena_t arena;
+	// but that's not very sustainable long term...
+
 	mutex_t mutex; // this is only used for sanity checking the threading, it shouldn't ever be contended
 
 	asset_hash_t hash;
@@ -62,7 +64,7 @@ typedef struct asset_slot_t
 	// asset_node_t *latest;
 	union
 	{
-		image_t image;
+		asset_image_t image;
 		waveform_t waveform;
 	};
 } asset_slot_t;
@@ -84,8 +86,8 @@ fn_local void asset__update_slot(asset_slot_t *slot, void *asset_blob)
 }
 #endif
 
-image_t    missing_image;
-waveform_t missing_waveform;
+asset_image_t missing_image;
+waveform_t    missing_waveform;
 
 static arena_t        asset_arena;
 static pool_t         asset_store = INIT_POOL(asset_slot_t);
@@ -138,6 +140,32 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 			{
 				case AssetKind_image:
 				{
+					image_t image = load_image_from_disk(&asset->arena, string_from_storage(asset->path), 4);
+
+					asset->image.w         = image.info.w;
+					asset->image.h         = image.info.h;
+					asset->image.format    = PixelFormat_r8g8b8a8_unorm,
+					asset->image.mip_count = 1;
+					asset->image.mips[0]   = (image_mip_t){
+						.w     = image.info.w,
+						.h     = image.info.h,
+						.pitch = image.pitch,
+					};
+
+					asset->image.rhi_texture = rhi_create_texture(&(rhi_create_texture_params_t){
+						.debug_name = string_from_storage(asset->path),
+						.dimension  = RhiTextureDimension_2d,
+						.width      = image.info.w,
+						.height     = image.info.h,
+						.depth      = 1,
+						.mip_levels = 1,
+						.format     = PixelFormat_r8g8b8a8_unorm,
+						.initial_data = &(rhi_texture_data_t){
+							.subresources      = &image.pixels,
+							.subresource_count = 1,
+							.row_stride        = image.pitch,
+						},
+					});
 #if 0
 					asset->image = load_image_from_disk(&asset->arena, string_from_storage(asset->path), 4);
 					asset->image.renderer_handle = render->upload_texture(&(r_upload_texture_t){
@@ -191,7 +219,8 @@ static void preload_asset_info(asset_slot_t *asset)
 	{
 		case AssetKind_image:
 		{
-			image_info_t *info = &asset->image.info;
+			// image_info_t *info = &asset->image.image.info;
+			asset_image_t *image = &asset->image;
 
 			m_scoped_temp
 			{
@@ -202,9 +231,9 @@ static void preload_asset_info(asset_slot_t *asset)
 				int x, y, comp;
 				if (stbi_info(string_null_terminate(temp, path).data, &x, &y, &comp))
 				{
-					info->w             = (uint32_t)x;
-					info->h             = (uint32_t)y;
-					info->channel_count = (uint32_t)comp;
+					image->w             = (uint32_t)x;
+					image->h             = (uint32_t)y;
+					// image->channel_count = (uint32_t)comp;
 				}
 			}
 		} break;
@@ -408,12 +437,12 @@ void reload_asset(asset_hash_t hash)
 	}
 }
 
-image_t *get_image(asset_hash_t hash)
+asset_image_t *get_image(asset_hash_t hash)
 {
-	image_t *result = &missing_image;
+	asset_image_t *result = &missing_image;
 
 	asset_slot_t *asset = get_or_load_asset_async(hash, AssetKind_image);
-	if (asset)
+	if (asset && (asset->state & AssetState_resident))
 	{
 		result = &asset->image;
 	}
@@ -421,23 +450,25 @@ image_t *get_image(asset_hash_t hash)
 	return result;
 }
 
-image_info_t *get_image_info(asset_hash_t hash)
+image_info_t get_image_info(asset_hash_t hash)
 {
-	image_info_t *result = &missing_image.info;
+	image_info_t result = {0};
 
 	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
 	if (asset && asset->kind == AssetKind_image)
 	{
-		result = &asset->image.info;
+		result.w      = asset->image.w;
+		result.h      = asset->image.h;
+		result.format = asset->image.format;
 	}
 
 	return result;
 }
 
 
-image_t *get_image_blocking(asset_hash_t hash)
+asset_image_t *get_image_blocking(asset_hash_t hash)
 {
-	image_t *image = &missing_image;
+	asset_image_t *image = &missing_image;
 
 	asset_slot_t *asset = get_or_load_asset_blocking(hash, AssetKind_image);
 	if (asset)
@@ -506,7 +537,6 @@ image_t load_image_from_disk(arena_t *arena, string_t path, unsigned nchannels)
 		result = (image_t){
 			.info.w             = (unsigned)w,
 			.info.h             = (unsigned)h,
-			.info.channel_count = nchannels,
 			.pitch              = nchannels*w,
 			.pixels             = m_copy(arena, pixels, nchannels*w*h),
 		};

@@ -112,7 +112,7 @@ fn void rhi_api_test_triangle_init(void)
 			},
 			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
 			.render_target_count     = 1,
-			.rtv_formats[0]          = RhiPixelFormat_r8g8b8a8_unorm,
+			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm,
 		});
 	}
 
@@ -134,10 +134,10 @@ fn void rhi_api_test_triangle_init(void)
 			.width      = image.info.w,
 			.height     = image.info.h,
 
-			.format = RhiPixelFormat_r8g8b8a8_unorm,
+			.format = PixelFormat_r8g8b8a8_unorm,
 
 			.initial_data = &(rhi_texture_data_t){
-				.subresource       = &image.pixels,
+				.subresources      = &image.pixels,
 				.subresource_count = 1,
 				.row_stride        = image.pitch,
 			},

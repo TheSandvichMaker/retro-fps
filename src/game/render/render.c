@@ -20,12 +20,17 @@ typedef struct map_pass_parameters_t
 
 typedef struct map_draw_parameters_t
 {
+	rhi_texture_srv_t albedo;
+
 	v3_t     normal;
 	uint32_t vertex_offset;
 } map_draw_parameters_t;
 
 typedef struct r1_state_t
 {
+	rhi_texture_t     white_texture;
+	rhi_texture_srv_t white_texture_srv;
+
 	rhi_texture_t shadow_map;
 
 	struct
@@ -60,20 +65,36 @@ typedef struct r_view_textures_t
 
 void r1_init(r1_state_t *r1)
 {
+	uint32_t white_pixel = 0xFFFFFFFF;
+
+	r1->white_texture = rhi_create_texture(&(rhi_create_texture_params_t){
+		.dimension = RhiTextureDimension_2d,
+		.width     = 1,
+		.height    = 1,
+		.format    = PixelFormat_r8g8b8a8_unorm,
+		.initial_data = &(rhi_texture_data_t){
+			.subresources      = (uint32_t *[]) { &white_pixel },
+			.subresource_count = 1,
+			.row_stride        = sizeof(white_pixel),
+		},
+	});
+
+	r1->white_texture_srv = rhi_get_texture_srv(r1->white_texture);
+
 	r1->shadow_map = rhi_create_texture(&(rhi_create_texture_params_t){
 		.dimension = RhiTextureDimension_2d,
 		.width     = 1024,
 		.height    = 1024,
 		.usage     = RhiTextureUsage_depth_stencil|RhiTextureUsage_deny_srv, // TODO: Fix the SRV situation with depth textures
-		.format    = RhiPixelFormat_d24_unorm_s8_uint,
+		.format    = PixelFormat_d24_unorm_s8_uint,
 	});
 
 	m_scoped_temp
 	{
 		string_t source = fs_read_entire_file(temp, S("../src/shaders/bindless_draft.hlsl"));
 
-		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("bindless_map.hlsl"), S("MainVS"), S("vs_6_6"));
-		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("bindless_map.hlsl"), S("MainPS"), S("ps_6_6"));
+		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("bindless_draft.hlsl"), S("MainVS"), S("vs_6_6"));
+		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("bindless_draft.hlsl"), S("MainPS"), S("ps_6_6"));
 
 		r1->psos.map = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
 			.vs = vs,
@@ -93,8 +114,8 @@ void r1_init(r1_state_t *r1)
 			},
 			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
 			.render_target_count     = 1,
-			.rtv_formats[0]          = RhiPixelFormat_r8g8b8a8_unorm,
-			.dsv_format              = RhiPixelFormat_d24_unorm_s8_uint,
+			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm,
+			.dsv_format              = PixelFormat_d24_unorm_s8_uint,
 		});
 	}
 }
@@ -184,7 +205,7 @@ fn_local void r1_update_window_resources(r1_state_t *r1, rhi_window_t window)
 			.depth      = 1,
 			.mip_levels = 1,
 			.usage      = RhiTextureUsage_depth_stencil|RhiTextureUsage_deny_srv, // TODO: Deal with depth buffer SRVs
-			.format     = RhiPixelFormat_d24_unorm_s8_uint,
+			.format     = PixelFormat_d24_unorm_s8_uint,
 		});
 	}
 }
@@ -192,7 +213,6 @@ fn_local void r1_update_window_resources(r1_state_t *r1, rhi_window_t window)
 void r1_render_map(r1_state_t *r1, rhi_command_list_t *list, rhi_window_t window, r_view_t *view, map_t *map)
 {
 	r1_update_window_resources(r1, window);
-
 
 	m4x4_t world_to_clip = mul(view->proj_matrix, view->view_matrix);
 
@@ -245,7 +265,20 @@ void r1_render_map(r1_state_t *r1, rhi_command_list_t *list, rhi_window_t window
 		{
 			map_poly_t *poly = &map->polys[i];
 
+			rhi_texture_srv_t albedo_srv = r1->white_texture_srv;
+
+			asset_image_t *albedo = get_image(poly->texture);
+
+			if (albedo != &missing_image)
+			{
+				if (rhi_texture_upload_complete(albedo->rhi_texture))
+				{
+					albedo_srv = rhi_get_texture_srv(albedo->rhi_texture);
+				}
+			}
+
 			map_draw_parameters_t draw_parameters = {
+				.albedo        = albedo_srv,
 				.normal        = poly->normal,
 				.vertex_offset = poly->first_vertex,
 			};

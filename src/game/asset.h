@@ -21,6 +21,43 @@ typedef enum asset_kind_t
 	AssetKind_count,
 } asset_kind_t;
 
+typedef struct image_info_t
+{
+	uint32_t w;
+	uint32_t h;
+	pixel_format_t format;
+} image_info_t;
+
+typedef struct image_t
+{
+	image_info_t info;
+
+	uint32_t pitch;
+	void    *pixels;
+} image_t;
+
+typedef struct image_mip_t
+{
+	uint32_t w;
+	uint32_t h;
+	uint32_t pitch;
+	void    *pixels;
+} image_mip_t;
+
+typedef struct asset_image_t
+{
+	uint32_t w;
+	uint32_t h;
+
+	pixel_format_t format;
+
+	uint32_t    mip_count;
+	image_mip_t mips[16];
+
+	rhi_texture_t     rhi_texture;
+//	rhi_texture_srv_t rhi_texture_srv;
+} asset_image_t;
+
 typedef enum asset_state_t
 {
 	AssetState_none = 0,
@@ -45,23 +82,6 @@ fn_local asset_hash_t asset_hash_from_string(string_t string)
 	};
 	return result;
 }
-
-typedef struct image_info_t
-{
-	uint32_t w;
-	uint32_t h;
-	uint32_t channel_count;
-} image_info_t;
-
-typedef struct image_t
-{
-	image_info_t info;
-
-	uint32_t pitch;
-	void    *pixels;
-
-	texture_handle_t renderer_handle;
-} image_t;
 
 typedef struct cubemap_t
 {
@@ -107,23 +127,23 @@ fn void process_asset_changes(void);
 // modular and really shouldn't have a (direct) dependency on this specific
 // game's asset system.
 
-fn image_t    missing_image;
-fn waveform_t missing_waveform;
+fn asset_image_t missing_image;
+fn waveform_t    missing_waveform;
 
 fn bool        asset_exists          (asset_hash_t hash, asset_kind_t kind);
 fn string_t    get_asset_path_on_disk(asset_hash_t hash); 
 fn void        reload_asset          (asset_hash_t hash);
 
-fn image_t      *get_image            (asset_hash_t hash);
-fn image_info_t *get_image_info     (asset_hash_t hash);
-fn image_t      *get_missing_image    (void);
-fn waveform_t   *get_waveform         (asset_hash_t hash);
-fn image_t      *get_missing_waveform (void);
+fn asset_image_t *get_image            (asset_hash_t hash);
+fn image_info_t   get_image_info       (asset_hash_t hash);
+fn image_t       *get_missing_image    (void);
+fn waveform_t    *get_waveform         (asset_hash_t hash);
+fn waveform_t    *get_missing_waveform (void);
 
-fn image_t    *get_image_blocking   (asset_hash_t hash);
-fn waveform_t *get_waveform_blocking(asset_hash_t hash);
+fn asset_image_t *get_image_blocking   (asset_hash_t hash);
+fn waveform_t    *get_waveform_blocking(asset_hash_t hash);
 
-fn_local image_t *get_image_from_string(string_t string)
+fn_local asset_image_t *get_image_from_string(string_t string)
 {
 	return get_image(asset_hash_from_string(string));
 }

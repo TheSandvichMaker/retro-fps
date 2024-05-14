@@ -13,8 +13,8 @@ rhi_pso_t pso;
 
 void init_map_rendering_resources(map_t *map)
 {
-	color = rhi_create_texture(1920, 1080, RhiPixelFormat_r8g8b8a8, RhiTextureUsage_render_target);
-	depth = rhi_create_texture(1920, 1080, RhiPixelFormat_d24, RhiTextureUsage_depth_stencil);
+	color = rhi_create_texture(1920, 1080, PixelFormat_r8g8b8a8, RhiTextureUsage_render_target);
+	depth = rhi_create_texture(1920, 1080, PixelFormat_d24, RhiTextureUsage_depth_stencil);
 
 	size_t index_count       = map->index_count;
 	size_t index_buffer_size = sizeof(uint16_t)*index_count;

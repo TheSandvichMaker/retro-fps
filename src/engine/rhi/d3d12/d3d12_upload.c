@@ -122,21 +122,21 @@ d3d12_upload_context_t d3d12_upload_begin(size_t size, size_t align)
 
 				log(RHI_D3D12, Spam, "Could not get a free ring buffer submission, attempting to retire");
 
-				size_t next_submission_index = ring_buffer->submission_tail % ARRAY_COUNT(ring_buffer->submissions);
-				d3d12_upload_submission_t *next_submission = &ring_buffer->submissions[next_submission_index];
+				size_t retired_submission_index = ring_buffer->submission_tail % ARRAY_COUNT(ring_buffer->submissions);
+				d3d12_upload_submission_t *retired_submission = &ring_buffer->submissions[retired_submission_index];
 
 				uint64_t fence_value = ID3D12Fence_GetCompletedValue(ring_buffer->fence);
 
-				if (fence_value < next_submission->fence_value)
+				if (fence_value < retired_submission->fence_value)
 				{
-					log(RHI_D3D12, Spam, "Waiting for ring buffer submission %zu to finish", next_submission_index);
-					ID3D12Fence_SetEventOnCompletion(ring_buffer->fence, next_submission->fence_value, NULL);
+					log(RHI_D3D12, Spam, "Waiting for ring buffer submission %zu to finish", retired_submission_index);
+					ID3D12Fence_SetEventOnCompletion(ring_buffer->fence, retired_submission->fence_value, NULL);
 				}
 
-				log(RHI_D3D12, Spam, "Retired ring buffer submission %zu", next_submission_index);
+				log(RHI_D3D12, Spam, "Retired ring buffer submission %zu", retired_submission_index);
 
 				ring_buffer->submission_tail += 1;
-				ring_buffer->tail             = submission->offset + submission->size;
+				ring_buffer->tail             = retired_submission->offset + retired_submission->size;
 			}
 
 			try_count += 1;

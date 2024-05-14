@@ -1,10 +1,4 @@
-#include "bindless.hlsli"
-
-struct ViewParameters
-{
-	float4x4 world_to_clip;
-	float3   sun_direction;
-};
+#include "common.hlsli"
 
 struct PassParameters
 {
@@ -15,11 +9,12 @@ struct PassParameters
 
 struct DrawParameters
 {
+	df::Resource< Texture2D > albedo;
+
 	float3 normal;
 	uint   vertex_offset;
 };
 
-ConstantBuffer<ViewParameters> view : register(b2);
 ConstantBuffer<PassParameters> pass : register(b1);
 ConstantBuffer<DrawParameters> draw : register(b0);
 
@@ -47,12 +42,10 @@ VS_OUT MainVS(uint vertex_index : SV_VertexID)
 
 float4 MainPS(VS_OUT IN) : SV_Target
 {
-#if 0
-	float3 albedo = draw.albedo  .Get().Sample(df::s_linear_wrap, IN.uv).rgb;
-	float3 light  = draw.lightmap.Get().Sample(df::s_linear_wrap, IN.lightmap_uv).rgb;
-#endif
+	float3 albedo = draw.albedo.Get().Sample(df::s_linear_wrap, IN.uv).rgb;
+	// float3 light  = draw.lightmap.Get().Sample(df::s_linear_wrap, IN.lightmap_uv).rgb;
 
 	float3 light = 0.5 + 0.5*dot(draw.normal, view.sun_direction);
 
-	return float4(light, 1);
+	return float4(albedo*light, 1);
 }

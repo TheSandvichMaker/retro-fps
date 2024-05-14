@@ -373,12 +373,12 @@ void game_init(void)
     update_camera_rotation(&g_camera, 0.0f);
 
     {
-		image_t *font_image = get_image_from_string(S("gamedata/textures/font.png"));
-        debug_font.w = font_image->info.w;
-        debug_font.h = font_image->info.h;
+		asset_image_t *font_image = get_image_from_string(S("gamedata/textures/font.png"));
+        debug_font.w = font_image->w;
+        debug_font.h = font_image->h;
         debug_font.cw = 10;
         debug_font.ch = 12;
-        debug_font.texture = font_image->renderer_handle;
+        //debug_font.texture = font_image->renderer_handle;
     }
 
     world_t *world = g_world = m_bootstrap(world_t, arena);
@@ -498,6 +498,7 @@ fn_local r_view_index_t render_map(r_context_t *rc, camera_t *camera, map_t *map
 
     r_view_index_t game_view = r_make_view(rc, &view);
 
+#if 0
     R_VIEW      (rc, game_view)
     R_VIEW_LAYER(rc, R_VIEW_LAYER_SCENE)
     {
@@ -596,6 +597,7 @@ fn_local r_view_index_t render_map(r_context_t *rc, camera_t *camera, map_t *map
 
     r_pop_command_identifier(rc);
 
+#endif
     // stop it man...
     return game_view;
 }
