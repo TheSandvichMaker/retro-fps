@@ -318,7 +318,7 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 		};
 
 		D3D12_STATIC_SAMPLER_DESC static_samplers[] = {
-			[0] = {
+			[0] = { // s_linear_wrap
 				.Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
 				.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
 				.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
@@ -328,6 +328,19 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 				.MinLOD           = 0.0f,
 				.MaxLOD           = D3D12_FLOAT32_MAX,
 				.ShaderRegister   = 0,
+				.RegisterSpace    = 100,
+				.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
+			},
+			[1] = { // s_linear_clamped
+				.Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+				.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+				.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+				.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+				.MipLODBias       = 0.0f,
+				.MaxAnisotropy    = 16,
+				.MinLOD           = 0.0f,
+				.MaxLOD           = D3D12_FLOAT32_MAX,
+				.ShaderRegister   = 1,
 				.RegisterSpace    = 100,
 				.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
 			},
@@ -516,7 +529,13 @@ rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 			frame_buffer->desc = rhi_texture_desc_from_d3d12_resource_desc(&rt_desc);
 
 			frame_buffer->rtv = d3d12_allocate_descriptor_persistent(&g_rhi.rtv);
-			ID3D12Device_CreateRenderTargetView(g_rhi.device, frame_buffer->resource, NULL, frame_buffer->rtv.cpu);
+
+			D3D12_RENDER_TARGET_VIEW_DESC rtv_desc = {
+				.Format        = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+				.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D,
+			};
+
+			ID3D12Device_CreateRenderTargetView(g_rhi.device, frame_buffer->resource, &rtv_desc, frame_buffer->rtv.cpu);
 
 			window->frame_buffers[i] = CAST_HANDLE(rhi_texture_t, pool_get_handle(&g_rhi.textures, frame_buffer));
 		}
@@ -683,7 +702,7 @@ fn_local void d3d12_upload_texture_data(d3d12_texture_t *texture, const rhi_text
 				.Width    = dst_layout.Footprint.Width,
 				.Height   = dst_layout.Footprint.Height,
 				.Depth    = dst_layout.Footprint.Depth,
-				.RowPitch = (uint32_t)src_stride,
+				.RowPitch = dst_layout.Footprint.RowPitch,
 			},
 		},
 	};

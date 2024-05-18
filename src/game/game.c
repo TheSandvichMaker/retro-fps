@@ -449,6 +449,39 @@ void game_init(void)
 	r1_init(&r1);
 	r1_init_map_resources(&r1, map);
 
+	{
+		map_entity_t *worldspawn = map->worldspawn;
+
+		v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
+		float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
+
+		sun_color = mul(sun_brightness, sun_color);
+
+		map->fog_absorption = 0.002f;
+		map->fog_density    = 0.02f;
+		map->fog_scattering = 0.04f;
+		map->fog_phase_k    = 0.6f;
+
+		float absorption = map->fog_absorption;
+		float density    = map->fog_density;
+		float scattering = map->fog_scattering;
+		v3_t sky_color = mul(sun_color, (1.0f / (4.0f*PI32))*scattering*density / (density*(scattering + absorption)));
+
+		map->lightmap_state = bake_lighting(&(lum_params_t) {
+			.map                 = map,
+			.sun_direction       = make_v3(0.25f, 0.75f, 1),
+			.sun_color           = sun_color,
+			.sky_color           = sky_color,
+
+			.use_dynamic_sun_shadows = true,
+
+			.ray_count               = 8,
+			.ray_recursion           = 3,
+			.fog_light_sample_count  = 4,
+			.fogmap_scale            = 16,
+		});
+	}
+
 	//
 	//
 	//
@@ -810,11 +843,6 @@ static void game_tick(platform_io_t *io)
 
 	mixer_set_listener(camera->p, negate(camera->computed_z));
 
-    map->fog_absorption = 0.002f;
-    map->fog_density    = 0.02f;
-    map->fog_scattering = 0.04f;
-    map->fog_phase_k    = 0.6f;
-
     r_view_index_t game_view = render_map(rc, camera, map);
 
     world->fade_t += 0.45f*dt*(world->fade_target_t - world->fade_t);
@@ -824,6 +852,7 @@ static void game_tick(platform_io_t *io)
 
     ui_end();
 
+#if 0
     R_VIEW      (rc, game_view) 
     R_VIEW_LAYER(rc, R_VIEW_LAYER_UI)
     {
@@ -861,6 +890,7 @@ static void game_tick(platform_io_t *io)
 
         r_flush_ui_rects(rc);
     }
+#endif
 
 #endif // #if 1
 	
@@ -900,7 +930,9 @@ static void game_tick(platform_io_t *io)
     scene->fog_scattering  = map->fog_scattering;
     scene->fog_phase_k     = map->fog_phase_k;
 
-	r1_render_game_view(&r1, io->rhi_command_list, io->rhi_window, &view, world);
+	r1_update_window_resources(&r1, io->rhi_window);
+
+	r1_render_game_view(&r1, io->rhi_command_list, rhi_get_current_backbuffer(io->rhi_window), &view, world);
 
 	//
 	//

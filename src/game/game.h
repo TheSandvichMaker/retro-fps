@@ -27,6 +27,7 @@
 #include "ui.h"
 #include "in_game_editor.h"
 #include "convex_hull_debugger.h"
+#include "render/r1.h"
 
 typedef enum player_move_mode_t
 {

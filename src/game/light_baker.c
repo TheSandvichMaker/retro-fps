@@ -463,27 +463,27 @@ static void lum_job(job_context_t *job_context, void *userdata)
         packed[i] = pack_r11g11b10f(direct_lighting_pixels[i]);
     }
 
-    if (RESOURCE_HANDLE_VALID(poly->lightmap))
+    if (RESOURCE_HANDLE_VALID(poly->lightmap_rhi))
     {
-#if 0
-        render->destroy_texture(poly->lightmap);
-#endif
+		rhi_destroy_texture(poly->lightmap_rhi);
     }
 
-#if 0
-    poly->lightmap = render->upload_texture(&(r_upload_texture_t){
-        .upload_flags = R_UPLOAD_TEXTURE_GEN_MIPMAPS,
-        .desc = {
-            .format = R_PIXEL_FORMAT_R11G11B10F,
-            .w      = w,
-            .h      = h,
-        },
-        .data = {
-            .pitch  = sizeof(uint32_t)*w,
-            .pixels = packed,
-        },
-    });
-#endif
+	rhi_texture_t lightmap_rhi = rhi_create_texture(&(rhi_create_texture_params_t){
+		.debug_name = S("lightmap_texture"),
+		.dimension	= RhiTextureDimension_2d,
+		.width      = w,
+		.height     = h,
+		.format     = PixelFormat_r11g11b10_float,
+		.initial_data = &(rhi_texture_data_t){
+			.subresources      = &packed,
+			.subresource_count = 1,
+			.row_stride        = sizeof(uint32_t)*w,
+		},
+	});
+
+	rhi_wait_on_texture_upload(lightmap_rhi);
+
+	poly->lightmap_rhi = lightmap_rhi;
 
 done:
 	atomic_increment_u32(&state->jobs_completed);

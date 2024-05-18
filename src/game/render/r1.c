@@ -11,6 +11,7 @@ typedef struct view_parameters_t
 	m4x4_t sun_matrix;
 	alignas(16) v3_t sun_direction;
 	alignas(16) v3_t sun_color;
+	alignas(16) v2_t view_size;
 } view_parameters_t;
 
 typedef struct map_pass_parameters_t
@@ -19,60 +20,33 @@ typedef struct map_pass_parameters_t
 	alignas(16) rhi_buffer_srv_t  uvs;
 	alignas(16) rhi_buffer_srv_t  lightmap_uvs;
 	alignas(16) rhi_texture_srv_t sun_shadowmap;
+	alignas(16) v2_t              shadowmap_dim;
 } map_pass_parameters_t;
 
 typedef struct map_draw_parameters_t
 {
 	rhi_texture_srv_t albedo;
-	v3_t              albedo_dim;
-	v3_t              normal;
+	v2_t              albedo_dim;
+	alignas(16) rhi_texture_srv_t lightmap;
+	v2_t              lightmap_dim;
+	alignas(16) v3_t              normal;
 } map_draw_parameters_t;
 
 typedef struct shadow_draw_parameters_t
 {
-	alignas(16) rhi_buffer_srv_t positions;
+	rhi_buffer_srv_t positions;
 } shadow_draw_parameters_t; 
 
-typedef struct r1_state_t
+typedef struct post_process_draw_parameters_t
 {
-	rhi_texture_t     white_texture;
-	rhi_texture_srv_t white_texture_srv;
+	rhi_texture_srv_t hdr_color;
+} post_process_draw_parameters_t;
 
-	rect2i_t unbounded_scissor_rect;
-
-	uint32_t shadow_map_resolution;
-	rhi_texture_t shadow_map;
-
-	struct
-	{
-		rhi_pso_t map;
-		rhi_pso_t sun_shadows;
-	} psos;
-
-	struct
-	{
-		uint32_t width;
-		uint32_t height;
-		rhi_texture_t depth_stencil;
-	} window;
-
-	struct
-	{
-		rhi_buffer_t positions;
-		rhi_buffer_t uvs;
-		rhi_buffer_t lightmap_uvs;
-		rhi_buffer_t indices;
-	} map;
-} r1_state_t;
-
-typedef struct r_view_textures_t
+typedef struct ui_draw_parameters_t
 {
-	rhi_texture_t hdr_color;
-	rhi_texture_t sdr_color;
-} r_view_textures_t;
-
-// TODO: view render targets, depth buffer, pso creation
-// transient resources
+	rhi_buffer_srv_t  rects;
+	rhi_texture_srv_t texture;
+} ui_draw_parameters_t;
 
 void r1_init(r1_state_t *r1)
 {
@@ -92,6 +66,23 @@ void r1_init(r1_state_t *r1)
 	});
 
 	r1->white_texture_srv = rhi_get_texture_srv(r1->white_texture);
+
+	uint32_t black_pixel = 0x0;
+
+	r1->black_texture = rhi_create_texture(&(rhi_create_texture_params_t){
+	    .debug_name = S("builtin_black_texture"),
+		.dimension = RhiTextureDimension_2d,
+		.width     = 1,
+		.height    = 1,
+		.format    = PixelFormat_r8g8b8a8_unorm,
+		.initial_data = &(rhi_texture_data_t){
+			.subresources      = (uint32_t *[]) { &black_pixel },
+			.subresource_count = 1,
+			.row_stride        = sizeof(black_pixel),
+		},
+	});
+
+	r1->black_texture_srv = rhi_get_texture_srv(r1->black_texture);
 
 	r1->shadow_map_resolution = 1024;
 	r1->shadow_map = rhi_create_texture(&(rhi_create_texture_params_t){
@@ -130,7 +121,7 @@ void r1_init(r1_state_t *r1)
 			},
 			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
 			.render_target_count     = 1,
-			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm,
+			.rtv_formats[0]          = PixelFormat_r16g16b16a16_float,
 			.dsv_format              = PixelFormat_d24_unorm_s8_uint,
 		});
 	}
@@ -155,6 +146,54 @@ void r1_init(r1_state_t *r1)
 			},
 			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
 			.dsv_format              = PixelFormat_d24_unorm_s8_uint,
+		});
+	}
+
+	m_scoped_temp
+	{
+		string_t source = fs_read_entire_file(temp, S("../src/shaders/bindless_post.hlsl"));
+
+		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("bindless_post.hlsl"), S("MainVS"), S("vs_6_8"));
+		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("bindless_post.hlsl"), S("MainPS"), S("ps_6_8"));
+
+		r1->psos.post_process = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
+			.vs = vs,
+			.ps = ps,
+			.blend = {
+				.render_target[0].write_mask = RhiColorWriteEnable_all,
+				.sample_mask                 = 0xFFFFFFFF,
+			},
+			.rasterizer = {
+				.cull_mode     = RhiCullMode_back,
+				.front_winding = RhiWinding_ccw,
+			},
+			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
+			.render_target_count     = 1,
+			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm_srgb,
+		});
+	}
+
+	m_scoped_temp
+	{
+		string_t source = fs_read_entire_file(temp, S("../src/shaders/bindless_ui.hlsl"));
+
+		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("bindless_ui.hlsl"), S("MainVS"), S("vs_6_8"));
+		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("bindless_ui.hlsl"), S("MainPS"), S("ps_6_8"));
+
+		r1->psos.ui = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
+			.vs = vs,
+			.ps = ps,
+			.blend = {
+				.render_target[0].write_mask = RhiColorWriteEnable_all,
+				.sample_mask                 = 0xFFFFFFFF,
+			},
+			.rasterizer = {
+				.cull_mode     = RhiCullMode_back,
+				.front_winding = RhiWinding_ccw,
+			},
+			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
+			.render_target_count     = 1,
+			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm_srgb,
 		});
 	}
 }
@@ -222,7 +261,7 @@ void r1_init_map_resources(r1_state_t *r1, map_t *map)
 	});
 }
 
-fn_local void r1_update_window_resources(r1_state_t *r1, rhi_window_t window)
+void r1_update_window_resources(r1_state_t *r1, rhi_window_t window)
 {
 	rhi_texture_t rt = rhi_get_current_backbuffer(window);
 
@@ -243,19 +282,31 @@ fn_local void r1_update_window_resources(r1_state_t *r1, rhi_window_t window)
 			.height     = r1->window.height,
 			.depth      = 1,
 			.mip_levels = 1,
-			.usage      = RhiTextureUsage_depth_stencil|RhiTextureUsage_deny_srv, // TODO: Deal with depth buffer SRVs
+			.usage      = RhiTextureUsage_depth_stencil,
 			.format     = PixelFormat_d24_unorm_s8_uint,
+		});
+
+		rhi_destroy_texture(r1->window.rt_hdr);
+
+		r1->window.rt_hdr = rhi_create_texture(&(rhi_create_texture_params_t){
+			.debug_name = S("window_hdr_target"),
+			.dimension  = RhiTextureDimension_2d,
+			.width      = r1->window.width,
+			.height     = r1->window.height,
+			.depth      = 1,
+			.mip_levels = 1,
+			.usage      = RhiTextureUsage_render_target,
+			.format     = PixelFormat_r16g16b16a16_float,
 		});
 	}
 }
 
 fn_local void r1_render_sun_shadows(r1_state_t *r1, rhi_command_list_t *list, map_t *map);
 fn_local void r1_render_map        (r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t rt, map_t *map);
+fn_local void r1_post_process      (r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t color_hdr, rhi_texture_t rt_result);
 
-void r1_render_game_view(r1_state_t *r1, rhi_command_list_t *list, rhi_window_t window, r_view_t *view, world_t *world)
+void r1_render_game_view(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t backbuffer, r_view_t *view, world_t *world)
 {
-	r1_update_window_resources(r1, window);
-
 	m4x4_t world_to_clip = mul(view->proj_matrix, view->view_matrix);
 
 	v3_t sun_direction = view->scene.sun_direction;
@@ -264,26 +315,31 @@ void r1_render_game_view(r1_state_t *r1, rhi_command_list_t *list, rhi_window_t 
     m4x4_t sun_ortho  = make_orthographic_matrix(2048, 2048, 512);
     m4x4_t sun_matrix = mul(sun_ortho, sun_view);
 
+	const rhi_texture_desc_t *backbuffer_desc = rhi_get_texture_desc(backbuffer);
+
 	{
 		view_parameters_t view_parameters = {
 			.world_to_clip = world_to_clip,
 			.sun_matrix    = sun_matrix,
 			.sun_direction = sun_direction,
 			.sun_color     = view->scene.sun_color,
+			.view_size     = make_v2((float)backbuffer_desc->width, (float)backbuffer_desc->height),
 		};
 
 		rhi_set_parameters(list, R1ParameterSlot_view, &view_parameters, sizeof(view_parameters));
 	}
 
-	rhi_texture_t backbuffer = rhi_get_current_backbuffer(window);
+	rhi_texture_t rt_hdr = r1->window.rt_hdr;
 
 	map_t *map = world->map;
 
 	if (map)
 	{
 		r1_render_sun_shadows(r1, list, map);
-		r1_render_map        (r1, list, backbuffer, map);
+		r1_render_map        (r1, list, rt_hdr, map);
 	}
+
+	r1_post_process(r1, list, rt_hdr, backbuffer);
 }
 
 void r1_render_sun_shadows(r1_state_t *r1, rhi_command_list_t *list, map_t *map)
@@ -322,6 +378,7 @@ void r1_render_map(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t rt, m
 		.uvs           = rhi_get_buffer_srv (r1->map.uvs),
 		.lightmap_uvs  = rhi_get_buffer_srv (r1->map.lightmap_uvs),
 		.sun_shadowmap = rhi_get_texture_srv(r1->shadow_map),
+		.shadowmap_dim = { (float)r1->shadow_map_resolution, (float)r1->shadow_map_resolution },
 	};
 	rhi_set_parameters(list, R1ParameterSlot_pass, &pass_parameters, sizeof(pass_parameters));
 
@@ -367,9 +424,22 @@ void r1_render_map(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t rt, m
 				}
 			}
 
+			rhi_texture_srv_t lightmap_srv = r1->white_texture_srv;
+			v2_t lightmap_dim = { 1.0f, 1.0f };
+
+			if (RESOURCE_HANDLE_VALID(poly->lightmap_rhi))
+			{
+				lightmap_srv = rhi_get_texture_srv(poly->lightmap_rhi);
+
+				const rhi_texture_desc_t *desc = rhi_get_texture_desc(poly->lightmap_rhi);
+				lightmap_dim = make_v2((float)desc->width, (float)desc->height);
+			}
+
 			map_draw_parameters_t draw_parameters = {
 				.albedo        = albedo_srv,
 				.albedo_dim    = { (float)albedo->w, (float)albedo->h },
+				.lightmap      = lightmap_srv,
+				.lightmap_dim  = lightmap_dim,
 				.normal        = poly->normal,
 			};
 			rhi_set_parameters(list, R1ParameterSlot_draw, &draw_parameters, sizeof(draw_parameters));
@@ -381,155 +451,55 @@ void r1_render_map(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t rt, m
 	rhi_graphics_pass_end(list);
 }
 
+void r1_post_process(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_texture_t rt_result)
+{
+	rhi_simple_graphics_pass_begin(list, rt_result, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglestrip);
+	{
+		rhi_set_pso(list, r1->psos.post_process);
+
+		post_process_draw_parameters_t draw_parameters = {
+			.hdr_color = rhi_get_texture_srv(hdr_color),
+		};
+		rhi_set_parameters(list, R1ParameterSlot_draw, &draw_parameters, sizeof(draw_parameters));
+
+		rhi_draw(list, 4, 0);
+	}
+	rhi_graphics_pass_end(list);
+}
+
+void r1_render_ui(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t rt, ui_render_command_list_t *ui_list)
+{
+	(void)r1;
+	(void)list;
+	(void)rt;
+	(void)ui_list;
 #if 0
-void render_game_world(renderer_t *r, r1_view_t *view, world_t *world)
-{
-	rhi_command_list_t *list = rhi_get_command_list();
-
-	m4x4_t sun_matrix = make_directional_light_matrix(...);
-
-	view_parameters_t view_parameters = {
-		.camera_p      = view->camera_p,
-		.view_matrix   = view->view_matrix,
-		.proj_matrix   = view->proj_matrix,
-		.world_to_clip = mul(view->proj_matrix, view->view_matrix),
-
-		.sun_direction = view->sun_direction,
-		.sun_color     = view->sun_color,
-		.sun_matrix    = sun_matrix,
-
-		.fogmap         = rhi_get_texture_srv(view->fogmap),
-		.fog_offset     = view->fog_offset,
-		.fog_dim        = view->fog_dim,
-		.fog_density    = view->fog_density,
-		.fog_absorption = view->fog_absorption,
-		.fog_scattering = view->fog_scattering,
-		.fog_phase_k    = view->fog_phase_k,
-	};
-
-	rhi_set_parameters(list, RenderParameterSlot_view, &view_parameters, sizeof(view_parameters));
-
-	render_skybox(r, list, view);
-
-	map_t *map = world->map;
-
-	if (map)
+	rhi_simple_graphics_pass_begin(list, rt, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglestrip);
 	{
-		render_map_shadows(r, list, view, map);
-		render_map        (r, list, view, map);
-	}
-
-	render_fog    (r, list, view);
-	render_post_fx(r, list, view);
-}
-
-void render_skybox(renderer_t *r, rhi_command_list_t *list, r1_view_t *view)
-{
-	rhi_texture_t render_target = view->hdr_color_target;
-
-	const rhi_texture_desc_t *rt_desc = rhi_get_texture_desc(render_target);
-
-	rhi_simple_graphics_pass_begin(list, render_target, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
-	{
-		rhi_set_pso(list, r->psos.skybox);
-
-		skybox_parameters_t parameters = {
-			.positions = rhi_get_buffer_srv (r->skybox_positions),
-			.uvs       = rhi_get_buffer_srv (r->skybox_uvs),
-			.skybox    = rhi_get_texture_srv(view->skybox),
-		};
-	}
-	rhi_graphics_pass_end(list);
-}
-
-void render_map_shadows(renderer_t *r, rhi_command_list_t *list, r1_view_t *view, map_t *map)
-{
-	rhi_simple_graphics_pass_begin(list, (rhi_texture_t){0}, view->shadowmap, RhiPrimitiveTopology_trianglelist);
-	{
-		rhi_set_pso(list, r->psos.directional_shadows);
-
-		map_pass_parameters_t pass_parameters = {
-			.positions    = map->rhi.positions_srv,
-			.uvs          = map->rhi.uvs_srv,
-			.lightmap_uvs = map->rhi.lightmap_uvs_srv,
-		};
-
-		rhi_set_parameters(list, RenderParameterSlot_pass, &pass_parameters, sizeof(pass_parameters));
-
-		for (size_t i = 0; i < map->poly_count; i++)
+		for (size_t key_index = 0;
+			 key_index < ui_list->count;
+			 key_index++)
 		{
-			map_poly_t *poly = &map->polys[i];
+			const ui_render_command_key_t *key = &list->keys[key_index];
 
-			map_draw_parameters_t draw_parameters = {
-				.albedo        = poly->albedo_rhi,
-				.lightmap      = poly->lightmap_rhi,
-				.vertex_offset = poly->first_vertex,
+			const size_t command_index = key->command_index;
+			const ui_render_command_t *command = &list->commands[command_index];
+
+			/*
+			r_flush_ui_rects(rc);
+			texture = command->texture;
+			rc->current_ui_texture = texture;
+			*/
+
+			ui_draw_parameters_t draw_parameters = {
+				.
 			};
 
-			rhi_set_parameters(list, RenderParameterSlot_draw, &draw_parameters[i], sizeof(draw_parameters));
+			r_ui_rect(rc, command->rect);
 
-			rhi_draw_indexed(list, map->index_buffer_rhi, poly->index_count, poly->first_index, 0);
+			commands_processed_count += 1;
 		}
 	}
 	rhi_graphics_pass_end(list);
-}
-
-void render_map(renderer_t *r, rhi_command_list_t *list, r1_view_t *view, map_t *map)
-{
-	rhi_simple_graphics_pass_begin(list, view->hdr_color_target, view->depth_buffer, RhiPrimitiveTopology_trianglelist);
-	{
-		rhi_set_pso(list, r->map_pso);
-
-		map_pass_parameters_t pass_parameters = {
-			.positions    = map->rhi.positions_srv,
-			.uvs          = map->rhi.uvs_srv,
-			.lightmap_uvs = map->rhi.lightmap_uvs_srv,
-			.shadowmap    = rhi_get_texture_srv(view->shadow_map),
-		};
-
-		rhi_set_parameters(list, RenderParameterSlot_pass, &pass_parameters, sizeof(pass_parameters));
-
-		for (size_t i = 0; i < map->poly_count; i++)
-		{
-			map_poly_t *poly = &map->polys[i];
-
-			map_draw_parameters_t draw_parameters = {
-				.albedo        = poly->rhi.albedo_srv,
-				.lightmap      = poly->rhi.lightmap_srv,
-				.vertex_offset = poly->first_vertex,
-			};
-
-			rhi_set_parameters(list, RenderParameterSlot_draw, &draw_parameters[i], sizeof(draw_parameters));
-
-			rhi_draw_indexed(list, map->index_buffer_rhi, poly->index_count, poly->first_index, 0);
-		}
-	}
-	rhi_graphics_pass_end(list);
-}
-
-void render_fog(renderer_t *r, rhi_command_list_t *list, r1_view_t *view)
-{
-	rhi_simple_full_screen_pass_begin(list, view->hdr_color_target);
-	{
-		render_fog_parameters_t parameters = {
-			.scene_depth = view->depth_buffer,
-			.blue_noise  = rhi_get_texture_srv(r->blue_noise_textures[r->frame_index % ARRAY_COUNT(r->blue_noise_textures)].srv),
-			.shadow_map  = rhi_get_texture_srv(r->shadow_map),
-		};
-
-		rhi_set_pso(list, r->psos.fog);
-		rhi_draw_fullscreen_quad(list);
-	}
-	rhi_graphics_pass_end(list);
-}
-
-void render_post_fx(renderer_t *r, rhi_command_list_t *list, r1_view_t *view)
-{
-	rhi_simple_full_screen_pass_begin(list, view->sdr_color_target);
-	{
-		rhi_set_pso(list, r->psos.resolve_hdr);
-		rhi_draw_fullscreen_quad(list);
-	}
-	rhi_graphics_pass_end(list);
-}
 #endif
+}

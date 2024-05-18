@@ -46,6 +46,7 @@ typedef struct map_poly_t
     mesh_handle_t    mesh;
     asset_hash_t     texture;
     texture_handle_t lightmap;
+	rhi_texture_t    lightmap_rhi;
 } map_poly_t;
 
 typedef struct map_lightmap_t

@@ -813,6 +813,8 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
             map_plane_t *plane = &planes[plane_index];
             map_poly_t  *poly  = &polys [plane_index];
 
+			NULLIFY_HANDLE(&poly->lightmap_rhi);
+
             float texscale_x = R_MISSING_TEXTURE_SIZE;
             float texscale_y = R_MISSING_TEXTURE_SIZE;
 

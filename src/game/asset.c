@@ -165,7 +165,7 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 						.height     = image.info.h,
 						.depth      = 1,
 						.mip_levels = 1,
-						.format     = PixelFormat_r8g8b8a8_unorm,
+						.format     = PixelFormat_r8g8b8a8_unorm_srgb,
 						.initial_data = &(rhi_texture_data_t){
 							.subresources      = &image.pixels,
 							.subresource_count = 1,
