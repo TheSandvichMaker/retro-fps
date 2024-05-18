@@ -38,6 +38,7 @@ typedef struct rhi_command_list_t
 
 	uint32_t render_target_count;
 	rhi_texture_t render_targets[8];
+	rhi_texture_t ds;
 } rhi_command_list_t;
 
 typedef struct d3d12_frame_state_t

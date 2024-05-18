@@ -126,7 +126,7 @@ typedef struct rhi_create_buffer_srv_params_t
 typedef struct rhi_create_buffer_params_t
 {
 	string_t           debug_name;
-	uint32_t           size;
+	size_t             size;
 	rhi_buffer_data_t  initial_data;
 
 	rhi_create_buffer_srv_params_t *srv;
@@ -135,6 +135,31 @@ typedef struct rhi_create_buffer_params_t
 fn rhi_buffer_t     rhi_create_buffer(const rhi_create_buffer_params_t *params);
 fn void             rhi_upload_buffer_data(rhi_buffer_t buffer, size_t dst_offset, const rhi_buffer_data_t *src);
 fn rhi_buffer_srv_t rhi_get_buffer_srv(rhi_buffer_t buffer);
+
+fn rhi_buffer_t rhi_create_structured_buffer(string_t debug_name, 
+											 uint32_t first_element, 
+											 uint32_t element_count, 
+											 uint32_t element_stride, 
+											 void *initial_data)
+{
+	size_t size = element_count*element_stride;
+
+	rhi_buffer_t result = rhi_create_buffer(&(rhi_create_buffer_params_t){
+		.debug_name = debug_name,
+		.size       = size,
+		.initial_data = {
+			.ptr  = initial_data,
+			.size = size,
+		},
+		.srv = &(rhi_create_buffer_srv_params_t){
+			.first_element  = first_element,
+			.element_count  = element_count,
+			.element_stride = element_stride,
+		},
+	});
+
+	return result;
+}
 
 typedef struct rhi_shader_bytecode_t
 {
@@ -422,8 +447,8 @@ fn void                rhi_begin_frame        (void);
 fn rhi_command_list_t *rhi_get_command_list   (void);
 fn void                rhi_graphics_pass_begin(rhi_command_list_t *list, const rhi_graphics_pass_params_t *params);
 fn void                rhi_set_pso            (rhi_command_list_t *list, rhi_pso_t pso);
-fn void                rhi_draw               (rhi_command_list_t *list, uint32_t vertex_count);
-fn void                rhi_draw_indexed       (rhi_command_list_t *list, rhi_buffer_t index_buffer_handle, uint32_t index_count, uint32_t start_index);
+fn void                rhi_draw               (rhi_command_list_t *list, uint32_t vertex_count, uint32_t start_vertex);
+fn void                rhi_draw_indexed       (rhi_command_list_t *list, rhi_buffer_t index_buffer_handle, uint32_t index_count, uint32_t start_index, uint32_t start_vertex);
 fn void                rhi_graphics_pass_end  (rhi_command_list_t *list);
 fn void                rhi_end_frame          (void);
 

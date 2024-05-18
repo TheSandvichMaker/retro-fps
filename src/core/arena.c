@@ -26,9 +26,10 @@ void *m_alloc_nozero(arena_t *arena, size_t size, size_t align)
         arena->owns_memory = true;
     }
 
-    if (size > 0 && ALWAYS(m_size_remaining_for_align(arena, align) >= size))
+    if (size > 0)
     {
         char *result = align_address(arena->at, align);
+
         if (result + size > arena->committed)
         {
             size_t to_commit = align_forward(result + size - arena->committed, ARENA_COMMIT_CHUNK_SIZE);
@@ -39,7 +40,13 @@ void *m_alloc_nozero(arena_t *arena, size_t size, size_t align)
             arena->committed += to_commit;
         }
 
+		ASSERT_MSG(result + size <= arena->end, 
+				   "Arena is out of memory: wanted to allocate %zu bytes with align %zu, "
+				   "but after alignment the arena can fit only %zu",
+				   size, align, m_size_remaining_for_align(arena, align));
+
         arena->at = result + size;
+
         return result;
     }
 

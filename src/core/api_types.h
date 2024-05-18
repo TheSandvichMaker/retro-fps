@@ -470,6 +470,6 @@ typedef union resource_handle_t
 
 #define NULL_HANDLE(type_t) ((type_t){0})
 #define NULL_RESOURCE_HANDLE ((resource_handle_t){0})
-#define NULLIFY_HANDLE(handle) ((handle).value = 0)
+#define NULLIFY_HANDLE(handle) ((handle)->value = 0)
 #define RESOURCE_HANDLE_VALID(x) ((x).index != 0)
 #define RESOURCE_HANDLES_EQUAL(a, b) ((a).value == (b).value)

@@ -27,7 +27,7 @@
 #include "render_helpers.c"
 #include "ui.c"
 
-#include "render/render.c"
+#include "render/r1.c"
 
 #define UI_FORCE_ONE_DRAW_CALL_PER_RECT_SLOW_DEBUG_STUFF 0
 
@@ -900,7 +900,7 @@ static void game_tick(platform_io_t *io)
     scene->fog_scattering  = map->fog_scattering;
     scene->fog_phase_k     = map->fog_phase_k;
 
-	r1_render_map(&r1, io->rhi_command_list, io->rhi_window, &view, map);
+	r1_render_game_view(&r1, io->rhi_command_list, io->rhi_window, &view, world);
 
 	//
 	//

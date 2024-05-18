@@ -264,14 +264,14 @@ fn_local void lightmap_editor_proc(ui_window_t *window)
 #if 0
 						render->destroy_texture(poly->lightmap);
 #endif
-                        NULLIFY_HANDLE(poly->lightmap);
+                        NULLIFY_HANDLE(&poly->lightmap);
 					}
 				}
 
 #if 0
 				render->destroy_texture(map->fogmap);
 #endif
-                NULLIFY_HANDLE(map->fogmap);
+                NULLIFY_HANDLE(&map->fogmap);
 
 				map->lightmap_state = NULL;
 			}
@@ -305,14 +305,14 @@ fn_local void lightmap_editor_proc(ui_window_t *window)
 #if 0
 					render->destroy_texture(poly->lightmap);
 #endif
-					NULLIFY_HANDLE(poly->lightmap);
+					NULLIFY_HANDLE(&poly->lightmap);
 				}
 			}
 
 #if 0
 			render->destroy_texture(map->fogmap);
 #endif
-			NULLIFY_HANDLE(map->fogmap);
+			NULLIFY_HANDLE(&map->fogmap);
 
 			release_bake_state(map->lightmap_state);
 			map->lightmap_state = NULL;

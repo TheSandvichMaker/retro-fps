@@ -140,6 +140,12 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 			{
 				case AssetKind_image:
 				{
+					if (RESOURCE_HANDLE_VALID(asset->image.rhi_texture))
+					{
+						rhi_destroy_texture(asset->image.rhi_texture);
+						NULLIFY_HANDLE(&asset->image.rhi_texture);
+					}
+
 					image_t image = load_image_from_disk(&asset->arena, string_from_storage(asset->path), 4);
 
 					asset->image.w         = image.info.w;

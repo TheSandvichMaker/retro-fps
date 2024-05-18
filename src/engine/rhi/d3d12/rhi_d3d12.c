@@ -489,7 +489,8 @@ rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 		.SwapEffect  = DXGI_SWAP_EFFECT_FLIP_DISCARD,
 	};
 
-	hr = IDXGIFactory6_CreateSwapChainForHwnd(g_rhi.dxgi_factory, (IUnknown*)g_rhi.direct_command_queue, hwnd, &desc, NULL, NULL, (IDXGISwapChain1**)&swap_chain);
+	hr = IDXGIFactory6_CreateSwapChainForHwnd(g_rhi.dxgi_factory, (IUnknown*)g_rhi.direct_command_queue, 
+											  hwnd, &desc, NULL, NULL, (IDXGISwapChain1**)&swap_chain);
 	D3D12_CHECK_HR(hr, goto bail);
 
 	IDXGIFactory4_MakeWindowAssociation(g_rhi.dxgi_factory, hwnd, DXGI_MWA_NO_ALT_ENTER);
@@ -777,6 +778,17 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 
 		bool wants_clear_value = (params->usage & (RhiTextureUsage_render_target|RhiTextureUsage_depth_stencil));
 
+		DXGI_FORMAT format = to_dxgi_format(params->format);
+
+		if ( (params->usage & RhiTextureUsage_depth_stencil) &&
+			!(params->usage & RhiTextureUsage_deny_srv))
+		{
+			if (format == DXGI_FORMAT_D24_UNORM_S8_UINT)
+			{
+				format = DXGI_FORMAT_R24G8_TYPELESS;
+			}
+		}
+
 		HRESULT hr = ID3D12Device_CreateCommittedResource(
 			g_rhi.device,
 			(&(D3D12_HEAP_PROPERTIES){
@@ -789,7 +801,7 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 				.Height           = params->height,
 				.DepthOrArraySize = MAX(1, params->depth),
 				.MipLevels        = MAX(1, params->mip_levels),
-				.Format           = to_dxgi_format(params->format),
+				.Format           = format,
 				.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN,
 				.Flags            = resource_flags,
 				.SampleDesc       = { .Count = 1 },
@@ -805,6 +817,7 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 			texture->state    = initial_state;
 			texture->resource = resource;
 
+			DEBUG_ASSERT(params->debug_name.count);
 			d3d12_set_debug_name((ID3D12Object *)texture->resource, params->debug_name);
 
 			D3D12_RESOURCE_DESC desc;
@@ -821,7 +834,25 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 			if (texture->desc.usage_flags & RhiTextureUsage_depth_stencil)
 			{
 				texture->dsv = d3d12_allocate_descriptor_persistent(&g_rhi.dsv);
-				ID3D12Device_CreateDepthStencilView(g_rhi.device, texture->resource, NULL, texture->dsv.cpu);
+
+				DXGI_FORMAT dsv_format = DXGI_FORMAT_UNKNOWN;
+				switch (format)
+				{
+					case DXGI_FORMAT_R24G8_TYPELESS: dsv_format = DXGI_FORMAT_D24_UNORM_S8_UINT; break;
+				}
+
+				ASSERT(params->dimension == RhiTextureDimension_2d); // TODO: other dimensions
+
+				D3D12_DEPTH_STENCIL_VIEW_DESC dsv_desc = {
+					.Format        = dsv_format,
+					.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D,
+					.Flags         = 0,
+					.Texture2D = {
+						.MipSlice = 0,
+					},
+				};
+
+				ID3D12Device_CreateDepthStencilView(g_rhi.device, texture->resource, &dsv_desc, texture->dsv.cpu);
 			}
 
 			if (texture->desc.usage_flags & RhiTextureUsage_uav)
@@ -833,7 +864,25 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 			if (!(texture->desc.usage_flags & RhiTextureUsage_deny_srv))
 			{
 				texture->srv = d3d12_allocate_descriptor_persistent(&g_rhi.cbv_srv_uav);
-				ID3D12Device_CreateShaderResourceView(g_rhi.device, texture->resource, NULL, texture->srv.cpu);
+
+				DXGI_FORMAT srv_format = format;
+				switch (format)
+				{
+					case DXGI_FORMAT_R24G8_TYPELESS: srv_format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS; break; // TODO: Stencil SRVs
+				}
+
+				ASSERT(params->dimension == RhiTextureDimension_2d); // TODO: other dimensions
+
+				D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {
+					.Format                  = srv_format,
+					.ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+					.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+					.Texture2D = {
+						.MipLevels = (UINT)-1,
+					},
+				};
+
+				ID3D12Device_CreateShaderResourceView(g_rhi.device, texture->resource, &srv_desc, texture->srv.cpu);
 			}
 
 			rhi_texture_data_t *initial_data = params->initial_data;
@@ -1284,6 +1333,20 @@ void rhi_graphics_pass_end(rhi_command_list_t *list)
 												D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, &barriers[i]);
 	}
 
+	if (RESOURCE_HANDLE_VALID(list->ds))
+	{
+		d3d12_texture_t *texture = pool_get(&g_rhi.textures, list->ds);
+		ASSERT(texture);
+
+		if (!(texture->desc.usage_flags & RhiTextureUsage_deny_srv))
+		{
+			barrier_count += d3d12_transition_state(texture->resource, &texture->state,
+													D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, &barriers[barrier_count]);
+		}
+	}
+
+	NULLIFY_HANDLE(&list->ds);
+
 	if (barrier_count > 0)
 	{
 		ID3D12GraphicsCommandList_ResourceBarrier(list->d3d, barrier_count, barriers);
@@ -1335,14 +1398,14 @@ void rhi_set_parameters(rhi_command_list_t *list, uint32_t slot, void *parameter
 	}
 }
 
-void rhi_draw(rhi_command_list_t *list, uint32_t vertex_count)
+void rhi_draw(rhi_command_list_t *list, uint32_t vertex_count, uint32_t start_vertex)
 {
 	DEBUG_ASSERT(list);
 
-	ID3D12GraphicsCommandList_DrawInstanced(list->d3d, vertex_count, 1, 0, 0);
+	ID3D12GraphicsCommandList_DrawInstanced(list->d3d, vertex_count, 1, start_vertex, 0);
 }
 
-void rhi_draw_indexed(rhi_command_list_t *list, rhi_buffer_t index_buffer_handle, uint32_t index_count, uint32_t start_index)
+void rhi_draw_indexed(rhi_command_list_t *list, rhi_buffer_t index_buffer_handle, uint32_t index_count, uint32_t start_index, uint32_t start_vertex)
 {
 	DEBUG_ASSERT(list);
 
@@ -1369,7 +1432,7 @@ void rhi_draw_indexed(rhi_command_list_t *list, rhi_buffer_t index_buffer_handle
 		list->index_buffer = index_buffer_handle;
 	}
 
-	ID3D12GraphicsCommandList_DrawIndexedInstanced(list->d3d, index_count, 1, start_index, 0, 0);
+	ID3D12GraphicsCommandList_DrawIndexedInstanced(list->d3d, index_count, 1, start_index, start_vertex, 0);
 }
 
 void rhi_end_frame(void)

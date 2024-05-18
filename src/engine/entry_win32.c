@@ -206,10 +206,11 @@ int wWinMain(HINSTANCE instance,
     equip_render_api(d3d11_get_api());
 
     // create window
-    //
     {
         int desktop_w = GetSystemMetrics(SM_CXFULLSCREEN);
+		(void)desktop_w;
         int desktop_h = GetSystemMetrics(SM_CYFULLSCREEN);
+		(void)desktop_h;
 
         int w = 4*desktop_w / 5;
         int h = 4*desktop_h / 5;
@@ -340,7 +341,7 @@ int wWinMain(HINSTANCE instance,
 		float   mouse_wheel = 0.0f;
 
         MSG msg;
-        if (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE))
+        while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE))
         {
             switch (msg.message)
             {
