@@ -43,8 +43,11 @@ typedef struct rhi_command_list_t
 
 typedef struct d3d12_frame_state_t
 {
-	ID3D12CommandAllocator *direct_command_allocator;
+	ID3D12CommandAllocator *direct_allocator;
+	ID3D12CommandAllocator *copy_allocator;
+
 	rhi_command_list_t direct_command_list;
+	ID3D12GraphicsCommandList *copy_command_list;
 
 	uint64_t fence_value;
 
@@ -67,7 +70,11 @@ typedef struct rhi_state_d3d12_t
 	ID3D12Fence *fence;
 	HANDLE       fence_event;
 
-	ID3D12CommandQueue *direct_command_queue;
+	uint64_t     copy_fence_value;
+	ID3D12Fence *copy_fence;
+
+	ID3D12CommandQueue *direct_queue;
+	ID3D12CommandQueue *copy_queue;
 
 	d3d12_upload_ring_buffer_t upload_ring_buffer;
 
@@ -121,6 +128,15 @@ typedef struct d3d12_buffer_t
 
 	D3D12_GPU_VIRTUAL_ADDRESS gpu_address;
 	uint64_t size;
+
+	struct
+	{
+		bool            pending;
+		ID3D12Resource *src_buffer;
+		size_t          src_offset;
+		size_t          dst_offset;
+		size_t          size;
+	} upload;
 
 	uint64_t upload_fence_value;
 } d3d12_buffer_t;

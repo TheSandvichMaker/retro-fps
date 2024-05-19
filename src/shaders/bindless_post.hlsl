@@ -2,7 +2,8 @@
 
 struct DrawParameters
 {
-	df::Resource< Texture2D > hdr_color;
+	df::Resource< Texture2DMS<float4> > hdr_color;
+	uint                                sample_count;
 };
 
 ConstantBuffer<DrawParameters> draw : register(b0);
@@ -23,11 +24,22 @@ VS_OUT MainVS(uint id : SV_VertexID)
 
 float4 MainPS(VS_OUT IN) : SV_Target
 {
-	uint2  co    = uint2(IN.pos.xy);
-	float4 color = draw.hdr_color.Get().Load(uint3(co, 0));
+	uint2 co = uint2(IN.pos.xy);
 
-	// tonemap
-	color.rgb = 1.0 - exp(-color.rgb);
+	Texture2DMS<float4> tex_color = draw.hdr_color.Get();
 
-	return color;
+	float4 sum = 0.0;
+	for (uint i = 0; i < draw.sample_count; i++)
+	{
+		float4 color = tex_color.Load(co, i);
+
+		// tonemap
+		color.rgb = 1.0 - exp(-color.rgb);
+
+		sum += color;
+	}
+
+	sum *= rcp(draw.sample_count);
+
+	return sum;
 }

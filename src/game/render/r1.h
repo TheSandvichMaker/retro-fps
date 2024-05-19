@@ -10,10 +10,14 @@ typedef struct r1_state_t
 	rhi_texture_t     black_texture;
 	rhi_texture_srv_t black_texture_srv;
 
-	rect2i_t unbounded_scissor_rect;
+	rect2i_t          unbounded_scissor_rect;
 
-	uint32_t      shadow_map_resolution;
-	rhi_texture_t shadow_map;
+	uint32_t          shadow_map_resolution;
+	rhi_texture_t     shadow_map;
+
+	uint32_t          multisample_count;
+
+	rhi_buffer_t      ui_rects;
 
 	struct
 	{
@@ -25,8 +29,8 @@ typedef struct r1_state_t
 
 	struct
 	{
-		uint32_t width;
-		uint32_t height;
+		uint32_t      width;
+		uint32_t      height;
 		rhi_texture_t depth_stencil;
 		rhi_texture_t rt_hdr;
 	} window;

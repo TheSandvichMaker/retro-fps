@@ -335,6 +335,9 @@ static void lum_job(job_context_t *job_context, void *userdata)
             indirect_lighting = add(indirect_lighting, this_indirect_lighting);
         }
 
+		DEBUG_ASSERT(!v3_contains_nan(  direct_lighting));
+		DEBUG_ASSERT(!v3_contains_nan(indirect_lighting));
+
           direct_lighting = mul(  direct_lighting, 1.0f / ray_count);
         indirect_lighting = mul(indirect_lighting, 1.0f / ray_count);
 

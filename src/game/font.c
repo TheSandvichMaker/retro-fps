@@ -131,21 +131,18 @@ font_atlas_t make_font_atlas_from_memory(string_t font_data, size_t range_count,
 			// TODO: Log failure
 		}
 
-#if 0
-		result.texture = render->upload_texture(&(r_upload_texture_t){
-			.debug_name = S("font atlas"),
-			.desc = {
-				.type   = R_TEXTURE_TYPE_2D,
-				.format = R_PIXEL_FORMAT_R8,
-				.w      = w,
-				.h      = h,
-			},
-			.data = {
-				.pitch  = w,
-				.pixels = pixels
+		result.texture = rhi_create_texture(&(rhi_create_texture_params_t){
+			.debug_name = S("font_atlas"),
+			.dimension  = RhiTextureDimension_2d,
+			.format     = PixelFormat_r8_unorm,
+			.width      = w,
+			.height     = h,
+			.initial_data = &(rhi_texture_data_t){
+				.subresources      = &pixels,
+				.subresource_count = 1,
+				.row_stride        = sizeof(uint8_t)*w,
 			},
 		});
-#endif
 
 		result.initialized = true;
 	}

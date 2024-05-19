@@ -450,18 +450,21 @@ void game_init(void)
 	r1_init_map_resources(&r1, map);
 
 	{
+		/*
 		map_entity_t *worldspawn = map->worldspawn;
 
 		v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
 		float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
 
 		sun_color = mul(sun_brightness, sun_color);
+		*/
 
 		map->fog_absorption = 0.002f;
 		map->fog_density    = 0.02f;
 		map->fog_scattering = 0.04f;
 		map->fog_phase_k    = 0.6f;
 
+		/*
 		float absorption = map->fog_absorption;
 		float density    = map->fog_density;
 		float scattering = map->fog_scattering;
@@ -480,6 +483,7 @@ void game_init(void)
 			.fog_light_sample_count  = 4,
 			.fogmap_scale            = 16,
 		});
+		*/
 	}
 
 	//
@@ -933,6 +937,9 @@ static void game_tick(platform_io_t *io)
 	r1_update_window_resources(&r1, io->rhi_window);
 
 	r1_render_game_view(&r1, io->rhi_command_list, rhi_get_current_backbuffer(io->rhi_window), &view, world);
+
+	ui_render_command_list_t *ui_commands = ui_get_render_commands();
+	r1_render_ui(&r1, io->rhi_command_list, rhi_get_current_backbuffer(io->rhi_window), ui_commands);
 
 	//
 	//

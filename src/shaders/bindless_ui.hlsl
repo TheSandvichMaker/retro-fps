@@ -45,13 +45,13 @@ struct UIRect
 	float      inner_radius;
 	uint       flags;
 	Rect2Fixed clip_rect;
-	// uint       texture;
+	df::Resource< Texture2D > texture;
 };
 
 struct DrawParameters
 {
 	df::Resource< StructuredBuffer<UIRect> > rects;
-	df::Resource< Texture2D >                texture;
+	//df::Resource< Texture2D >                texture;
 };
 
 ConstantBuffer<DrawParameters> draw : register(b0);
@@ -77,11 +77,11 @@ VSOut MainVS(uint vertex_id       : SV_VertexID,
 	float2 grown_radius = radius + r;
 	float2 grown_ratio  = grown_radius / radius;
 	
-	float4 verts[] = {
-		{ center + float2(-grown_radius.x, -grown_radius.y), 0, 1 },
-		{ center + float2(-grown_radius.x, +grown_radius.y), 0, 1 },
-		{ center + float2(+grown_radius.x, -grown_radius.y), 0, 1 },
-		{ center + float2(+grown_radius.x, +grown_radius.y), 0, 1 },
+	float2 verts[] = {
+		{ center + float2(-grown_radius.x, -grown_radius.y) },
+		{ center + float2(-grown_radius.x, +grown_radius.y) },
+		{ center + float2(+grown_radius.x, -grown_radius.y) },
+		{ center + float2(+grown_radius.x, +grown_radius.y) },
 	};
 
 	float2 uv_center       = 0.5*(rect.uv_min + rect.uv_max);
@@ -102,14 +102,17 @@ VSOut MainVS(uint vertex_id       : SV_VertexID,
 		rect.color_11,
 	};
 
-	float4 vert = verts[vertex_id];
-	vert = 2.0f*(vert / float4(view.view_size, 1, 1)) - 1.0f;
+	float2 vert = verts[vertex_id];
+	vert = 2.0f*(vert / view.view_size) - 1.0f;
+
+	float4 color = colors[vertex_id].Unpack();
+	color.rgb *= color.rgb;
 
 	VSOut OUT;
-	OUT.pos   = vert;
+	OUT.pos   = float4(vert, 0, 1);
     OUT.uv    = uvs[vertex_id];
 	OUT.id    = instance_id + instance_offset;
-	OUT.color = colors[vertex_id].Unpack();
+	OUT.color = color;
 	return OUT;
 }
 
@@ -167,7 +170,7 @@ float4 MainPS(VSOut IN) : SV_Target
 
 	if (all(uv >= uv_min) && all(uv <= uv_max))
 	{
-		float4 tex_col = draw.texture.Get().SampleLevel(df::s_linear_clamped, uv, 0);
+		float4 tex_col = rect.texture.Get().SampleLevel(df::s_linear_clamped, uv, 0);
 		if (rect.flags & R_UI_RECT_BLEND_TEXT)
 		{
 			color *= sqrt(tex_col.r);

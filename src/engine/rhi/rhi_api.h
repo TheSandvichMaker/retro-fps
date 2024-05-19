@@ -93,6 +93,7 @@ typedef struct rhi_create_texture_params_t
 	uint32_t                height;
 	uint32_t                depth;
 	uint32_t                mip_levels;
+	uint32_t                multisample_count;
 
 	rhi_texture_usage_t     usage;
 	pixel_format_t          format;
@@ -101,6 +102,12 @@ typedef struct rhi_create_texture_params_t
 
 	rhi_texture_data_t     *initial_data;
 } rhi_create_texture_params_t;
+
+typedef enum rhi_upload_frequency_t
+{
+	RhiUploadFreq_frame,
+	RhiUploadFreq_background,
+} rhi_upload_frequency_t;
 
 fn rhi_texture_t     rhi_create_texture         (const rhi_create_texture_params_t *params);
 fn void              rhi_destroy_texture        (rhi_texture_t handle);
@@ -133,8 +140,11 @@ typedef struct rhi_create_buffer_params_t
 } rhi_create_buffer_params_t;
 
 fn rhi_buffer_t     rhi_create_buffer(const rhi_create_buffer_params_t *params);
-fn void             rhi_upload_buffer_data(rhi_buffer_t buffer, size_t dst_offset, const rhi_buffer_data_t *src);
+fn void             rhi_upload_buffer_data(rhi_buffer_t buffer, size_t dst_offset, const void *src, size_t src_size, rhi_upload_frequency_t frequency);
 fn rhi_buffer_srv_t rhi_get_buffer_srv(rhi_buffer_t buffer);
+
+fn void *rhi_begin_buffer_upload(rhi_buffer_t buffer, size_t offset, size_t size, rhi_upload_frequency_t frequency);
+fn void  rhi_end_buffer_upload  (rhi_buffer_t buffer);
 
 fn rhi_buffer_t rhi_create_structured_buffer(string_t debug_name, 
 											 uint32_t first_element, 
@@ -399,6 +409,7 @@ typedef struct rhi_create_graphics_pso_params_t
 } rhi_create_graphics_pso_params_t;
 
 fn rhi_pso_t rhi_create_graphics_pso(const rhi_create_graphics_pso_params_t *params);
+fn void      rhi_destroy_pso(rhi_pso_t pso);
 
 typedef enum rhi_pass_op_t
 {
@@ -449,8 +460,12 @@ fn void                rhi_graphics_pass_begin(rhi_command_list_t *list, const r
 fn void                rhi_set_pso            (rhi_command_list_t *list, rhi_pso_t pso);
 fn void                rhi_draw               (rhi_command_list_t *list, uint32_t vertex_count, uint32_t start_vertex);
 fn void                rhi_draw_indexed       (rhi_command_list_t *list, rhi_buffer_t index_buffer_handle, uint32_t index_count, uint32_t start_index, uint32_t start_vertex);
+fn void                rhi_draw_instanced     (rhi_command_list_t *list, uint32_t vertex_count, uint32_t start_vertex, uint32_t instance_count, uint32_t start_instance);
 fn void                rhi_graphics_pass_end  (rhi_command_list_t *list);
 fn void                rhi_end_frame          (void);
+
+fn void rhi_begin_region(rhi_command_list_t *list, string_t region);
+fn void rhi_end_region  (rhi_command_list_t *list);
 
 fn_local void rhi_simple_graphics_pass_begin(rhi_command_list_t *list, 
 											 rhi_texture_t render_target,

@@ -293,6 +293,7 @@ typedef struct r_ui_rect_t
 	float    inner_radius;      // 84
 	uint32_t flags;             // 88
 	r_rect2_fixed_t clip_rect;
+	rhi_texture_srv_t texture;
 } r_ui_rect_t;
 
 typedef struct r_command_ui_rects_t

@@ -789,16 +789,16 @@ rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_tex
 					},
 
 					&(ui_render_command_t){
-						.texture = font->texture,
 						.rect = {
-							.rect = rect,
+							.rect       = rect,
 							.tex_coords = rect_uv,
-							.color_00 = color_packed,
-							.color_10 = color_packed,
-							.color_11 = color_packed,
-							.color_01 = color_packed,
-							.flags    = R_UI_RECT_BLEND_TEXT,
-							.clip_rect = ui_get_clip_rect(),
+							.color_00   = color_packed,
+							.color_10   = color_packed,
+							.color_11   = color_packed,
+							.color_01   = color_packed,
+							.flags      = R_UI_RECT_BLEND_TEXT,
+							.clip_rect  = ui_get_clip_rect(),
+							.texture    = rhi_get_texture_srv(font->texture),
 						},
 					}
                 );

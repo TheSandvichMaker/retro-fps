@@ -114,6 +114,16 @@ fn_local float fmod_ss(float x, float y)
     return x - n*y;
 }
 
+fn_local bool flt_is_nan(float x)
+{
+	return x != x;
+}
+
+fn_local bool v3_contains_nan(v3_t x)
+{
+	return flt_is_nan(x.x) || flt_is_nan(x.y) || flt_is_nan(x.z);
+}
+
 #ifdef NO_STD_LIB
 #pragma function(logf)
 inline float logf(float x) { return log_ss(x); }

@@ -11,6 +11,7 @@ typedef struct d3d12_buffer_arena_t
 
 typedef struct d3d12_buffer_allocation_t
 {
+	ID3D12Resource           *buffer;
 	size_t                    offset;
 	void                     *cpu;
 	D3D12_GPU_VIRTUAL_ADDRESS gpu;

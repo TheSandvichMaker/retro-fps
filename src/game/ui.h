@@ -463,7 +463,7 @@ typedef struct ui_render_command_key_t
 
 typedef struct ui_render_command_t
 {
-    texture_handle_t texture;
+    //texture_handle_t texture;
     r_ui_rect_t rect;
 } ui_render_command_t;
 

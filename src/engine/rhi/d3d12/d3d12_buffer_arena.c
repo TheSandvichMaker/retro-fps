@@ -40,9 +40,12 @@ d3d12_buffer_allocation_t d3d12_arena_alloc(d3d12_buffer_arena_t *arena, uint32_
 
 	if (ALWAYS(at_aligned + size <= arena->capacity))
 	{
-		result.cpu = arena->cpu_base + at_aligned;
-		result.gpu = arena->gpu_base + at_aligned;
+		result.offset = at_aligned;
+		result.cpu    = arena->cpu_base + at_aligned;
+		result.gpu    = arena->gpu_base + at_aligned;
 	}
+
+	result.buffer = arena->buffer;
 
 	return result;
 }
