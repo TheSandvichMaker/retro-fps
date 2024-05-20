@@ -60,7 +60,42 @@ typedef struct debug_line_draw_parameters_t
 
 #define set_draw_parameters(list, parameters) rhi_set_parameters(list, R1ParameterSlot_draw, parameters, sizeof(*(parameters)))
 
-fn_local void r1_create_psos(r1_state_t *r1, uint32_t multisample_count)
+fn_local uint32_t r1_get_region_index(string_t identifier)
+{
+	uint64_t hash = string_hash(identifier);
+	uint64_t index;
+	if (!table_find(&r1->region_indices, hash, &index))
+	{
+		index = r1->next_region_index++;
+		table_insert(&r1->region_indices, hash, index);
+
+		r1->region_identifiers[index] = string_copy(&r1->arena, identifier);
+	}
+
+	return (uint32_t)index;
+}
+
+fn_local void r1_begin_timed_region(rhi_command_list_t *list, string_t identifier)
+{
+	const uint32_t region_index       = r1_get_region_index(identifier);
+	const uint32_t start_timing_index = 2*region_index + 0;
+
+	rhi_record_timestamp(list, start_timing_index);
+	rhi_begin_region    (list, identifier);
+}
+
+fn_local void r1_end_timed_region(rhi_command_list_t *list, string_t identifier)
+{
+	const uint32_t region_index     = r1_get_region_index(identifier);
+	const uint32_t end_timing_index = 2*region_index + 1;
+
+	rhi_record_timestamp(list, end_timing_index);
+	rhi_end_region      (list);
+}
+
+#define R1_TIMED_REGION(list, identifier) DEFER_LOOP(r1_begin_timed_region(list, identifier), r1_end_timed_region(list, identifier))
+
+fn_local void r1_create_psos(uint32_t multisample_count)
 {
 	rhi_destroy_pso(r1->psos.map);
 	rhi_destroy_pso(r1->psos.sun_shadows);
@@ -209,8 +244,20 @@ fn_local void r1_create_psos(r1_state_t *r1, uint32_t multisample_count)
 	}
 }
 
-void r1_init(r1_state_t *r1)
+void r1_init(void)
 {
+	ASSERT(!r1);
+
+	r1 = m_bootstrap(r1_state_t, arena);
+
+	const uint32_t max_timestamps = 2*R1MaxRegions; // one for region start, one for region end
+
+	// the RHI layer doesn't create the timestamp query/readback buffers automatically,
+	// because you might not care and you want to be able to specify the capacity in
+	// application logic I think
+	rhi_init_timestamps(max_timestamps);
+	r1->timestamp_frequency = rhi_get_timestamp_frequency();
+
 	r1->multisample_count = 8;
 
 	uint32_t white_pixel = 0xFFFFFFFF;
@@ -279,10 +326,10 @@ void r1_init(r1_state_t *r1)
 		},
 	});
 
-	r1_create_psos(r1, r1->multisample_count);
+	r1_create_psos(r1->multisample_count);
 }
 
-void r1_init_map_resources(r1_state_t *r1, map_t *map)
+void r1_init_map_resources(map_t *map)
 {
 	uint32_t positions_size = (uint32_t)(sizeof(map->vertex.positions[0])*map->vertex_count);
 	uint32_t uvs_size       = (uint32_t)(sizeof(map->vertex.texcoords[0])*map->vertex_count);
@@ -345,7 +392,7 @@ void r1_init_map_resources(r1_state_t *r1, map_t *map)
 	});
 }
 
-void r1_update_window_resources(r1_state_t *r1, rhi_window_t window)
+void r1_update_window_resources(rhi_window_t window)
 {
 	rhi_texture_t rt = rhi_get_current_backbuffer(window);
 
@@ -383,12 +430,12 @@ void r1_update_window_resources(r1_state_t *r1, rhi_window_t window)
 	}
 }
 
-fn_local void r1_render_sun_shadows(r1_state_t *r1, rhi_command_list_t *list, map_t *map);
-fn_local void r1_render_map        (r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t rt, map_t *map);
-fn_local void r1_post_process      (r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t color_hdr, rhi_texture_t rt_result);
-fn_local void r1_render_debug_lines(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t rt);
+fn_local void r1_render_sun_shadows(rhi_command_list_t *list, map_t *map);
+fn_local void r1_render_map        (rhi_command_list_t *list, rhi_texture_t rt, map_t *map);
+fn_local void r1_post_process      (rhi_command_list_t *list, rhi_texture_t color_hdr, rhi_texture_t rt_result);
+fn_local void r1_render_debug_lines(rhi_command_list_t *list, rhi_texture_t rt);
 
-void r1_render_game_view(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t backbuffer, r_view_t *view, world_t *world)
+void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t backbuffer, r_view_t *view, world_t *world)
 {
 	rhi_begin_region(list, S("Game View"));
 
@@ -420,19 +467,19 @@ void r1_render_game_view(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t
 
 	if (map)
 	{
-		r1_render_sun_shadows(r1, list, map);
-		r1_render_map        (r1, list, rt_hdr, map);
-		r1_render_debug_lines(r1, list, rt_hdr);
+		r1_render_sun_shadows(list, map);
+		r1_render_map        (list, rt_hdr, map);
+		r1_render_debug_lines(list, rt_hdr);
 	}
 
-	r1_post_process(r1, list, rt_hdr, backbuffer);
+	r1_post_process(list, rt_hdr, backbuffer);
 
 	rhi_end_region(list);
 }
 
-void r1_render_sun_shadows(r1_state_t *r1, rhi_command_list_t *list, map_t *map)
+void r1_render_sun_shadows(rhi_command_list_t *list, map_t *map)
 {
-	RHI_TIMED_REGION(list, S("Sun Shadows"))
+	R1_TIMED_REGION(list, S("Sun Shadows"))
 	{
 		rhi_graphics_pass_begin(list, &(rhi_graphics_pass_params_t){
 			.depth_stencil = {
@@ -462,9 +509,9 @@ void r1_render_sun_shadows(r1_state_t *r1, rhi_command_list_t *list, map_t *map)
 	}
 }
 
-void r1_render_map(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t rt, map_t *map)
+void r1_render_map(rhi_command_list_t *list, rhi_texture_t rt, map_t *map)
 {
-	RHI_TIMED_REGION(list, S("Map"))
+	R1_TIMED_REGION(list, S("Map"))
 	{
 		map_pass_parameters_t pass_parameters = {
 			.positions     = rhi_get_buffer_srv (r1->map.positions),
@@ -545,28 +592,24 @@ void r1_render_map(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t rt, m
 	}
 }
 
-void r1_render_debug_lines(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t rt)
+void r1_render_debug_lines(rhi_command_list_t *list, rhi_texture_t rt)
 {
 	if (debug_line_count > 0)
 	{
 		size_t upload_size = sizeof(debug_line_t)*debug_line_count;
 
-		RHI_TIMED_REGION(list, S("Copy Debug Lines"))
+		R1_TIMED_REGION(list, S("Copy Debug Lines"))
 		{
 			rhi_upload_buffer_data(r1->debug_lines, 0, debug_lines, upload_size, RhiUploadFreq_frame);
 		}
 
-		RHI_TIMED_REGION(list, S("Draw Debug Lines"))
+		R1_TIMED_REGION(list, S("Draw Debug Lines"))
 		{
 			const rhi_texture_desc_t *rt_desc = rhi_get_texture_desc(rt);
 
 			rhi_graphics_pass_begin(list, &(rhi_graphics_pass_params_t){
-				.render_targets[0] = {
-					.texture = rt,
-				},
-				.depth_stencil = {
-					.texture = r1->window.depth_stencil,
-				},
+				.render_targets[0].texture = rt,
+				.depth_stencil.texture     = r1->window.depth_stencil,
 				.topology = RhiPrimitiveTopology_linelist,
 				.viewport = {
 					.width  = (float)rt_desc->width,
@@ -593,9 +636,9 @@ void r1_render_debug_lines(r1_state_t *r1, rhi_command_list_t *list, rhi_texture
 	debug_line_count = 0;
 }
 
-void r1_post_process(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_texture_t rt_result)
+void r1_post_process(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_texture_t rt_result)
 {
-	RHI_TIMED_REGION(list, S("Post Process"))
+	R1_TIMED_REGION(list, S("Post Process"))
 	{
 		rhi_simple_graphics_pass_begin(list, rt_result, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
 		{
@@ -613,11 +656,11 @@ void r1_post_process(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t hdr
 	}
 }
 
-void r1_render_ui(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t rt, ui_render_command_list_t *ui_list)
+void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, ui_render_command_list_t *ui_list)
 {
 	size_t upload_size = sizeof(r_ui_rect_t) * ui_list->count;
 
-	RHI_TIMED_REGION(list, S("Copy UI Rects"))
+	R1_TIMED_REGION(list, S("Copy UI Rects"))
 	{
 		if (upload_size > 0)
 		{
@@ -642,7 +685,7 @@ void r1_render_ui(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t rt, ui
 		}
 	}
 
-	RHI_TIMED_REGION(list, S("Draw UI"))
+	R1_TIMED_REGION(list, S("Draw UI"))
 	{
 		rhi_simple_graphics_pass_begin(list, rt, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglestrip);
 		{
@@ -657,6 +700,35 @@ void r1_render_ui(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t rt, ui
 		}
 		rhi_graphics_pass_end(list);
 	}
+}
+
+r1_stats_t r1_report_stats(arena_t *arena)
+{
+	uint32_t regions_count = r1->next_region_index;
+
+	r1_stats_t result = {
+		.timings_count = regions_count,
+		.timings       = m_alloc_array_nozero(arena, regions_count, r1_timing_t),
+	};
+
+	uint64_t timestamp_frequency = r1->timestamp_frequency;
+
+	uint64_t *timestamps = rhi_begin_read_timestamps();
+	for (size_t i = 0; i < regions_count; i++)
+	{
+		uint64_t start   = timestamps[2*i + 0];
+		uint64_t end     = timestamps[2*i + 1];
+		uint64_t delta   = end - start;
+		double   seconds = (double)delta / (double)timestamp_frequency;
+
+		r1_timing_t *timing = &result.timings[i];
+		timing->identifier     = r1->region_identifiers[i];
+		timing->inclusive_time = seconds;
+		timing->exclusive_time = seconds; // TODO: Handle nested regions
+	}
+	rhi_end_read_timestamps();
+
+	return result;
 }
 
 void draw_debug_line(v3_t start, v3_t end, v4_t start_color, v4_t end_color)

@@ -1223,6 +1223,8 @@ rhi_buffer_srv_t rhi_get_buffer_srv(rhi_buffer_t handle)
 	return result;
 }
 
+fn_local void d3d12_resolve_timestamp_queries(ID3D12GraphicsCommandList *list);
+
 void rhi_begin_frame(void)
 {
 	d3d12_frame_state_t *frame = d3d12_get_frame_state(g_rhi.frame_index);
@@ -1650,6 +1652,8 @@ void rhi_end_frame(void)
 		}
 	}
 
+	d3d12_resolve_timestamp_queries(list);
+
 	ID3D12GraphicsCommandList_Close(list);
 
 	ID3D12CommandQueue_BeginEvent(g_rhi.direct_queue, 1, "Draw Frame", sizeof("Draw Frame"));
@@ -1768,15 +1772,99 @@ void rhi_end_region(rhi_command_list_t *list)
 	ID3D12GraphicsCommandList_EndEvent(list->d3d);
 }
 
-void rhi_begin_timed_region(rhi_command_list_t *list, string_t identifier)
+void rhi_init_timestamps(uint32_t max_timestamps_per_frame_count)
 {
-	rhi_begin_region(list, identifier);
+	ASSERT_MSG(g_rhi.max_timestamps_per_frame == 0, "You can't init timestamps more than once!");
+
+	uint32_t capacity = g_rhi.frame_latency * max_timestamps_per_frame_count; // TODO: What if we switch between double and triple buffering at runtime?
+
+	HRESULT hr;
+
+	{
+		D3D12_QUERY_HEAP_DESC desc = {
+			.Type  = D3D12_QUERY_HEAP_TYPE_TIMESTAMP,
+			.Count = capacity,
+		};
+
+		hr = ID3D12Device_CreateQueryHeap(g_rhi.device, &desc, &IID_ID3D12QueryHeap, &g_rhi.timestamps_heap);
+		ASSERT(SUCCEEDED(hr));
+
+		d3d12_set_debug_name((ID3D12Object *)g_rhi.timestamps_heap, S("Timestamps Query Heap"));
+	}
+
+	uint32_t readback_size = sizeof(uint64_t)*capacity;
+	g_rhi.timestamps_readback = d3d12_create_readback_buffer(g_rhi.device, readback_size, S("Timestamp Query Readback Buffer"));
+
+	g_rhi.max_timestamps_per_frame = max_timestamps_per_frame_count;
 }
 
-void rhi_end_timed_region(rhi_command_list_t *list, string_t identifier)
+void rhi_record_timestamp(rhi_command_list_t *list, uint32_t index)
 {
-	(void)identifier;
-	rhi_end_region(list);
+	ASSERT_MSG(index < g_rhi.max_timestamps_per_frame, 
+			   "Timestamp index out of bounds! max: %u, index: %u", g_rhi.max_timestamps_per_frame, index);
+
+	g_rhi.timestamp_watermark = MAX(g_rhi.timestamp_watermark, index);
+
+	const uint32_t frame_index  = g_rhi.frame_index % g_rhi.frame_latency;
+	const uint32_t actual_index = frame_index*g_rhi.max_timestamps_per_frame + index;
+	ID3D12GraphicsCommandList_EndQuery(list->d3d, g_rhi.timestamps_heap, D3D12_QUERY_TYPE_TIMESTAMP, actual_index);
+}
+
+uint64_t rhi_get_timestamp_frequency(void)
+{
+	uint64_t result = 0;
+	ID3D12CommandQueue_GetTimestampFrequency(g_rhi.direct_queue, &result);
+
+	return result;
+}
+
+uint64_t *rhi_begin_read_timestamps(void)
+{
+	ASSERT_MSG(!g_rhi.timestamps_readback_is_mapped, "You can't begin reading timestamps without first ending the previous read");
+	ASSERT_MSG(g_rhi.timestamps_readback, "You have to initialize timestamps before you can try to read them");
+
+	const uint32_t frame_index            = g_rhi.frame_index % g_rhi.frame_latency;
+	const uint32_t timestamps_start_index = frame_index*g_rhi.max_timestamps_per_frame;
+	
+	void *mapped = NULL;
+
+	D3D12_RANGE read_range = {
+		.Begin = sizeof(uint64_t)*(timestamps_start_index),
+		.End   = sizeof(uint64_t)*(timestamps_start_index + g_rhi.max_timestamps_per_frame),
+	};
+
+	HRESULT hr = ID3D12Resource_Map(g_rhi.timestamps_readback, 0, &read_range, &mapped);
+	D3D12_CHECK_HR(hr, return NULL);
+
+	g_rhi.timestamps_readback_is_mapped = true;
+
+	return mapped;
+}
+
+void rhi_end_read_timestamps(void)
+{
+	ASSERT_MSG(g_rhi.timestamps_readback_is_mapped, "You can't end reading timestamps without first beginning a read");
+
+	ID3D12Resource_Unmap(g_rhi.timestamps_readback, 0, &(D3D12_RANGE){0});
+
+	g_rhi.timestamps_readback_is_mapped = false;
+}
+
+void d3d12_resolve_timestamp_queries(ID3D12GraphicsCommandList *list)
+{
+	const uint32_t frame_index = g_rhi.frame_index % g_rhi.frame_latency;
+	const uint32_t start_index = frame_index*g_rhi.max_timestamps_per_frame;
+
+	// TODO: This doesn't work. Need to handle sparse queries
+	const uint32_t queries_to_resolve = g_rhi.timestamp_watermark + 1;
+
+	ID3D12GraphicsCommandList_ResolveQueryData(list, 
+											   g_rhi.timestamps_heap,
+											   D3D12_QUERY_TYPE_TIMESTAMP,
+											   start_index,
+											   queries_to_resolve,
+											   g_rhi.timestamps_readback,
+											   sizeof(uint64_t)*start_index);
 }
 
 void rhi_marker(rhi_command_list_t *list, string_t marker)
@@ -1786,4 +1874,10 @@ void rhi_marker(rhi_command_list_t *list, string_t marker)
 		string_t terminated = string_null_terminate(temp, marker);
 		ID3D12GraphicsCommandList_SetMarker(list->d3d, 1, terminated.data, (UINT)terminated.count + 1);
 	}
+}
+
+void rhi_flush_everything(void)
+{
+	d3d12_flush_direct_command_queue();
+	d3d12_flush_ring_buffer_uploads();
 }

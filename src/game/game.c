@@ -50,8 +50,6 @@ static mixer_id_t music;
 
 static triangle_mesh_t test_convex_hull;
 
-static r1_state_t r1;
-
 v3_t player_view_origin(player_t *player)
 {
     v3_t result = player->p;
@@ -446,8 +444,8 @@ void game_init(void)
 	// R1
 	//
 
-	r1_init(&r1);
-	r1_init_map_resources(&r1, map);
+	r1_init();
+	r1_init_map_resources(map);
 
 	{
 		/*
@@ -650,50 +648,6 @@ fn_local r_view_index_t render_map(r_context_t *rc, camera_t *camera, map_t *map
     return game_view;
 }
 
-fn_local void render_game_ui(r_context_t *rc, world_t *world)
-{
-#if 0
-    int res_x, res_y;
-    render->get_resolution(&res_x, &res_y);
-#endif
-	int res_x = 1920;
-	int res_y = 1080;
-
-    v2_t res = make_v2((float)res_x, (float)res_y);
-
-    R_COMMAND_IDENTIFIER_FUNC(rc)
-    R_LAYER     (rc, R_SCREEN_LAYER_SCENE)
-    R_VIEW      (rc, rc->screenspace) 
-    R_VIEW_LAYER(rc, R_VIEW_LAYER_UI) 
-    R_IMMEDIATE (rc, imm)
-    {
-        if (g_cursor_locked)
-        {
-            //
-            // reticle 
-            //
-
-            v2_t center = mul(0.5f, res);
-            v2_t dim    = make_v2(4, 4);
-
-            rect2_t inner_rect = rect2_center_dim(center, dim);
-            rect2_t outer_rect = rect2_add_radius(inner_rect, make_v2(1, 1));
-
-            r_immediate_rect2_filled(rc, outer_rect, make_v4(0, 0, 0, 0.85f));
-            r_immediate_rect2_filled(rc, inner_rect, COLORF_WHITE);
-        }
-
-        //
-        // fade
-        //
-
-        float fade_t = world->fade_t;
-
-        rect2_t rect = { 0, 0, (float)res_x, (float)res_y, };
-        r_immediate_rect2_filled(rc, rect, make_v4(0, 0, 0, fade_t));
-    }
-}
-
 static void game_tick(platform_io_t *io)
 {
 	float dt = io->dt;
@@ -859,7 +813,6 @@ static void game_tick(platform_io_t *io)
     r_view_index_t game_view = render_map(rc, camera, map);
 
     world->fade_t += 0.45f*dt*(world->fade_target_t - world->fade_t);
-    render_game_ui(rc, world);
 
     update_and_render_in_game_editor(rc, game_view);
 
@@ -901,12 +854,11 @@ static void game_tick(platform_io_t *io)
     scene->fog_scattering  = map->fog_scattering;
     scene->fog_phase_k     = map->fog_phase_k;
 
-	r1_update_window_resources(&r1, io->rhi_window);
-
-	r1_render_game_view(&r1, io->rhi_command_list, rhi_get_current_backbuffer(io->rhi_window), &view, world);
+	r1_update_window_resources(io->rhi_window);
+	r1_render_game_view(io->rhi_command_list, rhi_get_current_backbuffer(io->rhi_window), &view, world);
 
 	ui_render_command_list_t *ui_commands = ui_get_render_commands();
-	r1_render_ui(&r1, io->rhi_command_list, rhi_get_current_backbuffer(io->rhi_window), ui_commands);
+	r1_render_ui(io->rhi_command_list, rhi_get_current_backbuffer(io->rhi_window), ui_commands);
 
 	//
 	//

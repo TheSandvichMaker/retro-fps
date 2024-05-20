@@ -84,6 +84,12 @@ typedef struct rhi_state_d3d12_t
 
 	ID3D12RootSignature *rs_bindless;
 
+	bool             timestamps_readback_is_mapped;
+	uint32_t         max_timestamps_per_frame;
+	uint32_t         timestamp_watermark; // TODO: This solution doesn't work
+	ID3D12Resource  *timestamps_readback;
+	ID3D12QueryHeap *timestamps_heap;
+
 	d3d12_descriptor_heap_t cbv_srv_uav;
 	d3d12_descriptor_heap_t rtv;
 	d3d12_descriptor_heap_t dsv;

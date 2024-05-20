@@ -464,15 +464,17 @@ fn void                rhi_draw_instanced     (rhi_command_list_t *list, uint32_
 fn void                rhi_graphics_pass_end  (rhi_command_list_t *list);
 fn void                rhi_end_frame          (void);
 
+fn void rhi_flush_everything(void);
+
 fn void rhi_begin_region(rhi_command_list_t *list, string_t region);
 fn void rhi_end_region  (rhi_command_list_t *list);
 fn void rhi_marker      (rhi_command_list_t *list, string_t marker);
 
-fn void rhi_begin_timed_region(rhi_command_list_t *list, string_t identifier);
-fn void rhi_end_timed_region(rhi_command_list_t *list, string_t identifier);
-
-#define RHI_TIMED_REGION(list, identifier) \
-	DEFER_LOOP(rhi_begin_timed_region(list, identifier), rhi_end_timed_region(list, identifier))
+fn void      rhi_init_timestamps        (uint32_t max_timestamps_per_frame_count);
+fn void      rhi_record_timestamp       (rhi_command_list_t *list, uint32_t index);
+fn uint64_t  rhi_get_timestamp_frequency(void);
+fn uint64_t *rhi_begin_read_timestamps  (void);
+fn void      rhi_end_read_timestamps    (void);
 
 fn_local void rhi_simple_graphics_pass_begin(rhi_command_list_t *list, 
 											 rhi_texture_t render_target,

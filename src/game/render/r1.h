@@ -1,9 +1,12 @@
 #pragma once
 
 enum { R1MaxUiRects = 4096 }; // TODO: Transient GPU allocator with CreatePlacedResource
+enum { R1MaxRegions = 512  };
 
 typedef struct r1_state_t
 {
+	arena_t arena;
+
 	rhi_texture_t     white_texture;
 	rhi_texture_srv_t white_texture_srv;
 
@@ -19,6 +22,11 @@ typedef struct r1_state_t
 
 	rhi_buffer_t      ui_rects;
 	rhi_buffer_t      debug_lines;
+
+	uint64_t timestamp_frequency;
+	uint32_t next_region_index;
+	string_t region_identifiers[R1MaxRegions];
+	table_t  region_indices;
 
 	struct
 	{
@@ -46,10 +54,27 @@ typedef struct r1_state_t
 	} map;
 } r1_state_t;
 
-fn void r1_init(r1_state_t *r1);
-fn void r1_update_window_resources(r1_state_t *r1, rhi_window_t window);
-fn void r1_render_game_view(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t rt, r_view_t *view, struct world_t *world);
-fn void r1_render_ui(r1_state_t *r1, rhi_command_list_t *list, rhi_texture_t rt, struct ui_render_command_list_t *ui_list);
+global r1_state_t *r1;
+
+fn void r1_init(void);
+fn void r1_update_window_resources(rhi_window_t window);
+fn void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t rt, r_view_t *view, struct world_t *world);
+fn void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, struct ui_render_command_list_t *ui_list);
+
+typedef struct r1_timing_t
+{
+	string_t identifier;
+	double   inclusive_time;
+	double   exclusive_time;
+} r1_timing_t;
+
+typedef struct r1_stats_t
+{
+	uint32_t     timings_count;
+	r1_timing_t *timings;
+} r1_stats_t; 
+
+fn r1_stats_t r1_report_stats(arena_t *arena);
 
 typedef struct debug_line_t
 {

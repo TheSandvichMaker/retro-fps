@@ -600,6 +600,10 @@ int wWinMain(HINSTANCE instance,
 		start_time = end_time;
     }
 
+#if DF_USE_RHI_ABSTRACTION
+	rhi_flush_everything();
+#endif
+
     return 0;
 }
 

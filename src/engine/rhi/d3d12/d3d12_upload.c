@@ -193,3 +193,15 @@ uint64_t d3d12_upload_end(const d3d12_upload_context_t *ctx)
 
 	return fence_value;
 }
+
+void d3d12_flush_ring_buffer_uploads(void)
+{
+	d3d12_upload_ring_buffer_t *ring_buffer = &g_rhi.upload_ring_buffer;
+
+	uint64_t fence_value = ID3D12Fence_GetCompletedValue(ring_buffer->fence);
+
+	if (fence_value < ring_buffer->fence_value)
+	{
+		ID3D12Fence_SetEventOnCompletion(ring_buffer->fence, ring_buffer->fence_value, NULL);
+	}
+}

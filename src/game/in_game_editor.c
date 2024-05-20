@@ -686,24 +686,27 @@ fn_local void render_lm_editor(r_context_t *rc)
     }
 }
 
-fn_local void fullscreen_show_timings(void)
+fn_local void show_render_stats(void)
 {
-#if 0
-    UI_SCALAR(UI_SCALAR_TEXT_ALIGN_X, 0.5f)
-    {
-        r_timings_t timings;
-        render->get_timings(&timings);
+	m_scoped_temp
+	{
+		r1_stats_t stats = r1_report_stats(temp);
 
-        float total = 0.0f;
-        for (int i = 1; i < RENDER_TS_COUNT; i++)
-        {
-            ui_label(Sf("%s: %.02fms", r_timestamp_names[i], 1000.0*timings.dt[i]));
-            total += timings.dt[i];
-        }
+		UI_SCALAR(UI_SCALAR_TEXT_ALIGN_X, 0.5f)
+		{
+			double total = 0.0f;
 
-        ui_label(Sf("total: %.02fms", 1000.0*total));
-    }
-#endif
+			for (size_t i = 0; i < stats.timings_count; i++)
+			{
+				r1_timing_t *timing = &stats.timings[i];
+
+				ui_label(Sf("%.*s: %.02fms", Sx(timing->identifier), 1000.0*timing->inclusive_time));
+				total += timing->exclusive_time;
+			}
+
+			ui_label(Sf("total: %.02fms", 1000.0*total));
+		}
+	}
 }
 
 fn_local void ui_demo_proc(ui_window_t *window)
@@ -969,7 +972,9 @@ void update_and_render_in_game_editor(r_context_t *rc, r_view_index_t game_view)
 		fullscreen_update_and_render_top_editor_bar();
 
 		if (editor.show_timings)
-			fullscreen_show_timings();
+		{
+			show_render_stats();
+		}
 	}
 
 #if 0
