@@ -1803,7 +1803,7 @@ void rhi_record_timestamp(rhi_command_list_t *list, uint32_t index)
 	ASSERT_MSG(index < g_rhi.max_timestamps_per_frame, 
 			   "Timestamp index out of bounds! max: %u, index: %u", g_rhi.max_timestamps_per_frame, index);
 
-	g_rhi.timestamp_watermark = MAX(g_rhi.timestamp_watermark, index);
+	g_rhi.timestamps_watermark = MAX(g_rhi.timestamps_watermark, index);
 
 	const uint32_t frame_index  = g_rhi.frame_index % g_rhi.frame_latency;
 	const uint32_t actual_index = frame_index*g_rhi.max_timestamps_per_frame + index;
@@ -1856,7 +1856,7 @@ void d3d12_resolve_timestamp_queries(ID3D12GraphicsCommandList *list)
 	const uint32_t start_index = frame_index*g_rhi.max_timestamps_per_frame;
 
 	// TODO: This doesn't work. Need to handle sparse queries
-	const uint32_t queries_to_resolve = g_rhi.timestamp_watermark + 1;
+	const uint32_t queries_to_resolve = g_rhi.timestamps_watermark + 1;
 
 	ID3D12GraphicsCommandList_ResolveQueryData(list, 
 											   g_rhi.timestamps_heap,
@@ -1865,6 +1865,8 @@ void d3d12_resolve_timestamp_queries(ID3D12GraphicsCommandList *list)
 											   queries_to_resolve,
 											   g_rhi.timestamps_readback,
 											   sizeof(uint64_t)*start_index);
+
+	g_rhi.timestamps_watermark = 0;
 }
 
 void rhi_marker(rhi_command_list_t *list, string_t marker)

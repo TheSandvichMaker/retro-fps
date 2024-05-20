@@ -749,6 +749,8 @@ fn_local void ui_demo_proc(ui_window_t *window)
 	ui_hover_tooltip(S("Text edit demo box"));
 	ui_text_edit(S("Text Edit"), &demo->edit_buffer);
 
+	ui_checkbox(S("Debug Drawing"), &r1->debug_drawing_enabled);
+
 	if (ui_button(S("Hot Reload Dog")))
 	{
 		reload_asset(asset_hash_from_string(S("gamedata/textures/dog.png")));

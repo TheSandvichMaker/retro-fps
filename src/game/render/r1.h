@@ -7,6 +7,8 @@ typedef struct r1_state_t
 {
 	arena_t arena;
 
+	bool debug_drawing_enabled;
+
 	rhi_texture_t     white_texture;
 	rhi_texture_srv_t white_texture_srv;
 
@@ -25,8 +27,7 @@ typedef struct r1_state_t
 
 	uint64_t timestamp_frequency;
 	uint32_t next_region_index;
-	string_t region_identifiers[R1MaxRegions];
-	table_t  region_indices;
+	string_storage_t(256) region_identifiers[R1MaxRegions];
 
 	struct
 	{
