@@ -1105,7 +1105,6 @@ void rhi_end_buffer_upload(rhi_buffer_t handle)
 	ASSERT_MSG(buffer->upload.pending == true, "You can't end a buffer upload without beginning one!");
 
 	d3d12_frame_state_t *frame = d3d12_get_frame_state(g_rhi.frame_index);
-
 	ID3D12GraphicsCommandList *copy_list = frame->copy_command_list;
 
 	{
@@ -1767,4 +1766,24 @@ void rhi_begin_region(rhi_command_list_t *list, string_t region)
 void rhi_end_region(rhi_command_list_t *list)
 {
 	ID3D12GraphicsCommandList_EndEvent(list->d3d);
+}
+
+void rhi_begin_timed_region(rhi_command_list_t *list, string_t identifier)
+{
+	rhi_begin_region(list, identifier);
+}
+
+void rhi_end_timed_region(rhi_command_list_t *list, string_t identifier)
+{
+	(void)identifier;
+	rhi_end_region(list);
+}
+
+void rhi_marker(rhi_command_list_t *list, string_t marker)
+{
+	m_scoped_temp
+	{
+		string_t terminated = string_null_terminate(temp, marker);
+		ID3D12GraphicsCommandList_SetMarker(list->d3d, 1, terminated.data, (UINT)terminated.count + 1);
+	}
 }

@@ -105,7 +105,7 @@ VSOut MainVS(uint vertex_id       : SV_VertexID,
 	float2 vert = verts[vertex_id];
 	vert = 2.0f*(vert / view.view_size) - 1.0f;
 
-	float4 color = colors[vertex_id].Unpack();
+	float4 color = Unpack(colors[vertex_id]);
 	color.rgb *= color.rgb;
 
 	VSOut OUT;

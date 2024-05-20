@@ -535,6 +535,17 @@ fn_local r_view_index_t render_map(r_context_t *rc, camera_t *camera, map_t *map
 
     r_view_index_t game_view = r_make_view(rc, &view);
 
+	for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
+	{
+		map_entity_t *entity = &map->entities[entity_index];
+
+		if (is_class(map, entity, S("point_light")))
+		{
+			v3_t origin = v3_from_key(map, entity, S("origin"));
+			draw_debug_cube(rect3_center_radius(origin, make_v3(8, 8, 8)), COLORF_YELLOW);
+		}
+	}
+
 #if 0
     R_VIEW      (rc, game_view)
     R_VIEW_LAYER(rc, R_VIEW_LAYER_SCENE)
@@ -803,8 +814,6 @@ static void game_tick(platform_io_t *io)
     world->primary_camera = &g_camera;
     // update_and_render_physics_playground(world, dt);
 
-#if 1
-
     if (button_pressed(BUTTON_FIRE1))
 	{
 		static bool mono = true;
@@ -855,48 +864,6 @@ static void game_tick(platform_io_t *io)
     update_and_render_in_game_editor(rc, game_view);
 
     ui_end();
-
-#if 0
-    R_VIEW      (rc, game_view) 
-    R_VIEW_LAYER(rc, R_VIEW_LAYER_UI)
-    {
-        // bit of manhandling with the texture for now
-        texture_handle_t texture = NULL_HANDLE(texture_handle_t);
-        rc->current_ui_texture = NULL_HANDLE(texture_handle_t);
-
-        size_t commands_processed_count = 0;
-
-		ui_render_command_list_t *list = ui_get_render_commands();
-
-		for (size_t key_index = 0;
-			 key_index < list->count;
-			 key_index++)
-		{
-			const ui_render_command_key_t *key = &list->keys[key_index];
-
-			const size_t command_index = key->command_index;
-			const ui_render_command_t *command = &list->commands[command_index];
-
-			// bad code...
-#if !UI_FORCE_ONE_DRAW_CALL_PER_RECT_SLOW_DEBUG_STUFF 
-			if (!RESOURCE_HANDLES_EQUAL(command->texture, texture))
-#endif
-			{
-				r_flush_ui_rects(rc);
-				texture = command->texture;
-				rc->current_ui_texture = texture;
-			}
-
-			r_ui_rect(rc, command->rect);
-
-			commands_processed_count += 1;
-		}
-
-        r_flush_ui_rects(rc);
-    }
-#endif
-
-#endif // #if 1
 	
 	//
 	// R1

@@ -466,6 +466,13 @@ fn void                rhi_end_frame          (void);
 
 fn void rhi_begin_region(rhi_command_list_t *list, string_t region);
 fn void rhi_end_region  (rhi_command_list_t *list);
+fn void rhi_marker      (rhi_command_list_t *list, string_t marker);
+
+fn void rhi_begin_timed_region(rhi_command_list_t *list, string_t identifier);
+fn void rhi_end_timed_region(rhi_command_list_t *list, string_t identifier);
+
+#define RHI_TIMED_REGION(list, identifier) \
+	DEFER_LOOP(rhi_begin_timed_region(list, identifier), rhi_end_timed_region(list, identifier))
 
 fn_local void rhi_simple_graphics_pass_begin(rhi_command_list_t *list, 
 											 rhi_texture_t render_target,

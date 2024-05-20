@@ -29,16 +29,40 @@ float RemapTriPDF(float n)
 struct ColorRGBA8
 {
 	uint color;
-
-	float4 Unpack()
-	{
-		float4 result = float4((float)((color >>  0) & 0xFF) / 255.0f,
-							   (float)((color >>  8) & 0xFF) / 255.0f,
-							   (float)((color >> 16) & 0xFF) / 255.0f,
-							   (float)((color >> 24) & 0xFF) / 255.0f);
-		return result;
-	}
 };
+
+float4 Unpack(ColorRGBA8 rgba8)
+{
+	uint color = rgba8.color;
+
+	float4 result = float4((float)((color >>  0) & 0xFF) / 255.0f,
+						   (float)((color >>  8) & 0xFF) / 255.0f,
+						   (float)((color >> 16) & 0xFF) / 255.0f,
+						   (float)((color >> 24) & 0xFF) / 255.0f);
+	return result;
+}
+
+float3 LinearToSRGB(float3 lin)
+{
+	// TODO: do better
+	return sqrt(lin);
+}
+
+float3 SRGBToLinear(float3 srgb)
+{
+	// TODO: do better
+	return srgb * srgb;
+}
+
+float4 LinearToSRGB(float4 lin)
+{
+	return float4(LinearToSRGB(lin.rgb), lin.a);
+}
+
+float4 SRGBToLinear(float4 srgb)
+{
+	return float4(SRGBToLinear(srgb.rgb), srgb.a);
+}
 
 float2 FatPixel(float2 texture_dim, float2 in_uv)
 {
