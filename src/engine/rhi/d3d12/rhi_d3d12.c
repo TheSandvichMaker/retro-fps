@@ -37,7 +37,7 @@ fn_local void d3d12_wait_for_frame(uint64_t fence_value)
 fn_local bool d3d12_transition_state(ID3D12Resource *resource, 
 									 D3D12_RESOURCE_STATES *dst_state, 
 									 D3D12_RESOURCE_STATES desired_state, 
-									 D3D12_RESOURCE_BARRIER* barrier)
+									 D3D12_RESOURCE_BARRIER *barrier)
 {
 	ASSERT(resource);
 	ASSERT(dst_state);
@@ -351,8 +351,8 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 		};
 
 		D3D12_STATIC_SAMPLER_DESC static_samplers[] = {
-			[0] = { // s_linear_wrap
-				.Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+			[0] = { // s_aniso_wrap
+				.Filter           = D3D12_FILTER_ANISOTROPIC,
 				.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
 				.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
 				.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
@@ -364,8 +364,8 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 				.RegisterSpace    = 100,
 				.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
 			},
-			[1] = { // s_linear_clamped
-				.Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+			[1] = { // s_aniso_clamped
+				.Filter           = D3D12_FILTER_ANISOTROPIC,
 				.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
 				.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
 				.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
@@ -374,6 +374,30 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 				.MinLOD           = 0.0f,
 				.MaxLOD           = D3D12_FLOAT32_MAX,
 				.ShaderRegister   = 1,
+				.RegisterSpace    = 100,
+				.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
+			},
+			[0] = { // s_aniso_wrap
+				.Filter           = D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR,
+				.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+				.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+				.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+				.MipLODBias       = 0.0f,
+				.MinLOD           = 0.0f,
+				.MaxLOD           = D3D12_FLOAT32_MAX,
+				.ShaderRegister   = 2,
+				.RegisterSpace    = 100,
+				.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
+			},
+			[1] = { // s_aniso_clamped
+				.Filter           = D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR,
+				.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+				.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+				.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+				.MipLODBias       = 0.0f,
+				.MinLOD           = 0.0f,
+				.MaxLOD           = D3D12_FLOAT32_MAX,
+				.ShaderRegister   = 3,
 				.RegisterSpace    = 100,
 				.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
 			},

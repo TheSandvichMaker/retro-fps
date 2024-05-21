@@ -34,7 +34,9 @@ struct Sampler
 	}
 };
 
-sampler s_linear_wrap    : register(s0, space100);
-sampler s_linear_clamped : register(s1, space100);
+sampler s_aniso_wrap     : register(s0, space100);
+sampler s_aniso_clamped  : register(s1, space100);
+sampler s_linear_wrap    : register(s2, space100);
+sampler s_linear_clamped : register(s3, space100);
 
 }
