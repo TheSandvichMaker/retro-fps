@@ -367,6 +367,21 @@ string_t string_split(string_t *string, string_t separator)
     return result;
 }
 
+string_t string_to_lower(arena_t *arena, string_t string)
+{
+	string_t result = {
+		.data  = m_alloc_nozero(arena, string.count, 16),
+		.count = string.count,
+	};
+
+	for (size_t i = 0; i < string.count; i++)
+	{
+		result.data[i] = to_lower(string.data[i]);
+	}
+
+	return result;
+}
+
 string_t string_trim_left_spaces(string_t string)
 {
     while (string.count > 0 && is_whitespace(string.data[0])) string.count -= 1, string.data += 1;

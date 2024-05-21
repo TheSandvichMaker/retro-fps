@@ -36,10 +36,10 @@ struct UIRect
 	float2     uv_min;
 	float2     uv_max;
 	float4     roundedness;
-	ColorRGBA8 color_00;
-	ColorRGBA8 color_10;
-	ColorRGBA8 color_11;
-	ColorRGBA8 color_01;
+	ColorRGBA8 colors[4];
+	// ColorRGBA8 color_10;
+	// ColorRGBA8 color_11;
+	// ColorRGBA8 color_01;
 	float      shadow_radius;
 	float      shadow_amount;
 	float      inner_radius;
@@ -68,49 +68,32 @@ VSOut MainVS(uint vertex_id       : SV_VertexID,
 			 uint instance_offset : SV_StartInstanceLocation,
 			 uint instance_id     : SV_InstanceID)
 {
-	UIRect rect = draw.rects.Get()[instance_offset + instance_id];
+	const UIRect rect = draw.rects.Get()[instance_offset + instance_id];
 
-	float r = rect.shadow_radius + 1.0f;
+	const float r = rect.shadow_radius + 1.0f;
 
-	float2 center       = 0.5*(rect.p_min + rect.p_max);
-	float2 radius       = 0.5*(rect.p_max - rect.p_min);
-	float2 grown_radius = radius + r;
-	float2 grown_ratio  = grown_radius / radius;
+	const float2 center       = 0.5*(rect.p_min + rect.p_max);
+	const float2 radius       = 0.5*(rect.p_max - rect.p_min);
+	const float2 grown_radius = radius + r;
 	
-	float2 verts[] = {
-		{ center + float2(-grown_radius.x, -grown_radius.y) },
-		{ center + float2(-grown_radius.x, +grown_radius.y) },
-		{ center + float2(+grown_radius.x, -grown_radius.y) },
-		{ center + float2(+grown_radius.x, +grown_radius.y) },
+	const float2 uv_center       = 0.5*(rect.uv_min + rect.uv_max);
+	const float2 uv_radius       = 0.5*(rect.uv_max - rect.uv_min);
+	const float2 grown_uv_radius = (grown_radius / radius)*uv_radius;
+
+	const float2 signs = {
+		(vertex_id & 0x1) ? 1.0 : -1.0,
+		(vertex_id & 0x2) ? 1.0 : -1.0,
 	};
 
-	float2 uv_center       = 0.5*(rect.uv_min + rect.uv_max);
-	float2 uv_radius       = 0.5*(rect.uv_max - rect.uv_min);
-	float2 grown_uv_radius = grown_ratio*uv_radius;
+	const float2 vert = (center    + signs*grown_radius);
+	const float2 uv   = (uv_center + signs*grown_uv_radius);
+	const float2 pos  = SvPositionToClip(vert);
 
-    float2 uvs[] = {
-		uv_center + float2(-grown_uv_radius.x, -grown_uv_radius.y),
-		uv_center + float2(-grown_uv_radius.x, +grown_uv_radius.y),
-		uv_center + float2(+grown_uv_radius.x, -grown_uv_radius.y),
-		uv_center + float2(+grown_uv_radius.x, +grown_uv_radius.y),
-    };
-
-	ColorRGBA8 colors[] = {
-		rect.color_00,
-		rect.color_01,
-		rect.color_10,
-		rect.color_11,
-	};
-
-	float2 vert = verts[vertex_id];
-	vert = 2.0f*(vert / view.view_size) - 1.0f;
-
-	float4 color = Unpack(colors[vertex_id]);
-	color.rgb *= color.rgb;
+	const float4 color = SRGBToLinear(Unpack(rect.colors[vertex_id]));
 
 	VSOut OUT;
-	OUT.pos   = float4(vert, 0, 1);
-    OUT.uv    = uvs[vertex_id];
+	OUT.pos   = float4(pos, 0, 1);
+    OUT.uv    = uv;
 	OUT.id    = instance_id + instance_offset;
 	OUT.color = color;
 	return OUT;

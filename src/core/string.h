@@ -92,6 +92,8 @@ fn_local char to_lower(char c)
     return to_lowercase_table[(unsigned char)c];
 }
 
+fn string_t string_to_lower(arena_t *arena, string_t string);
+
 // returns a string with the spaces trimmed, pointing into the original string
 fn string_t string_trim_left_spaces(string_t string);
 fn string_t string_trim_right_spaces(string_t string);

@@ -15,6 +15,8 @@ extern __declspec(dllexport) const char    *D3D12SDKPath    = u8".\\D3D12\\";
 #include "d3d12_constants.c"
 #include "d3d12_upload.c"
 
+CVAR_BOOL(cvar_serialize_command_lists, "rhi.d3d12.serialize_command_lists", true);
+
 fn_local d3d12_frame_state_t *d3d12_get_frame_state(uint32_t frame_index)
 {
 	return g_rhi.frames[frame_index % g_rhi.frame_latency];
@@ -77,13 +79,13 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 
 	HRESULT hr = 0;
 
-	IDXGIFactory6       *dxgi_factory         = NULL;
-	IDXGIAdapter1       *dxgi_adapter         = NULL;
-	ID3D12Device        *device               = NULL;
-	ID3D12CommandQueue  *direct_queue = NULL;
-	ID3D12CommandQueue  *copy_queue = NULL;
-	ID3D12Fence         *fence                = NULL;
-	ID3D12RootSignature *root_signature       = NULL;
+	IDXGIFactory6       *dxgi_factory   = NULL;
+	IDXGIAdapter1       *dxgi_adapter   = NULL;
+	ID3D12Device        *device         = NULL;
+	ID3D12CommandQueue  *direct_queue   = NULL;
+	ID3D12CommandQueue  *copy_queue     = NULL;
+	ID3D12Fence         *fence          = NULL;
+	ID3D12RootSignature *root_signature = NULL;
 
 	bool result = false;
 
@@ -92,7 +94,7 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 	//
 
 	if (params->base.frame_latency == 0 ||
-		params->base.frame_latency >  RhiMaxFrameLatency)
+		params->base.frame_latency > RhiMaxFrameLatency)
 	{
 		log(RHI_D3D12, Error, "Invalid frame latency %u (should between 1 and 3)", params->base.frame_latency);
 		goto bail;
@@ -377,7 +379,7 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 				.RegisterSpace    = 100,
 				.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
 			},
-			[0] = { // s_aniso_wrap
+			[2] = { // s_aniso_wrap
 				.Filter           = D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR,
 				.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
 				.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
@@ -389,7 +391,7 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 				.RegisterSpace    = 100,
 				.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
 			},
-			[1] = { // s_aniso_clamped
+			[3] = { // s_aniso_clamped
 				.Filter           = D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR,
 				.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
 				.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
@@ -1679,6 +1681,11 @@ void rhi_end_frame(void)
 	d3d12_resolve_timestamp_queries(list);
 
 	ID3D12GraphicsCommandList_Close(list);
+
+	if (cvar_read_bool(&cvar_serialize_command_lists))
+	{
+		ID3D12CommandQueue_Wait(g_rhi.direct_queue, g_rhi.fence, g_rhi.fence_value);
+	}
 
 	ID3D12CommandQueue_BeginEvent(g_rhi.direct_queue, 1, "Draw Frame", sizeof("Draw Frame"));
 

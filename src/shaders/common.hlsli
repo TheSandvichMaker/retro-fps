@@ -95,3 +95,8 @@ float SampleShadowPCF3x3(Texture2D<float> shadowmap, float2 shadowmap_dim, float
 
     return shadow;
 }
+
+float2 SvPositionToClip(float2 sv_position)
+{ 
+	return 2.0f*(sv_position / view.view_size) - 1.0f;
+}
