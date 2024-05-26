@@ -5,6 +5,7 @@
 #pragma once
 
 #include "asset.h"
+#include "asset_packing.h"
 #include "audio.h"
 #include "bvh.h"
 #include "camera.h"

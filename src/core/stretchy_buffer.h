@@ -23,7 +23,7 @@ typedef struct sb_t
 // Or don't. Because if you keep having pointer-pointers then you can't
 // index them without dereferencing them which is also annoying.
 
-#define sb_init(arena, type) sb__alloc(arena, 8, sizeof(type))
+#define sb_init(arena, initial_count, type) sb__alloc(arena, initial_count, sizeof(type))
 #define sb_add(sb) (sb__ensure_space((void **)&(sb), 1, sizeof(*sb)), &sb[sb__header(sb)->count++])
 #define sb_push(sb, item) (sb__ensure_space((void **)&(sb), 1, sizeof(*sb)), sb[sb__header(sb)->count++] = item)
 #define sb_pop(sb) (ASSERT(sb && sb__header(sb)->count > 0), sb[--sb__header(sb)->count])

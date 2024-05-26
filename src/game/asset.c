@@ -541,10 +541,10 @@ image_t load_image_from_disk(arena_t *arena, string_t path, unsigned nchannels)
 		unsigned char *pixels = stbi_load(string_null_terminate(temp, path).data, &w, &h, &n, nchannels);
 
 		result = (image_t){
-			.info.w             = (unsigned)w,
-			.info.h             = (unsigned)h,
-			.pitch              = nchannels*w,
-			.pixels             = m_copy(arena, pixels, nchannels*w*h),
+			.info.w = (unsigned)w,
+			.info.h = (unsigned)h,
+			.pitch  = nchannels*w,
+			.pixels = m_copy(arena, pixels, nchannels*w*h),
 		};
 	}
 

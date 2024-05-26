@@ -6,6 +6,7 @@ build
 *.dll
 *.wav
 *.raddbgi
+*.rdi
 
 .vs
 ctm
@@ -37,6 +38,7 @@ run/gamedata/shaders
 *.jpeg
 *.tga
 *.swatch
+sources/textures
 
 !run/gamedata/textures/font.png
 !run/gamedata/textures/dog.png

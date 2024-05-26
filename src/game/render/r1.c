@@ -87,6 +87,10 @@ fn_local void r1_end_timed_region(rhi_command_list_t *list, uint32_t region_inde
 
 r1_stats_t r1_report_stats(arena_t *arena)
 {
+	// TODO: This actually reports stats that are one or two frames behind, but the code makes no effort to
+	// buffer that up properly. So the timings might be /mismatched with the names for a frame or two in 
+	// rare occassions, but I guess it wouldn't ever really matter.
+
 	uint32_t regions_count = r1->next_region_index;
 
 	r1_stats_t result = {
@@ -118,6 +122,7 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 {
 	rhi_destroy_pso(r1->psos.map);
 	rhi_destroy_pso(r1->psos.sun_shadows);
+	rhi_destroy_pso(r1->psos.debug_lines);
 	rhi_destroy_pso(r1->psos.post_process);
 	rhi_destroy_pso(r1->psos.ui);
 
@@ -154,6 +159,7 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("bindless_draft.hlsl"), S("MainPS"), S("ps_6_8"));
 
 		r1->psos.map = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
+			.debug_name = S("Map PSO"),
 			.vs = vs,
 			.ps = ps,
 			.blend = {
@@ -186,6 +192,7 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("debug_lines.hlsl"), S("MainPS"), S("ps_6_8"));
 
 		r1->psos.debug_lines = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
+			.debug_name = S("Debug Lines PSO"),
 			.vs = vs,
 			.ps = ps,
 			.blend = {
@@ -217,6 +224,7 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("bindless_post.hlsl"), S("MainPS"), S("ps_6_8"));
 
 		r1->psos.post_process = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
+			.debug_name = S("Post Process PSO"),
 			.vs = vs,
 			.ps = ps,
 			.blend = {
@@ -241,6 +249,7 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("bindless_ui.hlsl"), S("MainPS"), S("ps_6_8"));
 
 		r1->psos.ui = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
+			.debug_name = S("UI PSO"),
 			.vs = vs,
 			.ps = ps,
 			.blend = {
@@ -465,7 +474,8 @@ void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t backbuffer, r_v
 
 	v3_t sun_direction = view->scene.sun_direction;
 
-    m4x4_t sun_view   = make_view_matrix(add(view->camera_p, mul(-256.0f, sun_direction)), negate(sun_direction), make_v3(0, 0, 1));
+    m4x4_t sun_view   = make_view_matrix(add(view->camera_p, mul(-256.0f, sun_direction)), 
+										 negate(sun_direction), make_v3(0, 0, 1));
     m4x4_t sun_ortho  = make_orthographic_matrix(2048, 2048, 512);
     m4x4_t sun_matrix = mul(sun_ortho, sun_view);
 
@@ -623,11 +633,7 @@ void r1_render_debug_lines(rhi_command_list_t *list, rhi_texture_t rt)
 	if (debug_line_count > 0)
 	{
 		size_t upload_size = sizeof(debug_line_t)*debug_line_count;
-
-		R1_TIMED_REGION(list, S("Copy Debug Lines"))
-		{
-			rhi_upload_buffer_data(r1->debug_lines, 0, debug_lines, upload_size, RhiUploadFreq_frame);
-		}
+		rhi_upload_buffer_data(r1->debug_lines, 0, debug_lines, upload_size, RhiUploadFreq_frame);
 
 		R1_TIMED_REGION(list, S("Draw Debug Lines"))
 		{
@@ -686,29 +692,26 @@ void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, ui_render_command_
 {
 	size_t upload_size = sizeof(r_ui_rect_t) * ui_list->count;
 
-	R1_TIMED_REGION(list, S("Copy UI Rects"))
+	if (upload_size > 0)
 	{
-		if (upload_size > 0)
+		r_ui_rect_t *rects = rhi_begin_buffer_upload(r1->ui_rects, 0, upload_size, RhiUploadFreq_frame);
 		{
-			r_ui_rect_t *rects = rhi_begin_buffer_upload(r1->ui_rects, 0, upload_size, RhiUploadFreq_frame);
+			for (size_t key_index = 0; key_index < ui_list->count; key_index++)
 			{
-				for (size_t key_index = 0; key_index < ui_list->count; key_index++)
+				const ui_render_command_key_t *key = &ui_list->keys[key_index];
+
+				const size_t command_index = key->command_index;
+				const ui_render_command_t *command = &ui_list->commands[command_index];
+
+				memcpy(&rects[key_index], &command->rect, sizeof(command->rect));
+
+				if (command->rect.texture.index == 0)
 				{
-					const ui_render_command_key_t *key = &ui_list->keys[key_index];
-
-					const size_t command_index = key->command_index;
-					const ui_render_command_t *command = &ui_list->commands[command_index];
-
-					memcpy(&rects[key_index], &command->rect, sizeof(command->rect));
-
-					if (command->rect.texture.index == 0)
-					{
-						rects[key_index].texture = r1->white_texture_srv;
-					}
+					rects[key_index].texture = r1->white_texture_srv;
 				}
 			}
-			rhi_end_buffer_upload(r1->ui_rects);
 		}
+		rhi_end_buffer_upload(r1->ui_rects);
 	}
 
 	R1_TIMED_REGION(list, S("Draw UI"))

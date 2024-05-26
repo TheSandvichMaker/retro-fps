@@ -6,28 +6,28 @@ struct Rect2
 {
 	float2 min;
 	float2 max;
-
-	bool PointInRect(float2 p)
-	{
-		return all(p >= min) && all(p <= max);
-	}
 };
+
+bool PointInRect(Rect2 rect, float2 p)
+{
+	return all(p >= rect.min) && all(p <= rect.max);
+}
 
 struct Rect2Fixed
 {
 	uint data0;
 	uint data1;
-
-	Rect2 Decode()
-	{
-		Rect2 result;
-		result.min.x = float((data0 >>  0) & 0xFFFF);// / 4.0;
-		result.min.y = float((data0 >> 16) & 0xFFFF);// / 4.0;
-		result.max.x = float((data1 >>  0) & 0xFFFF);// / 4.0;
-		result.max.y = float((data1 >> 16) & 0xFFFF);// / 4.0;
-		return result;
-	}
 };
+
+Rect2 Decode(Rect2Fixed fixed)
+{
+	Rect2 result;
+	result.min.x = float((fixed.data0 >>  0) & 0xFFFF);// / 4.0;
+	result.min.y = float((fixed.data0 >> 16) & 0xFFFF);// / 4.0;
+	result.max.x = float((fixed.data1 >>  0) & 0xFFFF);// / 4.0;
+	result.max.y = float((fixed.data1 >> 16) & 0xFFFF);// / 4.0;
+	return result;
+}
 
 struct UIRect
 {
@@ -37,9 +37,6 @@ struct UIRect
 	float2     uv_max;
 	float4     roundedness;
 	ColorRGBA8 colors[4];
-	// ColorRGBA8 color_10;
-	// ColorRGBA8 color_11;
-	// ColorRGBA8 color_01;
 	float      shadow_radius;
 	float      shadow_amount;
 	float      inner_radius;
@@ -51,7 +48,6 @@ struct UIRect
 struct DrawParameters
 {
 	df::Resource< StructuredBuffer<UIRect> > rects;
-	//df::Resource< Texture2D >                texture;
 };
 
 ConstantBuffer<DrawParameters> draw : register(b0);
@@ -94,7 +90,7 @@ VSOut MainVS(uint vertex_id       : SV_VertexID,
 	VSOut OUT;
 	OUT.pos   = float4(pos, 0, 1);
     OUT.uv    = uv;
-	OUT.id    = instance_id + instance_offset;
+	OUT.id    = instance_offset + instance_id;
 	OUT.color = color;
 	return OUT;
 }
@@ -117,12 +113,12 @@ float4 MainPS(VSOut IN) : SV_Target
 {
 	UIRect rect = draw.rects.Get()[IN.id];
 
-	Rect2 clip_rect = rect.clip_rect.Decode();
+	Rect2 clip_rect = Decode(rect.clip_rect);
 
 	float2 pos = IN.pos.xy;
 	pos.y = view.view_size.y - pos.y - 1;
 
-	if (!clip_rect.PointInRect(pos))
+	if (!PointInRect(clip_rect, pos))
 	{
 		discard;
 	}

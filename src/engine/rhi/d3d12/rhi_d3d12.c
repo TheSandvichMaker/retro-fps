@@ -15,7 +15,7 @@ extern __declspec(dllexport) const char    *D3D12SDKPath    = u8".\\D3D12\\";
 #include "d3d12_constants.c"
 #include "d3d12_upload.c"
 
-CVAR_BOOL(cvar_serialize_command_lists, "rhi.d3d12.serialize_command_lists", true);
+// CVAR_BOOL(cvar_serialize_command_lists, "rhi.d3d12.serialize_command_lists", true);
 
 fn_local d3d12_frame_state_t *d3d12_get_frame_state(uint32_t frame_index)
 {
@@ -1682,7 +1682,7 @@ void rhi_end_frame(void)
 
 	ID3D12GraphicsCommandList_Close(list);
 
-	if (cvar_read_bool(&cvar_serialize_command_lists))
+	// if (cvar_read_bool(&cvar_serialize_command_lists))
 	{
 		ID3D12CommandQueue_Wait(g_rhi.direct_queue, g_rhi.fence, g_rhi.fence_value);
 	}

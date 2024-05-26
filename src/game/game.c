@@ -5,6 +5,7 @@
 #include "game.h"
 
 #include "asset.c"
+#include "asset_packing.c"
 #include "audio.c"
 #include "bvh.c"
 #include "camera.c"
@@ -362,6 +363,8 @@ fn void init_view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
 
 void game_init(void)
 {
+	// pack_assets(S("../sources"));
+
 	initialize_asset_system(&(asset_config_t){
         .mix_sample_rate = DREAM_MIX_SAMPLE_RATE,
     });
