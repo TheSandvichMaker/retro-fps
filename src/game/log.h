@@ -23,6 +23,7 @@ typedef enum log_category_t
 	LogCat_Renderer      = 3,
 	LogCat_Renderer_DX11 = 4,
 	LogCat_RHI_D3D12     = 5,
+	LogCat_AssetPacker   = 6,
 	LogCat_Game          = 10,
 
 	LogCat_Max,

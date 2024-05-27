@@ -363,13 +363,13 @@ fn void init_view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
 
 void game_init(void)
 {
-	// pack_assets(S("../sources"));
+	init_game_job_queues();
 
 	initialize_asset_system(&(asset_config_t){
         .mix_sample_rate = DREAM_MIX_SAMPLE_RATE,
     });
 
-	init_game_job_queues();
+	pack_assets(S("../sources"));
 
     update_camera_rotation(&g_camera, 0.0f);
 

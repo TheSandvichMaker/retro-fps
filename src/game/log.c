@@ -16,6 +16,7 @@ string_t log_category_to_string[] = {
 	[LogCat_Renderer]      = Sc("Renderer"),
 	[LogCat_Renderer_DX11] = Sc("Renderer_DX11"),
 	[LogCat_RHI_D3D12]     = Sc("RHI_D3D12"),
+	[LogCat_AssetPacker]   = Sc("AssetPacker"),
 	[LogCat_Game]          = Sc("Game"),
 	[LogCat_Max]           = Sc("INVALID LOG CATEGORY"),
 };

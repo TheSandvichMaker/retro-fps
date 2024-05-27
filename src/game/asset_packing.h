@@ -29,7 +29,7 @@ typedef struct pack_texture_t
 	uint8_t  mip_count;     // 11
 	uint8_t  dimensions;    // 12
 	uint32_t pixel_format;  // 16
-	uint32_t data_offset;   // 20
+	uint64_t data_offset;   // 20
 } pack_texture_t;
 
 typedef struct pack_sound_t
@@ -37,7 +37,7 @@ typedef struct pack_sound_t
 	uint32_t string_offset;
 	uint32_t sample_count;
 	uint32_t channel_count;
-	uint32_t data_offset;
+	uint64_t data_offset;
 } pack_sound_t;
 
 typedef struct pack_header_t
@@ -45,15 +45,15 @@ typedef struct pack_header_t
 	uint32_t magic;
 	uint32_t version;
 
-	uint32_t assets_count;
+	uint64_t assets_count;
 
-	uint32_t strings_offset;
+	uint64_t strings_offset;
 
-	uint32_t textures_count;
-	uint32_t textures_offset;
+	uint64_t textures_count;
+	uint64_t textures_offset;
 
-	uint32_t sounds_count;
-	uint32_t sounds_offset;
+	uint64_t sounds_count;
+	uint64_t sounds_offset;
 } pack_header_t;
 
 typedef struct pack_file_t
