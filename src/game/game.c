@@ -369,7 +369,7 @@ void game_init(void)
         .mix_sample_rate = DREAM_MIX_SAMPLE_RATE,
     });
 
-	pack_assets(S("../sources"));
+	// pack_assets(S("../sources"));
 
     update_camera_rotation(&g_camera, 0.0f);
 
@@ -382,17 +382,18 @@ void game_init(void)
         //debug_font.texture = font_image->renderer_handle;
     }
 
-    world_t *world = g_world = m_bootstrap(world_t, arena);
-    world->fade_t = 1.0f;
+	gamestate_t *game = g_game = m_bootstrap(gamestate_t, arena);
+    game->fade_t = 1.0f;
 
-#if 1
 	string_t startup_map = S("test");
 
-    map_t    *map    = world->map    = load_map(&world->arena, Sf("gamedata/maps/%.*s.map", Sx(startup_map)));
-    player_t *player = world->player = m_alloc_struct(&world->arena, player_t);
+    map_t    *map    = game->map    = load_map(&game->arena, Sf("gamedata/maps/%.*s.map", Sx(startup_map)));
+    player_t *player = game->player = m_alloc_struct(&game->arena, player_t);
 
 	if (!map)
+	{
 		FATAL_ERROR("Failed to load map %.*s", Sx(startup_map));
+	}
 
 	for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
 	{
@@ -400,48 +401,19 @@ void game_init(void)
 
 		if (is_class(map, e, S("worldspawn")))
 		{
-#if 0
-			string_t skytex = value_from_key(map, e, S("skytex"));
-
-			m_scoped_temp
+			if (game->worldspawn)
 			{
-				image_t faces[6] = {
-					load_image_from_disk(temp, Sf("gamedata/textures/sky/%.*s/posx.jpg", Sx(skytex)), 4),
-					load_image_from_disk(temp, Sf("gamedata/textures/sky/%.*s/negx.jpg", Sx(skytex)), 4),
-					load_image_from_disk(temp, Sf("gamedata/textures/sky/%.*s/posy.jpg", Sx(skytex)), 4),
-					load_image_from_disk(temp, Sf("gamedata/textures/sky/%.*s/negy.jpg", Sx(skytex)), 4),
-					load_image_from_disk(temp, Sf("gamedata/textures/sky/%.*s/posz.jpg", Sx(skytex)), 4),
-					load_image_from_disk(temp, Sf("gamedata/textures/sky/%.*s/negz.jpg", Sx(skytex)), 4),
-				};
-
-				skybox = render->upload_texture(&(r_upload_texture_t){
-					.desc = {
-						.format = R_PIXEL_FORMAT_SRGB8_A8,
-						.w     = faces[0].info.w,
-						.h     = faces[0].info.h,
-						.flags = R_TEXTURE_FLAG_CUBEMAP,
-					},
-					.data = {
-						.pitch = faces[0].pitch,
-						.faces = {
-							faces[0].pixels,
-							faces[1].pixels,
-							faces[2].pixels,
-							faces[3].pixels,
-							faces[4].pixels,
-							faces[5].pixels,
-						},
-					},
-				});
+				log(MapLoad, Warning, "More than one worldspawn in the map. Overwriting previously seen one!");
 			}
-#endif
+
+			game->worldspawn = e;
 		}
-		else if (is_class(map, e, S("info_player_start")))
+
+		if (is_class(map, e, S("info_player_start")))
 		{
 			player->p = v3_from_key(map, e, S("origin"));
 		}
 	}
-#endif
 
 	//
 	// R1
@@ -450,43 +422,6 @@ void game_init(void)
 	r1_init();
 	r1_init_map_resources(map);
 
-	{
-		/*
-		map_entity_t *worldspawn = map->worldspawn;
-
-		v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
-		float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
-
-		sun_color = mul(sun_brightness, sun_color);
-		*/
-
-		map->fog_absorption = 0.002f;
-		map->fog_density    = 0.02f;
-		map->fog_scattering = 0.04f;
-		map->fog_phase_k    = 0.6f;
-
-		/*
-		float absorption = map->fog_absorption;
-		float density    = map->fog_density;
-		float scattering = map->fog_scattering;
-		v3_t sky_color = mul(sun_color, (1.0f / (4.0f*PI32))*scattering*density / (density*(scattering + absorption)));
-
-		map->lightmap_state = bake_lighting(&(lum_params_t) {
-			.map                 = map,
-			.sun_direction       = make_v3(0.25f, 0.75f, 1),
-			.sun_color           = sun_color,
-			.sky_color           = sky_color,
-
-			.use_dynamic_sun_shadows = true,
-
-			.ray_count               = 8,
-			.ray_recursion           = 3,
-			.fog_light_sample_count  = 4,
-			.fogmap_scale            = 16,
-		});
-		*/
-	}
-
 	//
 	//
 	//
@@ -494,178 +429,18 @@ void game_init(void)
     initialized = true;
 }
 
-// don't return the game view ya dingus... what bad code
-fn_local r_view_index_t render_map(r_context_t *rc, camera_t *camera, map_t *map)
-{
-    r_push_command_identifier(rc, S(LOC_CSTRING ":render_map"));
-
-    map_entity_t *worldspawn = map->worldspawn;
-
-#if 0
-    int res_x, res_y;
-    render->get_resolution(&res_x, &res_y);
-#else
-	int res_x = 1920;
-	int res_y = 1080;
-#endif
-
-    rect2_t viewport = {
-        0, 0, (float)res_x, (float)res_y,
-    };
-
-    float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
-    v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
-          sun_color      = mul(sun_brightness, sun_color);
-
-    r_view_t view = {0};
-    init_view_for_camera(camera, viewport, &view);
-
-    r_scene_parameters_t *scene = &view.scene;
-
-    scene->skybox = skybox;
-    scene->sun_direction   = normalize(make_v3(0.25f, 0.75f, 1));
-    scene->sun_color       = sun_color;
-
-    scene->fogmap          = map->fogmap;
-    scene->fog_offset      = rect3_center(map->bounds);
-    scene->fog_dim         = rect3_dim(map->bounds);
-    scene->fog_absorption  = map->fog_absorption;
-    scene->fog_density     = map->fog_density;
-    scene->fog_scattering  = map->fog_scattering;
-    scene->fog_phase_k     = map->fog_phase_k;
-
-    r_view_index_t game_view = r_make_view(rc, &view);
-
-	for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
-	{
-		map_entity_t *entity = &map->entities[entity_index];
-
-		if (is_class(map, entity, S("point_light")))
-		{
-			v3_t origin = v3_from_key(map, entity, S("origin"));
-			draw_debug_cube(rect3_center_radius(origin, make_v3(8, 8, 8)), COLORF_YELLOW);
-		}
-	}
-
-#if 0
-    R_VIEW      (rc, game_view)
-    R_VIEW_LAYER(rc, R_VIEW_LAYER_SCENE)
-    {
-        //
-        // render map
-        //
-
-        R_COMMAND_IDENTIFIER_LOC(rc, S("brushes"))
-        for (size_t poly_index = 0; poly_index < map->poly_count; poly_index++)
-        {
-            map_poly_t *poly = &map->polys[poly_index];
-
-            r_material_brush_t *material = r_allocate_command_data(rc, sizeof(r_material_brush_t));
-            material->kind     = R_MATERIAL_BRUSH,
-            material->texture  = get_image(poly->texture)->renderer_handle,
-            material->lightmap = poly->lightmap,
-
-            r_draw_mesh(rc, M4X4_IDENTITY, poly->mesh, &material->base);
-        }
-
-        //
-        // render map point lights
-        //
-
-        R_COMMAND_IDENTIFIER_LOC(rc, S("point light debug"))
-        R_IMMEDIATE(rc, imm)
-        {
-            imm->topology  = R_TOPOLOGY_LINELIST;
-            imm->use_depth = true;
-
-            for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
-            {
-                map_entity_t *entity = &map->entities[entity_index];
-
-                if (is_class(map, entity, S("point_light")))
-                {
-                    v3_t origin = v3_from_key(map, entity, S("origin"));
-                    r_immediate_rect3_outline(rc, rect3_center_radius(origin, make_v3(8, 8, 8)), COLORF_YELLOW);
-                }
-            }
-        }
-
-		//
-		// dog
-		//
-
-		r_vertex_immediate_t a, b, c, d;
-		make_quad_vertices(make_v3(64, 64, 128), make_v2(64, 64), QUAT_IDENTITY, COLORF_WHITE, &a, &b, &c, &d);
-
-        R_COMMAND_IDENTIFIER_LOC(rc, S("dog"))
-        R_IMMEDIATE(rc, imm)
-		{
-			imm->topology  = R_TOPOLOGY_TRIANGLELIST;
-			imm->use_depth = true;
-			imm->shader    = R_SHADER_FLAT;
-			imm->texture   = get_image_from_string(S("gamedata/textures/dog.png"))->renderer_handle;
-
-			r_immediate_quad(rc, a, b, c, d);
-		}
-
-        R_COMMAND_IDENTIFIER_LOC(rc, S("dog"))
-        R_IMMEDIATE(rc, imm)
-		{
-			imm->topology  = R_TOPOLOGY_LINELIST;
-			imm->use_depth = false;
-			imm->shader    = R_SHADER_FLAT;
-
-			r_immediate_line(rc, a.pos, b.pos, COLORF_YELLOW);
-			r_immediate_line(rc, a.pos, d.pos, COLORF_YELLOW);
-			r_immediate_line(rc, b.pos, c.pos, COLORF_YELLOW);
-			r_immediate_line(rc, d.pos, c.pos, COLORF_YELLOW);
-		}
-
-        //
-        // draw random moving thing to show dynamic shadows and volumetric fog
-        //
-
-        R_COMMAND_IDENTIFIER_LOC(rc, S("moving thing"))
-        {
-            static float timer = 0.0f;
-            timer += 1.0f / 60.0f;
-
-            map_poly_t *poly = &map->polys[27];
-
-            m4x4_t transform = translate(M4X4_IDENTITY, make_v3(-70.0f + sinf(timer)*40.0f, 250.0f + 25.0f*cosf(0.5f*timer), -170.0f));
-            transform.e[0][0] *= 2.0f; transform.e[1][1] *= 2.0f; transform.e[2][2] *= 2.0f;
-
-            r_material_brush_t *material = r_allocate_command_data(rc, sizeof(r_material_brush_t));
-            material->kind     = R_MATERIAL_BRUSH,
-            material->texture  = get_image(poly->texture)->renderer_handle,
-            material->lightmap = poly->lightmap,
-
-            r_draw_mesh(rc, transform, poly->mesh, &material->base);
-        }
-    }
-
-    r_pop_command_identifier(rc);
-
-#endif
-    // stop it man...
-    return game_view;
-}
-
 static void game_tick(platform_io_t *io)
 {
-	float dt = io->dt;
-
     if (!initialized)
     {
         game_init();
     }
 
+	gamestate_t *game = g_game;
+
+	float dt = io->dt;
+
 	process_asset_changes();
-
-    r_context_t *rc = &(r_context_t){0};
-    r_init_render_context(rc, io->r_commands);
-
-    world_t *world = g_world;
 
 	// TODO: Totally redo input 
 	{
@@ -768,8 +543,7 @@ static void game_tick(platform_io_t *io)
 
     io->lock_cursor = g_cursor_locked;
 
-    world->primary_camera = &g_camera;
-    // update_and_render_physics_playground(world, dt);
+    game->primary_camera = &g_camera;
 
     if (button_pressed(BUTTON_FIRE1))
 	{
@@ -787,9 +561,9 @@ static void game_tick(platform_io_t *io)
 		}
 	}
 
-    map_t *map = world->map;
+    map_t *map = game->map;
 
-    player_t *player = world->player;
+    player_t *player = game->player;
     player->attached_camera = &g_camera;
 
     camera_t *camera = player->attached_camera;
@@ -813,11 +587,9 @@ static void game_tick(platform_io_t *io)
 
 	mixer_set_listener(camera->p, negate(camera->computed_z));
 
-    r_view_index_t game_view = render_map(rc, camera, map);
+    game->fade_t += 0.45f*dt*(game->fade_target_t - game->fade_t);
 
-    world->fade_t += 0.45f*dt*(world->fade_target_t - world->fade_t);
-
-    update_and_render_in_game_editor(rc, game_view);
+    update_and_render_in_game_editor();
 
     ui_end();
 	
@@ -839,7 +611,7 @@ static void game_tick(platform_io_t *io)
 
     r_scene_parameters_t *scene = &view.scene;
 
-    map_entity_t *worldspawn = map->worldspawn;
+    map_entity_t *worldspawn = game->worldspawn;
 
     float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
     v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
@@ -852,13 +624,13 @@ static void game_tick(platform_io_t *io)
     scene->fogmap          = map->fogmap;
     scene->fog_offset      = rect3_center(map->bounds);
     scene->fog_dim         = rect3_dim(map->bounds);
-    scene->fog_absorption  = map->fog_absorption;
-    scene->fog_density     = map->fog_density;
-    scene->fog_scattering  = map->fog_scattering;
-    scene->fog_phase_k     = map->fog_phase_k;
+    scene->fog_absorption  = 0.002f;
+    scene->fog_density     = 0.02f;
+    scene->fog_scattering  = 0.04f;
+    scene->fog_phase_k     = 0.6f;
 
 	r1_update_window_resources(io->rhi_window);
-	r1_render_game_view(io->rhi_command_list, rhi_get_current_backbuffer(io->rhi_window), &view, world);
+	r1_render_game_view(io->rhi_command_list, rhi_get_current_backbuffer(io->rhi_window), &view, map);
 
 	ui_render_command_list_t *ui_commands = ui_get_render_commands();
 	r1_render_ui(io->rhi_command_list, rhi_get_current_backbuffer(io->rhi_window), ui_commands);

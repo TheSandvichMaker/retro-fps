@@ -315,7 +315,7 @@ void convex_hull_debugger_window_proc(ui_window_t *window)
 	debugger->initialized = true;
 }
 
-void convex_hull_debugger_update_and_render(convex_hull_debugger_t *debugger, r_context_t *rc, r_view_index_t game_view)
+void convex_hull_debugger_update_and_render(convex_hull_debugger_t *debugger)
 {
 	hull_debug_t *debug = &debugger->debug;
 
@@ -350,6 +350,7 @@ void convex_hull_debugger_update_and_render(convex_hull_debugger_t *debugger, r_
 	{
 		if (debugger->show_points)
 		{
+#if 0
 			R_VIEW     (rc, game_view) 
             R_IMMEDIATE(rc, imm)
             {
@@ -370,10 +371,12 @@ void convex_hull_debugger_update_and_render(convex_hull_debugger_t *debugger, r_
                     r_immediate_rect3_outline(rc, rect3_center_radius(p, make_v3(1, 1, 1)), color);
                 }
             }
+#endif
 		}
 
 		//
 
+#if 0
 		R_VIEW     (rc, game_view) 
         R_IMMEDIATE(rc, imm)
         {
@@ -448,6 +451,7 @@ void convex_hull_debugger_update_and_render(convex_hull_debugger_t *debugger, r_
                 step_index++;
             }
         }
+#endif
 	}
 }
 

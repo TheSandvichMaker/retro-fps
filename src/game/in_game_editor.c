@@ -141,10 +141,9 @@ fn_local void lightmap_editor_proc(ui_window_t *window)
 {
 	(void)window;
 
-    world_t *world = g_world;
-    map_t *map = world->map;
-
-    map_entity_t *worldspawn = map->worldspawn;
+    gamestate_t  *game       = g_game;
+    map_t        *map        = game->map;
+    map_entity_t *worldspawn = game->worldspawn;
 
     v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
     float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
@@ -452,13 +451,13 @@ fn_local void lightmap_editor_proc(ui_window_t *window)
 	}
 }
 
-fn_local void render_lm_editor(r_context_t *rc)
+fn_local void render_lm_editor(void)
 {
-    world_t *world = g_world;
-    player_t *player = world->player;
-    map_t    *map    = world->map;
+    gamestate_t *game = g_game;
+    // player_t *player = game->player;
+    map_t    *map    = game->map;
 
-    map_entity_t *worldspawn = map->worldspawn;
+    map_entity_t *worldspawn = game->worldspawn;
 
     v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
     float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
@@ -472,6 +471,7 @@ fn_local void render_lm_editor(r_context_t *rc)
 
     if (lm_editor->debug_lightmaps)
     {
+#if 0
         r_push_command_identifier(rc, S("lightmap debug"));
 
         r_immediate_t *imm = r_immediate_begin(rc);
@@ -683,6 +683,7 @@ fn_local void render_lm_editor(r_context_t *rc)
 
         r_immediate_end(rc, imm);
         r_pop_command_identifier(rc);
+#endif
     }
 }
 
@@ -905,14 +906,8 @@ fn_local void fullscreen_update_and_render_top_editor_bar(void)
     }
 }
 
-void update_and_render_in_game_editor(r_context_t *rc, r_view_index_t game_view)
+void update_and_render_in_game_editor(void)
 {
-    r_push_command_identifier(rc, S("update_and_render_in_game_editor"));
-
-    r_push_view      (rc, rc->screenspace);
-    r_push_view_layer(rc, R_VIEW_LAYER_UI);
-    r_push_layer     (rc, R_SCREEN_LAYER_UI);
-
 	if (!editor.initialized)
 	{
 		editor.initialized = true;
@@ -948,10 +943,10 @@ void update_and_render_in_game_editor(r_context_t *rc, r_view_index_t game_view)
 	}
 
 	if (&editor.lm_editor.window.open)
-		render_lm_editor(rc);
+		render_lm_editor();
 
 	if (&editor.convex_hull_debugger.window.open)
-		convex_hull_debugger_update_and_render(&editor.convex_hull_debugger, rc, game_view);
+		convex_hull_debugger_update_and_render(&editor.convex_hull_debugger);
 
 #if 0
     int res_x, res_y;
@@ -992,10 +987,4 @@ void update_and_render_in_game_editor(r_context_t *rc, r_view_index_t game_view)
 	ui_panel_end();
 
 	ui_process_windows();
-
-    r_pop_layer     (rc);
-    r_pop_view_layer(rc);
-    r_pop_view      (rc);
-
-    r_pop_command_identifier(rc);
 }

@@ -167,9 +167,9 @@ fn_local void phys_init_sphere(phys_sphere_t *sphere, float radius)
     sphere->inv_inertia_tensor.e[2][2] = 1.0f / (2.0f*sphere->radius*sphere->radius / 5.0f);
 }
 
-fn_local void initialize_phys_scene(phys_scene_t *scene, world_t *world)
+fn_local void initialize_phys_scene(phys_scene_t *scene, gamestate_t *game)
 {
-    camera_t *camera = world->primary_camera;
+    camera_t *camera = game->primary_camera;
     ASSERT(camera);
 
     camera->p = (v3_t){ -10, 0, 5 };
@@ -197,13 +197,13 @@ fn_local void initialize_phys_scene(phys_scene_t *scene, world_t *world)
     g_phys_scene_initialized = true;
 }
 
-void update_and_render_physics_playground(r_context_t *rc, world_t *world, float dt)
+void update_and_render_physics_playground(r_context_t *rc, gamestate_t *game, float dt)
 {
     phys_scene_t *scene = &g_phys_scene;
 
     if (!g_phys_scene_initialized)
     {
-        initialize_phys_scene(scene, world);
+        initialize_phys_scene(scene, game);
     }
 
     for (size_t body_index = 0; body_index < scene->bodies_count; body_index++)
@@ -248,7 +248,7 @@ void update_and_render_physics_playground(r_context_t *rc, world_t *world, float
     //
     //
 
-    camera_t *camera = world->primary_camera;
+    camera_t *camera = game->primary_camera;
     ASSERT(camera);
 
     if (g_cursor_locked)

@@ -60,4 +60,4 @@ fn bool g_cursor_locked;
 
 #include "world.h"
 
-static world_t *g_world;
+static gamestate_t *g_game;

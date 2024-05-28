@@ -4,14 +4,16 @@
 
 #pragma once
 
-typedef struct world_t
+typedef struct gamestate_t
 {
-    arena_t arena;
-    struct map_t *map;
+	arena_t arena;
 
-    struct camera_t *primary_camera;
+    map_t        *map;
+	map_entity_t *worldspawn;
+
+    camera_t *primary_camera;
     player_t *player;
 
     float fade_t;
     float fade_target_t;
-} world_t;
+} gamestate_t;

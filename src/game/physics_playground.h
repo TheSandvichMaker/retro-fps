@@ -70,4 +70,4 @@ typedef struct phys_scene_t
     phys_body_t bodies[MAX_PHYS_BODIES];
 } phys_scene_t;
 
-fn void update_and_render_physics_playground(struct r_context_t *rc, struct world_t *world, float dt);
+fn void update_and_render_physics_playground(struct r_context_t *rc, struct gamestate_t *game, float dt);

@@ -18,13 +18,14 @@ typedef enum log_category_t
 {
 	LogCat_None          = 0,
 
-	LogCat_Asset         = 1,
-	LogCat_Mixer         = 2,
-	LogCat_Renderer      = 3,
-	LogCat_Renderer_DX11 = 4,
-	LogCat_RHI_D3D12     = 5,
-	LogCat_AssetPacker   = 6,
-	LogCat_Game          = 10,
+	LogCat_Asset,
+	LogCat_Mixer,
+	LogCat_Renderer,
+	LogCat_Renderer_DX11,
+	LogCat_RHI_D3D12,
+	LogCat_AssetPacker,
+	LogCat_MapLoad,
+	LogCat_Game,
 
 	LogCat_Max,
 } log_category_t;

@@ -59,7 +59,7 @@ global r1_state_t *r1;
 
 fn void r1_init(void);
 fn void r1_update_window_resources(rhi_window_t window);
-fn void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t rt, r_view_t *view, struct world_t *world);
+fn void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t rt, r_view_t *view, struct map_t *map);
 fn void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, struct ui_render_command_list_t *ui_list);
 
 typedef struct r1_timing_t

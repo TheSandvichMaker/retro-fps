@@ -31,17 +31,17 @@ Rect2 Decode(Rect2Fixed fixed)
 
 struct UIRect
 {
-	float2     p_min;
-	float2     p_max;
-	float2     uv_min;
-	float2     uv_max;
-	float4     roundedness;
-	ColorRGBA8 colors[4];
-	float      shadow_radius;
-	float      shadow_amount;
-	float      inner_radius;
-	uint       flags;
-	Rect2Fixed clip_rect;
+	float2                    p_min;
+	float2                    p_max;
+	float2                    uv_min;
+	float2                    uv_max;
+	float4                    roundedness;
+	ColorRGBA8                colors[4];
+	float                     shadow_radius;
+	float                     shadow_amount;
+	float                     inner_radius;
+	uint                      flags;
+	Rect2Fixed                clip_rect;
 	df::Resource< Texture2D > texture;
 };
 

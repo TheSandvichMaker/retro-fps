@@ -239,9 +239,9 @@ void process_pack_job(job_context_t *job_context, void *userdata)
 				copy_memory(sound_data, waveform.frames, sound_footprint);
 
 				pack_sound_t *sound = &sounds[job->header_index];
-				sound->sample_count  = sample_count;
-				sound->channel_count = waveform.channel_count;
-				sound->data_offset   = get_pointer_offset_u64(header, sound_data);
+				sound->sample_count   = sample_count;
+				sound->channel_count  = waveform.channel_count;
+				sound->samples_offset = get_pointer_offset_u64(header, sound_data);
 			} break;
 		}
 

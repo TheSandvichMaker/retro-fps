@@ -35,7 +35,7 @@ typedef struct map_coplanar_surface_t
 typedef struct map_poly_t
 {
     uint32_t index_count;
-    uint32_t first_index; // NOTE: indices are _not_ absolute. They are relative to the first vertex.
+    uint32_t first_index;
 
     uint32_t vertex_count;
     uint32_t first_vertex;
@@ -111,8 +111,6 @@ typedef struct map_t
     uint32_t fogmap_d;
     texture_handle_t fogmap;
 
-    map_entity_t *worldspawn;
-
     v3_t fogmap_offset;
     v3_t fogmap_dim;
     float fog_absorption;
@@ -127,9 +125,9 @@ typedef struct map_t
     uint32_t plane_count;
     uint32_t poly_count;
 	uint32_t edge_count;
-    uint32_t light_count;
     uint32_t index_count;
     uint32_t vertex_count;
+    uint32_t light_count;
 
     map_bvh_node_t    *nodes;
     map_entity_t      *entities;

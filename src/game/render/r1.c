@@ -464,7 +464,7 @@ fn_local void r1_render_map        (rhi_command_list_t *list, rhi_texture_t rt, 
 fn_local void r1_post_process      (rhi_command_list_t *list, rhi_texture_t color_hdr, rhi_texture_t rt_result);
 fn_local void r1_render_debug_lines(rhi_command_list_t *list, rhi_texture_t rt);
 
-void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t backbuffer, r_view_t *view, world_t *world)
+void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t backbuffer, r_view_t *view, map_t *map)
 {
 	r1->next_region_index = 0;
 
@@ -494,8 +494,6 @@ void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t backbuffer, r_v
 	}
 
 	rhi_texture_t rt_hdr = r1->window.rt_hdr;
-
-	map_t *map = world->map;
 
 	if (map)
 	{
