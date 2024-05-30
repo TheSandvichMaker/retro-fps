@@ -4,8 +4,6 @@
 
 #pragma once
 
-#define DF_USE_RHI_ABSTRACTION 1
-
 #include "rhi/rhi_api.h"
 
 typedef uint32_t platform_mouse_buttons_t;
@@ -293,18 +291,11 @@ typedef struct platform_gamepad_t
 
 typedef struct r_command_buffer_t r_command_buffer_t;
 
-typedef struct platform_io_t
+typedef struct platform_update_io_t
 {
 	bool has_focus;
 
 	float dt;
-
-#if DF_USE_RHI_ABSTRACTION
-	rhi_window_t        rhi_window;
-	rhi_command_list_t *rhi_command_list;
-#endif
-
-    r_command_buffer_t *r_commands;
 
 	v2_t  mouse_p;
 	v2_t  mouse_dp;
@@ -320,7 +311,34 @@ typedef struct platform_io_t
 
 	bool lock_cursor;
 	bool request_exit;
-} platform_io_t;
+} platform_update_io_t;
+
+typedef struct platform_render_io_t
+{
+	bool has_focus;
+
+	float dt;
+
+	rhi_window_t        rhi_window;
+	rhi_command_list_t *rhi_command_list;
+
+#if 0
+	v2_t  mouse_p;
+	v2_t  mouse_dp;
+	float mouse_wheel;
+
+	platform_gamepad_t gamepads[4];
+
+	size_t event_count;
+	platform_event_t *first_event;
+	platform_event_t * last_event;
+
+	platform_cursor_t cursor;
+
+	bool lock_cursor;
+	bool request_exit;
+#endif
+} platform_render_io_t;
 
 typedef struct platform_audio_io_t
 {
@@ -330,7 +348,8 @@ typedef struct platform_audio_io_t
 
 typedef struct platform_hooks_t
 {
-	void (*tick)      (platform_io_t       *io);
+	void (*update)    (platform_update_io_t *io);
+	void (*render)    (platform_render_io_t *io);
 	void (*tick_audio)(size_t frame_count, float *frames);
 } platform_hooks_t;
 

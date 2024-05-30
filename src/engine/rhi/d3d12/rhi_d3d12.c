@@ -1678,7 +1678,10 @@ void rhi_end_frame(void)
 		}
 	}
 
-	d3d12_resolve_timestamp_queries(list);
+	if (g_rhi.timestamps_readback)
+	{
+		d3d12_resolve_timestamp_queries(list);
+	}
 
 	ID3D12GraphicsCommandList_Close(list);
 

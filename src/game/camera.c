@@ -11,17 +11,19 @@ void compute_camera_axes(camera_t *camera)
 
 void update_camera_rotation(camera_t *camera, float dt)
 {
+	(void)dt;
+
     int dxi, dyi;
     get_mouse_delta(&dxi, &dyi);
 
     float dx = (float)dxi;
     float dy = (float)dyi;
 
-    float look_speed_x = 10.0f;
-    float look_speed_y = 10.0f;
+    float look_speed_x = 0.1f;
+    float look_speed_y = 0.1f;
 
-    camera->yaw   -= look_speed_x*dt*dx;
-    camera->pitch -= look_speed_y*dt*dy;
+    camera->yaw   -= look_speed_x*dx;
+    camera->pitch -= look_speed_y*dy;
 
     camera->yaw   = fmodf(camera->yaw, 360.0f);
     camera->pitch = CLAMP(camera->pitch, -85.0f, 85.0f);

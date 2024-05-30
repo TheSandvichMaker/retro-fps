@@ -5,7 +5,6 @@
 #include "game.h"
 
 #include "asset.c"
-#include "asset_packing.c"
 #include "audio.c"
 #include "bvh.c"
 #include "camera.c"
@@ -429,7 +428,7 @@ void game_init(void)
     initialized = true;
 }
 
-static void game_tick(platform_io_t *io)
+fn_local void game_update(platform_update_io_t *io)
 {
     if (!initialized)
     {
@@ -592,10 +591,81 @@ static void game_tick(platform_io_t *io)
     update_and_render_in_game_editor();
 
     ui_end();
-	
+
 	//
-	// R1
 	//
+	//
+
+    if (button_pressed(BUTTON_ESCAPE))
+    {
+        io->request_exit = true;
+    }
+}
+
+#if 0
+typedef struct transform_t
+{
+	v3_t   translation;
+	quat_t rotation;
+	v3_t   scale;
+} transform_t;
+
+typedef struct render_entity_t
+{
+	struct render_entity_t *next;
+
+	transform_t transform;
+
+	// I don't care what's in here right now 
+	int dummy;
+} render_entity_t;
+
+typedef struct debug_line_block_t
+{
+	struct debug_line_block_t *next;
+	struct debug_line_block_t *prev;
+
+	uint32_t     simulation_step_index;
+	uint32_t     count;
+	debug_line_t lines[512];
+} debug_line_block_t;
+
+typedef struct render_frame_t
+{
+	arena_t *arena;
+
+	// per-frame render state:
+	debug_line_block_t *head_debug_line_block;
+	debug_line_block_t *tail_debug_line_block;
+
+	// static render state:
+	map_t *map;
+} render_frame_t;
+
+typedef struct render_world_t
+{
+	// sim render state (can be interpolated):
+} render_world_t;
+#endif
+
+fn_local void game_render(platform_render_io_t *io)
+{
+	gamestate_t *game = g_game;
+
+	if (!game)
+	{
+		return;
+	}
+
+	map_t *map = game->map;
+
+	if (!map)
+	{
+		return;
+	}
+
+    player_t *player = game->player;
+    camera_t *camera = player->attached_camera;
 
 	rhi_texture_t backbuffer = rhi_get_current_backbuffer(io->rhi_window);
 
@@ -634,15 +704,6 @@ static void game_tick(platform_io_t *io)
 
 	ui_render_command_list_t *ui_commands = ui_get_render_commands();
 	r1_render_ui(io->rhi_command_list, rhi_get_current_backbuffer(io->rhi_window), ui_commands);
-
-	//
-	//
-	//
-
-    if (button_pressed(BUTTON_ESCAPE))
-    {
-        io->request_exit = true;
-    }
 }
 
 static void game_mix_audio(size_t frame_count, float *frames)
@@ -655,6 +716,7 @@ void platform_init(size_t argc, string_t *argv, platform_hooks_t *hooks)
 	(void)argc;
 	(void)argv;
 
-	hooks->tick       = game_tick;
+	hooks->update     = game_update;
+	hooks->render     = game_render;
 	hooks->tick_audio = game_mix_audio;
 }

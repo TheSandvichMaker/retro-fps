@@ -9,12 +9,15 @@
 #pragma warning(push, 0)
 
 #include <stdio.h>
+#include <stdbool.h>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#define COBJMACROS
 #include <Windows.h>
 #include <dbghelp.h>
 #include <shellapi.h>
+#include <GameInput.h>
 
 #pragma warning(pop)
 
@@ -24,20 +27,20 @@
 #include "game/game.c"
 
 #include "audio_playback_win32.c"
-#include "d3d11.c"
 
 //
 //
 //
 
-#if DF_USE_RHI_ABSTRACTION
 #include "rhi/d3d12/rhi_d3d12.h"
 #include "rhi/d3d12/rhi_d3d12.c"
-#endif
 
 //
 //
 //
+
+global IGameInput *game_input;
+global bool        game_input_available;
 
 global arena_t win32_arena;
 global platform_hooks_t hooks;
@@ -118,12 +121,10 @@ fn_local LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 			uint32_t new_width  = LOWORD(lparam);
 			uint32_t new_height = HIWORD(lparam);
 
-#if DF_USE_RHI_ABSTRACTION
 			if (user)
 			{
 				rhi_resize_window(user->rhi_window, new_width, new_height);
 			}
-#endif
 		} break;
 
         default:
@@ -181,6 +182,11 @@ int wWinMain(HINSTANCE instance,
     IGNORED(instance);
     IGNORED(prev_instance);
 
+	if (SUCCEEDED(GameInputCreate(&game_input)))
+	{
+		game_input_available = true;
+	}
+
     int argc;
     wchar_t **argv_wide = CommandLineToArgvW(command_line, &argc);
 
@@ -192,18 +198,12 @@ int wWinMain(HINSTANCE instance,
 
 	platform_init((size_t)argc, argv, &hooks);
 
-	if (!hooks.tick && !hooks.tick_audio)
+	if (!hooks.update && !hooks.render && !hooks.tick_audio)
 	{
 		FATAL_ERROR("No tick functions provided - can't do anything.");
 	}
 
-#if 0
-    g_win32.wasapi_thread = CreateThread(NULL, 0, wasapi_thread_proc, NULL, 0, NULL);
-#endif
-
 	start_audio_thread(hooks.tick_audio);
-
-    equip_render_api(d3d11_get_api());
 
     // create window
     {
@@ -256,7 +256,6 @@ int wWinMain(HINSTANCE instance,
 
 	// it's d3d12 time
 
-#if DF_USE_RHI_ABSTRACTION
 	bool d3d12_success = rhi_init_d3d12(&(rhi_init_params_d3d12_t){
 		.base = {
 			.frame_latency = 2,
@@ -280,42 +279,12 @@ int wWinMain(HINSTANCE instance,
 	{
 		return 1;
 	}
-#else
-    // initialize d3d11
-    {
-        int result = init_d3d11(window);
-        if (result < 0)
-        {
-            FATAL_ERROR("D3D11 initialization failed.");
-        }
-    }
-#endif
 
 	window_user_data_t window_user_data = {
 		.rhi_window = rhi_window,
 	};
 
 	SetWindowLongPtrW(window, GWLP_USERDATA, (LONG_PTR)&window_user_data);
-
-    r_command_buffer_t r_commands = {
-        .views_capacity        = R_VIEWS_CAPACITY,
-        .views                 = m_alloc_array_nozero(&win32_arena, R_VIEWS_CAPACITY, r_view_t),
-
-        .commands_capacity     = R_COMMANDS_CAPACITY,
-        .commands              = m_alloc_array_nozero(&win32_arena, R_COMMANDS_CAPACITY, r_command_t),
-
-        .data_capacity         = R_COMMANDS_DATA_CAPACITY,
-        .data                  = m_alloc_nozero(&win32_arena, R_COMMANDS_DATA_CAPACITY, 16),
-
-        .imm_indices_capacity  = R_IMMEDIATE_INDICES_CAPACITY,
-        .imm_indices           = m_alloc_array_nozero(&win32_arena, R_IMMEDIATE_INDICES_CAPACITY, uint32_t),
-
-        .imm_vertices_capacity = R_IMMEDIATE_VERTICES_CAPACITY,
-        .imm_vertices          = m_alloc_array_nozero(&win32_arena, R_IMMEDIATE_VERTICES_CAPACITY, r_vertex_immediate_t),
-
-        .ui_rects_capacity     = R_UI_RECTS_CAPACITY,
-        .ui_rects              = m_alloc_array_nozero(&win32_arena, R_UI_RECTS_CAPACITY, r_ui_rect_t),
-    };
 
     POINT prev_cursor_point;
     GetCursorPos(&prev_cursor_point);
@@ -324,285 +293,342 @@ int wWinMain(HINSTANCE instance,
 	platform_cursor_t cursor      = PLATFORM_CURSOR_ARROW;
 	platform_cursor_t last_cursor = cursor;
 
-	hires_time_t start_time = os_hires_time();
-	float dt = 1.0f / 60.0f;
+	static const double fixed_step_hz = 240.0;
+
+	double dt          = 1.0 / fixed_step_hz;
+	double accumulator = 0.0;
+
+	GameInputGamepadState prev_gamepad_state = {0};
+
+	hires_time_t current_time = os_hires_time();
 
     // message loop
     bool running = true;
     while (running)
     {
-		arena_t *event_arena = m_get_temp(NULL, 0); // TODO: Think about how to provide events nicer (will be a ring buffer later probably for threaded fun)
-		platform_event_t *first_event = NULL;
-		platform_event_t * last_event = NULL;
+		hires_time_t new_time = os_hires_time();
 
-		wchar_t last_char   = 0;
-		size_t  event_count = 0;
+		double frame_time = os_seconds_elapsed(current_time, new_time);
 
-		float   mouse_wheel = 0.0f;
+		if (frame_time > 0.25)
+		{
+			frame_time = 0.25;
+		}
 
-        MSG msg;
-        while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE))
-        {
-            switch (msg.message)
-            {
-                case WM_QUIT:
-                {
-                    running = false;
-                } break;
+		current_time = new_time;
 
-				case WM_MOUSEWHEEL:
+		accumulator += frame_time;
+
+		while (accumulator >= dt)
+		{
+			// TODO: Think about how to provide events nicer (will be a ring buffer later probably for threaded fun)
+			arena_t *event_arena = m_get_temp_scope_begin(NULL, 0); 
+			platform_event_t *first_event = NULL;
+			platform_event_t * last_event = NULL;
+
+			wchar_t last_char   = 0;
+			size_t  event_count = 0;
+
+			float   mouse_wheel = 0.0f;
+
+			MSG msg;
+			while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE))
+			{
+				switch (msg.message)
 				{
-					mouse_wheel += (float)GET_WHEEL_DELTA_WPARAM(msg.wParam);
-				} break;
-
-				case WM_KEYDOWN:
-				case WM_KEYUP:
-				case WM_SYSKEYDOWN:
-				case WM_SYSKEYUP:
-				{
-					int  vk_code  = (int)msg.wParam;
-					bool pressed  = (bool)(msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN);
-					bool repeated = (bool)(msg.lParam & 0xFFFF);
-
-					platform_event_t *event = new_event(event_arena);
-					event_count += 1;
-
-					event->kind         = PLATFORM_EVENT_KEY;
-					event->key.pressed  = pressed;
-					event->key.repeated = repeated;
-					event->key.keycode  = (platform_keycode_t)vk_code;
-
-					sll_push_back_ex(first_event, last_event, event, next_);
-
-                    TranslateMessage(&msg);
-				} break;
-
-				case WM_LBUTTONDOWN:
-				case WM_LBUTTONUP:
-				case WM_MBUTTONDOWN:
-				case WM_MBUTTONUP:
-				case WM_RBUTTONDOWN:
-				case WM_RBUTTONUP:
-				case WM_XBUTTONDOWN:
-				case WM_XBUTTONUP:
-				{
-					platform_event_t *event = new_event(event_arena);
-					event_count += 1;
-
-					platform_mouse_buttons_t button = 0;
-					switch (msg.message)
+					case WM_QUIT:
 					{
-						case WM_LBUTTONDOWN: case WM_LBUTTONUP:
-						{
-							button = PLATFORM_MOUSE_BUTTON_LEFT;
-						} break;
+						running = false;
+					} break;
 
-						case WM_MBUTTONDOWN: case WM_MBUTTONUP:
-						{
-							button = PLATFORM_MOUSE_BUTTON_MIDDLE;
-						} break;
+					case WM_MOUSEWHEEL:
+					{
+						mouse_wheel += (float)GET_WHEEL_DELTA_WPARAM(msg.wParam);
+					} break;
 
-						case WM_RBUTTONDOWN: case WM_RBUTTONUP:
-						{
-							button = PLATFORM_MOUSE_BUTTON_RIGHT;
-						} break;
+					case WM_KEYDOWN:
+					case WM_KEYUP:
+					case WM_SYSKEYDOWN:
+					case WM_SYSKEYUP:
+					{
+						int  vk_code  = (int)msg.wParam;
+						bool pressed  = (bool)(msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN);
+						bool repeated = (bool)(msg.lParam & 0xFFFF);
 
-						case WM_XBUTTONDOWN: case WM_XBUTTONUP:
+						platform_event_t *event = new_event(event_arena);
+						event_count += 1;
+
+						event->kind         = PLATFORM_EVENT_KEY;
+						event->key.pressed  = pressed;
+						event->key.repeated = repeated;
+						event->key.keycode  = (platform_keycode_t)vk_code;
+
+						sll_push_back_ex(first_event, last_event, event, next_);
+
+						TranslateMessage(&msg);
+					} break;
+
+					case WM_LBUTTONDOWN:
+					case WM_LBUTTONUP:
+					case WM_MBUTTONDOWN:
+					case WM_MBUTTONUP:
+					case WM_RBUTTONDOWN:
+					case WM_RBUTTONUP:
+					case WM_XBUTTONDOWN:
+					case WM_XBUTTONUP:
+					{
+						platform_event_t *event = new_event(event_arena);
+						event_count += 1;
+
+						platform_mouse_buttons_t button = 0;
+						switch (msg.message)
 						{
-							if (GET_XBUTTON_WPARAM(msg.wParam) == XBUTTON1)
+							case WM_LBUTTONDOWN: case WM_LBUTTONUP:
 							{
-								button = PLATFORM_MOUSE_BUTTON_X1;
+								button = PLATFORM_MOUSE_BUTTON_LEFT;
+							} break;
+
+							case WM_MBUTTONDOWN: case WM_MBUTTONUP:
+							{
+								button = PLATFORM_MOUSE_BUTTON_MIDDLE;
+							} break;
+
+							case WM_RBUTTONDOWN: case WM_RBUTTONUP:
+							{
+								button = PLATFORM_MOUSE_BUTTON_RIGHT;
+							} break;
+
+							case WM_XBUTTONDOWN: case WM_XBUTTONUP:
+							{
+								if (GET_XBUTTON_WPARAM(msg.wParam) == XBUTTON1)
+								{
+									button = PLATFORM_MOUSE_BUTTON_X1;
+								}
+								else
+								{
+									button = PLATFORM_MOUSE_BUTTON_X2;
+								}
+							} break;
+
+							INVALID_DEFAULT_CASE;
+						}
+
+						event->kind = PLATFORM_EVENT_MOUSE_BUTTON;
+						event->mouse_button.pressed = !!(msg.wParam & (MK_LBUTTON|MK_MBUTTON|MK_RBUTTON|MK_XBUTTON1|MK_XBUTTON2));
+						event->mouse_button.button  = button;
+
+						sll_push_back_ex(first_event, last_event, event, next_);
+					} break;
+
+					case WM_CHAR:
+					{
+						platform_event_t *event = new_event(event_arena);
+						event_count += 1;
+
+						event->kind = PLATFORM_EVENT_TEXT;
+
+						// laboured UTF-16 wrangling
+						{
+							wchar_t chars[3] = {0};
+
+							wchar_t curr_char = (wchar_t)msg.wParam;
+							if (IS_HIGH_SURROGATE(curr_char))
+							{
+								last_char = curr_char;
+							}
+							else if (IS_LOW_SURROGATE(curr_char))
+							{
+								if (IS_SURROGATE_PAIR(last_char, curr_char))
+								{
+									chars[0] = last_char;
+									chars[1] = curr_char;
+								}
+								last_char = 0;
 							}
 							else
 							{
-								button = PLATFORM_MOUSE_BUTTON_X2;
+								chars[0] = curr_char;
+								if (chars[0] == L'\r')
+								{
+									chars[0] = L'\n';
+								}
 							}
-						} break;
 
-						INVALID_DEFAULT_CASE;
-					}
+							event->text.text.count = (size_t)WideCharToMultiByte(CP_UTF8, 0, chars, -1, event->text.text.data, string_storage_size(event->text.text), NULL, NULL) - 1;
+						}
 
-					event->kind = PLATFORM_EVENT_MOUSE_BUTTON;
-					event->mouse_button.pressed = !!(msg.wParam & (MK_LBUTTON|MK_MBUTTON|MK_RBUTTON|MK_XBUTTON1|MK_XBUTTON2));
-					event->mouse_button.button  = button;
+						sll_push_back_ex(first_event, last_event, event, next_);
+					} break;
 
-					sll_push_back_ex(first_event, last_event, event, next_);
-				} break;
-
-				case WM_CHAR:
-				{
-					platform_event_t *event = new_event(event_arena);
-					event_count += 1;
-
-					event->kind = PLATFORM_EVENT_TEXT;
-
-					// laboured UTF-16 wrangling
+					default:
 					{
-						wchar_t chars[3] = {0};
+						TranslateMessage(&msg);
+						DispatchMessageW(&msg);
+					} break;
+				}
+			}
 
-						wchar_t curr_char = (wchar_t)msg.wParam;
-						if (IS_HIGH_SURROGATE(curr_char))
-						{
-							last_char = curr_char;
-						}
-						else if (IS_LOW_SURROGATE(curr_char))
-						{
-							if (IS_SURROGATE_PAIR(last_char, curr_char))
-							{
-								chars[0] = last_char;
-								chars[1] = curr_char;
-							}
-							last_char = 0;
-						}
-						else
-						{
-							chars[0] = curr_char;
-							if (chars[0] == L'\r')
-							{
-								chars[0] = L'\n';
-							}
-						}
+			GameInputGamepadButtons pressed_buttons  = 0;
+			GameInputGamepadButtons released_buttons = 0;
+			GameInputGamepadButtons down_buttons     = 0;
 
-						event->text.text.count = (size_t)WideCharToMultiByte(CP_UTF8, 0, chars, -1, event->text.text.data, string_storage_size(event->text.text), NULL, NULL) - 1;
+			{
+				IGameInputDevice *device = NULL;
+
+				IGameInputReading *reading;
+				HRESULT hr = IGameInput_GetCurrentReading(game_input, GameInputKindGamepad, NULL, &reading);
+
+				if (SUCCEEDED(hr))
+				{
+					GameInputGamepadState state;
+					IGameInputReading_GetGamepadState(reading, &state);
+
+					GameInputGamepadButtons changed_buttons       = prev_gamepad_state.buttons ^ state.buttons;
+					GameInputGamepadButtons these_pressed_buttons = changed_buttons & state.buttons;
+
+					down_buttons     |= state.buttons;
+					pressed_buttons  |= these_pressed_buttons;
+					released_buttons |= changed_buttons ^ these_pressed_buttons;
+
+					prev_gamepad_state = state;
+
+					if (!device)
+					{
+						IGameInputReading_GetDevice(reading, &device);
 					}
 
-					sll_push_back_ex(first_event, last_event, event, next_);
-				} break;
+					IGameInputReading *next_reading;
+					hr = IGameInput_GetNextReading(game_input, reading, GameInputKindGamepad, device, &next_reading);
 
-                default:
-                {
-                    TranslateMessage(&msg);
-                    DispatchMessageW(&msg);
-                } break;
-            }
-        }
+					IGameInputReading_Release(reading);
 
-        has_focus = (GetActiveWindow() == window);
+					reading = next_reading;
+				}
+			}
 
-        RECT client_rect;
-        GetClientRect(window, &client_rect);
+			if (pressed_buttons & GameInputGamepadA)
+			{
+				OutputDebugStringA("Da A iz da Prezxzed\n");
+			}
 
-        int width  = client_rect.right - client_rect.left;
-        int height = client_rect.bottom - client_rect.top;
+			has_focus = (GetActiveWindow() == window);
 
-		(void)width;
+			RECT client_rect;
+			GetClientRect(window, &client_rect);
 
-        POINT cursor_point;
-        GetCursorPos(&cursor_point);
-        ScreenToClient(window, &cursor_point);
+			int width  = client_rect.right - client_rect.left;
+			int height = client_rect.bottom - client_rect.top;
 
-		bool cursor_is_in_client_rect = (cursor_point.x >  client_rect.left  &&
-										 cursor_point.x <= client_rect.right &&
-										 cursor_point.y >  client_rect.top   &&
-										 cursor_point.y <= client_rect.bottom);
+			(void)width;
 
-		v2_t prev_mouse_p = convert_mouse_cursor(prev_cursor_point, height);
-		v2_t mouse_p      = convert_mouse_cursor(cursor_point, height);
-		v2_t mouse_dp     = sub(mouse_p, prev_mouse_p);
+			POINT cursor_point;
+			GetCursorPos(&cursor_point);
+			ScreenToClient(window, &cursor_point);
 
-		if (has_focus && cursor_locked)
-		{
-			POINT mid_point;
-			mid_point.x = (client_rect.left + client_rect.right) / 2;
-			mid_point.y = (client_rect.bottom + client_rect.top) / 2;
-			cursor_point = mid_point;
+			bool cursor_is_in_client_rect = (cursor_point.x >  client_rect.left  &&
+											 cursor_point.x <= client_rect.right &&
+											 cursor_point.y >  client_rect.top   &&
+											 cursor_point.y <= client_rect.bottom);
 
-			ClientToScreen(window, &mid_point);
-			SetCursorPos(mid_point.x, mid_point.y);
-        }
+			v2_t prev_mouse_p = convert_mouse_cursor(prev_cursor_point, height);
+			v2_t mouse_p      = convert_mouse_cursor(cursor_point, height);
+			v2_t mouse_dp     = sub(mouse_p, prev_mouse_p);
 
-        prev_cursor_point = cursor_point;
+			if (has_focus && cursor_locked)
+			{
+				POINT mid_point;
+				mid_point.x = (client_rect.left + client_rect.right) / 2;
+				mid_point.y = (client_rect.bottom + client_rect.top) / 2;
+				cursor_point = mid_point;
 
-#if DF_USE_RHI_ABSTRACTION
+				ClientToScreen(window, &mid_point);
+				SetCursorPos(mid_point.x, mid_point.y);
+			}
+
+			prev_cursor_point = cursor_point;
+
+			platform_update_io_t update_io = {
+				.has_focus   = has_focus,
+				.dt          = (float)dt,
+
+				.mouse_p     = mouse_p,
+				.mouse_dp    = mouse_dp,
+				.mouse_wheel = mouse_wheel,
+
+				// .gamepads..?,
+
+				.event_count = event_count,
+				.first_event = first_event,
+				.last_event  = last_event,
+
+				.cursor      = cursor,
+			};
+
+			hooks.update(&update_io);
+
+			if (update_io.lock_cursor != cursor_locked)
+			{
+				lock_cursor(update_io.lock_cursor);
+			}
+
+			cursor = update_io.cursor;
+
+			if (cursor_is_in_client_rect)
+			{
+				if (cursor == PLATFORM_CURSOR_NONE)
+				{
+					SetCursor(NULL);
+				}
+				else
+				{
+					wchar_t *win32_cursor = IDC_ARROW;
+					switch (cursor)
+					{
+						case PLATFORM_CURSOR_ARROW:       win32_cursor = IDC_ARROW;    break;
+						case PLATFORM_CURSOR_TEXT_INPUT:  win32_cursor = IDC_IBEAM;    break;
+						case PLATFORM_CURSOR_RESIZE_ALL:  win32_cursor = IDC_SIZEALL;  break;
+						case PLATFORM_CURSOR_RESIZE_EW:   win32_cursor = IDC_SIZEWE;   break;
+						case PLATFORM_CURSOR_RESIZE_NS:   win32_cursor = IDC_SIZENS;   break;
+						case PLATFORM_CURSOR_RESIZE_NESW: win32_cursor = IDC_SIZENESW; break;
+						case PLATFORM_CURSOR_RESIZE_NWSE: win32_cursor = IDC_SIZENWSE; break;
+						case PLATFORM_CURSOR_HAND:        win32_cursor = IDC_HAND;     break;
+						case PLATFORM_CURSOR_NOT_ALLOWED: win32_cursor = IDC_NO;       break;
+					}
+					SetCursor(LoadCursor(NULL, win32_cursor));
+				}
+			}
+			last_cursor = cursor;
+
+			if (update_io.request_exit)
+			{
+				running = false;
+			}
+
+			m_scope_end(event_arena);
+
+			accumulator -= dt;
+		}
+
 		rhi_begin_frame();
 
 		rhi_command_list_t *command_list = rhi_get_command_list();
-#endif
 
-		platform_io_t tick_io = {
-			.has_focus   = has_focus,
+		platform_render_io_t render_io = {
+			.has_focus        = has_focus,
+			.dt               = dt,
 
-			.dt          = dt,
-
-#if DF_USE_RHI_ABSTRACTION
 			.rhi_window       = rhi_window,
 			.rhi_command_list = command_list,
-#endif
-
-            .r_commands  = &r_commands,
-
-			.mouse_p     = mouse_p,
-			.mouse_dp    = mouse_dp,
-			.mouse_wheel = mouse_wheel,
-
-			// .gamepads..?,
-
-			.event_count = event_count,
-			.first_event = first_event,
-			.last_event  = last_event,
-			
-			.cursor      = cursor,
 		};
 
-		hooks.tick(&tick_io);
+		hooks.render(&render_io);
 
-        if (tick_io.lock_cursor != cursor_locked)
-        {
-            lock_cursor(tick_io.lock_cursor);
-        }
-
-		cursor = tick_io.cursor;
-
-		if (cursor_is_in_client_rect)
-		{
-			if (cursor == PLATFORM_CURSOR_NONE)
-			{
-				SetCursor(NULL);
-			}
-			else
-			{
-				wchar_t *win32_cursor = IDC_ARROW;
-				switch (cursor)
-				{
-					case PLATFORM_CURSOR_ARROW:       win32_cursor = IDC_ARROW;    break;
-					case PLATFORM_CURSOR_TEXT_INPUT:  win32_cursor = IDC_IBEAM;    break;
-					case PLATFORM_CURSOR_RESIZE_ALL:  win32_cursor = IDC_SIZEALL;  break;
-					case PLATFORM_CURSOR_RESIZE_EW:   win32_cursor = IDC_SIZEWE;   break;
-					case PLATFORM_CURSOR_RESIZE_NS:   win32_cursor = IDC_SIZENS;   break;
-					case PLATFORM_CURSOR_RESIZE_NESW: win32_cursor = IDC_SIZENESW; break;
-					case PLATFORM_CURSOR_RESIZE_NWSE: win32_cursor = IDC_SIZENWSE; break;
-					case PLATFORM_CURSOR_HAND:        win32_cursor = IDC_HAND;     break;
-					case PLATFORM_CURSOR_NOT_ALLOWED: win32_cursor = IDC_NO;       break;
-				}
-				SetCursor(LoadCursor(NULL, win32_cursor));
-			}
-		}
-		last_cursor = cursor;
-
-#if DF_USE_RHI_ABSTRACTION
 		rhi_end_frame();
-#else
-        d3d11_execute_command_buffer(&r_commands, width, height);
-        d3d11_present();
-#endif
-
-        if (tick_io.request_exit)
-        {
-            running = false;
-        }
 
 		m_reset_temp_arenas();
-
-		hires_time_t end_time = os_hires_time();
-		dt = (float)os_seconds_elapsed(start_time, end_time);
-		dt = min(dt, 1.0f / 15.0f);
-
-		start_time = end_time;
     }
 
-#if DF_USE_RHI_ABSTRACTION
 	rhi_flush_everything();
-#endif
 
     return 0;
 }
