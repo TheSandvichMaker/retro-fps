@@ -289,6 +289,12 @@ typedef struct gamepad_t
 	gamepad_buttons_t buttons_down;
 } gamepad_t;
 
+typedef enum input_source_t
+{
+	InputSource_kbm,
+	InputSource_gamepad,
+} input_source_t;
+
 typedef struct button_t
 {
 	bool pressed;

@@ -922,22 +922,22 @@ void update_and_render_in_game_editor(void)
 		editor.ui_demo.window.rect = rect2_from_min_dim(make_v2(96, 96), make_v2(512, 512));
 	}
 
-    if (ui_button_pressed(BUTTON_F1))
+    if (ui_key_pressed(ui.input, Key_f1, false))
 	{
         editor.show_timings = !editor.show_timings;
 	}
 
-    if (ui_button_pressed(BUTTON_F2))
+    if (ui_key_pressed(ui.input, Key_f2, false))
 	{
 		ui_toggle_window_openness(&editor.lm_editor.window);
 	}
 
-    if (ui_button_pressed(BUTTON_F3))
+    if (ui_key_pressed(ui.input, Key_f3, false))
 	{
 		ui_toggle_window_openness(&editor.convex_hull_debugger.window);
 	}
 
-    if (ui_button_pressed(BUTTON_F4))
+    if (ui_key_pressed(ui.input, Key_f4, false))
 	{
 		ui_toggle_window_openness(&editor.ui_demo.window);
 	}

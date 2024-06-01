@@ -4,93 +4,119 @@
 
 #include "input.h"
 
-static input_kind_t input_kind;
-static uint64_t buttons_down;
-static uint64_t buttons_pressed;
-static uint64_t buttons_released;
-
-static int mouse_x,  mouse_y;
-static int mouse_dx, mouse_dy;
-
-static bool game_input_suppressed;
-
-void update_input_state(const input_state_t *state)
+void equip_action_system(action_system_t *action_system)
 {
-    input_kind = state->input_kind;
-
-    buttons_pressed  = (buttons_down^state->button_states) &  state->button_states;
-    buttons_released = (buttons_down^state->button_states) & ~state->button_states;
-    buttons_down     = state->button_states;
-
-    mouse_x = state->mouse_x;
-    mouse_y = state->mouse_y;
-
-    mouse_dx = state->mouse_dx;
-    mouse_dy = state->mouse_dy;
-
-    // let this reset every frame, probably nicer that way
-    game_input_suppressed = false;
+	g_actions = action_system;
 }
 
-void suppress_game_input(bool suppress)
+void unequip_action_system(void)
 {
-    game_input_suppressed = suppress;
+	equip_action_system(NULL);
 }
 
-input_kind_t get_input_kind(void)
+void bind_key_action(action_t action, keycode_t key)
 {
-    return input_kind;
+	ASSERT_MSG(g_actions, "You need to equip an action system before calling other action related functions");
+	ASSERT_MSG(key < Key_COUNT, "Passed invalid keycode to bind_key_action!");
+
+	g_actions->key_to_actions[key] |= action_bit(action);
 }
 
-bool ui_button_pressed(uint64_t buttons)
+void unbind_key_action(action_t action, keycode_t key)
 {
-    return !!(buttons_pressed & buttons);
+	ASSERT_MSG(g_actions, "You need to equip an action system before calling other action related functions");
+	ASSERT_MSG(key < Key_COUNT, "Passed invalid keycode to unbind_key_action!");
+
+	g_actions->key_to_actions[key] &= ~action_bit(action);
 }
 
-bool ui_button_released(uint64_t buttons)
+void process_action_system_input(input_t *input)
 {
-    return !!(buttons_released & buttons);
+	ASSERT_MSG(g_actions, "You need to equip an action system before calling other action related functions");
+
+	if (input->level > InputLevel_game)
+	{
+		log(ActionSystem, Warning, "Tried to process action system inputs using UI input level, that's probably a bug");
+	}
+
+	g_actions->mouse_p  = input->mouse_p;
+	g_actions->mouse_dp = input->mouse_dp;
+
+	for_array(key_index, input->keys)
+	{
+		button_t *key = &input->keys[key_index];
+
+		uint64_t actions = g_actions->key_to_actions[key_index];
+
+		for (uint64_t action_index = 0; action_index < 64; action_index++)
+		{
+			if (actions & (1ull << action_index))
+			{
+				action_state_t *action_state = &g_actions->action_states[action_index];
+				action_state->pressed  = key->pressed;
+				action_state->held     = key->held;
+				action_state->released = key->released;
+			}
+		}
+	}
 }
 
-bool ui_button_down(uint64_t buttons)
+bool action_pressed(action_t action)
 {
-    return !!(buttons_down & buttons);
+	ASSERT_MSG(g_actions, "You need to equip an action system before calling other action related functions");
+	ASSERT_MSG(action < Action_COUNT, "Passed invalid action to action_pressed");
+
+	return g_actions->action_states[action].pressed;
 }
 
-bool button_pressed(uint64_t buttons)
+bool action_held(action_t action)
 {
-    if (game_input_suppressed)
-        return false;
+	ASSERT_MSG(g_actions, "You need to equip an action system before calling other action related functions");
+	ASSERT_MSG(action < Action_COUNT, "Passed invalid action to action_held");
 
-    return !!(buttons_pressed & buttons);
+	return g_actions->action_states[action].held;
 }
 
-bool button_released(uint64_t buttons)
+bool action_released(action_t action)
 {
-    if (game_input_suppressed)
-        return false;
+	ASSERT_MSG(g_actions, "You need to equip an action system before calling other action related functions");
+	ASSERT_MSG(action < Action_COUNT, "Passed invalid action to action_released");
 
-    return !!(buttons_released & buttons);
+	return g_actions->action_states[action].released;
 }
 
-bool button_down(uint64_t buttons)
+v2_t get_movement_axes(void)
 {
-    if (game_input_suppressed)
-        return false;
+	ASSERT_MSG(g_actions, "You need to equip an action system before calling other action related functions");
 
-    return !!(buttons_down & buttons);
+	v2_t result = {
+		g_actions->axis_states[ActionAxis_move_x],
+		g_actions->axis_states[ActionAxis_move_y],
+	};
+
+	return result;
 }
 
-void get_mouse(int *x, int *y)
+v2_t get_look_axes(void)
 {
-    // maybe suppress mouse input as well?
-    *x = mouse_x;
-    *y = mouse_y;
+	ASSERT_MSG(g_actions, "You need to equip an action system before calling other action related functions");
+
+	v2_t result = {
+		g_actions->axis_states[ActionAxis_look_x],
+		g_actions->axis_states[ActionAxis_look_y],
+	};
+
+	return result;
 }
 
-void get_mouse_delta(int *dx, int *dy)
+v2_t get_action_mouse_p(void)
 {
-    // maybe suppress mouse input as well?
-    *dx = mouse_dx;
-    *dy = mouse_dy;
+	ASSERT_MSG(g_actions, "You need to equip an action system before calling other action related functions");
+	return g_actions->mouse_p;
+}
+
+v2_t get_action_mouse_dp(void)
+{
+	ASSERT_MSG(g_actions, "You need to equip an action system before calling other action related functions");
+	return g_actions->mouse_dp;
 }

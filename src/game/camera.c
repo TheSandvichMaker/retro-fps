@@ -13,17 +13,13 @@ void update_camera_rotation(camera_t *camera, float dt)
 {
 	(void)dt;
 
-    int dxi, dyi;
-    get_mouse_delta(&dxi, &dyi);
-
-    float dx = (float)dxi;
-    float dy = (float)dyi;
+	v2_t dp = get_action_mouse_dp();
 
     float look_speed_x = 0.1f;
     float look_speed_y = 0.1f;
 
-    camera->yaw   -= look_speed_x*dx;
-    camera->pitch -= look_speed_y*dy;
+    camera->yaw   -= look_speed_x*dp.x;
+    camera->pitch -= look_speed_y*dp.y;
 
     camera->yaw   = fmodf(camera->yaw, 360.0f);
     camera->pitch = CLAMP(camera->pitch, -85.0f, 85.0f);
@@ -37,12 +33,12 @@ void camera_freecam(camera_t *camera, float move_speed, float dt)
 
     v3_t move_delta = { 0 };
 
-    if (button_down(BUTTON_RUN))      move_speed *= 2.0f;
+    if (action_held(Action_run))      move_speed *= 2.0f;
 
-    if (button_down(BUTTON_FORWARD))  move_delta.x += move_speed;
-    if (button_down(BUTTON_BACK))     move_delta.x -= move_speed;
-    if (button_down(BUTTON_LEFT))     move_delta.y += move_speed;
-    if (button_down(BUTTON_RIGHT))    move_delta.y -= move_speed;
+    if (action_held(Action_forward))  move_delta.x += move_speed;
+    if (action_held(Action_back))     move_delta.x -= move_speed;
+    if (action_held(Action_left))     move_delta.y += move_speed;
+    if (action_held(Action_right))    move_delta.y -= move_speed;
 
     rotor3_t r_pitch = rotor3_from_plane_angle(PLANE_ZX, DEG_TO_RAD*camera->pitch);
     rotor3_t r_yaw   = rotor3_from_plane_angle(PLANE_YZ, DEG_TO_RAD*camera->yaw  );
@@ -50,8 +46,8 @@ void camera_freecam(camera_t *camera, float move_speed, float dt)
     move_delta = rotor3_rotatev(r_pitch, move_delta);
     move_delta = rotor3_rotatev(r_yaw  , move_delta);
 
-    if (button_down(BUTTON_JUMP))     move_delta.z += move_speed;
-    if (button_down(BUTTON_CROUCH))   move_delta.z -= move_speed;
+    if (action_held(Action_jump))     move_delta.z += move_speed;
+    if (action_held(Action_crouch))   move_delta.z -= move_speed;
 
     camera->p = add(camera->p, move_delta);
 }

@@ -87,12 +87,12 @@ void player_noclip(player_t *player, float dt)
     float move_speed = 200.0f;
     v3_t move_delta = { 0 };
 
-    if (button_down(BUTTON_RUN))      move_speed *= 2.0f;
+    if (action_held(Action_run))      move_speed *= 2.0f;
 
-    if (button_down(BUTTON_FORWARD))  move_delta.x += move_speed;
-    if (button_down(BUTTON_BACK))     move_delta.x -= move_speed;
-    if (button_down(BUTTON_LEFT))     move_delta.y += move_speed;
-    if (button_down(BUTTON_RIGHT))    move_delta.y -= move_speed;
+    if (action_held(Action_forward))  move_delta.x += move_speed;
+    if (action_held(Action_back))     move_delta.x -= move_speed;
+    if (action_held(Action_left))     move_delta.y += move_speed;
+    if (action_held(Action_right))    move_delta.y -= move_speed;
 
     rotor3_t r_pitch = rotor3_from_plane_angle(PLANE_ZX, DEG_TO_RAD*camera->pitch);
     rotor3_t r_yaw   = rotor3_from_plane_angle(PLANE_YZ, DEG_TO_RAD*camera->yaw  );
@@ -100,8 +100,8 @@ void player_noclip(player_t *player, float dt)
     move_delta = rotor3_rotatev(r_pitch, move_delta);
     move_delta = rotor3_rotatev(r_yaw  , move_delta);
 
-    if (button_down(BUTTON_JUMP))     move_delta.z += move_speed;
-    if (button_down(BUTTON_CROUCH))   move_delta.z -= move_speed;
+    if (action_held(Action_jump))     move_delta.z += move_speed;
+    if (action_held(Action_crouch))   move_delta.z -= move_speed;
 
     player->dp = move_delta;
     player->p  = add(player->p, mul(dt, player->dp));
@@ -124,14 +124,14 @@ void player_movement(map_t *map, player_t *player, float dt)
     float move_speed = 1500.0f;
     v3_t move_delta = { 0 };
 
-    if (button_down(BUTTON_RUN))      move_speed *= 2.0f;
+    if (action_held(Action_run))      move_speed *= 2.0f;
 
-    if (button_down(BUTTON_FORWARD))  move_delta.x += 1.0f;
-    if (button_down(BUTTON_BACK))     move_delta.x -= 1.0f;
-    if (button_down(BUTTON_LEFT))     move_delta.y += 1.0f;
-    if (button_down(BUTTON_RIGHT))    move_delta.y -= 1.0f;
+    if (action_held(Action_forward))  move_delta.x += 1.0f;
+    if (action_held(Action_back))     move_delta.x -= 1.0f;
+    if (action_held(Action_left))     move_delta.y += 1.0f;
+    if (action_held(Action_right))    move_delta.y -= 1.0f;
 
-    player->crouched = button_down(BUTTON_CROUCH);
+    player->crouched = action_held(Action_crouch);
 
     float max_player_height = 56.0f;
 
@@ -195,7 +195,7 @@ void player_movement(map_t *map, player_t *player, float dt)
 
     // physics
     
-    if (player->support && button_pressed(BUTTON_JUMP))
+    if (player->support && action_pressed(Action_jump))
     {
         float jump_force = 300.0f;
         player->support = NULL;
@@ -360,9 +360,25 @@ fn void init_view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
     view->proj_matrix = make_perspective_matrix(camera->vfov, aspect, 1.0f);
 }
 
+global action_system_t g_game_action_system = {0};
+
 void game_init(platform_init_io_t *io)
 {
 	(void)io;
+
+	equip_action_system(&g_game_action_system);
+
+	bind_key_action(Action_left,          Key_a);
+	bind_key_action(Action_right,         Key_d);
+	bind_key_action(Action_forward,       Key_w);
+	bind_key_action(Action_back,          Key_s);
+	bind_key_action(Action_jump,          Key_space);
+	bind_key_action(Action_run,           Key_shift);
+	bind_key_action(Action_crouch,        Key_control);
+	bind_key_action(Action_fire1,         Key_lbutton);
+	bind_key_action(Action_fire2,         Key_rbutton);
+	bind_key_action(Action_escape,        Key_escape);
+	bind_key_action(Action_toggle_noclip, Key_v);
 
 	init_game_job_queues();
 
@@ -433,6 +449,8 @@ void game_init(platform_init_io_t *io)
 	//
 
     initialized = true;
+
+	unequip_action_system();
 }
 
 fn_local void game_update(platform_update_io_t *io)
@@ -440,103 +458,12 @@ fn_local void game_update(platform_update_io_t *io)
 	gamestate_t *game = g_game;
 	ASSERT_MSG(game, "You need to call game_init before calling game_update");
 
+	equip_action_system(&g_game_action_system);
+	process_action_system_input(io->input);
+
 	float dt = io->dt;
 
-	// TODO: Totally redo input 
-	{
-		/*
-		ui_submit_mouse_p    (io->input->mouse_p);
-		ui_submit_mouse_dp   (io->input->mouse_dp);
-		ui_submit_mouse_wheel(io->input->mouse_wheel);
-		*/
-
-		input_state_t input = {0};
-		input.mouse_x  = (int)io->input->mouse_p.x;
-		input.mouse_y  = (int)io->input->mouse_p.y;
-		input.mouse_dx = (int)io->input->mouse_dp.x;
-		input.mouse_dy = (int)io->input->mouse_dp.y;
-
-		static uint64_t button_states = 0;
-
-		for (platform_event_t *ev = platform_event_iter(io->input->first_event);
-			 ev;
-			 ev = platform_event_next(ev))
-		{
-			switch (ev->kind)
-			{
-				case Event_mouse_button:
-				{
-					bool pressed = ev->mouse_button.pressed;
-					//ui_submit_mouse_buttons(ev->mouse_button.button, pressed);
-
-					switch (ev->mouse_button.button)
-					{
-						case Button_left:
-						{
-							button_states = TOGGLE_BIT(button_states, BUTTON_FIRE1, pressed);
-						} break;
-
-						case Button_right:
-						{
-							button_states = TOGGLE_BIT(button_states, BUTTON_FIRE2, pressed);
-						} break;
-					}
-				} break;
-
-				case Event_key:
-				{
-					bool pressed = ev->key.pressed;
-
-					switch ((int)ev->key.keycode) // int cast just stops MSVC from complaining that the ascii cases are not valid values of the enum (TODO: add them)
-					{
-						case 'W':         button_states = TOGGLE_BIT(button_states, BUTTON_FORWARD      , pressed); break;
-						case 'A':         button_states = TOGGLE_BIT(button_states, BUTTON_LEFT         , pressed); break;
-						case 'S':         button_states = TOGGLE_BIT(button_states, BUTTON_BACK         , pressed); break;
-						case 'D':         button_states = TOGGLE_BIT(button_states, BUTTON_RIGHT        , pressed); break;
-						case 'V':         button_states = TOGGLE_BIT(button_states, BUTTON_TOGGLE_NOCLIP, pressed); break;
-						case Key_space:   button_states = TOGGLE_BIT(button_states, BUTTON_JUMP         , pressed); break;
-						case Key_control: button_states = TOGGLE_BIT(button_states, BUTTON_CROUCH       , pressed); break;
-						case Key_shift:   button_states = TOGGLE_BIT(button_states, BUTTON_RUN          , pressed); break;
-						case Key_escape:  button_states = TOGGLE_BIT(button_states, BUTTON_ESCAPE       , pressed); break;
-						case Key_f1:      button_states = TOGGLE_BIT(button_states, BUTTON_F1           , pressed); break;
-						case Key_f2:      button_states = TOGGLE_BIT(button_states, BUTTON_F2           , pressed); break;
-						case Key_f3:      button_states = TOGGLE_BIT(button_states, BUTTON_F3           , pressed); break;
-						case Key_f4:      button_states = TOGGLE_BIT(button_states, BUTTON_F4           , pressed); break;
-						case Key_f5:      button_states = TOGGLE_BIT(button_states, BUTTON_F5           , pressed); break;
-						case Key_f6:      button_states = TOGGLE_BIT(button_states, BUTTON_F6           , pressed); break;
-						case Key_f7:      button_states = TOGGLE_BIT(button_states, BUTTON_F7           , pressed); break;
-						case Key_f8:      button_states = TOGGLE_BIT(button_states, BUTTON_F8           , pressed); break;
-						case Key_f9:      button_states = TOGGLE_BIT(button_states, BUTTON_F9           , pressed); break;
-						case Key_f10:     button_states = TOGGLE_BIT(button_states, BUTTON_F10          , pressed); break;
-						case Key_f11:     button_states = TOGGLE_BIT(button_states, BUTTON_F11          , pressed); break;
-						case Key_f12:     button_states = TOGGLE_BIT(button_states, BUTTON_F12          , pressed); break;
-					}
-				} break;
-
-				case Event_text:
-				{
-					//string_t text = string_from_storage(ev->text.text);
-					//ui_submit_text(text);
-				} break;
-			}
-		}
-
-		input.button_states = button_states;
-
-		update_input_state(&input);
-	}
-
-	//ui.input.app_has_focus = io->has_focus;
-	//io->cursor = ui.input.cursor;
-
-	// bool ui_focused = ui_begin(dt);
-
-    // if (ui_focused)
-    // {
-    //     suppress_game_input(true);
-    // }
-
-    if (button_pressed(BUTTON_FIRE2))
+    if (action_pressed(Action_fire2))
 	{
         g_cursor_locked = !g_cursor_locked;
 	}
@@ -545,7 +472,7 @@ fn_local void game_update(platform_update_io_t *io)
 
     game->primary_camera = &g_camera;
 
-    if (button_pressed(BUTTON_FIRE1))
+    if (action_pressed(Action_fire1))
 	{
 		static bool mono = true;
 
@@ -568,7 +495,7 @@ fn_local void game_update(platform_update_io_t *io)
 
     camera_t *camera = player->attached_camera;
 
-    if (button_pressed(BUTTON_TOGGLE_NOCLIP))
+    if (action_pressed(Action_toggle_noclip))
     {
         if (player->move_mode == PLAYER_MOVE_NORMAL)
             player->move_mode = PLAYER_MOVE_NOCLIP;
@@ -597,10 +524,12 @@ fn_local void game_update(platform_update_io_t *io)
 	//
 	//
 
-    if (button_pressed(BUTTON_ESCAPE))
+    if (action_pressed(Action_escape))
     {
         io->request_exit = true;
     }
+
+	unequip_action_system();
 }
 
 #if 0
