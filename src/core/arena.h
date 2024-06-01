@@ -8,7 +8,7 @@
 fn void m_init_with_memory(arena_t *arena, void *memory, size_t size);
 
 #define ARENA_CAPACITY (16ull << 30)
-#define ARENA_COMMIT_CHUNK_SIZE (16ull << 10)
+#define ARENA_COMMIT_CHUNK_SIZE (32ull << 10)
 #define ARENA_DEFAULT_COMMIT_PRESERVE_THRESHOLD ARENA_COMMIT_CHUNK_SIZE
 
 fn void *m_alloc(arena_t *arena, size_t size, size_t align);

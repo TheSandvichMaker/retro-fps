@@ -128,11 +128,14 @@ typedef struct d3d12_buffer_t
 {
 	D3D12_RESOURCE_STATES state;
 
-	ID3D12Resource *resource;
-	d3d12_descriptor_t srv;
-	d3d12_descriptor_t uav;
+	rhi_resource_flags_t flags;
 
-	D3D12_GPU_VIRTUAL_ADDRESS gpu_address;
+	ID3D12Resource *resources[RhiMaxFrameLatency];
+	d3d12_descriptor_t srvs[RhiMaxFrameLatency];
+	d3d12_descriptor_t uavs[RhiMaxFrameLatency];
+
+	D3D12_GPU_VIRTUAL_ADDRESS gpu_address[RhiMaxFrameLatency];
+
 	uint64_t size;
 
 	struct

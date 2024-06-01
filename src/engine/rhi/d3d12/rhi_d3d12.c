@@ -1032,12 +1032,16 @@ rhi_texture_srv_t rhi_get_texture_srv(rhi_texture_t handle)
 	return result;
 }
 
-fn_local void d3d12_upload_buffer_data(d3d12_buffer_t *buffer, uint64_t dst_offset, const void *src, size_t src_size)
+fn_local void d3d12_upload_buffer_data(d3d12_buffer_t *buffer, uint32_t resource_index, uint64_t dst_offset, const void *src, size_t src_size)
 {
+	ASSERT((buffer->flags & RhiResourceFlag_frame_buffered) ? resource_index < RhiMaxFrameLatency : resource_index == 0);
+
+	ID3D12Resource *resource = buffer->resources[resource_index];
+
 	m_scoped_temp
 	{
-		string_t debug_name = d3d12_get_debug_name(temp, (ID3D12Object *)buffer->resource);
-		log(RHI_D3D12, Spam, "Uploading data for buffer '%.*s'", Sx(debug_name));
+		string_t debug_name = d3d12_get_debug_name(temp, (ID3D12Object *)resource);
+		log(RHI_D3D12, Spam, "Uploading data for buffer '%.*s'[%u]", Sx(debug_name), resource_index);
 	}
 
 	d3d12_upload_context_t ctx = d3d12_upload_begin(src_size, 256);
@@ -1045,15 +1049,16 @@ fn_local void d3d12_upload_buffer_data(d3d12_buffer_t *buffer, uint64_t dst_offs
 	{
 		D3D12_RESOURCE_BARRIER barrier;
 
-		if (d3d12_transition_state(buffer->resource, &buffer->state, D3D12_RESOURCE_STATE_COPY_DEST, &barrier))
+		if (d3d12_transition_state(resource, &buffer->state, D3D12_RESOURCE_STATE_COPY_DEST, &barrier))
 		{
 			ID3D12GraphicsCommandList_ResourceBarrier(ctx.command_list, 1, &barrier);
 		}
 	}
 
 	memcpy(ctx.pointer, src, src_size);
+
 	ID3D12GraphicsCommandList_CopyBufferRegion(ctx.command_list, 
-											   buffer->resource, 
+											   resource, 
 											   dst_offset, 
 											   ctx.buffer, 
 											   ctx.offset, 
@@ -1062,7 +1067,7 @@ fn_local void d3d12_upload_buffer_data(d3d12_buffer_t *buffer, uint64_t dst_offs
 	{
 		D3D12_RESOURCE_BARRIER barrier;
 
-		ASSERT(d3d12_transition_state(buffer->resource, &buffer->state, D3D12_RESOURCE_STATE_COMMON, &barrier));
+		ASSERT(d3d12_transition_state(resource, &buffer->state, D3D12_RESOURCE_STATE_COMMON, &barrier));
 		ID3D12GraphicsCommandList_ResourceBarrier(ctx.command_list, 1, &barrier);
 	}
 
@@ -1080,6 +1085,8 @@ void rhi_upload_buffer_data(rhi_buffer_t handle,
 	d3d12_buffer_t *buffer = pool_get(&g_rhi.buffers, handle);
 	ASSERT_MSG(buffer, "Invalid buffer!");
 
+	uint32_t resource_index = d3d12_resource_index(buffer->flags);
+
 	switch (frequency)
 	{
 		case RhiUploadFreq_frame:
@@ -1090,13 +1097,13 @@ void rhi_upload_buffer_data(rhi_buffer_t handle,
 			memcpy(alloc.cpu, src, src_size);
 
 			ID3D12GraphicsCommandList *copy_list = frame->copy_command_list;
-			ID3D12GraphicsCommandList_CopyBufferRegion(copy_list, buffer->resource, dst_offset, 
+			ID3D12GraphicsCommandList_CopyBufferRegion(copy_list, buffer->resources[resource_index], dst_offset, 
 													   alloc.buffer, alloc.offset, src_size);
 		} break;
 
 		case RhiUploadFreq_background:
 		{
-			d3d12_upload_buffer_data(buffer, dst_offset, src, src_size);
+			d3d12_upload_buffer_data(buffer, resource_index, dst_offset, src, src_size);
 		} break;
 	}
 }
@@ -1133,22 +1140,25 @@ void rhi_end_buffer_upload(rhi_buffer_t handle)
 	d3d12_frame_state_t *frame = d3d12_get_frame_state(g_rhi.frame_index);
 	ID3D12GraphicsCommandList *copy_list = frame->copy_command_list;
 
+	uint32_t resource_index = d3d12_resource_index(buffer->flags);
+	ID3D12Resource *resource = buffer->resources[resource_index];
+
 	{
 		D3D12_RESOURCE_BARRIER barrier;
 
-		if (d3d12_transition_state(buffer->resource, &buffer->state, D3D12_RESOURCE_STATE_COPY_DEST, &barrier))
+		if (d3d12_transition_state(resource, &buffer->state, D3D12_RESOURCE_STATE_COPY_DEST, &barrier))
 		{
 			ID3D12GraphicsCommandList_ResourceBarrier(copy_list, 1, &barrier);
 		}
 	}
 
-	ID3D12GraphicsCommandList_CopyBufferRegion(copy_list, buffer->resource, buffer->upload.dst_offset, 
+	ID3D12GraphicsCommandList_CopyBufferRegion(copy_list, resource, buffer->upload.dst_offset, 
 											   buffer->upload.src_buffer, buffer->upload.src_offset, buffer->upload.size);
 
 	{
 		D3D12_RESOURCE_BARRIER barrier;
 
-		ASSERT(d3d12_transition_state(buffer->resource, &buffer->state, D3D12_RESOURCE_STATE_COMMON, &barrier));
+		ASSERT(d3d12_transition_state(resource, &buffer->state, D3D12_RESOURCE_STATE_COMMON, &barrier));
 		ID3D12GraphicsCommandList_ResourceBarrier(copy_list, 1, &barrier);
 	}
 
@@ -1178,44 +1188,67 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 			.Format           = DXGI_FORMAT_UNKNOWN,
 		};
 
-		ID3D12Resource *resource;
-		HRESULT hr = ID3D12Device_CreateCommittedResource(g_rhi.device,
-														  &heap_properties,
-														  D3D12_HEAP_FLAG_NONE,
-														  &desc,
-														  D3D12_RESOURCE_STATE_COMMON,
-														  NULL,
-														  &IID_ID3D12Resource,
-														  &resource);
-		if (SUCCEEDED(hr))
+		uint32_t count = (params->flags & RhiResourceFlag_frame_buffered) ? g_rhi.frame_latency : 1;
+
+		HRESULT hr;
+
+		bool succeeded = true;
+
+		ID3D12Resource *resources[RhiMaxFrameLatency] = {0};
+		for (size_t i = 0; i < count; i++)
+		{
+			hr = ID3D12Device_CreateCommittedResource(g_rhi.device,
+													  &heap_properties,
+													  D3D12_HEAP_FLAG_NONE,
+													  &desc,
+													  D3D12_RESOURCE_STATE_COMMON,
+													  NULL,
+													  &IID_ID3D12Resource,
+													  &resources[i]);
+			if (FAILED(hr))
+			{
+				succeeded = false;
+			}
+		}
+
+		if (succeeded)
 		{
 			d3d12_buffer_t *buffer = pool_add(&g_rhi.buffers);
 			result = CAST_HANDLE(rhi_buffer_t, pool_get_handle(&g_rhi.buffers, buffer));
 
-			buffer->resource = resource;
-			buffer->gpu_address = ID3D12Resource_GetGPUVirtualAddress(buffer->resource);
-			buffer->size = params->size;
+			buffer->flags = params->flags;
 
-			d3d12_set_debug_name((ID3D12Object *)buffer->resource, params->debug_name);
+			for (size_t i = 0; i < count; i++)
+			{
+				buffer->resources  [i] = resources[i];
+				buffer->gpu_address[i] = ID3D12Resource_GetGPUVirtualAddress(resources[i]);
+
+				d3d12_set_debug_name((ID3D12Object *)buffer->resources[i], params->debug_name);
+			}
+
+			buffer->size = params->size;
 
 			if (params->srv)
 			{
-				d3d12_descriptor_t descriptor = d3d12_allocate_descriptor_persistent(&g_rhi.cbv_srv_uav);
-				buffer->srv = descriptor;
-
+				for (size_t i = 0; i < count; i++)
 				{
-					D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
-						.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-						.ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
-						.Buffer = {
-							.FirstElement        = params->srv->first_element,
-							.NumElements         = params->srv->element_count,
-							.StructureByteStride = params->srv->element_stride,
-							.Flags = params->srv->raw ? D3D12_BUFFER_SRV_FLAG_RAW : D3D12_BUFFER_SRV_FLAG_NONE,
-						},
-					};
+					d3d12_descriptor_t descriptor = d3d12_allocate_descriptor_persistent(&g_rhi.cbv_srv_uav);
+					buffer->srvs[i] = descriptor;
 
-					ID3D12Device_CreateShaderResourceView(g_rhi.device, buffer->resource, &desc, descriptor.cpu);
+					{
+						D3D12_SHADER_RESOURCE_VIEW_DESC desc = {
+							.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+							.ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
+							.Buffer = {
+								.FirstElement        = params->srv->first_element,
+								.NumElements         = params->srv->element_count,
+								.StructureByteStride = params->srv->element_stride,
+								.Flags = params->srv->raw ? D3D12_BUFFER_SRV_FLAG_RAW : D3D12_BUFFER_SRV_FLAG_NONE,
+							},
+						};
+
+						ID3D12Device_CreateShaderResourceView(g_rhi.device, buffer->resources[i], &desc, descriptor.cpu);
+					}
 				}
 			}
 
@@ -1228,8 +1261,16 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 				// really makes it easier to do the manual state tracking as the user, for the state to just be ~whatever~ based
 				// on what you do with the resource!
 				buffer->state = D3D12_RESOURCE_STATE_COPY_DEST;
-				d3d12_upload_buffer_data(buffer, 0, params->initial_data.ptr, params->initial_data.size);
+
+				for (uint32_t i = 0; i < count; i++)
+				{
+					d3d12_upload_buffer_data(buffer, i, 0, params->initial_data.ptr, params->initial_data.size);
+				}
 			}
+		}
+		else
+		{
+			log(RHI_D3D12, Error, "Failed to create buffer resource(s)");
 		}
 	}
 
@@ -1243,7 +1284,9 @@ rhi_buffer_srv_t rhi_get_buffer_srv(rhi_buffer_t handle)
 	d3d12_buffer_t *buffer = pool_get(&g_rhi.buffers, handle);
 	ASSERT_MSG(buffer, "Buffer does not exist!");
 
-	result.index = buffer->srv.index;
+	uint32_t resource_index = d3d12_resource_index(buffer->flags);
+
+	result.index = buffer->srvs[resource_index].index;
 	ASSERT_MSG(result.index != 0, "Buffer does not have an SRV!");
 
 	return result;
@@ -1613,8 +1656,10 @@ void rhi_draw_indexed(rhi_command_list_t *list, rhi_buffer_t index_buffer_handle
 			d3d12_buffer_t *index_buffer = pool_get(&g_rhi.buffers, index_buffer_handle);
 			ASSERT(index_buffer);
 
+			uint32_t resource_index = d3d12_resource_index(index_buffer->flags);
+
 			D3D12_INDEX_BUFFER_VIEW ibv = {
-				.BufferLocation = index_buffer->gpu_address,
+				.BufferLocation = index_buffer->gpu_address[resource_index],
 				.SizeInBytes    = index_buffer->size,
 				.Format         = DXGI_FORMAT_R16_UINT, // TODO: Unhardcode
 			};

@@ -360,8 +360,10 @@ fn void init_view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
     view->proj_matrix = make_perspective_matrix(camera->vfov, aspect, 1.0f);
 }
 
-void game_init(void)
+void game_init(platform_init_io_t *io)
 {
+	(void)io;
+
 	init_game_job_queues();
 
 	initialize_asset_system(&(asset_config_t){
@@ -414,6 +416,11 @@ void game_init(void)
 		}
 	}
 
+    map->fog_absorption  = 0.002f;
+    map->fog_density     = 0.02f;
+    map->fog_scattering  = 0.04f;
+    map->fog_phase_k     = 0.6f;
+
 	//
 	// R1
 	//
@@ -430,92 +437,86 @@ void game_init(void)
 
 fn_local void game_update(platform_update_io_t *io)
 {
-    if (!initialized)
-    {
-        game_init();
-    }
-
 	gamestate_t *game = g_game;
+	ASSERT_MSG(game, "You need to call game_init before calling game_update");
 
 	float dt = io->dt;
 
-	process_asset_changes();
-
 	// TODO: Totally redo input 
 	{
-		ui_submit_mouse_p    (io->mouse_p);
-		ui_submit_mouse_dp   (io->mouse_dp);
-		ui_submit_mouse_wheel(io->mouse_wheel);
+		/*
+		ui_submit_mouse_p    (io->input->mouse_p);
+		ui_submit_mouse_dp   (io->input->mouse_dp);
+		ui_submit_mouse_wheel(io->input->mouse_wheel);
+		*/
 
 		input_state_t input = {0};
-		input.mouse_x  = (int)io->mouse_p.x;
-		input.mouse_y  = (int)io->mouse_p.y;
-		input.mouse_dx = (int)io->mouse_dp.x;
-		input.mouse_dy = (int)io->mouse_dp.y;
+		input.mouse_x  = (int)io->input->mouse_p.x;
+		input.mouse_y  = (int)io->input->mouse_p.y;
+		input.mouse_dx = (int)io->input->mouse_dp.x;
+		input.mouse_dy = (int)io->input->mouse_dp.y;
 
 		static uint64_t button_states = 0;
 
-		ui.input.events = io->first_event;
-
-		for (platform_event_t *ev = platform_event_iter(io->first_event);
+		for (platform_event_t *ev = platform_event_iter(io->input->first_event);
 			 ev;
 			 ev = platform_event_next(ev))
 		{
 			switch (ev->kind)
 			{
-				case PLATFORM_EVENT_MOUSE_BUTTON:
+				case Event_mouse_button:
 				{
 					bool pressed = ev->mouse_button.pressed;
-					ui_submit_mouse_buttons(ev->mouse_button.button, pressed);
+					//ui_submit_mouse_buttons(ev->mouse_button.button, pressed);
 
 					switch (ev->mouse_button.button)
 					{
-						case PLATFORM_MOUSE_BUTTON_LEFT:
+						case Button_left:
 						{
 							button_states = TOGGLE_BIT(button_states, BUTTON_FIRE1, pressed);
 						} break;
 
-						case PLATFORM_MOUSE_BUTTON_RIGHT:
+						case Button_right:
 						{
 							button_states = TOGGLE_BIT(button_states, BUTTON_FIRE2, pressed);
 						} break;
 					}
 				} break;
 
-				case PLATFORM_EVENT_KEY:
+				case Event_key:
 				{
 					bool pressed = ev->key.pressed;
 
 					switch ((int)ev->key.keycode) // int cast just stops MSVC from complaining that the ascii cases are not valid values of the enum (TODO: add them)
 					{
-						case 'W':                      button_states = TOGGLE_BIT(button_states, BUTTON_FORWARD      , pressed); break;
-						case 'A':                      button_states = TOGGLE_BIT(button_states, BUTTON_LEFT         , pressed); break;
-						case 'S':                      button_states = TOGGLE_BIT(button_states, BUTTON_BACK         , pressed); break;
-						case 'D':                      button_states = TOGGLE_BIT(button_states, BUTTON_RIGHT        , pressed); break;
-						case 'V':                      button_states = TOGGLE_BIT(button_states, BUTTON_TOGGLE_NOCLIP, pressed); break;
-						case PLATFORM_KEYCODE_SPACE:   button_states = TOGGLE_BIT(button_states, BUTTON_JUMP         , pressed); break;
-						case PLATFORM_KEYCODE_CONTROL: button_states = TOGGLE_BIT(button_states, BUTTON_CROUCH       , pressed); break;
-						case PLATFORM_KEYCODE_SHIFT:   button_states = TOGGLE_BIT(button_states, BUTTON_RUN          , pressed); break;
-						case PLATFORM_KEYCODE_ESCAPE:  button_states = TOGGLE_BIT(button_states, BUTTON_ESCAPE       , pressed); break;
-						case PLATFORM_KEYCODE_F1:      button_states = TOGGLE_BIT(button_states, BUTTON_F1           , pressed); break;
-						case PLATFORM_KEYCODE_F2:      button_states = TOGGLE_BIT(button_states, BUTTON_F2           , pressed); break;
-						case PLATFORM_KEYCODE_F3:      button_states = TOGGLE_BIT(button_states, BUTTON_F3           , pressed); break;
-						case PLATFORM_KEYCODE_F4:      button_states = TOGGLE_BIT(button_states, BUTTON_F4           , pressed); break;
-						case PLATFORM_KEYCODE_F5:      button_states = TOGGLE_BIT(button_states, BUTTON_F5           , pressed); break;
-						case PLATFORM_KEYCODE_F6:      button_states = TOGGLE_BIT(button_states, BUTTON_F6           , pressed); break;
-						case PLATFORM_KEYCODE_F7:      button_states = TOGGLE_BIT(button_states, BUTTON_F7           , pressed); break;
-						case PLATFORM_KEYCODE_F8:      button_states = TOGGLE_BIT(button_states, BUTTON_F8           , pressed); break;
-						case PLATFORM_KEYCODE_F9:      button_states = TOGGLE_BIT(button_states, BUTTON_F9           , pressed); break;
-						case PLATFORM_KEYCODE_F10:     button_states = TOGGLE_BIT(button_states, BUTTON_F10          , pressed); break;
-						case PLATFORM_KEYCODE_F11:     button_states = TOGGLE_BIT(button_states, BUTTON_F11          , pressed); break;
-						case PLATFORM_KEYCODE_F12:     button_states = TOGGLE_BIT(button_states, BUTTON_F12          , pressed); break;
+						case 'W':         button_states = TOGGLE_BIT(button_states, BUTTON_FORWARD      , pressed); break;
+						case 'A':         button_states = TOGGLE_BIT(button_states, BUTTON_LEFT         , pressed); break;
+						case 'S':         button_states = TOGGLE_BIT(button_states, BUTTON_BACK         , pressed); break;
+						case 'D':         button_states = TOGGLE_BIT(button_states, BUTTON_RIGHT        , pressed); break;
+						case 'V':         button_states = TOGGLE_BIT(button_states, BUTTON_TOGGLE_NOCLIP, pressed); break;
+						case Key_space:   button_states = TOGGLE_BIT(button_states, BUTTON_JUMP         , pressed); break;
+						case Key_control: button_states = TOGGLE_BIT(button_states, BUTTON_CROUCH       , pressed); break;
+						case Key_shift:   button_states = TOGGLE_BIT(button_states, BUTTON_RUN          , pressed); break;
+						case Key_escape:  button_states = TOGGLE_BIT(button_states, BUTTON_ESCAPE       , pressed); break;
+						case Key_f1:      button_states = TOGGLE_BIT(button_states, BUTTON_F1           , pressed); break;
+						case Key_f2:      button_states = TOGGLE_BIT(button_states, BUTTON_F2           , pressed); break;
+						case Key_f3:      button_states = TOGGLE_BIT(button_states, BUTTON_F3           , pressed); break;
+						case Key_f4:      button_states = TOGGLE_BIT(button_states, BUTTON_F4           , pressed); break;
+						case Key_f5:      button_states = TOGGLE_BIT(button_states, BUTTON_F5           , pressed); break;
+						case Key_f6:      button_states = TOGGLE_BIT(button_states, BUTTON_F6           , pressed); break;
+						case Key_f7:      button_states = TOGGLE_BIT(button_states, BUTTON_F7           , pressed); break;
+						case Key_f8:      button_states = TOGGLE_BIT(button_states, BUTTON_F8           , pressed); break;
+						case Key_f9:      button_states = TOGGLE_BIT(button_states, BUTTON_F9           , pressed); break;
+						case Key_f10:     button_states = TOGGLE_BIT(button_states, BUTTON_F10          , pressed); break;
+						case Key_f11:     button_states = TOGGLE_BIT(button_states, BUTTON_F11          , pressed); break;
+						case Key_f12:     button_states = TOGGLE_BIT(button_states, BUTTON_F12          , pressed); break;
 					}
 				} break;
 
-				case PLATFORM_EVENT_TEXT:
+				case Event_text:
 				{
-					string_t text = string_from_storage(ev->text.text);
-					ui_submit_text(text);
+					//string_t text = string_from_storage(ev->text.text);
+					//ui_submit_text(text);
 				} break;
 			}
 		}
@@ -525,15 +526,15 @@ fn_local void game_update(platform_update_io_t *io)
 		update_input_state(&input);
 	}
 
-	ui.input.app_has_focus = io->has_focus;
-	io->cursor = ui.input.cursor;
+	//ui.input.app_has_focus = io->has_focus;
+	//io->cursor = ui.input.cursor;
 
-	bool ui_focused = ui_begin(dt);
+	// bool ui_focused = ui_begin(dt);
 
-    if (ui_focused)
-    {
-        suppress_game_input(true);
-    }
+    // if (ui_focused)
+    // {
+    //     suppress_game_input(true);
+    // }
 
     if (button_pressed(BUTTON_FIRE2))
 	{
@@ -588,9 +589,9 @@ fn_local void game_update(platform_update_io_t *io)
 
     game->fade_t += 0.45f*dt*(game->fade_target_t - game->fade_t);
 
-    update_and_render_in_game_editor();
+    //update_and_render_in_game_editor();
 
-    ui_end();
+    //ui_end();
 
 	//
 	//
@@ -648,59 +649,78 @@ typedef struct render_world_t
 } render_world_t;
 #endif
 
+fn_local void game_update_ui(platform_update_ui_io_t *io)
+{
+	input_t *input = io->input;
+
+	ui.app_has_focus = io->has_focus;
+
+	bool ui_focused = ui_begin(input, io->dt);
+	(void)ui_focused;
+
+    update_and_render_in_game_editor();
+
+    ui_end();
+
+	io->cursor = ui.cursor;
+}
+
 fn_local void game_render(platform_render_io_t *io)
 {
+	process_asset_changes();
+
+	if (!r1)
+	{
+		return;
+	}
+
 	gamestate_t *game = g_game;
 
-	if (!game)
+	if (game)
 	{
-		return;
+		map_t *map = game->map;
+
+		if (map)
+		{
+			player_t *player = game->player;
+			camera_t *camera = player->attached_camera;
+
+			rhi_texture_t backbuffer = rhi_get_current_backbuffer(io->rhi_window);
+
+			const rhi_texture_desc_t *desc = rhi_get_texture_desc(backbuffer);
+
+			rect2_t viewport = {
+				.min = { 0.0f, 0.0f },
+				.max = { (float)desc->width, (float)desc->height },
+			};
+
+			r_view_t view = {0};
+			init_view_for_camera(camera, viewport, &view);
+
+			r_scene_parameters_t *scene = &view.scene;
+
+			map_entity_t *worldspawn = game->worldspawn;
+
+			float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
+			v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
+				  sun_color      = mul(sun_brightness, sun_color);
+
+			scene->skybox = skybox;
+			scene->sun_direction   = normalize(make_v3(0.25f, 0.75f, 1));
+			scene->sun_color       = sun_color;
+
+			scene->fogmap          = map->fogmap;
+			scene->fog_offset      = rect3_center(map->bounds);
+			scene->fog_dim         = rect3_dim(map->bounds);
+			scene->fog_absorption  = 0.002f;
+			scene->fog_density     = 0.02f;
+			scene->fog_scattering  = 0.04f;
+			scene->fog_phase_k     = 0.6f;
+
+			r1_update_window_resources(io->rhi_window);
+			r1_render_game_view(io->rhi_command_list, rhi_get_current_backbuffer(io->rhi_window), &view, map);
+		}
 	}
-
-	map_t *map = game->map;
-
-	if (!map)
-	{
-		return;
-	}
-
-    player_t *player = game->player;
-    camera_t *camera = player->attached_camera;
-
-	rhi_texture_t backbuffer = rhi_get_current_backbuffer(io->rhi_window);
-
-	const rhi_texture_desc_t *desc = rhi_get_texture_desc(backbuffer);
-
-	rect2_t viewport = {
-		.min = { 0.0f, 0.0f },
-		.max = { (float)desc->width, (float)desc->height },
-	};
-
-    r_view_t view = {0};
-    init_view_for_camera(camera, viewport, &view);
-
-    r_scene_parameters_t *scene = &view.scene;
-
-    map_entity_t *worldspawn = game->worldspawn;
-
-    float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
-    v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
-          sun_color      = mul(sun_brightness, sun_color);
-
-    scene->skybox = skybox;
-    scene->sun_direction   = normalize(make_v3(0.25f, 0.75f, 1));
-    scene->sun_color       = sun_color;
-
-    scene->fogmap          = map->fogmap;
-    scene->fog_offset      = rect3_center(map->bounds);
-    scene->fog_dim         = rect3_dim(map->bounds);
-    scene->fog_absorption  = 0.002f;
-    scene->fog_density     = 0.02f;
-    scene->fog_scattering  = 0.04f;
-    scene->fog_phase_k     = 0.6f;
-
-	r1_update_window_resources(io->rhi_window);
-	r1_render_game_view(io->rhi_command_list, rhi_get_current_backbuffer(io->rhi_window), &view, map);
 
 	ui_render_command_list_t *ui_commands = ui_get_render_commands();
 	r1_render_ui(io->rhi_command_list, rhi_get_current_backbuffer(io->rhi_window), ui_commands);
@@ -716,7 +736,9 @@ void platform_init(size_t argc, string_t *argv, platform_hooks_t *hooks)
 	(void)argc;
 	(void)argv;
 
+	hooks->init       = game_init;
 	hooks->update     = game_update;
+	hooks->update_ui  = game_update_ui;
 	hooks->render     = game_render;
 	hooks->tick_audio = game_mix_audio;
 }

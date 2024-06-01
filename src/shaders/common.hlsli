@@ -13,6 +13,11 @@ struct ViewParameters
 
 ConstantBuffer<ViewParameters> view : register(b2);
 
+float Max3(float3 v)
+{
+	return max(v.x, max(v.y, v.z));
+}
+
 float QuasirandomDither(float2 co)
 {
 	const float2 magic = float2(0.75487766624669276, 0.569840290998);

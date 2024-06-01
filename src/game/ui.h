@@ -38,6 +38,7 @@ fn void    ui_pop_id     (void);
 // Input
 //
 
+/*
 typedef struct ui_input_t
 {
 	float dt;
@@ -49,9 +50,9 @@ typedef struct ui_input_t
 
 	platform_event_t *events;
 
-	platform_mouse_buttons_t mouse_buttons_down;
-	platform_mouse_buttons_t mouse_buttons_pressed;
-	platform_mouse_buttons_t mouse_buttons_released;
+	mouse_buttons_t mouse_buttons_down;
+	mouse_buttons_t mouse_buttons_pressed;
+	mouse_buttons_t mouse_buttons_released;
 	float mouse_wheel;
 	v2_t  mouse_p;
 	v2_t  mouse_pressed_p;
@@ -62,16 +63,7 @@ typedef struct ui_input_t
 	platform_cursor_t cursor;
 	int               cursor_reset_delay;
 } ui_input_t;
-
-fn void ui_submit_mouse_buttons(platform_mouse_buttons_t buttons, bool pressed);
-fn void ui_submit_mouse_wheel  (float wheel_delta);
-fn void ui_submit_mouse_p      (v2_t p);
-fn void ui_submit_mouse_dp     (v2_t dp);
-fn void ui_submit_text         (string_t text);
-
-fn bool ui_mouse_buttons_down    (platform_mouse_buttons_t buttons);
-fn bool ui_mouse_buttons_pressed (platform_mouse_buttons_t buttons);
-fn bool ui_mouse_buttons_released(platform_mouse_buttons_t buttons);
+*/
 
 //
 // Panels
@@ -550,7 +542,14 @@ typedef struct ui_t
 	pool_t  state;
 	table_t state_index;
 
-	ui_input_t   input;
+	input_t *input;
+
+	platform_cursor_t cursor;
+	int               cursor_reset_delay;
+
+	float dt;
+	bool app_has_focus;
+	// ui_input_t   input;
 	ui_panels_t  panels;
 	ui_windows_t windows;
 	ui_style_t   style;
@@ -597,7 +596,7 @@ fn bool ui_is_hovered_delay(ui_id_t id, float delay);
 fn ui_state_t *ui_get_state(ui_id_t id);
 fn bool ui_state_is_new(ui_state_t *state);
 
-fn bool ui_begin(float dt);
+fn bool ui_begin(input_t *input, float dt);
 fn void ui_end(void);
 fn ui_render_command_list_t *ui_get_render_commands(void);
 

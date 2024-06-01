@@ -86,59 +86,6 @@ void ui_pop_id(void)
 }
 
 //
-// Input
-//
-
-void ui_submit_mouse_buttons(platform_mouse_buttons_t buttons, bool pressed)
-{
-	ui.input.mouse_buttons_down = TOGGLE_BIT(ui.input.mouse_buttons_down, buttons, pressed);
-
-	if (pressed)
-	{
-		ui.input.mouse_buttons_pressed |= buttons;
-	}
-	else
-	{
-		ui.input.mouse_buttons_released |= buttons;
-	}
-}
-
-void ui_submit_mouse_wheel(float wheel)
-{
-	ui.input.mouse_wheel += wheel;
-}
-
-void ui_submit_mouse_p(v2_t p)
-{
-	ui.input.mouse_p = p;
-}
-
-void ui_submit_mouse_dp(v2_t dp)
-{
-	ui.input.mouse_dp = dp;
-}
-
-void ui_submit_text(string_t text)
-{
-	dyn_string_appends(&ui.input.text, text);
-}
-
-bool ui_mouse_buttons_down(platform_mouse_buttons_t buttons)
-{
-	return !!(ui.input.mouse_buttons_down & buttons);
-}
-
-bool ui_mouse_buttons_pressed(platform_mouse_buttons_t buttons)
-{
-	return !!(ui.input.mouse_buttons_pressed & buttons);
-}
-
-bool ui_mouse_buttons_released(platform_mouse_buttons_t buttons)
-{
-	return !!(ui.input.mouse_buttons_released & buttons);
-}
-
-//
 // Panel
 //
 
@@ -420,7 +367,7 @@ void ui_process_windows(void)
 
 			if (ui_is_active(id))
 			{
-				v2_t new_p = add(ui.input.mouse_p, ui.drag_offset);
+				v2_t new_p = add(ui.input->mouse_p, ui.drag_offset);
 				window->rect = rect2_reposition_min(window->rect, new_p); 
 			}
 
@@ -433,14 +380,14 @@ void ui_process_windows(void)
 			ui_id_t id_se = ui_id(S("tray_id_se"));
 			ui_id_t id_sw = ui_id(S("tray_id_sw"));
 
-			if (ui_is_hot(id_n))  { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NS; };
-			if (ui_is_hot(id_e))  { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_EW; };
-			if (ui_is_hot(id_s))  { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NS; };
-			if (ui_is_hot(id_w))  { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_EW; };
-			if (ui_is_hot(id_ne)) { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NESW; };
-			if (ui_is_hot(id_nw)) { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NWSE; };
-			if (ui_is_hot(id_se)) { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NWSE; };
-			if (ui_is_hot(id_sw)) { ui.input.cursor_reset_delay = 1; ui.input.cursor = PLATFORM_CURSOR_RESIZE_NESW; };
+			if (ui_is_hot(id_n))  { ui.cursor_reset_delay = 1; ui.cursor = Cursor_resize_ns; };
+			if (ui_is_hot(id_e))  { ui.cursor_reset_delay = 1; ui.cursor = Cursor_resize_ew; };
+			if (ui_is_hot(id_s))  { ui.cursor_reset_delay = 1; ui.cursor = Cursor_resize_ns; };
+			if (ui_is_hot(id_w))  { ui.cursor_reset_delay = 1; ui.cursor = Cursor_resize_ew; };
+			if (ui_is_hot(id_ne)) { ui.cursor_reset_delay = 1; ui.cursor = Cursor_resize_nesw; };
+			if (ui_is_hot(id_nw)) { ui.cursor_reset_delay = 1; ui.cursor = Cursor_resize_nwse; };
+			if (ui_is_hot(id_se)) { ui.cursor_reset_delay = 1; ui.cursor = Cursor_resize_nwse; };
+			if (ui_is_hot(id_sw)) { ui.cursor_reset_delay = 1; ui.cursor = Cursor_resize_nesw; };
 
 			ui_rect_edge_t tray_region = 0;
 
@@ -455,7 +402,7 @@ void ui_process_windows(void)
 
 			if (tray_region)
 			{
-				v2_t delta = sub(ui.input.mouse_p, ui.input.mouse_pressed_p);
+				v2_t delta = sub(ui.input->mouse_p, ui.input->mouse_pressed_p);
 
 				window->rect = ui.resize_original_rect;
 				if (tray_region & UI_RECT_EDGE_E) window->rect = rect2_extend_right(window->rect,  delta.x);
@@ -490,7 +437,7 @@ void ui_process_windows(void)
 
 			if (interaction & UI_PRESSED)
 			{
-				ui.drag_offset = sub(window->rect.min, ui.input.mouse_p);
+				ui.drag_offset = sub(window->rect.min, ui.input->mouse_p);
 			}
 
 			rect2_t tray_init = interact_total;
@@ -571,7 +518,7 @@ void ui_process_windows(void)
 		hovered_window->hovered = true;
 	}
 
-	if (ui_mouse_buttons_pressed(PLATFORM_MOUSE_BUTTON_ANY))
+	if (ui_mouse_buttons_pressed(ui.input, Button_any, false))
 	{
 		if (hovered_window)
 		{
@@ -1040,7 +987,7 @@ void ui_draw_circle(v2_t p, float radius, v4_t color)
 
 bool ui_mouse_in_rect(rect2_t rect)
 {
-	return rect2_contains_point(rect, ui.input.mouse_p);
+	return rect2_contains_point(rect, ui.input->mouse_p);
 }
 
 ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, ui_priority_t priority)
@@ -1056,7 +1003,7 @@ ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, 
 	if (ui.panels.current_panel)
 		hit_rect = rect2_intersect(ui.panels.current_panel->rect_init, rect);
 
-	bool hovered = rect2_contains_point(hit_rect, ui.input.mouse_p);
+	bool hovered = rect2_contains_point(hit_rect, ui.input->mouse_p);
 
 	if (hovered)
 	{
@@ -1068,7 +1015,7 @@ ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, 
 	{
 		result |= UI_HELD;
 
-		if (ui_mouse_buttons_released(PLATFORM_MOUSE_BUTTON_LEFT))
+		if (ui_mouse_buttons_released(ui.input, Button_left, false))
 		{
 			if (hovered)
 			{
@@ -1085,10 +1032,10 @@ ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, 
 	{
 		result |= UI_HOT;
 
-		if (ui_mouse_buttons_pressed(PLATFORM_MOUSE_BUTTON_LEFT))
+		if (ui_mouse_buttons_pressed(ui.input, Button_left, false))
 		{
 			result |= UI_PRESSED;
-			ui.drag_anchor = sub(ui.input.mouse_p, rect2_center(rect));
+			ui.drag_anchor = sub(ui.input->mouse_p, rect2_center(rect));
 			ui_set_active(id);
 		}
 	}
@@ -1194,7 +1141,7 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 		{
 			if (ui_is_hovered_panel(id))
 			{
-				state->scroll_offset_y -= ui.input.mouse_wheel;
+				state->scroll_offset_y -= ui.input->mouse_wheel;
 				state->scroll_offset_y = flt_clamp(state->scroll_offset_y, 0.0f, max(0.0f, state->scrollable_height_y + ui_scalar(UI_SCALAR_WIDGET_MARGIN) - rect2_height(rect)));
 			}
 
@@ -1774,7 +1721,7 @@ fn_local void ui_slider__impl(ui_id_t id, rect2_t rect, ui_slider__params_t *p)
 	float slider_effective_w = slider_w - handle_w;
 
 	// TODO: This is needlessly confusing
-	float relative_x = CLAMP((ui.input.mouse_p.x - ui.drag_anchor.x) - rect.min.x - 0.5f*handle_w, 0.0f, slider_effective_w);
+	float relative_x = CLAMP((ui.input->mouse_p.x - ui.drag_anchor.x) - rect.min.x - 0.5f*handle_w, 0.0f, slider_effective_w);
 
 	float t_slider = 0.0f;
 
@@ -2043,7 +1990,7 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 
 	if (ui_is_hot(id))
 	{
-		ui.input.cursor = PLATFORM_CURSOR_TEXT_INPUT;
+		ui.cursor = Cursor_text_input;
 	}
 
 	bool inserted_character = false;
@@ -2052,13 +1999,13 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 
 	if (has_focus)
 	{
-		for (platform_event_t *event = platform_event_iter(ui.input.events);
+		for (platform_event_t *event = platform_event_iter(ui.input->first_event);
 			 event;
 			 event = platform_event_next(event))
 		{
 			switch (event->kind)
 			{
-				case PLATFORM_EVENT_TEXT:
+				case Event_text:
 				{
 					for (size_t i = 0; i < event->text.text.count; i++)
 					{
@@ -2082,13 +2029,13 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 					platform_consume_event(event);
 				} break;
 
-				case PLATFORM_EVENT_KEY:
+				case Event_key:
 				{
 					if (event->key.pressed)
 					{
 						switch (event->key.keycode)
 						{
-							case PLATFORM_KEYCODE_LEFT:
+							case Key_left:
 							{
 								if (selection_active && !event->shift)
 								{
@@ -2115,7 +2062,7 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 								platform_consume_event(event);
 							} break;
 
-							case PLATFORM_KEYCODE_RIGHT:
+							case Key_right:
 							{
 								if (selection_active && !event->shift)
 								{
@@ -2141,11 +2088,11 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 								}
 							} break;
 
-							case PLATFORM_KEYCODE_DELETE:
-							case PLATFORM_KEYCODE_BACKSPACE:
+							case Key_delete:
+							case Key_backspace:
 							{
-								bool delete    = event->key.keycode == PLATFORM_KEYCODE_DELETE;
-								bool backspace = event->key.keycode == PLATFORM_KEYCODE_BACKSPACE;
+								bool delete    = event->key.keycode == Key_delete;
+								bool backspace = event->key.keycode == Key_backspace;
 
 								size_t start = (size_t)state->selection_start;
 								size_t end   = (size_t)state->cursor;
@@ -2200,13 +2147,13 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 		{
 			if (interaction & UI_PRESSED)
 			{
-				float mouse_offset_x = ui.input.mouse_p.x - buffer_rect.min.x;
+				float mouse_offset_x = ui.input->mouse_p.x - buffer_rect.min.x;
 				state->cursor = (int)ui_text_edit__find_insert_point_from_offset(&prep, mouse_offset_x);
 				state->selection_start = state->cursor;
 			}
 			else if (interaction & UI_HELD)
 			{
-				float mouse_offset_x = ui.input.mouse_p.x - buffer_rect.min.x;
+				float mouse_offset_x = ui.input->mouse_p.x - buffer_rect.min.x;
 				state->cursor = (int)ui_text_edit__find_insert_point_from_offset(&prep, mouse_offset_x);
 			}
 
@@ -2346,7 +2293,7 @@ void ui_clear_active(void)
 
 bool ui_has_focus(void)
 {
-	return ui.has_focus && ui.input.app_has_focus;
+	return ui.has_focus && ui.app_has_focus;
 }
 
 bool ui_id_has_focus(ui_id_t id)
@@ -2454,14 +2401,6 @@ static void ui_initialize(void)
 	ui.style.base_colors [UI_COLOR_SLIDER_HOT             ] = hot;
 	ui.style.base_colors [UI_COLOR_SLIDER_ACTIVE          ] = active;
 
-	size_t text_input_capacity = 64;
-
-	ui.input.text = (dynamic_string_t){
-		.capacity = text_input_capacity,
-		.count    = 0,
-		.data     = m_alloc_nozero(&ui.arena, text_input_capacity, 16),
-	};
-
 	ui.render_commands.capacity = UI_RENDER_COMMANDS_CAPACITY;
 	ui.render_commands.keys     = m_alloc_array_nozero(&ui.arena, ui.render_commands.capacity, ui_render_command_key_t);
 	ui.render_commands.commands = m_alloc_array_nozero(&ui.arena, ui.render_commands.capacity, ui_render_command_t);
@@ -2469,14 +2408,15 @@ static void ui_initialize(void)
 	ui.initialized = true;
 }
 
-bool ui_begin(float dt)
+bool ui_begin(input_t *input, float dt)
 {
 	if (!ui.initialized)
 	{
 		ui_initialize();
 	}
 
-	ui.input.dt = dt;
+	ui.input = input;
+	ui.dt    = dt;
 
 	ui.last_frame_ui_rect_count = ui.render_commands.count;
     ui_reset_render_commands();
@@ -2523,8 +2463,8 @@ bool ui_begin(float dt)
 			v4_t accel_v = mul(-c_v, velocity);
 			v4_t accel = add(accel_t, accel_v);
 
-			velocity = add(velocity, mul(ui.input.dt, accel));
-			current  = add(current,  mul(ui.input.dt, velocity));
+			velocity = add(velocity, mul(ui.dt, accel));
+			current  = add(current,  mul(ui.dt, velocity));
 
 			anim->t_current  = current;
 			anim->t_velocity = velocity;
@@ -2571,18 +2511,13 @@ bool ui_begin(float dt)
 
 	ui.hovered = false;
 	
-	if (ui_mouse_buttons_pressed(PLATFORM_MOUSE_BUTTON_LEFT))
+	if (ui.cursor_reset_delay > 0)
 	{
-		ui.input.mouse_pressed_p = ui.input.mouse_p;
-	}
-
-	if (ui.input.cursor_reset_delay > 0)
-	{
-		ui.input.cursor_reset_delay -= 1;
+		ui.cursor_reset_delay -= 1;
 	}
 	else
 	{
-		ui.input.cursor = PLATFORM_CURSOR_ARROW;
+		ui.cursor = Cursor_arrow;
 	}
 
 	return ui.has_focus;
@@ -2642,7 +2577,7 @@ void ui_end(void)
 
 		notif_at.y -= text_dim.y + 4.0;
 
-		notif->lifetime -= ui.input.dt;
+		notif->lifetime -= ui.dt;
 		if (notif->lifetime > 0.0f)
 		{
 			sll_push(surviving_notifs, notif);
@@ -2655,13 +2590,13 @@ void ui_end(void)
 		debug_notif_replicate(notif);
 	}
 
-	for (platform_event_t *event = platform_event_iter(ui.input.events);
+	for (platform_event_t *event = platform_event_iter(ui.input->first_event);
 		 event;
 		 event = platform_event_next(event))
 	{
 		switch (event->kind)
 		{
-			case PLATFORM_EVENT_MOUSE_BUTTON:
+			case Event_mouse_button:
 			{
 				if (event->mouse_button.pressed)
 				{
@@ -2670,11 +2605,11 @@ void ui_end(void)
 				}
 			} break;
 
-			case PLATFORM_EVENT_KEY:
+			case Event_key:
 			{
 				if (event->key.pressed)
 				{
-					if (event->key.keycode == PLATFORM_KEYCODE_ESCAPE)
+					if (event->key.keycode == Key_escape)
 					{
 						if (ui_id_valid(ui.focused_id))
 						{
@@ -2691,11 +2626,6 @@ void ui_end(void)
 			} break;
 		}
 	}
-
-	ui.input.mouse_wheel            = 0.0f;
-	ui.input.mouse_buttons_pressed  = 0;
-	ui.input.mouse_buttons_released = 0;
-	dyn_string_clear(&ui.input.text);
 
 	ASSERT(ui.panels.current_panel == NULL);
 	ASSERT(ui.id_stack.at == 0);

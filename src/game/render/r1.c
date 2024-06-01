@@ -237,7 +237,7 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 			},
 			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
 			.render_target_count     = 1,
-			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm_srgb,
+			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm,
 		});
 	}
 
@@ -267,7 +267,7 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 			},
 			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
 			.render_target_count     = 1,
-			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm_srgb,
+			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm,
 		});
 	}
 }
@@ -338,6 +338,7 @@ void r1_init(void)
 	r1->ui_rects = rhi_create_buffer(&(rhi_create_buffer_params_t){
 		.debug_name = S("ui_rects"),
 		.size       = sizeof(r_ui_rect_t) * R1MaxUiRects,
+		.flags      = RhiResourceFlag_frame_buffered,
 		.srv = &(rhi_create_buffer_srv_params_t){
 			.first_element  = 0,
 			.element_count  = R1MaxUiRects,
@@ -468,47 +469,46 @@ void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t backbuffer, r_v
 {
 	r1->next_region_index = 0;
 
-	rhi_begin_region(list, S("Game View"));
-
-	m4x4_t world_to_clip = mul(view->proj_matrix, view->view_matrix);
-
-	v3_t sun_direction = view->scene.sun_direction;
-
-    m4x4_t sun_view   = make_view_matrix(add(view->camera_p, mul(-256.0f, sun_direction)), 
-										 negate(sun_direction), make_v3(0, 0, 1));
-    m4x4_t sun_ortho  = make_orthographic_matrix(2048, 2048, 512);
-    m4x4_t sun_matrix = mul(sun_ortho, sun_view);
-
-	const rhi_texture_desc_t *backbuffer_desc = rhi_get_texture_desc(backbuffer);
-
+	R1_TIMED_REGION(list, S("Game View"))
 	{
-		view_parameters_t view_parameters = {
-			.world_to_clip = world_to_clip,
-			.sun_matrix    = sun_matrix,
-			.sun_direction = sun_direction,
-			.sun_color     = view->scene.sun_color,
-			.view_size     = make_v2((float)backbuffer_desc->width, (float)backbuffer_desc->height),
-		};
+		m4x4_t world_to_clip = mul(view->proj_matrix, view->view_matrix);
 
-		rhi_set_parameters(list, R1ParameterSlot_view, &view_parameters, sizeof(view_parameters));
-	}
+		v3_t sun_direction = view->scene.sun_direction;
 
-	rhi_texture_t rt_hdr = r1->window.rt_hdr;
+		m4x4_t sun_view   = make_view_matrix(add(view->camera_p, mul(-256.0f, sun_direction)), 
+											 negate(sun_direction), make_v3(0, 0, 1));
+		m4x4_t sun_ortho  = make_orthographic_matrix(2048, 2048, 512);
+		m4x4_t sun_matrix = mul(sun_ortho, sun_view);
 
-	if (map)
-	{
-		r1_render_sun_shadows(list, map);
-		r1_render_map        (list, rt_hdr, map);
+		const rhi_texture_desc_t *backbuffer_desc = rhi_get_texture_desc(backbuffer);
 
-		if (r1->debug_drawing_enabled)
 		{
-			r1_render_debug_lines(list, rt_hdr);
+			view_parameters_t view_parameters = {
+				.world_to_clip = world_to_clip,
+				.sun_matrix    = sun_matrix,
+				.sun_direction = sun_direction,
+				.sun_color     = view->scene.sun_color,
+				.view_size     = make_v2((float)backbuffer_desc->width, (float)backbuffer_desc->height),
+			};
+
+			rhi_set_parameters(list, R1ParameterSlot_view, &view_parameters, sizeof(view_parameters));
 		}
+
+		rhi_texture_t rt_hdr = r1->window.rt_hdr;
+
+		if (map)
+		{
+			r1_render_sun_shadows(list, map);
+			r1_render_map        (list, rt_hdr, map);
+
+			if (r1->debug_drawing_enabled)
+			{
+				r1_render_debug_lines(list, rt_hdr);
+			}
+		}
+
+		r1_post_process(list, rt_hdr, backbuffer);
 	}
-
-	r1_post_process(list, rt_hdr, backbuffer);
-
-	rhi_end_region(list);
 }
 
 void r1_render_sun_shadows(rhi_command_list_t *list, map_t *map)

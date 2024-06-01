@@ -84,6 +84,11 @@ typedef struct rhi_texture_data_t
 	uint32_t  row_stride, slice_stride;
 } rhi_texture_data_t;
 
+typedef enum rhi_resource_flags_t
+{
+	RhiResourceFlag_frame_buffered = 0x1,
+} rhi_resource_flags_t;
+
 typedef struct rhi_create_texture_params_t
 {
 	string_t                debug_name;
@@ -94,6 +99,8 @@ typedef struct rhi_create_texture_params_t
 	uint32_t                depth;
 	uint32_t                mip_levels;
 	uint32_t                multisample_count;
+
+	rhi_resource_flags_t    flags;
 
 	rhi_texture_usage_t     usage;
 	pixel_format_t          format;
@@ -135,6 +142,8 @@ typedef struct rhi_create_buffer_params_t
 	string_t           debug_name;
 	size_t             size;
 	rhi_buffer_data_t  initial_data;
+
+	rhi_resource_flags_t flags;
 
 	rhi_create_buffer_srv_params_t *srv;
 } rhi_create_buffer_params_t;

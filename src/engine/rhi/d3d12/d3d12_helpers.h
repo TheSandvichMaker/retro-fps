@@ -64,3 +64,6 @@ typedef struct d3d12_deferred_release_queue_t
 
 fn void d3d12_deferred_release(IUnknown *resource);
 fn void d3d12_flush_deferred_release_queue(uint32_t frame_index);
+
+fn uint32_t d3d12_resource_index(rhi_resource_flags_t flags);
+

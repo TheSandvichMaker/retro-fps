@@ -151,3 +151,9 @@ void d3d12_flush_deferred_release_queue(uint32_t frame_index)
 
 	queue->tail = tail;
 }
+
+uint32_t d3d12_resource_index(rhi_resource_flags_t flags)
+{
+	uint32_t resource_index = (flags & RhiResourceFlag_frame_buffered) ? g_rhi.frame_index % g_rhi.frame_latency : 0;
+	return resource_index;
+}

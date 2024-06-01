@@ -815,7 +815,7 @@ fn_local void fullscreen_update_and_render_top_editor_bar(void)
 		collision_bar.min.y -= 128.0f;
 
     bool mouse_hover = ui_mouse_in_rect(collision_bar);
-	mouse_hover |= ui.input.mouse_p.y >= collision_bar.max.y;
+	mouse_hover |= ui.input->mouse_p.y >= collision_bar.max.y;
 	mouse_hover |= editor.pin_bar;
 
     editor.bar_openness = ui_interpolate_f32(ui_id_pointer(&editor.bar_openness), mouse_hover ? 1.0f : 0.0f);
@@ -891,9 +891,9 @@ fn_local void fullscreen_update_and_render_top_editor_bar(void)
 
             ui_label(S("  Menus: "));
 
-            ui_label(Sf("Mouse Position: %.02f x %.02f", ui.input.mouse_p.x, ui.input.mouse_p.y));
+            ui_label(Sf("Mouse Position: %.02f x %.02f", ui.input->mouse_p.x, ui.input->mouse_p.y));
 			ui_label(Sf("Active UI Animation Count: %zu", ui.style.animation_state.count));
-			ui_label(Sf("Delta Time: %.02fms", 1000.0f*ui.input.dt));
+			ui_label(Sf("Delta Time: %.02fms", 1000.0f*ui.dt));
 			ui_label(Sf("UI Hover Time: %.02f", ui.hover_time_seconds));
 			ui_label(Sf("UI Rect Count: %zu", ui.last_frame_ui_rect_count));
 #if DREAM_SLOW

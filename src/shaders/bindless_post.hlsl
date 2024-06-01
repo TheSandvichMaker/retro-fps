@@ -33,13 +33,19 @@ float4 MainPS(VS_OUT IN) : SV_Target
 	{
 		float4 color = tex_color.Load(co, i);
 
+		float2 sample_position = tex_color.GetSamplePosition(i);
+
+		float weight = 1.0 ; //smoothstep(8, 0, sample_position.x)*smoothstep(8, 0, sample_position.y);
+
 		// tonemap
 		color.rgb = 1.0 - exp(-color.rgb);
+		color.rgb *= weight;
 
-		sum += color;
+		sum.rgb += color.rgb;
+		sum.a   += weight;
 	}
 
-	sum *= rcp(draw.sample_count);
+	sum.rgb *= rcp(sum.a);
 
-	return sum;
+	return float4(sum.rgb, 1.0);
 }
