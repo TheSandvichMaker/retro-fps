@@ -103,6 +103,15 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 	g_rhi.frame_latency = params->base.frame_latency;
 
 	//
+	// Read QPC freq
+	//
+
+	LARGE_INTEGER qpc_freq;
+	QueryPerformanceFrequency(&qpc_freq);
+
+	g_rhi.qpc_freq = qpc_freq.QuadPart;
+
+	//
 	// Enable Debug Layer
 	//
 
@@ -558,12 +567,14 @@ fn_local rhi_texture_desc_t rhi_texture_desc_from_d3d12_resource_desc(const D3D1
 	return result;
 }
 
-rhi_window_t rhi_init_window_d3d12(HWND hwnd)
+rhi_window_t rhi_init_window_d3d12(const rhi_init_window_d3d12_params_t *params)
 {
 	rhi_window_t result = {0};
 
 	d3d12_window_t *window = pool_add(&g_rhi.windows);
 	ASSERT(window);
+
+	HWND hwnd = params->hwnd;
 
 	HRESULT hr;
 
@@ -577,14 +588,21 @@ rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 		.Format      = DXGI_FORMAT_R8G8B8A8_UNORM,
 		.SampleDesc  = { 1, 0 },
 		.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
-		.BufferCount = 2,
+		.BufferCount = RhiMaxFrameLatency,
 		.Scaling     = DXGI_SCALING_STRETCH,
 		.SwapEffect  = DXGI_SWAP_EFFECT_FLIP_DISCARD,
+		.Flags       = params->create_frame_latency_waitable_object ? DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT : 0,
 	};
 
 	hr = IDXGIFactory6_CreateSwapChainForHwnd(g_rhi.dxgi_factory, (IUnknown*)g_rhi.direct_queue, 
 											  hwnd, &desc, NULL, NULL, (IDXGISwapChain1**)&swap_chain);
 	D3D12_CHECK_HR(hr, goto bail);
+
+	if (params->create_frame_latency_waitable_object)
+	{
+		window->frame_latency_waitable_object = IDXGISwapChain2_GetFrameLatencyWaitableObject(swap_chain);
+		IDXGISwapChain2_SetMaximumFrameLatency(swap_chain, RhiMaxFrameLatency);
+	}
 
 	IDXGIFactory4_MakeWindowAssociation(g_rhi.dxgi_factory, hwnd, DXGI_MWA_NO_ALT_ENTER);
 
@@ -593,7 +611,7 @@ rhi_window_t rhi_init_window_d3d12(HWND hwnd)
 	//
 
 	{
-		for (size_t i = 0; i < g_rhi.frame_latency; i++)
+		for (size_t i = 0; i < RhiMaxFrameLatency; i++)
 		{
 			d3d12_texture_t *frame_buffer = pool_add(&g_rhi.textures);
 			frame_buffer->state = D3D12_RESOURCE_STATE_COMMON|D3D12_RESOURCE_STATE_PRESENT;
@@ -661,7 +679,7 @@ void rhi_resize_window(rhi_window_t handle, uint32_t new_width, uint32_t new_hei
 
 	HRESULT hr;
 
-	for (size_t i = 0; i < g_rhi.frame_latency; i++)
+	for (size_t i = 0; i < RhiMaxFrameLatency; i++)
 	{
 		d3d12_texture_t *frame_buffer = pool_get(&g_rhi.textures, window->frame_buffers[i]);
 		ASSERT(frame_buffer);
@@ -673,10 +691,10 @@ void rhi_resize_window(rhi_window_t handle, uint32_t new_width, uint32_t new_hei
 	hr = IDXGISwapChain4_GetDesc(window->swap_chain, &desc);
 	ASSERT(SUCCEEDED(hr)); // SERIOUSLY FIX THE ERROR HANDLING...
 
-	hr = IDXGISwapChain4_ResizeBuffers(window->swap_chain, g_rhi.frame_latency, new_width, new_height, desc.BufferDesc.Format, desc.Flags);
+	hr = IDXGISwapChain4_ResizeBuffers(window->swap_chain, RhiMaxFrameLatency, new_width, new_height, desc.BufferDesc.Format, desc.Flags);
 	ASSERT(SUCCEEDED(hr)); // SERIOUSLY FIX THE ERROR HANDLING...
 
-	for (size_t i = 0; i < g_rhi.frame_latency; i++)
+	for (size_t i = 0; i < RhiMaxFrameLatency; i++)
 	{
 		d3d12_texture_t *frame_buffer = pool_get(&g_rhi.textures, window->frame_buffers[i]);
 		ASSERT(frame_buffer);
@@ -695,10 +713,6 @@ void rhi_resize_window(rhi_window_t handle, uint32_t new_width, uint32_t new_hei
 	}
 }
 
-//
-// API implementation
-//
-
 rhi_texture_t rhi_get_current_backbuffer(rhi_window_t handle)
 {
 	rhi_texture_t result = {0};
@@ -711,6 +725,83 @@ rhi_texture_t rhi_get_current_backbuffer(rhi_window_t handle)
 	}
 
 	return result;
+}
+
+uint64_t rhi_get_frame_sync_cpu_freq(void)
+{
+	return g_rhi.qpc_freq;
+}
+
+bool rhi_get_frame_statistics(rhi_window_t handle, rhi_frame_statistics_t *statistics)
+{
+	d3d12_window_t *window = pool_get(&g_rhi.windows, handle);
+
+	if (!window)
+	{
+		log(RHI_D3D12, Error, "Invalid window passed to rhi_get_frame_statistics");
+		return false;
+	}
+
+	bool result = false;
+
+	DXGI_FRAME_STATISTICS stats;
+	HRESULT hr = IDXGISwapChain_GetFrameStatistics(window->swap_chain, &stats);
+
+	if (SUCCEEDED(hr))
+	{
+		statistics->sync_cpu_time = stats.SyncQPCTime.QuadPart;
+		result = true;
+	}
+
+	return result;
+}
+
+void rhi_wait_on_swap_chain(rhi_window_t handle)
+{
+	d3d12_window_t *window = pool_get(&g_rhi.windows, handle);
+
+	if (!window)
+	{
+		log(RHI_D3D12, Error, "Invalid window passed to rhi_wait_on_swap_chain");
+		return;
+	}
+
+	if (window->frame_latency_waitable_object)
+	{
+		WaitForSingleObjectEx(window->frame_latency_waitable_object, INFINITE, FALSE);
+	}
+}
+
+bool rhi_get_window_fullscreen(rhi_window_t handle)
+{
+	d3d12_window_t *window = pool_get(&g_rhi.windows, handle);
+
+	if (!window)
+	{
+		log(RHI_D3D12, Error, "Invalid window passed to rhi_set_window_fullscreen");
+		return false;
+	}
+
+	return window->fullscreen;
+}
+
+void rhi_set_window_fullscreen(rhi_window_t handle, bool fullscreen)
+{
+	d3d12_window_t *window = pool_get(&g_rhi.windows, handle);
+
+	if (!window)
+	{
+		log(RHI_D3D12, Error, "Invalid window passed to rhi_set_window_fullscreen");
+		return;
+	}
+
+	bool changed = window->fullscreen != fullscreen;
+
+	if (changed)
+	{
+		window->fullscreen = fullscreen;
+		IDXGISwapChain_SetFullscreenState(window->swap_chain, fullscreen, NULL);
+	}
 }
 
 const rhi_texture_desc_t *rhi_get_texture_desc(rhi_texture_t handle)
@@ -1747,7 +1838,7 @@ void rhi_end_frame(void)
 		d3d12_window_t *window = it.data;
 
 		DXGI_PRESENT_PARAMETERS present_parameters = { 0 };
-		IDXGISwapChain1_Present1(window->swap_chain, 1, 0, &present_parameters);
+		IDXGISwapChain1_Present1(window->swap_chain, window->fullscreen ? 1 : 0, 0, &present_parameters);
 	}
 
 	frame->fence_value = ++g_rhi.fence_value;

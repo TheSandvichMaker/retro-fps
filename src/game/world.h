@@ -11,6 +11,8 @@ typedef struct gamestate_t
     map_t        *map;
 	map_entity_t *worldspawn;
 
+	camera_t global_camera;
+
     camera_t *primary_camera;
     player_t *player;
 

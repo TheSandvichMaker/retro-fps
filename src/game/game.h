@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "globals.h"
 #include "asset.h"
 #include "audio.h"
 #include "bvh.h"
@@ -59,4 +60,4 @@ fn bool g_cursor_locked;
 
 #include "world.h"
 
-static gamestate_t *g_game;
+//static gamestate_t *g_game;

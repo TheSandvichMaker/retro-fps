@@ -363,6 +363,11 @@ fn_local LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 			bool pressed  = (bool)(message == WM_KEYDOWN || message == WM_SYSKEYDOWN);
 			bool repeated = (bool)(lparam & 0xFFFF);
 
+			if (pressed && vk_code == VK_RETURN)
+			{
+				rhi_set_window_fullscreen(user->rhi_window, !rhi_get_window_fullscreen(user->rhi_window));
+			}
+
 			process_button(context, (keycode_t)vk_code, pressed);
 
 			platform_event_t event = {
@@ -627,7 +632,10 @@ int wWinMain(HINSTANCE instance,
 
 	if (d3d12_success)
 	{
-		rhi_window = rhi_init_window_d3d12(window);
+		rhi_window = rhi_init_window_d3d12(&(rhi_init_window_d3d12_params_t){
+			.hwnd                                 = window,
+			.create_frame_latency_waitable_object = true,
+		});
 
 		if (!RESOURCE_HANDLE_VALID(rhi_window))
 		{
@@ -672,7 +680,19 @@ int wWinMain(HINSTANCE instance,
 
 	hires_time_t current_time = os_hires_time();
 
-	platform_init_io_t init_io = {0};
+	uint64_t last_frame_sync_time = 0;
+
+	rhi_frame_statistics_t frame_stats;
+	if (rhi_get_frame_statistics(rhi_window, &frame_stats))
+	{
+		last_frame_sync_time = frame_stats.sync_cpu_time;
+	}
+
+	platform_io_t base_io = {0};
+
+	platform_init_io_t init_io = {
+		.base = &base_io,
+	};
 
 	hooks.init(&init_io);
 
@@ -680,9 +700,25 @@ int wWinMain(HINSTANCE instance,
     bool running = true;
     while (running)
     {
+		rhi_wait_on_swap_chain(rhi_window);
+
 		hires_time_t new_time = os_hires_time();
 
 		double frame_time = os_seconds_elapsed(current_time, new_time);
+
+		// subsitute frame time with exact vsync timing when possible
+
+		rhi_frame_statistics_t frame_stats;
+		if (rhi_get_frame_statistics(rhi_window, &frame_stats))
+		{
+			uint64_t freq = rhi_get_frame_sync_cpu_freq();
+			uint64_t this_frame_sync_time = frame_stats.sync_cpu_time;
+			frame_time = (double)(this_frame_sync_time - last_frame_sync_time) / (double)freq;
+
+			last_frame_sync_time = this_frame_sync_time;
+		}
+
+		//
 
 		if (frame_time > 0.25)
 		{
@@ -722,6 +758,7 @@ int wWinMain(HINSTANCE instance,
 		// poll gamepad / cursor
 
 		poll_input(&input_context, window);
+		base_io.has_focus = input_context.has_focus;
 
 		//
 		// tick
@@ -732,17 +769,12 @@ int wWinMain(HINSTANCE instance,
 		while (accumulator >= dt)
 		{
 			platform_update_io_t update_io = {
-				.has_focus   = input_context.has_focus,
-				.dt          = (float)dt,
-				.input       = tick_input,
+				.base  = &base_io,
+				.dt    = (float)dt,
+				.input = tick_input,
 			};
 
 			hooks.update(&update_io);
-
-			if (update_io.request_exit)
-			{
-				running = false;
-			}
 
 			accumulator -= dt;
 
@@ -758,15 +790,20 @@ int wWinMain(HINSTANCE instance,
 		frame_input->level = InputLevel_ui;
 
 		platform_update_ui_io_t ui_io = {
-			.has_focus = input_context.has_focus,
-			.dt        = (float)frame_time,
-			.input     = frame_input,
-			.cursor    = cursor,
+			.base   = &base_io,
+			.dt     = (float)frame_time,
+			.input  = frame_input,
+			.cursor = cursor,
 		};
 
 		hooks.update_ui(&ui_io);
 
 		frame_input->level = InputLevel_none;
+
+		if (ui_io.request_exit)
+		{
+			running = false;
+		}
 
 		// process cursor updates
 
@@ -801,11 +838,6 @@ int wWinMain(HINSTANCE instance,
 		}
 		last_cursor = cursor;
 
-		if (ui_io.request_exit)
-		{
-			running = false;
-		}
-
 		//
 		// render
 		//
@@ -817,11 +849,9 @@ int wWinMain(HINSTANCE instance,
 		frame_input->level = InputLevel_ui;
 
 		platform_render_io_t render_io = {
-			.has_focus        = input_context.has_focus,
+			.base             = &base_io,
 			.dt               = (float)frame_time,
-
 			.input            = frame_input,
-
 			.rhi_window       = rhi_window,
 			.rhi_command_list = command_list,
 		};

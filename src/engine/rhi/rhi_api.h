@@ -28,6 +28,17 @@ DEFINE_HANDLE_TYPE(rhi_pso_t);
 fn void rhi_resize_window(rhi_window_t window, uint32_t new_width, uint32_t new_height);
 fn rhi_texture_t rhi_get_current_backbuffer(rhi_window_t window);
 
+typedef struct rhi_frame_statistics_t
+{
+	uint64_t sync_cpu_time;
+} rhi_frame_statistics_t;
+
+fn uint64_t rhi_get_frame_sync_cpu_freq(void);
+fn bool rhi_get_frame_statistics(rhi_window_t window, rhi_frame_statistics_t *statistics);
+fn void rhi_wait_on_swap_chain(rhi_window_t window);
+fn bool rhi_get_window_fullscreen(rhi_window_t window);
+fn void rhi_set_window_fullscreen(rhi_window_t window, bool fullscreen);
+
 //
 // resources
 //

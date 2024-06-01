@@ -450,7 +450,7 @@ bool os_execute_capture(string_t command, int *exit_code, arena_t *arena, string
     return result;
 }
 
-static LARGE_INTEGER qpc_freq;
+static LARGE_INTEGER g_qpc_freq;
 
 hires_time_t os_hires_time(void)
 {
@@ -462,23 +462,23 @@ hires_time_t os_hires_time(void)
 
 double os_seconds_elapsed(hires_time_t start, hires_time_t end)
 {
-    if (qpc_freq.QuadPart == 0)
+    if (g_qpc_freq.QuadPart == 0)
     {
-        QueryPerformanceFrequency(&qpc_freq);
+        QueryPerformanceFrequency(&g_qpc_freq);
     }
 
-    double result = (double)(end.value - start.value) / (double)qpc_freq.QuadPart;
+    double result = (double)(end.value - start.value) / (double)g_qpc_freq.QuadPart;
     return result;
 }
 
 uint64_t estimate_cpu_timer_frequency(uint64_t wait_ms)
 {
-    if (qpc_freq.QuadPart == 0)
+    if (g_qpc_freq.QuadPart == 0)
     {
-        QueryPerformanceFrequency(&qpc_freq);
+        QueryPerformanceFrequency(&g_qpc_freq);
     }
 
-	uint64_t os_freq      = qpc_freq.QuadPart;
+	uint64_t os_freq      = g_qpc_freq.QuadPart;
 	uint64_t os_wait_time = (os_freq * wait_ms) / 1000;
 	uint64_t cpu_start    = read_cpu_timer();
 	uint64_t os_start     = os_hires_time().value;

@@ -29,26 +29,16 @@
 
 #include "render/r1.c"
 
-#define UI_FORCE_ONE_DRAW_CALL_PER_RECT_SLOW_DEBUG_STUFF 0
+typedef struct app_state_t
+{
+	arena_t arena;
 
-#if 0
-    OK here's an issue: rc->screenspace is still being used. It shouldn't be.
-    UI for the game should be in the UI layer of the scene view, not a separate screenspace
-    view. So that needs to be solved
-#endif
+	gamestate_t     *game;
+	action_system_t *action_system;
+	ui_t            *ui;
 
-static bool initialized = false;
-
-bool g_cursor_locked;
-
-static texture_handle_t skybox;
-static bitmap_font_t debug_font;
-static waveform_t *test_waveform;
-static waveform_t *short_sound;
-
-static mixer_id_t music;
-
-static triangle_mesh_t test_convex_hull;
+	bitmap_font_t   debug_font;
+} app_state_t;
 
 v3_t player_view_origin(player_t *player)
 {
@@ -338,10 +328,6 @@ void player_movement(map_t *map, player_t *player, float dt)
     camera->p = player_view_origin(player);
 }
 
-static camera_t g_camera = {
-    .vfov = 60.0f,
-};
-
 fn void init_view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
 {
     view->clip_rect = viewport;
@@ -364,9 +350,13 @@ global action_system_t g_game_action_system = {0};
 
 void game_init(platform_init_io_t *io)
 {
-	(void)io;
+	app_state_t *app = m_bootstrap(app_state_t, arena);
+	io->base->app_state = app;
 
-	equip_action_system(&g_game_action_system);
+	app->ui            = m_alloc_struct(&app->arena, ui_t);
+	app->action_system = m_alloc_struct(&app->arena, action_system_t);
+
+	equip_action_system(app->action_system);
 
 	bind_key_action(Action_left,          Key_a);
 	bind_key_action(Action_right,         Key_d);
@@ -388,24 +378,30 @@ void game_init(platform_init_io_t *io)
 
 	// pack_assets(S("../sources"));
 
-    update_camera_rotation(&g_camera, 0.0f);
-
     {
 		asset_image_t *font_image = get_image_from_string(S("gamedata/textures/font.png"));
-        debug_font.w = font_image->w;
-        debug_font.h = font_image->h;
-        debug_font.cw = 10;
-        debug_font.ch = 12;
+        app->debug_font.w = font_image->w;
+        app->debug_font.h = font_image->h;
+        app->debug_font.cw = 10;
+        app->debug_font.ch = 12;
         //debug_font.texture = font_image->renderer_handle;
     }
 
-	gamestate_t *game = g_game = m_bootstrap(gamestate_t, arena);
+	gamestate_t *game = app->game = m_bootstrap(gamestate_t, arena);
+	equip_gamestate(game);
+
     game->fade_t = 1.0f;
+
+	game->global_camera.vfov = 60.0f;
+    compute_camera_axes(&game->global_camera);
 
 	string_t startup_map = S("test");
 
     map_t    *map    = game->map    = load_map(&game->arena, Sf("gamedata/maps/%.*s.map", Sx(startup_map)));
     player_t *player = game->player = m_alloc_struct(&game->arena, player_t);
+
+	game->primary_camera = &game->global_camera;
+    player->attached_camera = game->primary_camera;
 
 	if (!map)
 	{
@@ -448,50 +444,30 @@ void game_init(platform_init_io_t *io)
 	//
 	//
 
-    initialized = true;
-
 	unequip_action_system();
+	unequip_gamestate();
 }
 
 fn_local void game_update(platform_update_io_t *io)
 {
-	gamestate_t *game = g_game;
-	ASSERT_MSG(game, "You need to call game_init before calling game_update");
+	app_state_t *app = io->base->app_state;
 
-	equip_action_system(&g_game_action_system);
+	gamestate_t *game = app->game;
+	ASSERT(game);
+
+	equip_gamestate(game);
+
+	equip_action_system(app->action_system);
 	process_action_system_input(io->input);
 
 	float dt = io->dt;
 
-    if (action_pressed(Action_fire2))
-	{
-        g_cursor_locked = !g_cursor_locked;
-	}
-
-    io->lock_cursor = g_cursor_locked;
-
-    game->primary_camera = &g_camera;
-
-    if (action_pressed(Action_fire1))
-	{
-		static bool mono = true;
-
-		mono = !mono;
-
-		if (mono)
-		{
-			update_playing_sound_flags(music, 0, PLAY_SOUND_FORCE_MONO);
-		}
-		else
-		{
-			update_playing_sound_flags(music, PLAY_SOUND_FORCE_MONO, 0);
-		}
-	}
+    game->primary_camera = &game->global_camera;
 
     map_t *map = game->map;
 
     player_t *player = game->player;
-    player->attached_camera = &g_camera;
+    player->attached_camera = game->primary_camera;
 
     camera_t *camera = player->attached_camera;
 
@@ -503,8 +479,7 @@ fn_local void game_update(platform_update_io_t *io)
             player->move_mode = PLAYER_MOVE_NORMAL;
     }
 
-    if (io->lock_cursor)
-        update_camera_rotation(camera, dt);
+	update_camera_rotation(camera, dt);
 
     switch (player->move_mode)
     {
@@ -520,16 +495,8 @@ fn_local void game_update(platform_update_io_t *io)
 
     //ui_end();
 
-	//
-	//
-	//
-
-    if (action_pressed(Action_escape))
-    {
-        io->request_exit = true;
-    }
-
 	unequip_action_system();
+	unequip_gamestate();
 }
 
 #if 0
@@ -580,9 +547,14 @@ typedef struct render_world_t
 
 fn_local void game_update_ui(platform_update_ui_io_t *io)
 {
+	app_state_t *app = io->base->app_state;
+
+	gamestate_t *game = app->game;
+	equip_gamestate(game);
+
 	input_t *input = io->input;
 
-	ui.app_has_focus = io->has_focus;
+	ui.app_has_focus = io->base->has_focus;
 
 	bool ui_focused = ui_begin(input, io->dt);
 	(void)ui_focused;
@@ -592,10 +564,14 @@ fn_local void game_update_ui(platform_update_ui_io_t *io)
     ui_end();
 
 	io->cursor = ui.cursor;
+
+	unequip_gamestate();
 }
 
 fn_local void game_render(platform_render_io_t *io)
 {
+	app_state_t *app = io->base->app_state;
+
 	process_asset_changes();
 
 	if (!r1)
@@ -603,7 +579,7 @@ fn_local void game_render(platform_render_io_t *io)
 		return;
 	}
 
-	gamestate_t *game = g_game;
+	gamestate_t *game = app->game;
 
 	if (game)
 	{
@@ -634,7 +610,7 @@ fn_local void game_render(platform_render_io_t *io)
 			v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
 				  sun_color      = mul(sun_brightness, sun_color);
 
-			scene->skybox = skybox;
+			// scene->skybox = skybox;
 			scene->sun_direction   = normalize(make_v3(0.25f, 0.75f, 1));
 			scene->sun_color       = sun_color;
 

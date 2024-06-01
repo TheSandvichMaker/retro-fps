@@ -456,61 +456,48 @@ fn_local bool ui_mouse_buttons_released(input_t *input, mouse_buttons_t buttons,
 
 typedef struct r_command_buffer_t r_command_buffer_t;
 
+typedef struct platform_io_t
+{
+	bool has_focus;
+
+	void *app_state;
+} platform_io_t;
+
 typedef struct platform_init_io_t 
 {
-	int i;
+	platform_io_t *base;
 } platform_init_io_t;
 
 typedef struct platform_update_io_t
 {
-	bool has_focus;
+	platform_io_t *base;
 
-	float dt;
-
+	float    dt;
 	input_t *input;
-
-	bool lock_cursor;
-	bool request_exit;
 } platform_update_io_t;
 
 typedef struct platform_update_ui_io_t
 {
-	bool     has_focus;
+	platform_io_t *base;
+
 	float    dt;
 	input_t *input;
 
+	bool              lock_cursor;
 	platform_cursor_t cursor;
-	bool lock_cursor;
+
 	bool request_exit;
 } platform_update_ui_io_t;
 
 typedef struct platform_render_io_t
 {
-	bool has_focus;
+	platform_io_t *base;
 
-	float dt;
+	float    dt;
+	input_t *input;
 
 	rhi_window_t        rhi_window;
 	rhi_command_list_t *rhi_command_list;
-
-	input_t *input;
-
-#if 0
-	v2_t  mouse_p;
-	v2_t  mouse_dp;
-	float mouse_wheel;
-
-	platform_gamepad_t gamepads[4];
-
-	size_t event_count;
-	platform_event_t *first_event;
-	platform_event_t * last_event;
-
-	platform_cursor_t cursor;
-
-	bool lock_cursor;
-	bool request_exit;
-#endif
 } platform_render_io_t;
 
 typedef struct platform_audio_io_t
