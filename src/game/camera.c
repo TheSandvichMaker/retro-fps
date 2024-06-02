@@ -13,7 +13,7 @@ void update_camera_rotation(camera_t *camera, float dt)
 {
 	(void)dt;
 
-	v2_t dp = get_action_mouse_dp();
+	v2_t dp = {0, 0}; // @ActionSystem get_action_mouse_dp();
 
     float look_speed_x = 0.1f;
     float look_speed_y = 0.1f;

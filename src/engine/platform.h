@@ -192,327 +192,97 @@ typedef enum platform_cursor_t
 
 typedef enum platform_event_kind_t
 {
+	Event_mouse_move,
 	Event_mouse_button,
 	Event_key,
 	Event_text,
-	Event_file_change,
 	Event_COUNT,
 } platform_event_kind_t;
 
+typedef struct platform_event_mouse_button_t
+{
+	bool            pressed;
+	mouse_buttons_t button;
+} platform_event_mouse_button_t;
+
+typedef struct platform_event_key_t
+{
+	bool      pressed;
+	bool      repeated;
+	keycode_t keycode;
+} platform_event_key_t;
+
+typedef struct platform_event_text_t
+{
+	string_storage_t(4) text;
+} platform_event_text_t;
+
 typedef struct platform_event_t
 {
-	struct platform_event_t *next_; // use platform_event_next()
+	struct platform_event_t *next; 
 
 	platform_event_kind_t kind;
 
-	bool consumed : 1;
-	bool ctrl     : 1;
-	bool alt      : 1;
-	bool shift    : 1;
+	bool ctrl;
+	bool alt;
+	bool shift;
+
+	v2_t mouse_p;
 
 	union
 	{
-		struct
-		{
-			bool            pressed;
-			mouse_buttons_t button;
-		} mouse_button;
-
-		struct
-		{
-			bool      pressed;
-			bool      repeated;
-			keycode_t keycode;
-		} key;
-
-		struct
-		{
-			string_storage_t(4) text;
-		} text;
+		platform_event_mouse_button_t mouse_button;
+		platform_event_key_t          key;
+		platform_event_text_t         text;
 	};
 } platform_event_t;
 
-fn_local platform_event_t *platform_event_next(platform_event_t *event)
-{
-	if (!event) return NULL;
-
-	platform_event_t *result = event->next_;
-
-	while (result && result->consumed)
-	{
-		result = result->next_;
-	}
-
-	return result;
-}
-
-fn_local platform_event_t *platform_event_iter(platform_event_t *event)
-{
-	if (!event) return NULL;
-
-	platform_event_t *result = event;
-
-	if (event->consumed)
-	{
-		result = platform_event_next(event);
-	}
-
-	return result;
-}
-
-fn_local void platform_consume_event(platform_event_t *event)
-{
-	event->consumed = true;
-}
-
-typedef enum gamepad_axis_t
-{
-	GamepadAxis_lx,
-	GamepadAxis_COUNT,
-} gamepad_axis_t;
-
-typedef uint32_t gamepad_buttons_t;
-typedef enum gamepad_button_t
-{
-	GamepadButton_x = 1 << 0,
-	// etc
-} gamepad_button_t;
-
-typedef struct gamepad_t
-{
-	bool connected;
-
-	float axes[GamepadAxis_COUNT];
-
-	gamepad_buttons_t buttons_pressed;
-	gamepad_buttons_t buttons_released;
-	gamepad_buttons_t buttons_down;
-} gamepad_t;
-
-typedef enum input_source_t
-{
-	InputSource_kbm,
-	InputSource_gamepad,
-} input_source_t;
-
-typedef struct button_t
-{
-	bool pressed;
-	bool released;
-	bool held;
-} button_t;
-
-typedef enum input_level_t
-{
-	InputLevel_none = 0,
-	InputLevel_game = 1,
-	InputLevel_ui   = 2,
-} input_level_t;
-
 typedef struct input_t
 {
-	input_level_t level;
-
 	v2_t  mouse_p;
 	v2_t  mouse_dp;
-	v2_t  mouse_pressed_p;
 	float mouse_wheel;
-
-	mouse_buttons_t buttons_pressed;
-	mouse_buttons_t buttons_held;
-	mouse_buttons_t buttons_released;
 
 	size_t event_count;
 	platform_event_t *first_event;
 	platform_event_t * last_event;
-
-	button_t keys[Key_COUNT]; // includes mouse buttons
 } input_t;
-
-fn_local bool key_pressed(input_t *input, keycode_t keycode, bool consume, input_level_t level)
-{
-	if (level < input->level)
-	{
-		return false;
-	}
-
-	ASSERT(keycode < Key_COUNT);
-	bool result = input->keys[keycode].pressed;
-
-	if (consume)
-	{
-		input->keys[keycode].pressed = false;
-	}
-
-	return result;
-}
-
-fn_local bool key_held(input_t *input, keycode_t keycode, input_level_t level)
-{
-	if (level < input->level)
-	{
-		return false;
-	}
-
-	ASSERT(keycode < Key_COUNT);
-	bool result = input->keys[keycode].held;
-
-	return result;
-}
-
-fn_local bool key_released(input_t *input, keycode_t keycode, bool consume, input_level_t level)
-{
-	if (level < input->level)
-	{
-		return false;
-	}
-
-	ASSERT(keycode < Key_COUNT);
-	bool result = input->keys[keycode].released;
-
-	if (consume)
-	{
-		input->keys[keycode].released = false;
-	}
-
-	return result;
-}
-
-fn_local bool ui_key_pressed(input_t *input, keycode_t keycode, bool consume)
-{
-	return key_pressed(input, keycode, consume, InputLevel_game);
-}
-
-fn_local bool ui_key_held(input_t *input, keycode_t keycode)
-{
-	return key_held(input, keycode, InputLevel_game);
-}
-
-fn_local bool ui_key_released(input_t *input, keycode_t keycode, bool consume)
-{
-	return key_released(input, keycode, consume, InputLevel_game);
-}
-
-fn_local bool mouse_buttons_pressed(input_t *input, mouse_buttons_t buttons, bool consume, input_level_t level)
-{
-	if (level < input->level)
-	{
-		return false;
-	}
-
-	bool result = !!(input->buttons_pressed & buttons);
-
-	if (consume)
-	{
-		input->buttons_pressed &= ~buttons;
-	}
-
-	return result;
-}
-
-fn_local bool mouse_buttons_held(input_t *input, mouse_buttons_t buttons, input_level_t level)
-{
-	if (level < input->level)
-	{
-		return false;
-	}
-
-	bool result = !!(input->buttons_held & buttons);
-
-	return result;
-}
-
-fn_local bool mouse_buttons_released(input_t *input, mouse_buttons_t buttons, bool consume, input_level_t level)
-{
-	if (level < input->level)
-	{
-		return false;
-	}
-
-	bool result = !!(input->buttons_released & buttons);
-
-	if (consume)
-	{
-		input->buttons_released &= ~buttons;
-	}
-
-	return result;
-}
-
-fn_local bool ui_mouse_buttons_pressed(input_t *input, mouse_buttons_t buttons, bool consume)
-{
-	return mouse_buttons_pressed(input, buttons, consume, InputLevel_ui);
-}
-
-fn_local bool ui_mouse_buttons_held(input_t *input, mouse_buttons_t buttons)
-{
-	return mouse_buttons_held(input, buttons, InputLevel_ui);
-}
-
-fn_local bool ui_mouse_buttons_released(input_t *input, mouse_buttons_t buttons, bool consume)
-{
-	return mouse_buttons_released(input, buttons, consume, InputLevel_ui);
-}
-
-typedef struct r_command_buffer_t r_command_buffer_t;
-
-typedef struct platform_io_t
-{
-	bool has_focus;
-
-	void *app_state;
-} platform_io_t;
 
 typedef struct platform_init_io_t 
 {
-	platform_io_t *base;
+	void *app_state;
 } platform_init_io_t;
 
-typedef struct platform_update_io_t
+typedef struct platform_tick_io_t
 {
-	platform_io_t *base;
+	void *app_state;
 
-	float    dt;
-	input_t *input;
-} platform_update_io_t;
-
-typedef struct platform_update_ui_io_t
-{
-	platform_io_t *base;
-
-	float    dt;
+	// in
+	bool     has_focus;
+	double   frame_time;
 	input_t *input;
 
-	bool              lock_cursor;
+	rhi_window_t rhi_window;
+
+	// in-out
+	bool              cursor_locked;
 	platform_cursor_t cursor;
 
+	// out
 	bool request_exit;
-} platform_update_ui_io_t;
-
-typedef struct platform_render_io_t
-{
-	platform_io_t *base;
-
-	float    dt;
-	input_t *input;
-
-	rhi_window_t        rhi_window;
-	rhi_command_list_t *rhi_command_list;
-} platform_render_io_t;
+} platform_tick_io_t;
 
 typedef struct platform_audio_io_t
 {
 	uint32_t frames_to_mix;
-	float *buffer;
+	float   *buffer;
 } platform_audio_io_t;
 
 typedef struct platform_hooks_t
 {
-	void (*init)      (platform_init_io_t *io);
-	void (*update)    (platform_update_io_t *io);
-	void (*update_ui) (platform_update_ui_io_t *io);
-	void (*render)    (platform_render_io_t *io);
-	void (*tick_audio)(size_t frame_count, float *frames);
+	void (*init)      (platform_init_io_t  *io);
+	void (*tick)      (platform_tick_io_t  *io);
+	void (*tick_audio)(platform_audio_io_t *io);
 } platform_hooks_t;
 
 fn_export void platform_init(size_t argc, string_t *argv, platform_hooks_t *hooks);

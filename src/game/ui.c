@@ -402,7 +402,7 @@ void ui_process_windows(void)
 
 			if (tray_region)
 			{
-				v2_t delta = sub(ui.input->mouse_p, ui.input->mouse_pressed_p);
+				v2_t delta = {0, 0}; // @UiInput sub(ui.input->mouse_p, ui.input->mouse_pressed_p);
 
 				window->rect = ui.resize_original_rect;
 				if (tray_region & UI_RECT_EDGE_E) window->rect = rect2_extend_right(window->rect,  delta.x);
@@ -518,6 +518,7 @@ void ui_process_windows(void)
 		hovered_window->hovered = true;
 	}
 
+	/* @UIInput
 	if (ui_mouse_buttons_pressed(ui.input, Button_any, false))
 	{
 		if (hovered_window)
@@ -527,6 +528,7 @@ void ui_process_windows(void)
 
 		ui.windows.focus_window = hovered_window;
 	}
+	*/
 }
 
 //
@@ -1015,6 +1017,7 @@ ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, 
 	{
 		result |= UI_HELD;
 
+		/* @UIInput
 		if (ui_mouse_buttons_released(ui.input, Button_left, false))
 		{
 			if (hovered)
@@ -1026,18 +1029,21 @@ ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, 
 
 			ui_clear_active();
 		}
+		*/
 	}
 
 	if (ui_is_hot(id))
 	{
 		result |= UI_HOT;
 
+		/* @UIInput
 		if (ui_mouse_buttons_pressed(ui.input, Button_left, false))
 		{
 			result |= UI_PRESSED;
 			ui.drag_anchor = sub(ui.input->mouse_p, rect2_center(rect));
 			ui_set_active(id);
 		}
+		*/
 	}
 
 	return result;
@@ -1999,9 +2005,9 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 
 	if (has_focus)
 	{
-		for (platform_event_t *event = platform_event_iter(ui.input->first_event);
+		for (platform_event_t *event = ui.input->first_event;
 			 event;
-			 event = platform_event_next(event))
+			 event = event->next)
 		{
 			switch (event->kind)
 			{
@@ -2026,7 +2032,7 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 						}
 					}
 
-					platform_consume_event(event);
+					// @UiInput platform_consume_event(event);
 				} break;
 
 				case Event_key:
@@ -2059,7 +2065,7 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 									}
 								}
 
-								platform_consume_event(event);
+								// @UIInput platform_consume_event(event);
 							} break;
 
 							case Key_right:
@@ -2084,7 +2090,7 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 										state->selection_start = state->cursor;
 									}
 
-									platform_consume_event(event);
+									// @UIInput platform_consume_event(event);
 								}
 							} break;
 
@@ -2122,7 +2128,7 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 								{
 									state->selection_start = 0;
 									state->cursor          = buffer->count;
-									platform_consume_event(event);
+									// @UIInput platform_consume_event(event);
 								}
 							} break;
 						}
@@ -2590,9 +2596,9 @@ void ui_end(void)
 		debug_notif_replicate(notif);
 	}
 
-	for (platform_event_t *event = platform_event_iter(ui.input->first_event);
+	for (platform_event_t *event = ui.input->first_event;
 		 event;
-		 event = platform_event_next(event))
+		 event = event->next)
 	{
 		switch (event->kind)
 		{
@@ -2601,7 +2607,7 @@ void ui_end(void)
 				if (event->mouse_button.pressed)
 				{
 					ui.has_focus = ui.hovered;
-					platform_consume_event(event);
+					// @UIInput platform_consume_event(event);
 				}
 			} break;
 
@@ -2614,12 +2620,12 @@ void ui_end(void)
 						if (ui_id_valid(ui.focused_id))
 						{
 							ui.focused_id = UI_ID_NULL;
-							platform_consume_event(event);
+							// @UIInput platform_consume_event(event);
 						}
 						else if (ui_has_focus())
 						{
 							ui.has_focus = false;
-							platform_consume_event(event);
+							// @UIInput platform_consume_event(event);
 						}
 					}
 				}

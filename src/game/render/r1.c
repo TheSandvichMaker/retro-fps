@@ -130,9 +130,9 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 
 	m_scoped_temp
 	{
-		string_t source = fs_read_entire_file(temp, S("../src/shaders/bindless_shadow.hlsl"));
+		string_t source = fs_read_entire_file(temp, S("../src/shaders/shadow.hlsl"));
 
-		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("bindless_shadow.hlsl"), S("MainVS"), S("vs_6_8"));
+		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("shadow.hlsl"), S("MainVS"), S("vs_6_8"));
 
 		r1->psos.sun_shadows = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
 			.vs = vs,
@@ -153,10 +153,10 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 
 	m_scoped_temp
 	{
-		string_t source = fs_read_entire_file(temp, S("../src/shaders/bindless_draft.hlsl"));
+		string_t source = fs_read_entire_file(temp, S("../src/shaders/brush.hlsl"));
 
-		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("bindless_draft.hlsl"), S("MainVS"), S("vs_6_8"));
-		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("bindless_draft.hlsl"), S("MainPS"), S("ps_6_8"));
+		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("brush.hlsl"), S("MainVS"), S("vs_6_8"));
+		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("brush.hlsl"), S("MainPS"), S("ps_6_8"));
 
 		r1->psos.map = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
 			.debug_name = S("Map PSO"),
@@ -218,10 +218,10 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 
 	m_scoped_temp
 	{
-		string_t source = fs_read_entire_file(temp, S("../src/shaders/bindless_post.hlsl"));
+		string_t source = fs_read_entire_file(temp, S("../src/shaders/post.hlsl"));
 
-		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("bindless_post.hlsl"), S("MainVS"), S("vs_6_8"));
-		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("bindless_post.hlsl"), S("MainPS"), S("ps_6_8"));
+		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("post.hlsl"), S("MainVS"), S("vs_6_8"));
+		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("post.hlsl"), S("MainPS"), S("ps_6_8"));
 
 		r1->psos.post_process = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
 			.debug_name = S("Post Process PSO"),
@@ -243,10 +243,10 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 
 	m_scoped_temp
 	{
-		string_t source = fs_read_entire_file(temp, S("../src/shaders/bindless_ui.hlsl"));
+		string_t source = fs_read_entire_file(temp, S("../src/shaders/ui.hlsl"));
 
-		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("bindless_ui.hlsl"), S("MainVS"), S("vs_6_8"));
-		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("bindless_ui.hlsl"), S("MainPS"), S("ps_6_8"));
+		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("ui.hlsl"), S("MainVS"), S("vs_6_8"));
+		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("ui.hlsl"), S("MainPS"), S("ps_6_8"));
 
 		r1->psos.ui = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
 			.debug_name = S("UI PSO"),
@@ -323,7 +323,7 @@ void r1_init(void)
 
 	r1->black_texture_srv = rhi_get_texture_srv(r1->black_texture);
 
-	r1->shadow_map_resolution = 1024;
+	r1->shadow_map_resolution = 2048;
 	r1->shadow_map = rhi_create_texture(&(rhi_create_texture_params_t){
 	    .debug_name = S("sun_shadow_map"),
 		.dimension  = RhiTextureDimension_2d,
@@ -338,7 +338,7 @@ void r1_init(void)
 	r1->ui_rects = rhi_create_buffer(&(rhi_create_buffer_params_t){
 		.debug_name = S("ui_rects"),
 		.size       = sizeof(r_ui_rect_t) * R1MaxUiRects,
-		.flags      = RhiResourceFlag_frame_buffered,
+		.flags      = RhiResourceFlag_dynamic,
 		.srv = &(rhi_create_buffer_srv_params_t){
 			.first_element  = 0,
 			.element_count  = R1MaxUiRects,
@@ -475,10 +475,11 @@ void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t backbuffer, r_v
 
 		v3_t sun_direction = view->scene.sun_direction;
 
-		m4x4_t sun_view   = make_view_matrix(add(view->camera_p, mul(-256.0f, sun_direction)), 
-											 negate(sun_direction), make_v3(0, 0, 1));
-		m4x4_t sun_ortho  = make_orthographic_matrix(2048, 2048, 512);
-		m4x4_t sun_matrix = mul(sun_ortho, sun_view);
+		v3_t   sun_view_origin    = add(make_v3(0, 0, 0), mul(-256.0f, sun_direction));
+		v3_t   sun_view_direction = negate(sun_direction);
+		m4x4_t sun_view           = make_view_matrix(sun_view_origin, sun_view_direction, make_v3(0, 0, 1));
+		m4x4_t sun_proj           = make_orthographic_matrix(2048, 2048, 512);
+		m4x4_t sun_matrix         = mul(sun_proj, sun_view);
 
 		const rhi_texture_desc_t *backbuffer_desc = rhi_get_texture_desc(backbuffer);
 

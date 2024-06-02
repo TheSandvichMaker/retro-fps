@@ -97,7 +97,7 @@ typedef struct rhi_texture_data_t
 
 typedef enum rhi_resource_flags_t
 {
-	RhiResourceFlag_frame_buffered = 0x1,
+	RhiResourceFlag_dynamic = 0x1, // that is - can be updated dynamically while rendering. causes the resource to be double/triple buffered
 } rhi_resource_flags_t;
 
 typedef struct rhi_create_texture_params_t

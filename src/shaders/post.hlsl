@@ -47,5 +47,7 @@ float4 MainPS(VS_OUT IN) : SV_Target
 
 	sum.rgb *= rcp(sum.a);
 
+	sum.rgb = LinearToSRGB(sum.rgb);
+
 	return float4(sum.rgb, 1.0);
 }

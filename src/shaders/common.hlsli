@@ -49,14 +49,12 @@ float4 Unpack(ColorRGBA8 rgba8)
 
 float3 LinearToSRGB(float3 lin)
 {
-	// TODO: do better
-	return sqrt(lin);
+	return select(lin <= 0.0031308, 12.92*lin, 1.055*pow(lin, 1.0 / 2.4) - 0.055);
 }
 
 float3 SRGBToLinear(float3 srgb)
 {
-	// TODO: do better
-	return srgb * srgb;
+	return select(srgb <= 0.04045, srgb / 12.92, pow((srgb + 0.055) / 1.055, 2.4));
 }
 
 float4 LinearToSRGB(float4 lin)

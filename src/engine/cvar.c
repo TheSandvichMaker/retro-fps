@@ -4,7 +4,7 @@ void cvar_register(cvar_t *cvar)
 	{
 		m_scoped_temp
 		{
-			string_t key_lower = string_to_lower(key);
+			string_t key_lower = string_to_lower(temp, cvar->key);
 			table_insert_object(&g_cvars.cvar_table, string_hash(key_lower), cvar);
 		}
 
@@ -18,7 +18,7 @@ cvar_t *cvar_find(string_t key)
 
 	m_scoped_temp
 	{
-		string_t key_lower = string_to_lower(key);
+		string_t key_lower = string_to_lower(temp, key);
 		result = table_find_object(&g_cvars.cvar_table, string_hash(key_lower));
 
 		DEBUG_ASSERT(string_match_nocase(result->key, key_lower));

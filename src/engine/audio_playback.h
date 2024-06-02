@@ -4,5 +4,7 @@
 
 #pragma once
 
-typedef void (*audio_output_callback_t)(size_t frame_count, float *frames);
+typedef struct platform_audio_io_t platform_audio_io_t;
+
+typedef void (*audio_output_callback_t)(platform_audio_io_t *io);
 fn void start_audio_thread(audio_output_callback_t callback);

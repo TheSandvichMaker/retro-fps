@@ -26,6 +26,7 @@
 #include "core/core.c"
 #include "game/game.c"
 
+#include "cvar.c"
 #include "audio_playback_win32.c"
 
 //
@@ -57,8 +58,7 @@ typedef struct win32_input_context_t
 	POINT prev_cursor_point;
 	bool  cursor_is_in_client_rect;
 
-	input_t *frame_input;
-	input_t *tick_input;
+	input_t *input;
 } win32_input_context_t;
 
 fn_local void win32_lock_cursor(win32_input_context_t *context, HWND window, bool lock)
@@ -115,11 +115,11 @@ fn_local platform_event_t *new_event_internal(win32_input_context_t *context)
 	if (!context->first_free_event)
 	{
 		context->first_free_event = m_alloc_struct_nozero(context->arena, platform_event_t);
-		context->first_free_event->next_ = NULL;
+		context->first_free_event->next = NULL;
 	}
 
 	platform_event_t *event = context->first_free_event;
-	context->first_free_event = event->next_;
+	context->first_free_event = event->next;
 
 	return event;
 }
@@ -129,50 +129,17 @@ fn_local void push_event(win32_input_context_t *context, const platform_event_t 
 	bool ctrl  = (bool)(GetAsyncKeyState(VK_CONTROL) & 0x8000);
 	bool alt   = (bool)(GetAsyncKeyState(VK_MENU)    & 0x8000);
 	bool shift = (bool)(GetAsyncKeyState(VK_SHIFT)   & 0x8000);
-	{
-		platform_event_t *event = new_event_internal(context);
-		copy_struct(event, src_event);
 
-		event->ctrl  = ctrl;
-		event->alt   = alt;
-		event->shift = shift;
+	platform_event_t *event = new_event_internal(context);
+	copy_struct(event, src_event);
 
-		sll_push_back_ex(context->frame_input->first_event, 
-						 context->frame_input->last_event,
-						 event,
-						 next_);
+	event->ctrl  = ctrl;
+	event->alt   = alt;
+	event->shift = shift;
 
-		context->frame_input->event_count += 1;
-	}
+	sll_push_back(context->input->first_event, context->input->last_event, event);
 
-	{
-		platform_event_t *event = new_event_internal(context);
-		copy_struct(event, src_event);
-
-		event->ctrl  = ctrl;
-		event->alt   = alt;
-		event->shift = shift;
-
-		sll_push_back_ex(context->tick_input->first_event, 
-						 context->tick_input->last_event,
-						 event,
-						 next_);
-
-		context->tick_input->event_count += 1;
-	}
-}
-
-fn_local void process_button_internal(button_t *button, bool down)
-{
-	button->pressed  |=  down && !button->held;
-	button->released |= !down &&  button->held;
-	button->held      = down;
-}
-
-fn_local void process_button(win32_input_context_t *context, keycode_t keycode, bool down)
-{
-	process_button_internal(&context->frame_input->keys[keycode], down);
-	process_button_internal(&context->tick_input ->keys[keycode], down);
+	context->input->event_count += 1;
 }
 
 fn_local v2_t convert_mouse_cursor(POINT cursor, int height)
@@ -184,20 +151,19 @@ fn_local v2_t convert_mouse_cursor(POINT cursor, int height)
 	return result;
 }
 
-fn_local void clear_input_deltas(win32_input_context_t *context, input_t *input)
+fn_local void new_input_frame(win32_input_context_t *context)
 {
+	input_t *input = context->input;
+
 	input->event_count = 0;
 
-	input->buttons_pressed  = 0;
-	input->buttons_released = 0;
-
-	// free all events
+	// free all events (TODO: don't need to do this this way anymore)
 	while (input->first_event)
 	{
 		platform_event_t *event = input->first_event;
-		input->first_event = event->next_;
+		input->first_event = event->next;
 
-		event->next_ = context->first_free_event;
+		event->next = context->first_free_event;
 		context->first_free_event = event;
 	}
 
@@ -206,19 +172,11 @@ fn_local void clear_input_deltas(win32_input_context_t *context, input_t *input)
 
 	input->mouse_dp    = (v2_t){ 0.0f, 0.0f };
 	input->mouse_wheel = 0.0f;
-
-	for_array(i, input->keys)
-	{
-		button_t *button = &input->keys[i];
-		button->pressed  = false;
-		button->released = false;
-	}
 }
 
-fn_local void poll_input(win32_input_context_t *input_context, HWND window)
+fn_local void poll_input(win32_input_context_t *context, HWND window)
 {
-	input_t *frame_input = input_context->frame_input;
-	input_t *tick_input  = input_context->tick_input;
+	input_t *input  = context->input;
 
 #if 0
 	GameInputGamepadButtons pressed_buttons  = 0;
@@ -266,7 +224,7 @@ fn_local void poll_input(win32_input_context_t *input_context, HWND window)
 	}
 #endif
 
-	input_context->has_focus = (GetActiveWindow() == window);
+	context->has_focus = (GetActiveWindow() == window);
 
 	RECT client_rect;
 	GetClientRect(window, &client_rect);
@@ -285,21 +243,11 @@ fn_local void poll_input(win32_input_context_t *input_context, HWND window)
 									 cursor_point.y >  client_rect.top   &&
 									 cursor_point.y <= client_rect.bottom);
 
-	v2_t prev_mouse_p = convert_mouse_cursor(input_context->prev_cursor_point, height);
+	v2_t prev_mouse_p = convert_mouse_cursor(context->prev_cursor_point, height);
 	v2_t mouse_p      = convert_mouse_cursor(cursor_point, height);
 	v2_t mouse_dp     = sub(mouse_p, prev_mouse_p);
 
-	if (ui_mouse_buttons_pressed(frame_input, Button_left, false))
-	{
-		frame_input->mouse_pressed_p = mouse_p;
-	}
-
-	if (ui_mouse_buttons_pressed(tick_input, Button_left, false))
-	{
-		tick_input->mouse_pressed_p = mouse_p;
-	}
-
-	if (input_context->has_focus && input_context->cursor_locked)
+	if (context->has_focus && context->cursor_locked)
 	{
 		POINT mid_point;
 		mid_point.x = (client_rect.left + client_rect.right) / 2;
@@ -310,14 +258,12 @@ fn_local void poll_input(win32_input_context_t *input_context, HWND window)
 		SetCursorPos(mid_point.x, mid_point.y);
 	}
 
-	input_context->cursor_is_in_client_rect = cursor_is_in_client_rect;
+	context->cursor_is_in_client_rect = cursor_is_in_client_rect;
 
-	frame_input->mouse_p  = mouse_p;
-	frame_input->mouse_dp = mouse_dp;
-	tick_input ->mouse_p  = mouse_p;
-	tick_input ->mouse_dp = mouse_dp;
+	input->mouse_p  = mouse_p;
+	input->mouse_dp = mouse_dp;
 
-	input_context->prev_cursor_point = cursor_point;
+	context->prev_cursor_point = cursor_point;
 }
 
 typedef struct window_user_data_t
@@ -348,8 +294,7 @@ fn_local LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 
 			float delta = (float)GET_WHEEL_DELTA_WPARAM(wparam);
 
-			context->frame_input->mouse_wheel += delta;
-			context->tick_input ->mouse_wheel += delta;
+			context->input->mouse_wheel += delta;
 		} break;
 
 		case WM_KEYDOWN:
@@ -367,8 +312,6 @@ fn_local LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 			{
 				rhi_set_window_fullscreen(user->rhi_window, !rhi_get_window_fullscreen(user->rhi_window));
 			}
-
-			process_button(context, (keycode_t)vk_code, pressed);
 
 			platform_event_t event = {
 				.kind         = Event_key,
@@ -426,31 +369,6 @@ fn_local LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 			}
 
 			bool pressed = !!(wparam & (MK_LBUTTON|MK_MBUTTON|MK_RBUTTON|MK_XBUTTON1|MK_XBUTTON2));
-
-			if (pressed)
-			{
-				context->frame_input->buttons_pressed |= button;
-				context->frame_input->buttons_held    |= button;
-				context->tick_input->buttons_pressed  |= button;
-				context->tick_input->buttons_held     |= button;
-			}
-			else
-			{
-				context->frame_input->buttons_released |= button;
-				context->frame_input->buttons_held     &= ~button;
-				context->tick_input->buttons_released  |= button;
-				context->tick_input->buttons_held      &= ~button;
-			}
-
-			// bit silly to have mouse buttons in here too
-			switch (button)
-			{
-				case Button_left:   process_button(context, Key_lbutton,  pressed); break;
-				case Button_middle: process_button(context, Key_mbutton,  pressed); break;
-				case Button_right:  process_button(context, Key_rbutton,  pressed); break;
-				case Button_x1:     process_button(context, Key_xbutton1, pressed); break;
-				case Button_x2:     process_button(context, Key_xbutton2, pressed); break;
-			}
 
 			platform_event_t event = {
 				.kind = Event_mouse_button,
@@ -562,7 +480,7 @@ int wWinMain(HINSTANCE instance,
 
 	platform_init((size_t)argc, argv, &hooks);
 
-	if (!hooks.update && !hooks.render && !hooks.tick_audio)
+	if (!hooks.tick && !hooks.tick_audio)
 	{
 		FATAL_ERROR("No tick functions provided - can't do anything.");
 	}
@@ -657,8 +575,7 @@ int wWinMain(HINSTANCE instance,
 	win32_input_context_t input_context = {
 		.arena             = &win32_arena,
 		.prev_cursor_point = prev_cursor_point,
-		.frame_input       = &(input_t){0},
-		.tick_input        = &(input_t){0},
+		.input             = &(input_t){0},
 	};
 
 	window_user_data_t window_user_data = {
@@ -670,13 +587,7 @@ int wWinMain(HINSTANCE instance,
 
     ShowWindow(window, command_show);
 
-	input_t *frame_input = input_context.frame_input;
-	input_t *tick_input  = input_context.tick_input;
-
-	static const double fixed_step_hz = 60.0;
-
-	double dt          = 1.0 / fixed_step_hz;
-	double accumulator = 0.0;
+	input_t *input  = input_context.input;
 
 	hires_time_t current_time = os_hires_time();
 
@@ -688,13 +599,11 @@ int wWinMain(HINSTANCE instance,
 		last_frame_sync_time = frame_stats.sync_cpu_time;
 	}
 
-	platform_io_t base_io = {0};
-
-	platform_init_io_t init_io = {
-		.base = &base_io,
-	};
+	platform_init_io_t init_io = {0};
 
 	hooks.init(&init_io);
+
+	void *app_state = init_io.app_state;
 
     // message loop
     bool running = true;
@@ -720,20 +629,20 @@ int wWinMain(HINSTANCE instance,
 
 		//
 
-		if (frame_time > 0.25)
-		{
-			frame_time = 0.25;
-		}
+		// if (frame_time > 0.25)
+		// {
+		// 	frame_time = 0.25;
+		// }
 
 		current_time = new_time;
 
-		accumulator += frame_time;
+		// accumulator += frame_time;
 
 		//
 		// input
 		//
 
-		clear_input_deltas(&input_context, frame_input);
+		new_input_frame(&input_context);
 
 		// pump messages
 
@@ -758,58 +667,32 @@ int wWinMain(HINSTANCE instance,
 		// poll gamepad / cursor
 
 		poll_input(&input_context, window);
-		base_io.has_focus = input_context.has_focus;
 
 		//
 		// tick
 		//
 
-		tick_input->level = InputLevel_game;
-
-		while (accumulator >= dt)
-		{
-			platform_update_io_t update_io = {
-				.base  = &base_io,
-				.dt    = (float)dt,
-				.input = tick_input,
-			};
-
-			hooks.update(&update_io);
-
-			accumulator -= dt;
-
-			clear_input_deltas(&input_context, tick_input);
-		}
-
-		tick_input->level = InputLevel_none;
-
-		//
-		// UI
-		//
-
-		frame_input->level = InputLevel_ui;
-
-		platform_update_ui_io_t ui_io = {
-			.base   = &base_io,
-			.dt     = (float)frame_time,
-			.input  = frame_input,
-			.cursor = cursor,
+		platform_tick_io_t tick_io = {
+			.app_state     = app_state,
+			.has_focus     = input_context.has_focus,
+			.frame_time    = frame_time,
+			.input         = input,
+			.rhi_window    = rhi_window,
+			.cursor_locked = input_context.cursor_locked,
 		};
 
-		hooks.update_ui(&ui_io);
+		hooks.tick(&tick_io);
 
-		frame_input->level = InputLevel_none;
-
-		if (ui_io.request_exit)
+		if (tick_io.request_exit)
 		{
 			running = false;
 		}
 
 		// process cursor updates
 
-		if (ui_io.lock_cursor != input_context.cursor_locked)
+		if (tick_io.cursor_locked != input_context.cursor_locked)
 		{
-			win32_lock_cursor(&input_context, window, ui_io.lock_cursor);
+			win32_lock_cursor(&input_context, window, tick_io.cursor_locked);
 		}
 
 		if (input_context.cursor_is_in_client_rect)
@@ -837,30 +720,6 @@ int wWinMain(HINSTANCE instance,
 			}
 		}
 		last_cursor = cursor;
-
-		//
-		// render
-		//
-
-		rhi_begin_frame();
-
-		rhi_command_list_t *command_list = rhi_get_command_list();
-
-		frame_input->level = InputLevel_ui;
-
-		platform_render_io_t render_io = {
-			.base             = &base_io,
-			.dt               = (float)frame_time,
-			.input            = frame_input,
-			.rhi_window       = rhi_window,
-			.rhi_command_list = command_list,
-		};
-
-		hooks.render(&render_io);
-
-		frame_input->level = InputLevel_none;
-
-		rhi_end_frame();
 
 		m_reset_temp_arenas();
     }

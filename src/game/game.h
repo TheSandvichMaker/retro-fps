@@ -5,6 +5,7 @@
 #pragma once
 
 #include "globals.h"
+#include "action.h"
 #include "asset.h"
 #include "audio.h"
 #include "bvh.h"

@@ -112,7 +112,12 @@ fn_local DWORD WINAPI wasapi_thread_proc(void *userdata)
         hr = IAudioRenderClient_GetBuffer(audio_render_client, frame_count, (BYTE **)&buffer);
         CHECK_HR(hr);
 
-		callback(frame_count, buffer);
+		platform_audio_io_t io = {
+			.frames_to_mix = frame_count,
+			.buffer        = buffer,
+		};
+
+		callback(&io);
 
         hr = IAudioRenderClient_ReleaseBuffer(audio_render_client, frame_count, 0);
         CHECK_HR(hr);

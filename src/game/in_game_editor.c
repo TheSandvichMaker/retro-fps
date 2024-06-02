@@ -922,6 +922,7 @@ void update_and_render_in_game_editor(void)
 		editor.ui_demo.window.rect = rect2_from_min_dim(make_v2(96, 96), make_v2(512, 512));
 	}
 
+	/* @UIInput
     if (ui_key_pressed(ui.input, Key_f1, false))
 	{
         editor.show_timings = !editor.show_timings;
@@ -941,6 +942,7 @@ void update_and_render_in_game_editor(void)
 	{
 		ui_toggle_window_openness(&editor.ui_demo.window);
 	}
+	*/
 
 	if (&editor.lm_editor.window.open)
 		render_lm_editor();

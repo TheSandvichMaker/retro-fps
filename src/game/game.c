@@ -2,8 +2,17 @@
 // Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
 // ============================================================
 
+// Tags:
+// @UIInput
+// @ActionSystem
+// @ThreadSafety / @threadsafe (TODO: merge)
+// @Globals
+// @LoggingInCore
+// @must-initialize (TODO: Deprecate?)
+
 #include "game.h"
 
+#include "action.c"
 #include "asset.c"
 #include "audio.c"
 #include "bvh.c"
@@ -32,6 +41,8 @@
 typedef struct app_state_t
 {
 	arena_t arena;
+
+	double accumulator;
 
 	gamestate_t     *game;
 	action_system_t *action_system;
@@ -346,12 +357,16 @@ fn void init_view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
     view->proj_matrix = make_perspective_matrix(camera->vfov, aspect, 1.0f);
 }
 
+//
+//
+//
+
 global action_system_t g_game_action_system = {0};
 
-void game_init(platform_init_io_t *io)
+void app_init(platform_init_io_t *io)
 {
 	app_state_t *app = m_bootstrap(app_state_t, arena);
-	io->base->app_state = app;
+	io->app_state = app;
 
 	app->ui            = m_alloc_struct(&app->arena, ui_t);
 	app->action_system = m_alloc_struct(&app->arena, action_system_t);
@@ -384,7 +399,6 @@ void game_init(platform_init_io_t *io)
         app->debug_font.h = font_image->h;
         app->debug_font.cw = 10;
         app->debug_font.ch = 12;
-        //debug_font.texture = font_image->renderer_handle;
     }
 
 	gamestate_t *game = app->game = m_bootstrap(gamestate_t, arena);
@@ -448,55 +462,174 @@ void game_init(platform_init_io_t *io)
 	unequip_gamestate();
 }
 
-fn_local void game_update(platform_update_io_t *io)
+fn_local void tick_game  (gamestate_t *game, float dt);
+fn_local void tick_ui    (/*ui_t        *ui,*/   float dt);
+fn_local void render_game(gamestate_t *game, rhi_window_t window);
+
+fn_local void app_tick(platform_tick_io_t *io)
 {
-	app_state_t *app = io->base->app_state;
+	app_state_t     *app            = io->app_state;
+	gamestate_t     *game           = app->game;
+	action_system_t *action_system  = app->action_system;
+	//ui_t            *ui             = app->ui;
+	//r1_state_t       *r1             = app->r1;
 
-	gamestate_t *game = app->game;
-	ASSERT(game);
+	equip_action_system(action_system);
+	ingest_action_system_input(io->input);
 
-	equip_gamestate(game);
+	suppress_actions(ui.has_focus);
 
-	equip_action_system(app->action_system);
-	process_action_system_input(io->input);
+	const double sim_rate = 240.0;
+	const double dt       = 1.0 / sim_rate;
 
-	float dt = io->dt;
+	// clamp frame time to avoid death spirals
+	double frame_time = MIN(io->frame_time, 0.1);
 
-    game->primary_camera = &game->global_camera;
+	app->accumulator += frame_time;
 
-    map_t *map = game->map;
+	bool first_iteration = true;
+	while (app->accumulator >= dt)
+	{
+		tick_game(game, (float)dt);
+		app->accumulator -= dt;
 
-    player_t *player = game->player;
-    player->attached_camera = game->primary_camera;
+		if (first_iteration)
+		{
+			action_system_clear_sticky_edges();
+			first_iteration = false;
+		}
+	}
 
-    camera_t *camera = player->attached_camera;
+	unequip_action_system();
 
-    if (action_pressed(Action_toggle_noclip))
-    {
-        if (player->move_mode == PLAYER_MOVE_NORMAL)
-            player->move_mode = PLAYER_MOVE_NOCLIP;
-        else
-            player->move_mode = PLAYER_MOVE_NORMAL;
-    }
+	/*
+	for (platform_event_t *event = io->first_event;
+		 event;
+		 event = event->next)
+	{
+		case Event_mouse_move:
+		{
+			ui_event_t *ui_event = ui_allocate_event();
+			ui_event->kind = UIEvent_mouse_move;
+		} break;
+	}
+	*/
+
+	tick_ui((float)frame_time);
+
+	rhi_window_t window = io->rhi_window;
+	render_game(game, window);
+
+	process_asset_changes();
+}
+
+fn_local void tick_game(gamestate_t *game, float dt)
+{
+	map_t    *map    = game->map;
+	player_t *player = game->player;
+	camera_t *camera = player->attached_camera;
 
 	update_camera_rotation(camera, dt);
 
-    switch (player->move_mode)
-    {
-        case PLAYER_MOVE_NORMAL:  player_movement(map, player, dt); break;
-        case PLAYER_MOVE_NOCLIP: player_noclip(player, dt); break;
-    }
+	if (action_pressed(Action_toggle_noclip))
+	{
+		if (player->move_mode == PLAYER_MOVE_NORMAL)
+		{
+			player->move_mode = PLAYER_MOVE_NOCLIP;
+		}
+		else
+		{
+			player->move_mode = PLAYER_MOVE_NORMAL;
+		}
+	}
+
+	switch (player->move_mode)
+	{
+		case PLAYER_MOVE_NORMAL: player_movement(map, player, dt); break;
+		case PLAYER_MOVE_NOCLIP: player_noclip  (player, dt);      break;
+	}
 
 	mixer_set_listener(camera->p, negate(camera->computed_z));
+}
 
-    game->fade_t += 0.45f*dt*(game->fade_target_t - game->fade_t);
+fn_local void tick_ui(/*ui_t *ui, */float dt)
+{
+	(void)dt;
 
-    //update_and_render_in_game_editor();
+	// @Globals
+	// equip_ui(ui);
 
-    //ui_end();
+	/*
+	ui_begin(NULL, dt);
+	{
+		update_and_render_in_game_editor();
+	}
+    ui_end();
+	*/
 
-	unequip_action_system();
-	unequip_gamestate();
+	//io->cursor = ui.cursor;
+
+	// @Globals
+	//unequip_ui();
+}
+
+fn_local void render_game(/*r1_t *r1, */gamestate_t *game, rhi_window_t window)
+{
+	// @Globals
+	// equip_r1(r1);
+
+	rhi_begin_frame();
+
+	rhi_command_list_t *list = rhi_get_command_list();
+	rhi_texture_t backbuffer = rhi_get_current_backbuffer(window);
+
+	map_t *map = game->map;
+
+	if (map)
+	{
+		player_t *player = game->player;
+		camera_t *camera = player->attached_camera;
+
+		const rhi_texture_desc_t *desc = rhi_get_texture_desc(backbuffer);
+
+		rect2_t viewport = {
+			.min = { 0.0f, 0.0f },
+			.max = { (float)desc->width, (float)desc->height },
+		};
+
+		r_view_t view = {0};
+		init_view_for_camera(camera, viewport, &view);
+
+		r_scene_parameters_t *scene = &view.scene;
+
+		map_entity_t *worldspawn = game->worldspawn;
+
+		float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
+		v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
+			  sun_color      = mul(sun_brightness, sun_color);
+
+		// scene->skybox = skybox;
+		scene->sun_direction   = normalize(make_v3(0.25f, 0.75f, 1));
+		scene->sun_color       = sun_color;
+
+		scene->fogmap          = map->fogmap;
+		scene->fog_offset      = rect3_center(map->bounds);
+		scene->fog_dim         = rect3_dim(map->bounds);
+		scene->fog_absorption  = 0.002f;
+		scene->fog_density     = 0.02f;
+		scene->fog_scattering  = 0.04f;
+		scene->fog_phase_k     = 0.6f;
+
+		r1_update_window_resources(window);
+		r1_render_game_view(list, backbuffer, &view, map);
+	}
+
+	ui_render_command_list_t *ui_commands = ui_get_render_commands();
+	r1_render_ui(list, backbuffer, ui_commands);
+
+	rhi_end_frame();
+
+	// unequip_r1();
 }
 
 #if 0
@@ -545,95 +678,9 @@ typedef struct render_world_t
 } render_world_t;
 #endif
 
-fn_local void game_update_ui(platform_update_ui_io_t *io)
+static void app_mix_audio(platform_audio_io_t *io)
 {
-	app_state_t *app = io->base->app_state;
-
-	gamestate_t *game = app->game;
-	equip_gamestate(game);
-
-	input_t *input = io->input;
-
-	ui.app_has_focus = io->base->has_focus;
-
-	bool ui_focused = ui_begin(input, io->dt);
-	(void)ui_focused;
-
-    update_and_render_in_game_editor();
-
-    ui_end();
-
-	io->cursor = ui.cursor;
-
-	unequip_gamestate();
-}
-
-fn_local void game_render(platform_render_io_t *io)
-{
-	app_state_t *app = io->base->app_state;
-
-	process_asset_changes();
-
-	if (!r1)
-	{
-		return;
-	}
-
-	gamestate_t *game = app->game;
-
-	if (game)
-	{
-		map_t *map = game->map;
-
-		if (map)
-		{
-			player_t *player = game->player;
-			camera_t *camera = player->attached_camera;
-
-			rhi_texture_t backbuffer = rhi_get_current_backbuffer(io->rhi_window);
-
-			const rhi_texture_desc_t *desc = rhi_get_texture_desc(backbuffer);
-
-			rect2_t viewport = {
-				.min = { 0.0f, 0.0f },
-				.max = { (float)desc->width, (float)desc->height },
-			};
-
-			r_view_t view = {0};
-			init_view_for_camera(camera, viewport, &view);
-
-			r_scene_parameters_t *scene = &view.scene;
-
-			map_entity_t *worldspawn = game->worldspawn;
-
-			float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
-			v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
-				  sun_color      = mul(sun_brightness, sun_color);
-
-			// scene->skybox = skybox;
-			scene->sun_direction   = normalize(make_v3(0.25f, 0.75f, 1));
-			scene->sun_color       = sun_color;
-
-			scene->fogmap          = map->fogmap;
-			scene->fog_offset      = rect3_center(map->bounds);
-			scene->fog_dim         = rect3_dim(map->bounds);
-			scene->fog_absorption  = 0.002f;
-			scene->fog_density     = 0.02f;
-			scene->fog_scattering  = 0.04f;
-			scene->fog_phase_k     = 0.6f;
-
-			r1_update_window_resources(io->rhi_window);
-			r1_render_game_view(io->rhi_command_list, rhi_get_current_backbuffer(io->rhi_window), &view, map);
-		}
-	}
-
-	ui_render_command_list_t *ui_commands = ui_get_render_commands();
-	r1_render_ui(io->rhi_command_list, rhi_get_current_backbuffer(io->rhi_window), ui_commands);
-}
-
-static void game_mix_audio(size_t frame_count, float *frames)
-{
-	mix_samples((uint32_t)frame_count, frames);
+	mix_samples((uint32_t)io->frames_to_mix, io->buffer);
 }
 
 void platform_init(size_t argc, string_t *argv, platform_hooks_t *hooks)
@@ -641,9 +688,7 @@ void platform_init(size_t argc, string_t *argv, platform_hooks_t *hooks)
 	(void)argc;
 	(void)argv;
 
-	hooks->init       = game_init;
-	hooks->update     = game_update;
-	hooks->update_ui  = game_update_ui;
-	hooks->render     = game_render;
-	hooks->tick_audio = game_mix_audio;
+	hooks->init       = app_init;
+	hooks->tick       = app_tick;
+	hooks->tick_audio = app_mix_audio;
 }

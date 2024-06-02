@@ -123,7 +123,7 @@ typedef struct d3d12_window_t
 	IDXGISwapChain4 *swap_chain;
 	rhi_texture_t    frame_buffers[3];
 
-	bool fullscreen;
+	bool   fullscreen;
 	HANDLE frame_latency_waitable_object;
 } d3d12_window_t;
 

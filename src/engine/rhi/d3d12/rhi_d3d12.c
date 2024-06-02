@@ -15,7 +15,7 @@ extern __declspec(dllexport) const char    *D3D12SDKPath    = u8".\\D3D12\\";
 #include "d3d12_constants.c"
 #include "d3d12_upload.c"
 
-// CVAR_BOOL(cvar_serialize_command_lists, "rhi.d3d12.serialize_command_lists", true);
+CVAR_BOOL(cvar_d3d12_force_heavy_synchronization, "rhi.d3d12.force_heavy_synchronization", false);
 
 fn_local d3d12_frame_state_t *d3d12_get_frame_state(uint32_t frame_index)
 {
@@ -68,6 +68,12 @@ fn_local bool d3d12_transition_state(ID3D12Resource *resource,
 
 bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 {
+	// Register cvars (optional - but prevents lazy initialization which is preferable)
+
+	cvar_register(&cvar_d3d12_force_heavy_synchronization);
+
+	// initialize pools
+
 	g_rhi.windows  = (pool_t)INIT_POOL_EX(d3d12_window_t,  POOL_FLAGS_CONCURRENT);
 	g_rhi.buffers  = (pool_t)INIT_POOL_EX(d3d12_buffer_t,  POOL_FLAGS_CONCURRENT);
 	g_rhi.textures = (pool_t)INIT_POOL_EX(d3d12_texture_t, POOL_FLAGS_CONCURRENT);
@@ -691,7 +697,7 @@ void rhi_resize_window(rhi_window_t handle, uint32_t new_width, uint32_t new_hei
 	hr = IDXGISwapChain4_GetDesc(window->swap_chain, &desc);
 	ASSERT(SUCCEEDED(hr)); // SERIOUSLY FIX THE ERROR HANDLING...
 
-	hr = IDXGISwapChain4_ResizeBuffers(window->swap_chain, RhiMaxFrameLatency, new_width, new_height, desc.BufferDesc.Format, desc.Flags);
+	hr = IDXGISwapChain4_ResizeBuffers(window->swap_chain, 0, new_width, new_height, desc.BufferDesc.Format, desc.Flags);
 	ASSERT(SUCCEEDED(hr)); // SERIOUSLY FIX THE ERROR HANDLING...
 
 	for (size_t i = 0; i < RhiMaxFrameLatency; i++)
@@ -1125,7 +1131,7 @@ rhi_texture_srv_t rhi_get_texture_srv(rhi_texture_t handle)
 
 fn_local void d3d12_upload_buffer_data(d3d12_buffer_t *buffer, uint32_t resource_index, uint64_t dst_offset, const void *src, size_t src_size)
 {
-	ASSERT((buffer->flags & RhiResourceFlag_frame_buffered) ? resource_index < RhiMaxFrameLatency : resource_index == 0);
+	ASSERT((buffer->flags & RhiResourceFlag_dynamic) ? resource_index < RhiMaxFrameLatency : resource_index == 0);
 
 	ID3D12Resource *resource = buffer->resources[resource_index];
 
@@ -1279,7 +1285,7 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 			.Format           = DXGI_FORMAT_UNKNOWN,
 		};
 
-		uint32_t count = (params->flags & RhiResourceFlag_frame_buffered) ? g_rhi.frame_latency : 1;
+		uint32_t count = (params->flags & RhiResourceFlag_dynamic) ? g_rhi.frame_latency : 1;
 
 		HRESULT hr;
 
@@ -1821,7 +1827,7 @@ void rhi_end_frame(void)
 
 	ID3D12GraphicsCommandList_Close(list);
 
-	// if (cvar_read_bool(&cvar_serialize_command_lists))
+	if (cvar_read_bool(&cvar_d3d12_force_heavy_synchronization))
 	{
 		ID3D12CommandQueue_Wait(g_rhi.direct_queue, g_rhi.fence, g_rhi.fence_value);
 	}
