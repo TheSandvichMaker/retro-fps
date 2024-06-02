@@ -23,6 +23,7 @@ typedef enum log_category_t
 	LogCat_Mixer,
 	LogCat_Renderer,
 	LogCat_Renderer_DX11,
+	LogCat_UI,
 	LogCat_RHI_D3D12,
 	LogCat_AssetPacker,
 	LogCat_MapLoad,

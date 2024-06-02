@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "globals.h"
 #include "action.h"
 #include "asset.h"
 #include "audio.h"
@@ -15,6 +14,8 @@
 #include "dream.h"
 #include "font.h"
 #include "freeverb.h"
+#include "globals.h"
+#include "in_game_editor.h"
 #include "input.h"
 #include "intersect.h"
 #include "job_queues.h"
@@ -23,13 +24,14 @@
 #include "map.h"
 #include "mesh.h"
 #include "physics_playground.h"
-#include "render_backend.h"
+#include "render_backend.h" // @IncludeOrder
 #include "render.h"
 #include "render_helpers.h"
 #include "ui.h"
-#include "in_game_editor.h"
-#include "convex_hull_debugger.h"
-#include "render/r1.h"
+#include "ui_layout.h"
+#include "convex_hull_debugger.h" // @IncludeOrder
+
+#include "render/r1.h" // @IncludeOrder
 
 typedef enum player_move_mode_t
 {

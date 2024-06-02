@@ -8,7 +8,7 @@ void ui_widget_checkbox(ui_widget_context_t *context, ui_widget_mode_t mode, rec
 
 	switch (mode)
 	{
-		case UIWidgetMode_input:
+		case UIWidgetMode_interact:
 		{
 			if (ui_is_active(id))
 			{
@@ -47,7 +47,7 @@ void ui_widget_checkbox(ui_widget_context_t *context, ui_widget_mode_t mode, rec
 			float height = rect2_height(rect);
 
 			rect2_t checkbox_rect, label_rect;
-			rect_hsplit(rect, height, &checkbox_rect, &label_rect);
+			rect2_hsplit(rect, height, &checkbox_rect, &label_rect);
 
 			v4_t color = ui_button_colors(id);
 
@@ -91,15 +91,10 @@ void ui_widget_checkbox(ui_widget_context_t *context, ui_widget_mode_t mode, rec
 void ui_checkbox(string_t label, rect2_t rect, bool *value)
 {
 	ui_widget_context_t context = {
-		.bool = value,
+		.userdata = value,
 	};
 
-	if (value)
-	{
-		ui_widget_checkbox(&context, UIWidgetMode_input, rect);
-	}
-
-	ui_widget_checkbox(&context, UIWidgetMode_draw, rect);
+	ui_widget_checkbox(&context, UIWidgetMode_interact_and_draw, rect);
 }
 
 // auto-layout with frame latency on hit testing and deferred draw (but no frame latency on draw)
@@ -314,7 +309,7 @@ void layout_checkbox(layout_t *layout, string_t label, bool *value)
 
 	if (value)
 	{
-		ui_widget_checkbox(&context, UIWidgetMode_input, rect);
+		ui_widget_checkbox(&context, UIWidgetMode_interact, rect);
 	}
 }
 
@@ -415,3 +410,134 @@ void layout_checkbox(string_t label, bool *value)
 {
 
 }
+
+// haha I don't know what I want
+// let's sketch out Rect Cut But Better
+
+void ui_checkbox(string_t label, rect2_t rect, bool *value);
+
+void layout_test(rect2_t panel)
+{
+	ui_layout_t layout = make_layout(panel);
+
+	equip_layout(&layout);
+
+	// the idea I guess is that ui_xxx widgets take an explicit rect
+	// and layout_xxx widgets cut out a rect automatically based on
+	// the layout parameters and such
+
+	// first, I want a title bar
+	Layout_Flow(Flow_south)
+	{
+		Layout_Cut(
+			.size = ui_sz_pix(16.0f))
+		{
+			// there's three buttons on the left that want to occupy 1/3rd of the space evenly
+			Layout_Flow(Flow_east)
+			{
+				Layout_Cut(
+					.size = ui_sz_pct(1.0f / 3.0f))
+				{
+					// prepare even spacing for 3 rects, this overrides the rects used normally
+					// by the buttons
+					layout_prepare_even_spacing(3);
+
+					if (layout_button(S("File")))
+					{
+						do_file_menu();
+					}
+
+					if (layout_button(S("Edit")))
+					{
+						do_edit_menu();
+					}
+
+					if (layout_button(S("View")))
+					{
+						do_view_menu();
+					}
+				}
+			}
+
+			// there's three buttons on the right of (possibly) varying size
+			Layout_Flow(Flow_west)
+			{
+				if (layout_icon_button(UiIcon_close))
+				{
+					editor_command(EditorCommand_close, NULL);
+				}
+
+				if (is_windowed)
+				{
+					if (layout_icon_button(UiIcon_fullscreen))
+					{
+						editor_command(EditorCommand_fullscreen, NULL);
+					}
+				}
+				else
+				{
+					if (layout_icon_button(UiIcon_windowed))
+					{
+						editor_command(EditorCommand_windowed, NULL);
+					}
+				}
+
+				if (layout_icon_button(UiIcon_minimize))
+				{
+					editor_command(EditorCommand_minimize, NULL);
+				}
+			}
+
+			// now I want to center some text in the remaining space... somehow
+			// not sure how to make that not annoying to do, the thing doesn't
+			// want to cut anything anymore, it just wants to use the remaining 
+			// space, so maybe that remaining space is accessible through this
+			// cool variable 'rect'
+
+			ui_label(rect, S("Centered Text"));
+
+			// but how do you even decide that ui_label would center the label
+			// if given an oversized rect, that seems like now the simple widget
+			// code that is supposed to just accept rects is doing layout again
+
+			// so maybe it should look like this
+			Layout_Justify(
+				.x = 0.5, // 0.5 = center
+				.y = 0.5) // 0.5 = center
+			{
+				// and then setting that up makes sense with this somehow
+				layout_label(S("Centered Text"));
+				// but layout_label now is not doing a simple rect cut, it's
+				// conceptually doing 4 rect cuts to carve out the empty space
+				// that centers the label (maybe in the implementation it doesn't
+				// really need to do that)
+			}
+		}
+	}
+
+	unequip_layout(layout);
+}
+
+void layout_place_widget(ui_widget_context_t *context, ui_widget_func_t widget)
+{
+	rect2_t rect = {0};
+
+	widget(context, UIWidgetMode_get_size, rect);
+
+	v2_t bounds = context->min_size;
+
+	if (layout->wants_justify)
+	{
+		// justify stuff
+		rect = layout_find_justified_rect(bounds);
+	}
+	else
+	{
+		// cut stuff, maybe insert margins here somehow
+		rect = layout_cut(layout->flow_direction, ui_sz_pix(bounds.e[layout->flow_axis]));
+	}
+
+	// maybe interact and draw doesn't need to be separate in this scheme
+	widget(context, UIWidgetMode_interact_and_draw, rect);
+}
+

@@ -15,7 +15,7 @@
 #define DEBUG_ASSERT_MSG(...)
 #else
 #define DEBUG_ASSERT(expr) ASSERT(expr)
-#define DEBUG_ASSERT_MSG(expr, msg) ASSERT_MSG(expr, msg)
+#define DEBUG_ASSERT_MSG(expr, msg) ASSERT_MSG(expr, "(dbg) " msg)
 #endif
 
 #define ALWAYS(expr) ASSERT(expr) // assert behaves like ALWAYS already

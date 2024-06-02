@@ -9,6 +9,7 @@
 // @Globals
 // @LoggingInCore
 // @must-initialize (TODO: Deprecate?)
+// @IncludeOrder
 
 #include "game.h"
 
@@ -35,6 +36,7 @@
 #include "render_backend.c"
 #include "render_helpers.c"
 #include "ui.c"
+#include "ui_layout.c"
 
 #include "render/r1.c"
 
