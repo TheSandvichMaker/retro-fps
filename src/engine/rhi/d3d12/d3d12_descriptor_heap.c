@@ -111,7 +111,7 @@ void d3d12_descriptor_heap_init(ID3D12Device *device,
 		ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(heap->heap, &heap->gpu_base);
 	}
 
-	heap->debug_name = string_copy(rhi_arena, debug_name);
+	heap->debug_name = m_copy_string(rhi_arena, debug_name);
 
 	heap->capacity = persistent_capacity;
 	heap->stride   = ID3D12Device_GetDescriptorHandleIncrementSize(device, type);

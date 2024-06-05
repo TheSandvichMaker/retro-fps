@@ -94,7 +94,7 @@ void file_watcher_add_directory(file_watcher_t *watcher, string_t directory)
 	file_watcher_directory_t *dir = m_alloc_struct(&watcher->arena, file_watcher_directory_t);
 	dir->os                       = m_alloc_struct(&watcher->arena, file_watcher_directory_os_t);
 
-	dir->path = string_copy(&watcher->arena, directory);
+	dir->path = m_copy_string(&watcher->arena, directory);
 
 	dir->os->handle            = handle;
 	dir->os->overlapped.hEvent = event;

@@ -19,6 +19,8 @@ typedef struct font_t
 
 	arena_t arena;
 
+	string_t cosmetic_name;
+
 	int oversampling_x;
 	int oversampling_y;
 
@@ -59,9 +61,9 @@ typedef struct prepared_glyphs_t
 	rect2_t           bounds;
 } prepared_glyphs_t;
 
-fn font_t make_font            (string_t path,      size_t range_count, font_range_t *ranges, float font_size);
-fn font_t make_font_from_memory(string_t font_data, size_t range_count, font_range_t *ranges, float font_size);
-fn void   destroy_font         (font_t *font);
+fn font_t *make_font            (string_t path,      size_t range_count, font_range_t *ranges, float font_size);
+fn font_t *make_font_from_memory(string_t cosmetic_name, string_t font_data, size_t range_count, font_range_t *ranges, float font_size);
+fn void    destroy_font         (font_t *font);
 
 fn font_glyph_t     *font_get_glyph           (font_t *font, uint32_t codepoint);
 //fn font_glyph_t     *font_get_glyph_from_index(font_t *font, uint32_t index);

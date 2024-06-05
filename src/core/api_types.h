@@ -13,6 +13,8 @@
 #include <stdalign.h>
 #include <stdlib.h>
 
+#define DEPRECATED(details) __declspec(deprecated(details))
+
 // TODO: Cursed? DON'T DO IT??
 #define USING(type, name) union { type; type name; }
 

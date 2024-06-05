@@ -316,10 +316,10 @@ typedef struct ui_style_t
 	stack_t(font_t *, UI_STYLE_STACK_COUNT) fonts[UiFont_COUNT];
 
 	string_t font_data; // so we can rebuild the font at different sizes without going out to disk
-	font_t font;
+	font_t *font;
 
 	string_t header_font_data; // so we can rebuild the font at different sizes without going out to disk
-	font_t header_font;
+	font_t *header_font;
 } ui_style_t;
 
 fn ui_anim_t *ui_get_anim        (ui_id_t id, v4_t init_value);

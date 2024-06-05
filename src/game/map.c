@@ -415,8 +415,8 @@ static bool parse_map(arena_t *arena, string_t path, map_parse_result_t *result)
                     sll_push_back(first_property, last_property, prop_node);
                     result->property_count += 1;
 
-                    prop->key = string_copy(arena, key);
-                    prop->val = string_copy(arena, val);
+                    prop->key = m_copy_string(arena, key);
+                    prop->val = m_copy_string(arena, val);
                 }
                 else if (map_match_token(&parser, '{'))
                 {
@@ -445,7 +445,7 @@ static bool parse_map(arena_t *arena, string_t path, map_parse_result_t *result)
                         string_t texture;
                         map_parse_texture_name(&parser, &texture);
 
-                        plane->texture = string_copy(arena, texture);
+                        plane->texture = m_copy_string(arena, texture);
 
                         map_parse_tex_vec(&parser, &plane->s);
                         map_parse_tex_vec(&parser, &plane->t);

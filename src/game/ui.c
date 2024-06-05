@@ -713,7 +713,7 @@ void ui_process_windows(void)
 			ui_draw_rect_roundedness_shadow(rect2_shrink(total, 1.0f), make_v4(0, 0, 0, 0), make_v4(5, 5, 5, 5), shadow_amount, 32.0f);
 			ui_draw_rect_roundedness(title_bar, interpolated_title_bar_color, make_v4(2, 0, 2, 0));
 			ui_draw_rect_roundedness(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), make_v4(0, 2, 0, 2));
-			ui_draw_text(&ui->style.header_font, ui_text_center_p(&ui->style.header_font, title_bar_minus_outline, title), title);
+			ui_draw_text(ui->style.header_font, ui_text_center_p(ui->style.header_font, title_bar_minus_outline, title), title);
 			ui_draw_rect_roundedness_outline(total, ui_color(UI_COLOR_WINDOW_OUTLINE), make_v4(2, 2, 2, 2), 2.0f);
 
 			// handle window contents
@@ -888,28 +888,38 @@ font_t *ui_font(ui_style_font_t font_id)
 
 void ui_set_font_height(float size)
 {
-	if (ui->style.font.initialized)
-		destroy_font(&ui->style.font);
+	if (ui->style.font)
+	{
+		destroy_font(ui->style.font);
+		ui->style.font = NULL;
+	}
 
-	if (ui->style.header_font.initialized)
-		destroy_font(&ui->style.header_font);
+	if (ui->style.header_font)
+	{
+		destroy_font(ui->style.header_font);
+		ui->style.header_font = NULL;
+	}
 
 	font_range_t ranges[] = {
 		{ .start = ' ', .end = '~' },
 	};
 
-	ui->style.font        = make_font_from_memory(ui->style.font_data, ARRAY_COUNT(ranges), ranges, size);
-	ui->style.header_font = make_font_from_memory(ui->style.header_font_data, ARRAY_COUNT(ranges), ranges, 1.5f*size);
+	ui->style.font        = make_font_from_memory(S("UI Font"), ui->style.font_data, ARRAY_COUNT(ranges), ranges, size);
+	ui->style.header_font = make_font_from_memory(S("UI Header Font"), ui->style.header_font_data, ARRAY_COUNT(ranges), ranges, 1.5f*size);
 }
 
 float ui_font_height(void)
 {
-	return ui->style.font.font_height;
+	// @UiFonts
+	DEBUG_ASSERT(ui->style.font);
+	return ui->style.font ? ui->style.font->font_height : 0.0f;
 }
 
 float ui_header_font_height(void)
 {
-	return ui->style.header_font.font_height;
+	// @UiFonts
+	DEBUG_ASSERT(ui->style.header_font);
+	return ui->style.font ? ui->style.header_font->font_height : 0.0f;
 }
 
 //
@@ -1486,11 +1496,11 @@ void ui_label(string_t label)
 	if (NEVER(!ui->initialized)) 
 		return;
 
-	rect2_t rect = ui_default_label_rect(&ui->style.font, label);
+	rect2_t rect = ui_default_label_rect(ui->style.font, label);
 	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
 	rect2_t text_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
-	ui_draw_text(&ui->style.font, ui_text_default_align_p(&ui->style.font, text_rect, label), label);
+	ui_draw_text(ui->style.font, ui_text_default_align_p(ui->style.font, text_rect, label), label);
 }
 
 void ui_header(string_t label)
@@ -1498,16 +1508,16 @@ void ui_header(string_t label)
 	if (NEVER(!ui->initialized)) 
 		return;
 
-	rect2_t rect = ui_default_label_rect(&ui->style.header_font, label);
+	rect2_t rect = ui_default_label_rect(ui->style.header_font, label);
 	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
 	rect2_t text_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
-	ui_draw_text(&ui->style.header_font, ui_text_default_align_p(&ui->style.header_font, text_rect, label), label);
+	ui_draw_text(ui->style.header_font, ui_text_default_align_p(ui->style.header_font, text_rect, label), label);
 }
 
 float ui_label_width(string_t label)
 {
-    return ui_text_width(&ui->style.font, label) + 2.0f*ui_widget_padding();
+    return ui_text_width(ui->style.font, label) + 2.0f*ui_widget_padding();
 }
 
 void ui_progress_bar(string_t label, float progress)
@@ -1515,7 +1525,7 @@ void ui_progress_bar(string_t label, float progress)
 	if (NEVER(!ui->initialized)) 
 		return;
 
-	rect2_t rect = ui_default_label_rect(&ui->style.font, label);
+	rect2_t rect = ui_default_label_rect(ui->style.font, label);
 	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
 	rect2_t text_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
@@ -1530,7 +1540,7 @@ void ui_progress_bar(string_t label, float progress)
 	ui_draw_rect(tray, ui_color(UI_COLOR_PROGRESS_BAR_EMPTY));
 	ui_draw_rect(filled, ui_color(UI_COLOR_PROGRESS_BAR_FILLED));
 
-	ui_draw_text(&ui->style.font, ui_text_default_align_p(&ui->style.font, text_rect, label), label);
+	ui_draw_text(ui->style.font, ui_text_default_align_p(ui->style.font, text_rect, label), label);
 }
 
 typedef enum ui_widget_state_t
@@ -1593,7 +1603,7 @@ bool ui_button(string_t label)
 	ui_id_t id = ui_id(label);
 
 	v2_t min_widget_size;
-	min_widget_size.x = ui_text_width(&ui->style.font, label);
+	min_widget_size.x = ui_text_width(ui->style.font, label);
 	min_widget_size.y = ui_font_height();
 
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
@@ -1616,7 +1626,7 @@ bool ui_button(string_t label)
 	ui_draw_rect(shadow, ui_color(UI_COLOR_WIDGET_SHADOW));
 	ui_draw_rect(rect, color);
 
-	ui_draw_text_aligned(&ui->style.font, rect, label, make_v2(0.5f, 0.5f));
+	ui_draw_text_aligned(ui->style.font, rect, label, make_v2(0.5f, 0.5f));
 
 	return result;
 }
@@ -1630,7 +1640,7 @@ bool ui_checkbox(string_t label, bool *result_value)
 
 	ui_id_t id = ui_id_pointer(result_value);
 
-	float label_width   = ui_text_width(&ui->style.font, label);
+	float label_width   = ui_text_width(ui->style.font, label);
 	float label_padding = ui_scalar(UI_SCALAR_TEXT_MARGIN);
 
 	v2_t min_widget_size;
@@ -1706,7 +1716,7 @@ bool ui_checkbox(string_t label, bool *result_value)
 
 	// --- draw label ---
 
-	v2_t p = ui_text_align_p(&ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
+	v2_t p = ui_text_align_p(ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
 	p.x += label_padding;
 	p.y += hover_lift;
 
@@ -1720,7 +1730,7 @@ bool ui_checkbox(string_t label, bool *result_value)
 	text_color = ui_interpolate_v4(ui_child_id(id, S("text_color")), text_color);
 
 	UI_COLOR(UI_COLOR_TEXT, text_color)
-	ui_draw_text(&ui->style.font, p, label);
+	ui_draw_text(ui->style.font, p, label);
 
 	return result;
 }
@@ -1740,13 +1750,13 @@ bool ui_option_buttons(string_t label, int *value, int count, string_t *options)
 
 	ui_id_t id = ui_id(label);
 
-	float label_width   = ui_text_width(&ui->style.font, label);
+	float label_width   = ui_text_width(ui->style.font, label);
 	float label_padding = 0.33f*ui_font_height();
 
 	float button_labels_width = 0.0f;
 	for (int i = 0; i < count; i++)
 	{
-		button_labels_width += ui_text_width(&ui->style.font, options[i]);
+		button_labels_width += ui_text_width(ui->style.font, options[i]);
 	}
 
 	v2_t min_widget_size = { label_width + label_padding + button_labels_width, ui_font_height() };
@@ -1788,7 +1798,7 @@ bool ui_option_buttons(string_t label, int *value, int count, string_t *options)
     }
 	ui_pop_id();
 
-	ui_draw_text_aligned(&ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
+	ui_draw_text_aligned(ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
     return result;
 }
@@ -1813,7 +1823,7 @@ bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t
 
 	ui_push_id(id);
 
-	float label_width   = ui_text_width(&ui->style.font, label);
+	float label_width   = ui_text_width(ui->style.font, label);
 	float label_padding = 0.33f*ui_font_height();
 
 	float max_name_width = 0.0f;
@@ -1821,7 +1831,7 @@ bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t
 	float *heights = m_alloc_array_nozero(temp, count, float);
 	for (size_t i = 0; i < count; i++)
 	{
-		v2_t dim = ui_text_dim(&ui->style.font, names[i]);
+		v2_t dim = ui_text_dim(ui->style.font, names[i]);
 		if (max_name_width < dim.x) max_name_width = dim.x;
 
 		float padded_height = dim.y + ui_widget_padding();
@@ -1834,7 +1844,7 @@ bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
 
 	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
-	ui_draw_text_aligned(&ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
+	ui_draw_text_aligned(ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
 	ui_hoverable(id, label_rect);
 
@@ -2051,7 +2061,7 @@ fn_local void ui_slider__impl(ui_id_t id, rect2_t rect, ui_slider__params_t *p)
 		} break;
 	}
 
-	ui_draw_text_aligned(&ui->style.font, body, value_text, make_v2(0.5f, 0.5f));
+	ui_draw_text_aligned(ui->style.font, body, value_text, make_v2(0.5f, 0.5f));
 }
 
 bool ui_slider(string_t label, float *v, float min, float max)
@@ -2067,7 +2077,7 @@ bool ui_slider(string_t label, float *v, float min, float max)
 	ui_id_t id = ui_id_pointer(v);
 
 	v2_t min_widget_size;
-	min_widget_size.x = ui_text_width(&ui->style.font, label) + 32.0f;
+	min_widget_size.x = ui_text_width(ui->style.font, label) + 32.0f;
 	min_widget_size.y = ui_font_height();
 
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
@@ -2075,7 +2085,7 @@ bool ui_slider(string_t label, float *v, float min, float max)
 
 	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
 
-	ui_draw_text_aligned(&ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
+	ui_draw_text_aligned(ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
 	ui_slider__params_t p = {
 		.type = UI_SLIDER__F32,
@@ -2107,14 +2117,14 @@ bool ui_slider_int_ex(string_t label, int *v, int min, int max, ui_slider_flags_
 
 	v2_t min_widget_size;
 	min_widget_size.y = ui_font_height();
-	min_widget_size.x = ui_text_width(&ui->style.font, label) + 32.0f + 2.0f*min_widget_size.y + 2.0f*widget_margin;
+	min_widget_size.x = ui_text_width(ui->style.font, label) + 32.0f + 2.0f*min_widget_size.y + 2.0f*widget_margin;
 
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
 	ui_hoverable(id, rect);
 
 	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
 
-	ui_draw_text_aligned(&ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
+	ui_draw_text_aligned(ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
 	if (flags & UI_SLIDER_FLAGS_INC_DEC_BUTTONS)
 	{
@@ -2387,12 +2397,12 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 	rect2_t  buffer_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
 
 	ui_draw_rect(rect, ui_color(UI_COLOR_SLIDER_BACKGROUND));
-	ui_draw_text_aligned(&ui->style.font, buffer_rect, string, make_v2(0.0f, 0.5f));
-	ui_draw_text_aligned(&ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
+	ui_draw_text_aligned(ui->style.font, buffer_rect, string, make_v2(0.0f, 0.5f));
+	ui_draw_text_aligned(ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
 	if (has_focus)
 	{
-		prepared_glyphs_t prep = font_prepare_glyphs(&ui->style.font, temp, string);
+		prepared_glyphs_t prep = font_prepare_glyphs(ui->style.font, temp, string);
 
 		if (prep.count > 0)
 		{
@@ -2657,8 +2667,8 @@ static void ui_initialize(void)
 	ui->style.base_colors [UI_COLOR_SLIDER_HOT             ] = hot;
 	ui->style.base_colors [UI_COLOR_SLIDER_ACTIVE          ] = active;
 
-	ui->style.base_fonts[UiFont_default] = &ui->style.font; // @UiFonts
-	ui->style.base_fonts[UiFont_header]  = &ui->style.header_font; // @UiFonts
+	ui->style.base_fonts[UiFont_default] = ui->style.font; // @UiFonts
+	ui->style.base_fonts[UiFont_header]  = ui->style.header_font; // @UiFonts
 
 	ui->render_commands.capacity = UI_RENDER_COMMANDS_CAPACITY;
 	ui->render_commands.keys     = m_alloc_array_nozero(&ui->arena, ui->render_commands.capacity, ui_render_command_key_t);
@@ -2800,14 +2810,14 @@ void ui_end(void)
 
 		string_t text = string_from_storage(tooltip->text);
 
-		float text_w = ui_text_width(&ui->style.font, text);
+		float text_w = ui_text_width(ui->style.font, text);
 
 		float center_x = 0.5f*(float)res_x;
 		rect2_t rect = rect2_center_dim(make_v2(center_x, at_y), make_v2(4.0f + text_w, font_height));
 
 		ui_draw_rect_shadow(rect, make_v4(0, 0, 0, 0.5f), 0.20f, 32.0f);
-		ui_draw_text_aligned(&ui->style.font, rect, text, make_v2(0.5f, 0.5f));
-		at_y += ui->style.font.y_advance;
+		ui_draw_text_aligned(ui->style.font, rect, text, make_v2(0.5f, 0.5f));
+		at_y += ui->style.font->y_advance;
 	}
 
 	stack_reset(ui->tooltip_stack);
@@ -2822,7 +2832,7 @@ void ui_end(void)
 	{
 		debug_notif_t *notif = sll_pop(notifs);
 
-		v2_t text_dim = ui_text_dim(&ui->style.font, notif->text);
+		v2_t text_dim = ui_text_dim(ui->style.font, notif->text);
 
 		v2_t pos = add(notif_at, make_v2(0, -text_dim.y));
 
@@ -2832,7 +2842,7 @@ void ui_end(void)
 		color.w *= smoothstep(saturate(4.0f * lifetime_t));
 
 		UI_COLOR(UI_COLOR_TEXT, color)
-		ui_draw_text(&ui->style.font, pos, notif->text);
+		ui_draw_text(ui->style.font, pos, notif->text);
 
 		notif_at.y -= text_dim.y + 4.0;
 
@@ -2924,7 +2934,7 @@ void debug_notif_va(v4_t color, float time, string_t fmt, va_list args)
 void debug_notif_replicate(debug_notif_t *notif)
 {
 	debug_notif_t *repl = m_copy_struct(ui_frame_arena(), notif);
-	repl->text = string_copy(ui_frame_arena(), repl->text);
+	repl->text = m_copy_string(ui_frame_arena(), repl->text);
 
 	repl->next = ui->first_debug_notif;
 	ui->first_debug_notif = repl;

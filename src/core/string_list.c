@@ -38,7 +38,7 @@ void slist_interleaves_nocopy(string_list_t *list, arena_t *arena, string_t stri
 
 void slist_appends(string_list_t *list, arena_t *arena, string_t string)
 {
-    slist_appends_nocopy(list, arena, string_copy(arena, string));
+    slist_appends_nocopy(list, arena, m_copy_string(arena, string));
 }
 
 void slist_appendf(string_list_t *list, arena_t *arena, const char *fmt, ...)
@@ -58,7 +58,7 @@ void slist_appendf_va(string_list_t *list, arena_t *arena, const char *fmt, va_l
 
 void slist_prepends(string_list_t *list, arena_t *arena, string_t string)
 {
-    slist_prepends_nocopy(list, arena, string_copy(arena, string));
+    slist_prepends_nocopy(list, arena, m_copy_string(arena, string));
 }
 
 void slist_prependf(string_list_t *list, arena_t *arena, const char *fmt, ...)
@@ -78,7 +78,7 @@ void slist_prependf_va(string_list_t *list, arena_t *arena, const char *fmt, va_
 
 void slist_interleaves(string_list_t *list, arena_t *arena, string_t string)
 {
-    slist_interleaves_nocopy(list, arena, string_copy(arena, string));
+    slist_interleaves_nocopy(list, arena, m_copy_string(arena, string));
 }
 
 void slist_interleavef(string_list_t *list, arena_t *arena, const char *fmt, ...)

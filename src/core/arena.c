@@ -67,6 +67,23 @@ void *m_copy(arena_t *arena, const void *src, size_t size)
     return result;
 }
 
+string_t m_copy_string(arena_t *arena, string_t string)
+{
+    char *data = m_alloc_string(arena, string.count);
+
+    if (ALWAYS(data))
+    {
+        copy_memory(data, string.data, string.count);
+    }
+
+    string_t result = {
+        .count = string.count,
+        .data  = data,
+    };
+
+    return result;
+}
+
 char *m_alloc_string(arena_t *arena, size_t size)
 {
     return m_alloc(arena, size, DEFAULT_STRING_ALIGN);

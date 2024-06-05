@@ -76,12 +76,12 @@ void ui_widget_checkbox(ui_widget_context_t *context, ui_widget_mode_t mode, rec
 				}
 			}
 
-			v2_t p          = ui_text_align_p(&ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
+			v2_t p          = ui_text_align_p(ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
 			v4_t text_color = ui_interpolate_v4(ui_child_id(id, S("text_color")), ui_color(UI_COLOR_TEXT));
 
 			UI_COLOR(UI_COLOR_TEXT, text_color)
 			{
-				ui_draw_text(&ui->style.font, p, label);
+				ui_draw_text(ui->style.font, p, label);
 			}
 		} break;
 	}
@@ -268,12 +268,12 @@ void ui_widget_checkbox_draw(ui_widget_context_t *context, rect2_t rect)
 		}
 	}
 
-	v2_t p          = ui_text_align_p(&ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
+	v2_t p          = ui_text_align_p(ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
 	v4_t text_color = ui_interpolate_v4(ui_child_id(id, S("text_color")), ui_color(UI_COLOR_TEXT));
 
 	UI_COLOR(UI_COLOR_TEXT, text_color)
 	{
-		ui_draw_text(&ui->style.font, p, label);
+		ui_draw_text(ui->style.font, p, label);
 	}
 }
 

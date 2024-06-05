@@ -43,23 +43,6 @@ null_term_string16_t string16_from_cstr(wchar_t *string)
     return result;
 }
 
-string_t string_copy(arena_t *arena, string_t string)
-{
-    char *data = m_alloc_string(arena, string.count);
-
-    if (ALWAYS(data))
-    {
-        copy_memory(data, string.data, string.count);
-    }
-
-    string_t result = {
-        .count = string.count,
-        .data  = data,
-    };
-
-    return result;
-}
-
 string_t string_copy_cstr(arena_t *arena, const char *string)
 {
     size_t count = string_count(string);

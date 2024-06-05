@@ -28,6 +28,8 @@ fn wchar_t *m_alloc_string16(arena_t *arena, size_t size);
 #define m_copy_struct(arena, src)       m_copy(arena, src, sizeof(*(src)))
 #define m_copy_array(arena, src, count) m_copy(arena, src, (count)*sizeof(*(src)))
 
+fn string_t m_copy_string(arena_t *arena, string_t string);
+
 fn size_t m_size_used(const arena_t *arena);
 fn size_t m_size_remaining(const arena_t *arena);
 fn size_t m_size_remaining_for_align(const arena_t *arena, size_t align);

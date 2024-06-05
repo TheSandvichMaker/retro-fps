@@ -9,8 +9,7 @@ fn size_t string16_count(const wchar_t *string);
 
 fn bool string_empty(string_t string);
 
-fn string_t             string_copy            (arena_t *arena, string_t string);
-fn string_t             string_copy_cstr       (arena_t *arena, const char *string);
+fn string_t string_copy_cstr(arena_t *arena, const char *string);
 
 fn null_term_string_t   string_from_cstr       (char    *string);
 fn null_term_string16_t string16_from_cstr     (wchar_t *string);

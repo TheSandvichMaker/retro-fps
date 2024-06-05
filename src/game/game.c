@@ -396,7 +396,7 @@ void app_init(platform_init_io_t *io)
 
 	app->console = m_alloc_struct(&app->arena, console_t);
 	// @UiFonts - this is stupid
-	app->console->font = &app->ui->style.font;
+	app->console->font = app->ui->style.font;
 
 	bind_key_action(Action_left,           Key_a);
 	bind_key_action(Action_right,          Key_d);

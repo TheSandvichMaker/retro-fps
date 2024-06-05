@@ -981,7 +981,7 @@ void update_and_render_in_game_editor(void)
 	ui_draw_rect(rect2_extend(r, 1.0f), make_v4(0, 0, 0, 1));
 	ui_draw_rect(r2, make_v4(1, 1, 1, 1));
 	ui_draw_rect(r , make_v4(1, 1, 1, 1));
-	ui_draw_text(&ui->style.font, r.min, S("The Quick Brown Fox Jumped Over The Lazy Dog"));
+	ui_draw_text(ui->style.font, r.min, S("The Quick Brown Fox Jumped Over The Lazy Dog"));
 #endif
 
 	ui_panel_end();

@@ -13,35 +13,42 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
 
-font_t make_font(string_t path, size_t range_count, font_range_t *ranges, float font_size)
+font_t *make_font(string_t path, size_t range_count, font_range_t *ranges, float font_size)
 {
-	font_t result = {0};
+	font_t *result = NULL;
 
 	m_scoped_temp
 	{
-		string_t font = fs_read_entire_file(temp, path);
-		if (font.count)
+		string_t font_data = fs_read_entire_file(temp, path);
+		if (font_data.count)
 		{
-			result = make_font_from_memory(font, range_count, ranges, font_size);
+			result = make_font_from_memory(path, font_data, range_count, ranges, font_size);
 		}
 	}
 
 	return result;
 }
 
-font_t make_font_from_memory(string_t font_data, size_t range_count, font_range_t *ranges, float font_size)
+font_t *make_font_from_memory(string_t cosmetic_name, string_t font_data, size_t range_count, font_range_t *ranges, float font_size)
 {
-	font_t result = {0};
+	font_t *result = NULL;
 
-	if (NEVER(font_data.count == 0)) return result;
+	if (NEVER(font_data.count == 0))
+	{
+		// TODO: Fallback font
+		return result;
+	}
+
+	result = m_bootstrap(font_t, arena);
+	result->cosmetic_name = m_copy_string(&result->arena, cosmetic_name);
 
 	m_scoped_temp
 	{
 		unsigned char *data = (unsigned char *)font_data.data;
 
 		// TODO: Think about bitmap size
-		int w = result.texture_w = 512;
-		int h = result.texture_h = 512;
+		int w = result->texture_w = 512;
+		int h = result->texture_h = 512;
 
 		unsigned char *pixels = m_alloc_nozero(temp, w*h, 16);
 
@@ -53,18 +60,18 @@ font_t make_font_from_memory(string_t font_data, size_t range_count, font_range_
 			int ascent, descent, line_gap;
 			stbtt_GetFontVMetrics(&info, &ascent, &descent, &line_gap);
 
-			result.oversampling_x = 2;
-			result.oversampling_y = 2;
-			result.font_height = font_size;
-			result.ascent      = font_scale*(float)ascent;
-			result.descent     = font_scale*(float)descent;
-			result.line_gap    = font_scale*(float)line_gap;
-			result.y_advance   = result.ascent - result.descent + result.line_gap;
+			result->oversampling_x = 2;
+			result->oversampling_y = 2;
+			result->font_height = font_size;
+			result->ascent      = font_scale*(float)ascent;
+			result->descent     = font_scale*(float)descent;
+			result->line_gap    = font_scale*(float)line_gap;
+			result->y_advance   = result->ascent - result->descent + result->line_gap;
 
 			stbtt_pack_context spc;
 			if (stbtt_PackBegin(&spc, pixels, w, h, w, 1, temp))
 			{
-				stbtt_PackSetOversampling(&spc, result.oversampling_x, result.oversampling_y);
+				stbtt_PackSetOversampling(&spc, result->oversampling_x, result->oversampling_y);
 
 				// translate passed in font ranges to stbtt font ranges
 
@@ -91,9 +98,9 @@ font_t make_font_from_memory(string_t font_data, size_t range_count, font_range_
 
 				if (stbtt_PackFontRanges(&spc, data, 0, tt_ranges, (int)range_count))
 				{
-					result.first_glyph = first_codepoint;
-					result.glyph_count = last_codepoint - first_codepoint + 1;
-					result.glyph_table = m_alloc_array(&result.arena, result.glyph_count, font_glyph_t);
+					result->first_glyph = first_codepoint;
+					result->glyph_count = last_codepoint - first_codepoint + 1;
+					result->glyph_table = m_alloc_array(&result->arena, result->glyph_count, font_glyph_t);
 
 					for (size_t range_index = 0; range_index < range_count; range_index++)
 					{
@@ -101,10 +108,10 @@ font_t make_font_from_memory(string_t font_data, size_t range_count, font_range_
 
 						for (int packed_index = 0; packed_index < tt_range->num_chars; packed_index++)
 						{
-							uint32_t glyph_index = tt_range->first_unicode_codepoint_in_range + packed_index - result.first_glyph;
+							uint32_t glyph_index = tt_range->first_unicode_codepoint_in_range + packed_index - result->first_glyph;
 
 							stbtt_packedchar *packed   = &tt_range->chardata_for_range[packed_index];
-							font_glyph_t     *my_glyph = &result.glyph_table[glyph_index];
+							font_glyph_t     *my_glyph = &result->glyph_table[glyph_index];
 
 							my_glyph->min_x     =  packed->x0;
 							my_glyph->min_y     =  packed->y0;
@@ -131,8 +138,8 @@ font_t make_font_from_memory(string_t font_data, size_t range_count, font_range_
 			// TODO: Log failure
 		}
 
-		result.texture = rhi_create_texture(&(rhi_create_texture_params_t){
-			.debug_name = S("font_font"),
+		result->texture = rhi_create_texture(&(rhi_create_texture_params_t){
+			.debug_name = cosmetic_name,
 			.dimension  = RhiTextureDimension_2d,
 			.format     = PixelFormat_r8_unorm,
 			.width      = w,
@@ -144,7 +151,7 @@ font_t make_font_from_memory(string_t font_data, size_t range_count, font_range_
 			},
 		});
 
-		result.initialized = true;
+		result->initialized = true;
 	}
 
 	return result;
