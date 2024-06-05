@@ -6,16 +6,18 @@
 
 #include "rhi/rhi_api.h"
 
-typedef uint32_t mouse_buttons_t;
-typedef enum mouse_button_enum_t
+typedef enum mouse_button_t
 {
-	Button_left   = (1 << 0),
-	Button_middle = (1 << 1),
-	Button_right  = (1 << 2),
-	Button_x1     = (1 << 3),
-	Button_x2     = (1 << 4),
-	Button_any    = (Button_left|Button_middle|Button_right|Button_x1|Button_x2),
-} mouse_button_enum_t;
+	Button_none,
+
+	Button_left,
+	Button_middle,
+	Button_right,
+	Button_x1,
+	Button_x2,
+
+	Button_COUNT,
+} mouse_button_t;
 
 typedef enum keycode_t
 {
@@ -213,9 +215,9 @@ typedef struct platform_event_mouse_wheel_t
 
 typedef struct platform_event_mouse_button_t
 {
-	v2_t            mouse_p;
-	bool            pressed;
-	mouse_buttons_t button;
+	v2_t           mouse_p;
+	bool           pressed;
+	mouse_button_t button;
 } platform_event_mouse_button_t;
 
 typedef struct platform_event_key_t

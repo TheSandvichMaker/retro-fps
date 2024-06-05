@@ -62,17 +62,22 @@ typedef struct action_system_t
 	v2_t  mouse_p;
 	v2_t  mouse_dp;
 
-	uint64_t       key_to_actions[Key_COUNT];
-	action_state_t action_states [Action_COUNT];
+	uint64_t       key_to_actions   [Key_COUNT];
+	uint64_t       button_to_actions[Button_COUNT];
+	action_state_t action_states    [Action_COUNT];
 } action_system_t;
 
 global thread_local action_system_t *g_actions = NULL;
 
 fn void equip_action_system  (action_system_t *action_system);
 fn void unequip_action_system(void);
+fn action_system_t *get_action_system(void);
 
 fn void bind_key_action  (action_t action, keycode_t key);
 fn void unbind_key_action(action_t action, keycode_t key);
+
+fn void bind_mouse_button_action  (action_t action, mouse_button_t button);
+fn void unbind_mouse_button_action(action_t action, mouse_button_t button);
 
 fn void ingest_action_system_input(input_t *input);
 fn void suppress_actions(bool suppress);

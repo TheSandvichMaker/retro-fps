@@ -377,17 +377,17 @@ void app_init(platform_init_io_t *io)
 
 	equip_action_system(app->action_system);
 
-	bind_key_action(Action_left,          Key_a);
-	bind_key_action(Action_right,         Key_d);
-	bind_key_action(Action_forward,       Key_w);
-	bind_key_action(Action_back,          Key_s);
-	bind_key_action(Action_jump,          Key_space);
-	bind_key_action(Action_run,           Key_shift);
-	bind_key_action(Action_crouch,        Key_control);
-	bind_key_action(Action_fire1,         Key_lbutton);
-	bind_key_action(Action_fire2,         Key_rbutton);
-	bind_key_action(Action_escape,        Key_escape);
-	bind_key_action(Action_toggle_noclip, Key_v);
+	bind_key_action(Action_left,           Key_a);
+	bind_key_action(Action_right,          Key_d);
+	bind_key_action(Action_forward,        Key_w);
+	bind_key_action(Action_back,           Key_s);
+	bind_key_action(Action_jump,           Key_space);
+	bind_key_action(Action_run,            Key_shift);
+	bind_key_action(Action_crouch,         Key_control);
+	bind_mouse_button_action(Action_fire1, Button_left);
+	bind_mouse_button_action(Action_fire2, Button_right);
+	bind_key_action(Action_escape,         Key_escape);
+	bind_key_action(Action_toggle_noclip,  Key_v);
 
 	init_game_job_queues();
 
@@ -545,6 +545,7 @@ fn_local void tick_ui(input_t *input, gamestate_t *game, ui_t *the_ui, float dt)
 					case Button_right:  button = UiButton_right;  break;
 					case Button_x1:     button = UiButton_x1;     break;
 					case Button_x2:     button = UiButton_x2;     break;
+					INVALID_DEFAULT_CASE;
 				}
 
 				ui_push_input_event(&(ui_event_t){
@@ -670,7 +671,7 @@ fn_local void app_tick(platform_tick_io_t *io)
 	equip_action_system(action_system);
 	ingest_action_system_input(io->input);
 
-	suppress_actions(the_ui->has_focus);
+	suppress_actions(!io->has_focus || the_ui->has_focus);
 
 	const double sim_rate = 240.0;
 	const double dt       = 1.0 / sim_rate;
@@ -679,6 +680,12 @@ fn_local void app_tick(platform_tick_io_t *io)
 	double frame_time = MIN(io->frame_time, 0.1);
 
 	app->accumulator += frame_time;
+
+	// why are you inconsisteeeeent
+	if (action_pressed(Action_fire2))
+	{
+		the_ui->has_focus = true;
+	}
 
 	bool first_iteration = true;
 	while (app->accumulator >= dt)
@@ -701,6 +708,8 @@ fn_local void app_tick(platform_tick_io_t *io)
 	render_game(game, &the_ui->render_commands, window);
 
 	process_asset_changes();
+
+	io->cursor_locked = !the_ui->has_focus;
 }
 
 #if 0

@@ -134,9 +134,9 @@ void ui__trickle_input(ui_input_t *input, ui_event_queue_t *queue)
 					// TODO: use enums more smartly
 					switch (event->button)
 					{
-						case Button_left:   input->mouse_p_on_lmb = event->mouse_p; break;
-						case Button_middle: input->mouse_p_on_mmb = event->mouse_p; break;
-						case Button_right:  input->mouse_p_on_rmb = event->mouse_p; break;
+						case UiButton_left:   input->mouse_p_on_lmb = event->mouse_p; break;
+						case UiButton_middle: input->mouse_p_on_mmb = event->mouse_p; break;
+						case UiButton_right:  input->mouse_p_on_rmb = event->mouse_p; break;
 					}
 				}
 				else
@@ -1242,7 +1242,7 @@ ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, 
 	{
 		result |= UI_HELD;
 
-		if (ui_button_released(Button_left, false))
+		if (ui_button_released(UiButton_left, false))
 		{
 			if (hovered)
 			{
@@ -1259,7 +1259,7 @@ ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, 
 	{
 		result |= UI_HOT;
 
-		if (ui_button_pressed(Button_left, false))
+		if (ui_button_pressed(UiButton_left, false))
 		{
 			result |= UI_PRESSED;
 			ui->drag_anchor = sub(ui->input.mouse_p, rect2_center(rect));

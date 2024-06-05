@@ -370,7 +370,7 @@ fn_local LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 		{
 			if (!context) break;
 
-			mouse_buttons_t button = 0;
+			mouse_button_t button = 0;
 
 			switch (message)
 			{
