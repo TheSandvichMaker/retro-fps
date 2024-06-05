@@ -13,25 +13,25 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
 
-font_atlas_t make_font_atlas(string_t path, size_t range_count, font_range_t *ranges, float font_size)
+font_t make_font(string_t path, size_t range_count, font_range_t *ranges, float font_size)
 {
-	font_atlas_t result = {0};
+	font_t result = {0};
 
 	m_scoped_temp
 	{
 		string_t font = fs_read_entire_file(temp, path);
 		if (font.count)
 		{
-			result = make_font_atlas_from_memory(font, range_count, ranges, font_size);
+			result = make_font_from_memory(font, range_count, ranges, font_size);
 		}
 	}
 
 	return result;
 }
 
-font_atlas_t make_font_atlas_from_memory(string_t font_data, size_t range_count, font_range_t *ranges, float font_size)
+font_t make_font_from_memory(string_t font_data, size_t range_count, font_range_t *ranges, float font_size)
 {
-	font_atlas_t result = {0};
+	font_t result = {0};
 
 	if (NEVER(font_data.count == 0)) return result;
 
@@ -132,7 +132,7 @@ font_atlas_t make_font_atlas_from_memory(string_t font_data, size_t range_count,
 		}
 
 		result.texture = rhi_create_texture(&(rhi_create_texture_params_t){
-			.debug_name = S("font_atlas"),
+			.debug_name = S("font_font"),
 			.dimension  = RhiTextureDimension_2d,
 			.format     = PixelFormat_r8_unorm,
 			.width      = w,
@@ -150,44 +150,44 @@ font_atlas_t make_font_atlas_from_memory(string_t font_data, size_t range_count,
 	return result;
 }
 
-void destroy_font_atlas(font_atlas_t *atlas)
+void destroy_font(font_t *font)
 {
-	m_release(&atlas->arena);
+	m_release(&font->arena);
 #if 0
-	render->destroy_texture(atlas->texture);
+	render->destroy_texture(font->texture);
 #endif
-	zero_struct(atlas);
+	zero_struct(font);
 }
 
-font_glyph_t *atlas_get_glyph(font_atlas_t *atlas, uint32_t codepoint)
+font_glyph_t *font_get_glyph(font_t *font, uint32_t codepoint)
 {
-	font_glyph_t *result = &atlas->null_glyph;
-	if (codepoint >= atlas->first_glyph && codepoint < atlas->first_glyph + atlas->glyph_count)
+	font_glyph_t *result = &font->null_glyph;
+	if (codepoint >= font->first_glyph && codepoint < font->first_glyph + font->glyph_count)
 	{
-		result = &atlas->glyph_table[codepoint - atlas->first_glyph];
+		result = &font->glyph_table[codepoint - font->first_glyph];
 	}
 	return result;
 }
 
-float atlas_get_advance(font_atlas_t *atlas, uint32_t a, uint32_t b)
+float font_get_advance(font_t *font, uint32_t a, uint32_t b)
 {
 	(void)b;
 	// TODO: Kerning
-	font_glyph_t *glyph = atlas_get_glyph(atlas, a);
+	font_glyph_t *glyph = font_get_glyph(font, a);
 	return glyph->x_advance;
 }
 
-prepared_glyphs_t atlas_prepare_glyphs(font_atlas_t *atlas, arena_t *arena, string_t text)
+prepared_glyphs_t font_prepare_glyphs(font_t *font, arena_t *arena, string_t text)
 {
 	prepared_glyphs_t result = {0};
 	result.count  = text.count;
 	result.glyphs = m_alloc_array_nozero(arena, text.count, prepared_glyph_t);
 
-	float w = (float)atlas->texture_w;
-	float h = (float)atlas->texture_h;
+	float w = (float)font->texture_w;
+	float h = (float)font->texture_h;
 
 	v2_t at = {0};
-	at.y -= 0.5f*atlas->descent;
+	at.y -= 0.5f*font->descent;
 
 	at.y = roundf(at.y);
 
@@ -198,17 +198,17 @@ prepared_glyphs_t atlas_prepare_glyphs(font_atlas_t *atlas, arena_t *arena, stri
 		if (is_newline(c))
 		{
 			at.x  = 0.0f;
-			at.y -= atlas->y_advance;
+			at.y -= font->y_advance;
 		}
 		else
 		{
-			font_glyph_t *glyph = atlas_get_glyph(atlas, c);
+			font_glyph_t *glyph = font_get_glyph(font, c);
 
 			float cw = (float)(glyph->max_x - glyph->min_x);
 			float ch = (float)(glyph->max_y - glyph->min_y);
 
-			cw /= (float)atlas->oversampling_x;
-			ch /= (float)atlas->oversampling_y;
+			cw /= (float)font->oversampling_x;
+			ch /= (float)font->oversampling_y;
 
 			v2_t point = at;
 			point.x += glyph->x_offset;
@@ -229,7 +229,7 @@ prepared_glyphs_t atlas_prepare_glyphs(font_atlas_t *atlas, arena_t *arena, stri
 			if (i + 1 < text.count)
 			{
 				char c_next = text.data[i + 1];
-				at.x += atlas_get_advance(atlas, c, c_next);
+				at.x += font_get_advance(font, c, c_next);
 			}
 		}
 	}

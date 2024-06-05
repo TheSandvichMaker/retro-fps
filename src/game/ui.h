@@ -163,7 +163,7 @@ fn float    ui_divide_space        (float item_count);
 // layout helpers
 fn float    ui_widget_padding      (void);
 fn bool     ui_override_rect       (rect2_t *rect);
-fn rect2_t  ui_default_label_rect  (font_atlas_t *font, string_t label);
+fn rect2_t  ui_default_label_rect  (font_t *font, string_t label);
 
 typedef uint32_t ui_rect_edge_t;
 typedef enum ui_rect_edge_enum_t
@@ -307,19 +307,19 @@ typedef struct ui_style_t
 	ui_anim_pool_t animation_state;
 	table_t animation_index;
 
-	float         base_scalars[UI_SCALAR_COUNT];
-	v4_t          base_colors [UI_COLOR_COUNT];
-	font_atlas_t *base_fonts  [UiFont_COUNT];
+	float   base_scalars[UI_SCALAR_COUNT];
+	v4_t    base_colors [UI_COLOR_COUNT];
+	font_t *base_fonts  [UiFont_COUNT];
 
     stack_t(float, UI_STYLE_STACK_COUNT) scalars[UI_SCALAR_COUNT];
     stack_t(v4_t,  UI_STYLE_STACK_COUNT) colors [UI_COLOR_COUNT];
-	stack_t(font_atlas_t *, UI_STYLE_STACK_COUNT) fonts[UiFont_COUNT];
+	stack_t(font_t *, UI_STYLE_STACK_COUNT) fonts[UiFont_COUNT];
 
 	string_t font_data; // so we can rebuild the font at different sizes without going out to disk
-	font_atlas_t font;
+	font_t font;
 
 	string_t header_font_data; // so we can rebuild the font at different sizes without going out to disk
-	font_atlas_t header_font;
+	font_t header_font;
 } ui_style_t;
 
 fn ui_anim_t *ui_get_anim        (ui_id_t id, v4_t init_value);
@@ -344,9 +344,9 @@ fn v4_t  ui_pop_color         (ui_style_color_t color);
 
 #define UI_COLOR(color, value) DEFER_LOOP(ui_push_color(color, value), ui_pop_color(color))
 
-fn void          ui_push_font(ui_style_font_t font_id, font_atlas_t *font);
-fn font_atlas_t *ui_pop_font (ui_style_font_t font_id);
-fn font_atlas_t *ui_font     (ui_style_font_t font_id);
+fn void    ui_push_font(ui_style_font_t font_id, font_t *font);
+fn font_t *ui_pop_font (ui_style_font_t font_id);
+fn font_t *ui_font     (ui_style_font_t font_id);
 
 #define UI_Font(font_id, font) DEFER_LOOP(ui_push_font(font_id, font), ui_pop_font(font_id))
 
@@ -365,19 +365,19 @@ typedef enum ui_text_op_t
 	UI_TEXT_OP_COUNT,
 } ui_text_op_t;
 
-fn rect2_t ui_text_op                      (font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op);
-fn v2_t    ui_text_align_p                 (font_atlas_t *font, rect2_t rect, string_t text, v2_t align);
-fn v2_t    ui_text_center_p                (font_atlas_t *font, rect2_t rect, string_t text);
+fn rect2_t ui_text_op                      (font_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op);
+fn v2_t    ui_text_align_p                 (font_t *font, rect2_t rect, string_t text, v2_t align);
+fn v2_t    ui_text_center_p                (font_t *font, rect2_t rect, string_t text);
 
 fn void    ui_push_clip_rect               (rect2_t rect);
 fn void    ui_pop_clip_rect                (void);
 
-fn rect2_t ui_draw_text                    (font_atlas_t *font, v2_t p, string_t text);
-fn rect2_t ui_draw_text_aligned            (font_atlas_t *font, rect2_t rect, string_t text, v2_t align);
-fn rect2_t ui_text_bounds                  (font_atlas_t *font, v2_t p, string_t text);
-fn float   ui_text_width                   (font_atlas_t *font, string_t text);
-fn float   ui_text_height                  (font_atlas_t *font, string_t text);
-fn v2_t    ui_text_dim                     (font_atlas_t *font, string_t text);
+fn rect2_t ui_draw_text                    (font_t *font, v2_t p, string_t text);
+fn rect2_t ui_draw_text_aligned            (font_t *font, rect2_t rect, string_t text, v2_t align);
+fn rect2_t ui_text_bounds                  (font_t *font, v2_t p, string_t text);
+fn float   ui_text_width                   (font_t *font, string_t text);
+fn float   ui_text_height                  (font_t *font, string_t text);
+fn v2_t    ui_text_dim                     (font_t *font, string_t text);
 
 fn void    ui_draw_rect                    (rect2_t rect, v4_t color);
 fn void    ui_draw_rect_shadow             (rect2_t rect, v4_t color, float shadow_amount, float shadow_radius);

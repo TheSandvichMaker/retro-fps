@@ -13,7 +13,7 @@ typedef struct font_glyph_t
 	float x_offset2, y_offset2;
 } font_glyph_t;
 
-typedef struct font_atlas_t
+typedef struct font_t
 {
 	bool initialized;
 
@@ -37,7 +37,7 @@ typedef struct font_atlas_t
 	uint32_t      first_glyph;
 	uint32_t      glyph_count;
 	font_glyph_t *glyph_table; // for the time being, a packed array you directly index into with codepoints
-} font_atlas_t;
+} font_t;
 
 typedef struct font_range_t
 {
@@ -59,13 +59,13 @@ typedef struct prepared_glyphs_t
 	rect2_t           bounds;
 } prepared_glyphs_t;
 
-fn font_atlas_t make_font_atlas            (string_t path,      size_t range_count, font_range_t *ranges, float font_size);
-fn font_atlas_t make_font_atlas_from_memory(string_t font_data, size_t range_count, font_range_t *ranges, float font_size);
-fn void         destroy_font_atlas         (font_atlas_t *atlas);
+fn font_t make_font            (string_t path,      size_t range_count, font_range_t *ranges, float font_size);
+fn font_t make_font_from_memory(string_t font_data, size_t range_count, font_range_t *ranges, float font_size);
+fn void   destroy_font         (font_t *font);
 
-fn font_glyph_t     *atlas_get_glyph           (font_atlas_t *atlas, uint32_t codepoint);
-fn font_glyph_t     *atlas_get_glyph_from_index(font_atlas_t *atlas, uint32_t index);
-fn float             atlas_get_advance         (font_atlas_t *atlas, uint32_t a, uint32_t b);
-fn prepared_glyphs_t atlas_prepare_glyphs      (font_atlas_t *atlas, arena_t *arena, string_t text);
+fn font_glyph_t     *font_get_glyph           (font_t *font, uint32_t codepoint);
+//fn font_glyph_t     *font_get_glyph_from_index(font_t *font, uint32_t index);
+fn float             font_get_advance         (font_t *font, uint32_t a, uint32_t b);
+fn prepared_glyphs_t font_prepare_glyphs      (font_t *font, arena_t *arena, string_t text);
 
 #endif

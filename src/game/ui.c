@@ -435,7 +435,7 @@ bool ui_override_rect(rect2_t *override)
 	return result;
 }
 
-rect2_t ui_default_label_rect(font_atlas_t *font, string_t label)
+rect2_t ui_default_label_rect(font_t *font, string_t label)
 {
 	rect2_t rect;
 	if (!ui_override_rect(&rect))
@@ -870,17 +870,17 @@ v4_t ui_pop_color(ui_style_color_t color)
     return stack_pop(ui->style.colors[color]);
 }
 
-void ui_push_font(ui_style_font_t font_id, font_atlas_t *font)
+void ui_push_font(ui_style_font_t font_id, font_t *font)
 {
 	stack_push(ui->style.fonts[font_id], font);
 }
 
-font_atlas_t *ui_pop_font(ui_style_font_t font_id)
+font_t *ui_pop_font(ui_style_font_t font_id)
 {
 	return stack_pop(ui->style.fonts[font_id]);
 }
 
-font_atlas_t *ui_font(ui_style_font_t font_id)
+font_t *ui_font(ui_style_font_t font_id)
 {
 	if (stack_empty(ui->style.fonts[font_id])) return ui->style.base_fonts[font_id];
 	else                                       return stack_top(ui->style.fonts[font_id]);
@@ -889,17 +889,17 @@ font_atlas_t *ui_font(ui_style_font_t font_id)
 void ui_set_font_height(float size)
 {
 	if (ui->style.font.initialized)
-		destroy_font_atlas(&ui->style.font);
+		destroy_font(&ui->style.font);
 
 	if (ui->style.header_font.initialized)
-		destroy_font_atlas(&ui->style.header_font);
+		destroy_font(&ui->style.header_font);
 
 	font_range_t ranges[] = {
 		{ .start = ' ', .end = '~' },
 	};
 
-	ui->style.font        = make_font_atlas_from_memory(ui->style.font_data, ARRAY_COUNT(ranges), ranges, size);
-	ui->style.header_font = make_font_atlas_from_memory(ui->style.header_font_data, ARRAY_COUNT(ranges), ranges, 1.5f*size);
+	ui->style.font        = make_font_from_memory(ui->style.font_data, ARRAY_COUNT(ranges), ranges, size);
+	ui->style.header_font = make_font_from_memory(ui->style.header_font_data, ARRAY_COUNT(ranges), ranges, 1.5f*size);
 }
 
 float ui_font_height(void)
@@ -947,7 +947,7 @@ fn_local r_rect2_fixed_t ui_get_clip_rect(void)
 	return clip_rect;
 }
 
-rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op)
+rect2_t ui_text_op(font_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op)
 {
 	rect2_t result = rect2_inverted_infinity();
 
@@ -958,7 +958,7 @@ rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_tex
 
 	m_scoped_temp
 	{
-		prepared_glyphs_t prep = atlas_prepare_glyphs(font, temp, text);
+		prepared_glyphs_t prep = font_prepare_glyphs(font, temp, text);
 		result = rect2_add_offset(prep.bounds, p);
 
 		if (op == UI_TEXT_OP_DRAW)
@@ -999,30 +999,30 @@ rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_tex
 	return result;
 }
 
-rect2_t ui_text_bounds(font_atlas_t *font, v2_t p, string_t text)
+rect2_t ui_text_bounds(font_t *font, v2_t p, string_t text)
 {
 	return ui_text_op(font, p, text, (v4_t){0,0,0,0}, UI_TEXT_OP_BOUNDS);
 }
 
-float ui_text_width(font_atlas_t *font, string_t text)
+float ui_text_width(font_t *font, string_t text)
 {
 	rect2_t rect = ui_text_bounds(font, (v2_t){0, 0}, text);
 	return rect2_width(rect);
 }
 
-float ui_text_height(font_atlas_t *font, string_t text)
+float ui_text_height(font_t *font, string_t text)
 {
 	rect2_t rect = ui_text_bounds(font, (v2_t){0, 0}, text);
 	return rect2_height(rect);
 }
 
-v2_t ui_text_dim(font_atlas_t *font, string_t text)
+v2_t ui_text_dim(font_t *font, string_t text)
 {
 	rect2_t rect = ui_text_bounds(font, (v2_t){0, 0}, text);
 	return rect2_dim(rect);
 }
 
-v2_t ui_text_align_p(font_atlas_t *font, rect2_t rect, string_t text, v2_t align)
+v2_t ui_text_align_p(font_t *font, rect2_t rect, string_t text, v2_t align)
 {
     float text_width  = ui_text_width(font, text);
     float text_height = font->y_advance;
@@ -1038,17 +1038,17 @@ v2_t ui_text_align_p(font_atlas_t *font, rect2_t rect, string_t text, v2_t align
     return result;
 }
 
-v2_t ui_text_center_p(font_atlas_t *font, rect2_t rect, string_t text)
+v2_t ui_text_center_p(font_t *font, rect2_t rect, string_t text)
 {
 	return ui_text_align_p(font, rect, text, make_v2(0.5f, 0.5f));
 }
 
-v2_t ui_text_default_align_p(font_atlas_t *font, rect2_t rect, string_t text)
+v2_t ui_text_default_align_p(font_t *font, rect2_t rect, string_t text)
 {
 	return ui_text_align_p(font, rect, text, make_v2(ui_scalar(UI_SCALAR_TEXT_ALIGN_X), ui_scalar(UI_SCALAR_TEXT_ALIGN_Y)));
 }
 
-rect2_t ui_draw_text(font_atlas_t *font, v2_t p, string_t text)
+rect2_t ui_draw_text(font_t *font, v2_t p, string_t text)
 {
 	v4_t text_color   = ui_color(UI_COLOR_TEXT);
 	v4_t shadow_color = ui_color(UI_COLOR_TEXT_SHADOW);
@@ -1060,7 +1060,7 @@ rect2_t ui_draw_text(font_atlas_t *font, v2_t p, string_t text)
 	return result;
 }
 
-rect2_t ui_draw_text_aligned(font_atlas_t *font, rect2_t rect, string_t text, v2_t align)
+rect2_t ui_draw_text_aligned(font_t *font, rect2_t rect, string_t text, v2_t align)
 {
 	v2_t p = ui_text_align_p(font, rect, text, align);
 
@@ -2392,7 +2392,7 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 
 	if (has_focus)
 	{
-		prepared_glyphs_t prep = atlas_prepare_glyphs(&ui->style.font, temp, string);
+		prepared_glyphs_t prep = font_prepare_glyphs(&ui->style.font, temp, string);
 
 		if (prep.count > 0)
 		{
