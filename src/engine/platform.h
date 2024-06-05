@@ -193,14 +193,27 @@ typedef enum platform_cursor_t
 typedef enum platform_event_kind_t
 {
 	Event_mouse_move,
+	Event_mouse_wheel,
 	Event_mouse_button,
 	Event_key,
 	Event_text,
 	Event_COUNT,
 } platform_event_kind_t;
 
+typedef struct platform_event_mouse_move_t
+{
+	v2_t mouse_p;
+} platform_event_mouse_move_t;
+
+typedef struct platform_event_mouse_wheel_t
+{
+	float wheel;
+	v2_t mouse_p;
+} platform_event_mouse_wheel_t;
+
 typedef struct platform_event_mouse_button_t
 {
+	v2_t            mouse_p;
 	bool            pressed;
 	mouse_buttons_t button;
 } platform_event_mouse_button_t;
@@ -227,10 +240,10 @@ typedef struct platform_event_t
 	bool alt;
 	bool shift;
 
-	v2_t mouse_p;
-
 	union
 	{
+		platform_event_mouse_move_t   mouse_move;
+		platform_event_mouse_wheel_t  mouse_wheel;
 		platform_event_mouse_button_t mouse_button;
 		platform_event_key_t          key;
 		platform_event_text_t         text;
@@ -239,6 +252,7 @@ typedef struct platform_event_t
 
 typedef struct input_t
 {
+	// TODO: probably just remove all this in favor of just having events
 	v2_t  mouse_p;
 	v2_t  mouse_dp;
 	float mouse_wheel;

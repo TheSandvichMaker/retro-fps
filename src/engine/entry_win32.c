@@ -14,7 +14,8 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #define COBJMACROS
-#include <Windows.h>
+#include <windows.h>
+#include <windowsx.h> // TODO: What god-forsaken shit am I including here
 #include <dbghelp.h>
 #include <shellapi.h>
 #include <GameInput.h>
@@ -281,6 +282,11 @@ fn_local LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 
 	wchar_t last_char = 0;
 
+	RECT client_rect;
+	GetClientRect(hwnd, &client_rect);
+
+	int height = client_rect.bottom - client_rect.top;
+
     switch (message)
     {
         case WM_DESTROY:
@@ -295,6 +301,19 @@ fn_local LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 			float delta = (float)GET_WHEEL_DELTA_WPARAM(wparam);
 
 			context->input->mouse_wheel += delta;
+
+			POINT mouse_point = {
+				.x = GET_X_LPARAM(lparam),
+				.y = GET_Y_LPARAM(lparam),
+			};
+
+			v2_t mouse_p = convert_mouse_cursor(mouse_point, height);
+
+			push_event(context, &(platform_event_t){
+				.kind                = Event_mouse_wheel,
+				.mouse_wheel.wheel   = delta,
+				.mouse_wheel.mouse_p = mouse_p,
+			});
 		} break;
 
 		case WM_KEYDOWN:
@@ -318,6 +337,23 @@ fn_local LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 				.key.pressed  = pressed,
 				.key.repeated = repeated,
 				.key.keycode  = (keycode_t)vk_code,
+			};
+
+			push_event(context, &event);
+		} break;
+
+		case WM_MOUSEMOVE:
+		{
+			POINT mouse_point = {
+				.x = GET_X_LPARAM(lparam),
+				.y = GET_Y_LPARAM(lparam),
+			};
+
+			v2_t mouse_p = convert_mouse_cursor(mouse_point, height);
+
+			platform_event_t event = {
+				.kind = Event_mouse_move,
+				.mouse_move.mouse_p = mouse_p,
 			};
 
 			push_event(context, &event);
@@ -370,8 +406,16 @@ fn_local LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 
 			bool pressed = !!(wparam & (MK_LBUTTON|MK_MBUTTON|MK_RBUTTON|MK_XBUTTON1|MK_XBUTTON2));
 
+			POINT mouse_point = {
+				.x = GET_X_LPARAM(lparam),
+				.y = GET_Y_LPARAM(lparam),
+			};
+
+			v2_t mouse_p = convert_mouse_cursor(mouse_point, height);
+
 			platform_event_t event = {
 				.kind = Event_mouse_button,
+				.mouse_button.mouse_p = mouse_p,
 				.mouse_button.pressed = pressed,
 				.mouse_button.button  = button,
 			};

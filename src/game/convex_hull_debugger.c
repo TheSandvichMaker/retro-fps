@@ -217,7 +217,7 @@ void convex_hull_debugger_window_proc(ui_window_t *window)
 		UI_COLOR(UI_COLOR_TEXT, make_v4(0.5f, 1.0f, 0.2f, 1.0f))
 		ui_label(S("Brute force test passed."));
 
-		debugger->brute_force_triggered_success_timer -= ui.dt;
+		debugger->brute_force_triggered_success_timer -= ui->dt;
 	}
 
 	if (debugger->brute_force_triggered_error_timer > 0.0f)
@@ -225,7 +225,7 @@ void convex_hull_debugger_window_proc(ui_window_t *window)
 		UI_COLOR(UI_COLOR_TEXT, COLORF_RED)
 		ui_label(S("BRUTE FORCE TEST FOUND A DEGENERATE HULL!?!?!"));
 
-		debugger->brute_force_triggered_error_timer -= ui.dt;
+		debugger->brute_force_triggered_error_timer -= ui->dt;
 	}
 
 	if (degenerate_hull)

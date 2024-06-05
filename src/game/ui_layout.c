@@ -4,28 +4,28 @@
 
 ui_layout_t *ui_get_layout(void)
 {
-	ASSERT_MSG(g_layout, "You have to equip a layout before calling any layout functions");
-	return g_layout;
+	ASSERT_MSG(ui->layout, "You have to equip a layout before calling any layout functions");
+	return ui->layout;
 }
 
-ui_layout_t *make_layout(arena_t *arena, rect2_t starting_rect)
+ui_layout_t ui_make_layout(rect2_t starting_rect)
 {
-	ui_layout_t *layout = m_alloc_struct(arena, ui_layout_t);
-	layout->arena = arena;
-	layout->rect  = starting_rect;
+	ui_layout_t layout = {
+		.rect = starting_rect,
+	};
 	return layout;
 }
 
-void equip_layout(ui_layout_t *layout)
+void ui_equip_layout(ui_layout_t *layout)
 {
-	DEBUG_ASSERT_MSG(!g_layout, "Please unequip your old layout first");
-	g_layout = layout;
+	DEBUG_ASSERT_MSG(!ui->layout, "Please unequip your old layout first");
+	ui->layout = layout;
 }
 
-void unequip_layout(void)
+void ui_unequip_layout(void)
 {
-	DEBUG_ASSERT_MSG(!g_layout, "You don't have a layout equipped!");
-	g_layout = NULL;
+	DEBUG_ASSERT_MSG(!ui->layout, "You don't have a layout equipped!");
+	ui->layout = NULL;
 }
 
 void layout_prepare_even_spacing(uint32_t item_count)
@@ -42,13 +42,13 @@ void layout_prepare_even_spacing(uint32_t item_count)
 
 	for (size_t i = 0; i < item_count; i++)
 	{
-		if (!layout->first_free_prepared_rect)
+		if (!ui->first_free_prepared_rect)
 		{
-			layout->first_free_prepared_rect = m_alloc_struct_nozero(layout->arena, ui_prepared_rect_t);
-			layout->first_free_prepared_rect->next = NULL;
+			ui->first_free_prepared_rect = m_alloc_struct_nozero(&ui->arena, ui_prepared_rect_t);
+			ui->first_free_prepared_rect->next = NULL;
 		}
 
-		ui_prepared_rect_t *prep = sll_pop(layout->first_free_prepared_rect);
+		ui_prepared_rect_t *prep = sll_pop(ui->first_free_prepared_rect);
 
 		rect2_t active, remainder;
 		rect2_cut(layout->rect, layout->flow, size, &active, &remainder);
@@ -78,7 +78,7 @@ void layout_place_widget(ui_widget_context_t *context, ui_widget_func_t widget)
 		ui_prepared_rect_t *prep = sll_pop(layout->first_prepared_rect);
 		layout->prepared_rect_count -= 1;
 
-		if (!layout->first_free_prepared_rect)
+		if (!ui->first_free_prepared_rect)
 		{
 			ASSERT(layout->prepared_rect_count == 0);
 			layout->last_prepared_rect = NULL;
@@ -86,8 +86,8 @@ void layout_place_widget(ui_widget_context_t *context, ui_widget_func_t widget)
 
 		rect = prep->rect;
 
-		prep->next = layout->first_free_prepared_rect;
-		layout->first_free_prepared_rect = prep;
+		prep->next = ui->first_free_prepared_rect;
+		ui->first_free_prepared_rect = prep;
 	}
 	else if (layout->wants_justify)
 	{

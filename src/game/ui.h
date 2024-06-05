@@ -30,40 +30,97 @@ fn_local bool ui_id_valid(ui_id_t id)
 	return id.value != 0;
 }
 
-fn void    ui_set_next_id(ui_id_t id);
-fn void    ui_push_id    (ui_id_t id);
-fn void    ui_pop_id     (void);
+fn void ui_set_next_id(ui_id_t id);
+fn void ui_push_id    (ui_id_t id);
+fn void ui_pop_id     (void);
 
 //
 // Input
 //
 
-/*
+typedef enum ui_event_kind_t
+{
+	UiEvent_none,
+
+	UiEvent_mouse_move,
+	UiEvent_mouse_wheel,
+	UiEvent_mouse_button,
+	UiEvent_key,
+	UiEvent_text,
+
+	UiEvent_count,
+} ui_event_kind_t;
+
+typedef uint8_t ui_buttons_t;
+typedef enum ui_button_t
+{
+	UiButton_left   = 0x1,
+	UiButton_middle = 0x2,
+	UiButton_right  = 0x4,
+	UiButton_x1     = 0x8,
+	UiButton_x2     = 0x10,
+	UiButton_any    = 0xFF,
+} ui_button_t;
+
+typedef struct ui_event_t
+{
+	struct ui_event_t *next;
+
+	// iterate using ui_iterate_events / ui_event_next to handle consumed events properly
+	bool consumed;
+
+	ui_event_kind_t kind;
+
+	bool pressed;
+	bool ctrl;
+	bool alt;
+	bool shift;
+
+	float               mouse_wheel;
+	v2_t                mouse_p;
+	ui_buttons_t        button;
+	keycode_t           keycode; // this still ties things to the platform abstraction which is... maybe good but inconsistent
+	string_storage_t(4) text;
+} ui_event_t;
+
+typedef struct ui_event_queue_t
+{
+	ui_event_t *head;
+	ui_event_t *tail;
+} ui_event_queue_t;
+
 typedef struct ui_input_t
 {
-	float dt;
+	ui_event_queue_t events;
 
-	bool app_has_focus;
-	bool alt_down;
-	bool shift_down;
-	bool ctrl_down;
+	float        mouse_wheel;
+	v2_t         mouse_p;
+	v2_t         mouse_p_on_lmb;
+	v2_t         mouse_p_on_mmb;
+	v2_t         mouse_p_on_rmb;
+	ui_buttons_t buttons_pressed;
+	ui_buttons_t buttons_held;
+	ui_buttons_t buttons_released;
 
-	platform_event_t *events;
-
-	mouse_buttons_t mouse_buttons_down;
-	mouse_buttons_t mouse_buttons_pressed;
-	mouse_buttons_t mouse_buttons_released;
-	float mouse_wheel;
-	v2_t  mouse_p;
-	v2_t  mouse_pressed_p;
-	v2_t  mouse_dp;
-
-	dynamic_string_t text;
-
-	platform_cursor_t cursor;
-	int               cursor_reset_delay;
+	bool         keys_held[Key_COUNT];
 } ui_input_t;
-*/
+
+/* internal use */
+fn void ui__enqueue_event(ui_event_queue_t *queue, ui_event_t *event);
+fn void ui__trickle_input(ui_input_t *input, ui_event_queue_t *queue);
+
+fn ui_event_t *ui_iterate_events (void);
+fn ui_event_t *ui_event_next     (ui_event_t *event);
+fn void        ui_consume_event  (ui_event_t *event);
+fn bool        ui_key_pressed    (keycode_t key, bool consume);        
+fn bool        ui_key_released   (keycode_t key, bool consume);        
+fn bool        ui_key_held       (keycode_t key, bool consume);        
+fn bool        ui_button_pressed (ui_buttons_t button, bool consume);
+fn bool        ui_button_released(ui_buttons_t button, bool consume);
+fn bool        ui_button_held    (ui_buttons_t button, bool consume);
+
+/* external use */
+fn void ui_push_input_event(const ui_event_t *event);
 
 //
 // Panels
@@ -430,13 +487,15 @@ typedef struct ui_tooltip_t
 	string_storage_t(UI_MAX_TOOLTIP_LENGTH) text;
 } ui_tooltip_t;
 
+#define UI_DEPTH_LEVELS_PER_LAYER (2048u)
+
 typedef enum ui_render_layer_t
 {
-	UI_LAYER_BACKGROUND,
-	UI_LAYER_FOREGROUND,
-	UI_LAYER_OVERLAY_BACKGROUND,
-	UI_LAYER_OVERLAY_FOREGROUND,
-	UI_LAYER_TOOLTIP,
+	UI_LAYER_BACKGROUND         = 1*UI_DEPTH_LEVELS_PER_LAYER,
+	UI_LAYER_FOREGROUND         = 2*UI_DEPTH_LEVELS_PER_LAYER,
+	UI_LAYER_OVERLAY_BACKGROUND = 3*UI_DEPTH_LEVELS_PER_LAYER,
+	UI_LAYER_OVERLAY_FOREGROUND = 4*UI_DEPTH_LEVELS_PER_LAYER,
+	UI_LAYER_TOOLTIP            = 5*UI_DEPTH_LEVELS_PER_LAYER,
 } ui_render_layer_t;
 
 typedef struct ui_render_command_key_t
@@ -494,6 +553,14 @@ typedef struct debug_notif_t
 	string_t text;
 } debug_notif_t;
 
+typedef struct ui_prepared_rect_t
+{
+	struct ui_prepared_rect_t *next;
+	rect2_t rect;
+} ui_prepared_rect_t;
+
+typedef struct ui_layout_t ui_layout_t;
+
 typedef struct ui_t
 {
 	bool initialized;
@@ -533,6 +600,9 @@ typedef struct ui_t
 	v2_t    drag_offset;
 	rect2_t resize_original_rect;
 
+	ui_layout_t        *layout;
+	ui_prepared_rect_t *first_free_prepared_rect;
+
 	string_storage_t(UI_MAX_TOOLTIP_LENGTH) next_tooltip;
 
 	stack_t(ui_id_t, UI_ID_STACK_COUNT) id_stack;
@@ -542,13 +612,16 @@ typedef struct ui_t
 	pool_t  state;
 	table_t state_index;
 
-	input_t *input;
-
 	platform_cursor_t cursor;
 	int               cursor_reset_delay;
 
 	float dt;
 	bool app_has_focus;
+
+	ui_event_t      *first_free_event;
+	ui_event_queue_t queued_input;
+	ui_input_t       input;
+
 	// ui_input_t   input;
 	ui_panels_t  panels;
 	ui_windows_t windows;
@@ -564,13 +637,18 @@ typedef struct ui_t
     size_t last_frame_ui_rect_count;
 } ui_t;
 
-fn ui_t ui;
+global thread_local ui_t *ui;
+// global ui_t  ui_inst;
 
 fn_local arena_t *ui_frame_arena(void)
 {
-	arena_t *result = &ui.frame_arenas[ui.frame_index & 1];
+	arena_t *result = &ui->frame_arenas[ui->frame_index & 1];
 	return result;
 }
+
+fn void ui_init   (ui_t *state);
+fn void equip_ui  (ui_t *state);
+fn void unequip_ui(void);
 
 fn bool ui_is_cold         (ui_id_t id);
 fn bool ui_is_next_hot     (ui_id_t id);
@@ -578,16 +656,16 @@ fn bool ui_is_hot          (ui_id_t id);
 fn bool ui_is_active       (ui_id_t id);
 fn bool ui_is_hovered_panel(ui_id_t id);
 
-fn void ui_set_next_hot  (ui_id_t id, ui_priority_t priority);
-fn void ui_set_hot       (ui_id_t id); // maybe should be never used?
-fn void ui_set_active    (ui_id_t id);
+fn void ui_set_next_hot    (ui_id_t id, ui_priority_t priority);
+fn void ui_set_hot         (ui_id_t id); // maybe should be never used?
+fn void ui_set_active      (ui_id_t id);
 
-fn void ui_clear_next_hot(void);
-fn void ui_clear_hot     (void);
-fn void ui_clear_active  (void);
+fn void ui_clear_next_hot  (void);
+fn void ui_clear_hot       (void);
+fn void ui_clear_active    (void);
 
-fn bool ui_has_focus     (void);
-fn bool ui_id_has_focus(ui_id_t id);
+fn bool ui_has_focus       (void);
+fn bool ui_id_has_focus    (ui_id_t id);
 
 fn void ui_hoverable       (ui_id_t id, rect2_t rect);
 fn bool ui_is_hovered      (ui_id_t id);
@@ -596,7 +674,7 @@ fn bool ui_is_hovered_delay(ui_id_t id, float delay);
 fn ui_state_t *ui_get_state(ui_id_t id);
 fn bool ui_state_is_new(ui_state_t *state);
 
-fn bool ui_begin(input_t *input, float dt);
+fn bool ui_begin(float dt);
 fn void ui_end(void);
 fn ui_render_command_list_t *ui_get_render_commands(void);
 

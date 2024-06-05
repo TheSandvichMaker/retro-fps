@@ -72,16 +72,10 @@ fn_local ui_size_t ui_sz_pix(float pix)
 	};
 }
 
-typedef struct ui_prepared_rect_t
-{
-	struct ui_prepared_rect_t *next;
-	rect2_t rect;
-} ui_prepared_rect_t;
+typedef struct ui_prepared_rect_t ui_prepared_rect_t;
 
 typedef struct ui_layout_t
 {
-	arena_t *arena;
-
 	rect2_t rect;
 
 	ui_layout_flow_t flow;
@@ -90,19 +84,16 @@ typedef struct ui_layout_t
 	size_t prepared_rect_count;
 	ui_prepared_rect_t *first_prepared_rect;
 	ui_prepared_rect_t * last_prepared_rect;
-	ui_prepared_rect_t *first_free_prepared_rect;
 
 	bool  wants_justify;
 	float justify_x;
 	float justify_y;
 } ui_layout_t;
 
-global thread_local ui_layout_t *g_layout = NULL;
+fn ui_layout_t ui_make_layout(rect2_t starting_rect);
 
-fn ui_layout_t *make_layout(arena_t *arena, rect2_t starting_rect);
-
-fn void equip_layout  (ui_layout_t *layout);
-fn void unequip_layout(void);
+fn void ui_equip_layout  (ui_layout_t *layout);
+fn void ui_unequip_layout(void);
 
 fn ui_layout_t *ui_get_layout(void);
 

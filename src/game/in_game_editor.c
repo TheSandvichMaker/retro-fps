@@ -733,17 +733,17 @@ fn_local void ui_demo_proc(ui_window_t *window)
 	}
 
 	ui_hover_tooltip(S("Size of the inner margin for windows"));
-	ui_slider(S("UI Window Margin"), &ui.style.base_scalars[UI_SCALAR_WINDOW_MARGIN], 0.0f, 8.0f);
+	ui_slider(S("UI Window Margin"), &ui->style.base_scalars[UI_SCALAR_WINDOW_MARGIN], 0.0f, 8.0f);
 	ui_hover_tooltip(S("Size of the margin between widgets"));
-	ui_slider(S("UI Widget Margin"), &ui.style.base_scalars[UI_SCALAR_WIDGET_MARGIN], 0.0f, 8.0f);
+	ui_slider(S("UI Widget Margin"), &ui->style.base_scalars[UI_SCALAR_WIDGET_MARGIN], 0.0f, 8.0f);
 	ui_hover_tooltip(S("Size of the margin between widgets and their text contents (e.g. a button and its label)"));
-	ui_slider(S("UI Text Margin"), &ui.style.base_scalars[UI_SCALAR_TEXT_MARGIN], 0.0f, 8.0f);
+	ui_slider(S("UI Text Margin"), &ui->style.base_scalars[UI_SCALAR_TEXT_MARGIN], 0.0f, 8.0f);
 	ui_hover_tooltip(S("Roundedness of UI elements in pixel radius"));
-	ui_slider(S("UI Roundedness"), &ui.style.base_scalars[UI_SCALAR_ROUNDEDNESS], 0.0f, 12.0f);
+	ui_slider(S("UI Roundedness"), &ui->style.base_scalars[UI_SCALAR_ROUNDEDNESS], 0.0f, 12.0f);
 	ui_hover_tooltip(S("Spring stiffness coefficient for animations"));
-	ui_slider(S("UI Animation Stiffness"), &ui.style.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS], 1.0f, 1024.0f);
+	ui_slider(S("UI Animation Stiffness"), &ui->style.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS], 1.0f, 1024.0f);
 	ui_hover_tooltip(S("Spring dampen coefficient for animations"));
-	ui_slider(S("UI Animation Dampen"), &ui.style.base_scalars[UI_SCALAR_ANIMATION_DAMPEN], 1.0f, 128.0f);
+	ui_slider(S("UI Animation Dampen"), &ui->style.base_scalars[UI_SCALAR_ANIMATION_DAMPEN], 1.0f, 128.0f);
 
 	demo->edit_buffer.data     = demo->edit_buffer_storage;
 	demo->edit_buffer.capacity = ARRAY_COUNT(demo->edit_buffer_storage);
@@ -815,7 +815,7 @@ fn_local void fullscreen_update_and_render_top_editor_bar(void)
 		collision_bar.min.y -= 128.0f;
 
     bool mouse_hover = ui_mouse_in_rect(collision_bar);
-	mouse_hover |= ui.input->mouse_p.y >= collision_bar.max.y;
+	mouse_hover |= ui->input.mouse_p.y >= collision_bar.max.y;
 	mouse_hover |= editor.pin_bar;
 
     editor.bar_openness = ui_interpolate_f32(ui_id_pointer(&editor.bar_openness), mouse_hover ? 1.0f : 0.0f);
@@ -891,16 +891,16 @@ fn_local void fullscreen_update_and_render_top_editor_bar(void)
 
             ui_label(S("  Menus: "));
 
-            ui_label(Sf("Mouse Position: %.02f x %.02f", ui.input->mouse_p.x, ui.input->mouse_p.y));
-			ui_label(Sf("Active UI Animation Count: %zu", ui.style.animation_state.count));
-			ui_label(Sf("Delta Time: %.02fms", 1000.0f*ui.dt));
-			ui_label(Sf("UI Hover Time: %.02f", ui.hover_time_seconds));
-			ui_label(Sf("UI Rect Count: %zu", ui.last_frame_ui_rect_count));
+            ui_label(Sf("Mouse Position: %.02f x %.02f", ui->input.mouse_p.x, ui->input.mouse_p.y));
+			ui_label(Sf("Active UI Animation Count: %zu", ui->style.animation_state.count));
+			ui_label(Sf("Delta Time: %.02fms", 1000.0f*ui->dt));
+			ui_label(Sf("UI Hover Time: %.02f", ui->hover_time_seconds));
+			ui_label(Sf("UI Rect Count: %zu", ui->last_frame_ui_rect_count));
 #if DREAM_SLOW
-			ui_label(Sf("Hot ID: '%s'", ui.hot.name));
-			ui_label(Sf("Active ID: '%s'", ui.active.name));
-			ui_label(Sf("Hovered Panel: '%s'", ui.hovered_panel.name));
-			ui_label(Sf("Hovered Widget: '%s'", ui.hovered_widget.name));
+			ui_label(Sf("Hot ID: '%s'", ui->hot.name));
+			ui_label(Sf("Active ID: '%s'", ui->active.name));
+			ui_label(Sf("Hovered Panel: '%s'", ui->hovered_panel.name));
+			ui_label(Sf("Hovered Widget: '%s'", ui->hovered_widget.name));
 #endif
         }
     }
@@ -922,27 +922,25 @@ void update_and_render_in_game_editor(void)
 		editor.ui_demo.window.rect = rect2_from_min_dim(make_v2(96, 96), make_v2(512, 512));
 	}
 
-	/* @UIInput
-    if (ui_key_pressed(ui.input, Key_f1, false))
+    if (ui_key_pressed(Key_f1, true))
 	{
         editor.show_timings = !editor.show_timings;
 	}
 
-    if (ui_key_pressed(ui.input, Key_f2, false))
+    if (ui_key_pressed(Key_f2, true))
 	{
 		ui_toggle_window_openness(&editor.lm_editor.window);
 	}
 
-    if (ui_key_pressed(ui.input, Key_f3, false))
+    if (ui_key_pressed(Key_f3, true))
 	{
 		ui_toggle_window_openness(&editor.convex_hull_debugger.window);
 	}
 
-    if (ui_key_pressed(ui.input, Key_f4, false))
+    if (ui_key_pressed(Key_f4, true))
 	{
 		ui_toggle_window_openness(&editor.ui_demo.window);
 	}
-	*/
 
 	if (&editor.lm_editor.window.open)
 		render_lm_editor();
@@ -977,13 +975,13 @@ void update_and_render_in_game_editor(void)
 	}
 
 #if 0
-	rect2_t r  = rect2_center_radius(ui.input.mouse_p, make_v2(1, 1));
-	rect2_t r2 = rect2_from_min_dim(ui.input.mouse_p, make_v2(512, 1));
+	rect2_t r  = rect2_center_radius(ui->input.mouse_p, make_v2(1, 1));
+	rect2_t r2 = rect2_from_min_dim(ui->input.mouse_p, make_v2(512, 1));
 	ui_draw_rect(rect2_extend(r2, 1.0f), make_v4(0, 0, 0, 1));
 	ui_draw_rect(rect2_extend(r, 1.0f), make_v4(0, 0, 0, 1));
 	ui_draw_rect(r2, make_v4(1, 1, 1, 1));
 	ui_draw_rect(r , make_v4(1, 1, 1, 1));
-	ui_draw_text(&ui.style.font, r.min, S("The Quick Brown Fox Jumped Over The Lazy Dog"));
+	ui_draw_text(&ui->style.font, r.min, S("The Quick Brown Fox Jumped Over The Lazy Dog"));
 #endif
 
 	ui_panel_end();

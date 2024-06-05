@@ -10,9 +10,9 @@ ui_id_t ui_id(string_t string)
 {
 	ui_id_t parent = UI_ID_NULL;
 
-	if (!stack_empty(ui.id_stack))
+	if (!stack_empty(ui->id_stack))
 	{
-		parent = stack_top(ui.id_stack);
+		parent = stack_top(ui->id_stack);
 	}
 
 	return ui_child_id(parent, string);
@@ -22,10 +22,10 @@ ui_id_t ui_child_id(ui_id_t parent, string_t string)
 {
 	ui_id_t result = {0};
 
-	if (ui.next_id.value)
+	if (ui->next_id.value)
 	{
-		result = ui.next_id;
-		ui.next_id = UI_ID_NULL;
+		result = ui->next_id;
+		ui->next_id = UI_ID_NULL;
 	}
 	else
 	{
@@ -48,10 +48,10 @@ ui_id_t ui_id_pointer(void *pointer)
 {
 	ui_id_t result = { (uint64_t)(uintptr_t)pointer };
 
-	if (ui.next_id.value)
+	if (ui->next_id.value)
 	{
-		result = ui.next_id;
-		ui.next_id = UI_ID_NULL;
+		result = ui->next_id;
+		ui->next_id = UI_ID_NULL;
 	}
 
 	return result;
@@ -61,10 +61,10 @@ ui_id_t ui_id_u64(uint64_t u64)
 {
 	ui_id_t result = { u64 };
 
-	if (ui.next_id.value)
+	if (ui->next_id.value)
 	{
-		result = ui.next_id;
-		ui.next_id = UI_ID_NULL;
+		result = ui->next_id;
+		ui->next_id = UI_ID_NULL;
 	}
 
 	return result;
@@ -72,17 +72,244 @@ ui_id_t ui_id_u64(uint64_t u64)
 
 void ui_set_next_id(ui_id_t id)
 {
-	ui.next_id = id;
+	ui->next_id = id;
 }
 
 void ui_push_id(ui_id_t id)
 {
-	stack_push(ui.id_stack, id);
+	stack_push(ui->id_stack, id);
 }
 
 void ui_pop_id(void)
 {
-	stack_pop(ui.id_stack);
+	stack_pop(ui->id_stack);
+}
+
+//
+// Input
+//
+
+void ui__enqueue_event(ui_event_queue_t *queue, ui_event_t *event)
+{
+	sll_push_back(queue->head, queue->tail, event);
+}
+
+void ui__trickle_input(ui_input_t *input, ui_event_queue_t *queue)
+{
+	input->buttons_pressed  = 0;
+	input->buttons_released = 0;
+	
+	bool button_changed = false;
+
+	while (queue->head)
+	{
+		ui_event_t *event = queue->head;
+
+		switch (event->kind)
+		{
+			case UiEvent_mouse_move:
+			{
+				input->mouse_p = event->mouse_p;
+			} break;
+
+			case UiEvent_mouse_wheel:
+			{
+				input->mouse_wheel += event->mouse_wheel;
+			} break;
+
+			case UiEvent_mouse_button:
+			{
+				// rule: enforce ordering on all mouse button changes
+				if (button_changed)
+				{
+					goto loop_exit;
+				}
+
+				if (event->pressed)
+				{
+					// = instead of |= because due to the aggressive trickling rule, only one can be pressed in one frame
+					input->buttons_pressed = event->button;
+					input->buttons_held   |= event->button;
+
+					// TODO: use enums more smartly
+					switch (event->button)
+					{
+						case Button_left:   input->mouse_p_on_lmb = event->mouse_p; break;
+						case Button_middle: input->mouse_p_on_mmb = event->mouse_p; break;
+						case Button_right:  input->mouse_p_on_rmb = event->mouse_p; break;
+					}
+				}
+				else
+				{
+					// = instead of |= because due to the aggressive trickling rule, only one can be released in one frame
+					input->buttons_released =  event->button;
+					input->buttons_held    &= ~event->button;
+
+					// TODO: maybe clear the mouse_p_on_xxx values to something obvious like -1, -1?
+				}
+
+				button_changed = true;
+			} break;
+
+			// TODO: enforce ordering on keydown, keyup of the same key in the same frame
+
+			case UiEvent_key:
+			{
+				input->keys_held[event->keycode] = event->pressed;
+
+				ui__enqueue_event(&input->events, event);
+			} break;
+
+			default:
+			{
+				ASSERT(event->kind > UiEvent_none);
+				ASSERT(event->kind < UiEvent_count);
+
+				ui__enqueue_event(&input->events, event);
+			} break;
+		}
+
+		queue->head = event->next;
+	}
+loop_exit:
+
+	if (!queue->head)
+	{
+		queue->tail = NULL;
+	}
+}
+
+ui_event_t *ui_iterate_events(void)
+{
+	ui_event_t *event = ui->input.events.head;
+
+	while (event && event->consumed)
+	{
+		event = event->next;
+	}
+
+	return event;
+}
+
+ui_event_t *ui_event_next(ui_event_t *event)
+{
+	if (event)
+	{
+		event = event->next;
+
+		while (event && event->consumed)
+		{
+			event = event->next;
+		}
+	}
+
+	return event;
+}
+
+void ui_consume_event(ui_event_t *event)
+{
+	ASSERT(event);
+	DEBUG_ASSERT_MSG(!event->consumed, "Tried to consume an event twice, that smells like a bug");
+
+	event->consumed = true;
+}
+
+void ui_push_input_event(const ui_event_t *in_event)
+{
+	if (!ui->first_free_event)
+	{
+		ui->first_free_event = m_alloc_struct_nozero(&ui->arena, ui_event_t);
+		ui->first_free_event->next = NULL;
+	}
+
+	ui_event_t *event = sll_pop(ui->first_free_event);
+	copy_struct(event, in_event);
+
+	ui__enqueue_event(&ui->queued_input, event);
+}
+
+fn_local bool ui__check_for_key(keycode_t key, bool pressed, bool consume)
+{
+	bool result = false;
+
+	// Maybe iterating events all the time is bad, but actually it's probably super fine. There's going to be
+	// a very small amount of these per frame
+	for (ui_event_t *event = ui_iterate_events();
+		 event;
+		 event = ui_event_next(event))
+	{
+		if (event->kind    == UiEvent_key &&
+			event->keycode == key         &&
+			event->pressed == pressed)
+		{
+			result = true;
+
+			if (consume)
+			{
+				ui_consume_event(event);
+			}
+		}
+	}
+
+	return result;
+}
+
+bool ui_key_pressed(keycode_t key, bool consume)
+{
+	return ui__check_for_key(key, true, consume);
+}
+
+bool ui_key_released(keycode_t key, bool consume)
+{
+	return ui__check_for_key(key, false, consume);
+}
+
+bool ui_key_held(keycode_t key, bool consume)
+{
+	bool result = ui->input.keys_held[key];
+
+	if (consume)
+	{
+		ui->input.keys_held[key] = false;
+	}
+
+	return result;
+}
+
+bool ui_button_pressed(ui_buttons_t button, bool consume)
+{
+	bool result = !!(ui->input.buttons_pressed & button);
+
+	if (consume)
+	{
+		ui->input.buttons_pressed &= ~button;
+	}
+
+	return result;
+}
+
+bool ui_button_released(ui_buttons_t button, bool consume)
+{
+	bool result = !!(ui->input.buttons_released & button);
+
+	if (consume)
+	{
+		ui->input.buttons_released &= ~button;
+	}
+
+	return result;
+}
+
+bool ui_button_held(ui_buttons_t button, bool consume)
+{
+	bool result = !!(ui->input.buttons_held & button);
+
+	if (consume)
+	{
+		ui->input.buttons_held &= ~button;
+	}
+
+	return result;
 }
 
 //
@@ -91,14 +318,14 @@ void ui_pop_id(void)
 
 ui_panel_t *ui_push_panel(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 {
-	if (!ui.panels.first_free_panel)
+	if (!ui->panels.first_free_panel)
 	{
-		ui.panels.first_free_panel = m_alloc_struct_nozero(&ui.arena, ui_panel_t);
-		ui.panels.first_free_panel->next_free = NULL;
+		ui->panels.first_free_panel = m_alloc_struct_nozero(&ui->arena, ui_panel_t);
+		ui->panels.first_free_panel->next_free = NULL;
 	}
 
-	ui_panel_t *panel = ui.panels.first_free_panel;
-	ui.panels.first_free_panel = panel->next_free;
+	ui_panel_t *panel = ui->panels.first_free_panel;
+	ui->panels.first_free_panel = panel->next_free;
 
 	zero_struct(panel);
 
@@ -108,21 +335,21 @@ ui_panel_t *ui_push_panel(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 	panel->rect_init        = rect;
 	panel->rect_layout      = rect;
 
-	panel->parent = ui.panels.current_panel;
-	ui.panels.current_panel = panel;
+	panel->parent = ui->panels.current_panel;
+	ui->panels.current_panel = panel;
 
 	return panel;
 }
 
 void ui_pop_panel(void)
 {
-	if (ALWAYS(ui.panels.current_panel))
+	if (ALWAYS(ui->panels.current_panel))
 	{
-		ui_panel_t *panel = ui.panels.current_panel;
-		ui.panels.current_panel = ui.panels.current_panel->parent;
+		ui_panel_t *panel = ui->panels.current_panel;
+		ui->panels.current_panel = ui->panels.current_panel->parent;
 
-		panel->next_free = ui.panels.first_free_panel;
-		ui.panels.first_free_panel = panel;
+		panel->next_free = ui->panels.first_free_panel;
+		ui->panels.first_free_panel = panel;
 	}
 }
 
@@ -132,9 +359,9 @@ ui_panel_t *ui_panel(void)
 
 	ui_panel_t *result = &dummy_panel;
 
-	if (ALWAYS(ui.panels.current_panel))
+	if (ALWAYS(ui->panels.current_panel))
 	{
-		result = ui.panels.current_panel;
+		result = ui->panels.current_panel;
 	}
     else
     {
@@ -158,7 +385,7 @@ void ui_set_layout_direction(rect2_cut_side_t side)
 
 void ui_set_next_rect(rect2_t rect)
 {
-	ui.next_rect = rect;
+	ui->next_rect = rect;
 }
 
 float ui_divide_space(float item_count)
@@ -197,10 +424,10 @@ bool ui_override_rect(rect2_t *override)
 {
 	bool result = false;
 
-	if (rect2_area(ui.next_rect) > 0.0f)
+	if (rect2_area(ui->next_rect) > 0.0f)
 	{
-		*override = ui.next_rect;
-		ui.next_rect = (rect2_t){ 0 };
+		*override = ui->next_rect;
+		ui->next_rect = (rect2_t){ 0 };
 
 		result = true;
 	}
@@ -241,9 +468,9 @@ void ui_open_popup(ui_id_t id)
 {
 	bool popup_exists = false;
 
-	for (size_t i = 0; i < ui.popup_stack.at; i++)
+	for (size_t i = 0; i < ui->popup_stack.at; i++)
 	{
-		if (ui.popup_stack.values[i].id.value == id.value)
+		if (ui->popup_stack.values[i].id.value == id.value)
 		{
 			popup_exists = true;
 		}
@@ -255,17 +482,17 @@ void ui_open_popup(ui_id_t id)
 			.id = id, 
 		};
 
-		stack_push(ui.popup_stack, popup);
+		stack_push(ui->popup_stack, popup);
 	}
 }
 
 void ui_close_popup(ui_id_t id)
 {
-	for (size_t i = 0; i < ui.popup_stack.at; i++)
+	for (size_t i = 0; i < ui->popup_stack.at; i++)
 	{
-		if (ui.popup_stack.values[i].id.value == id.value)
+		if (ui->popup_stack.values[i].id.value == id.value)
 		{
-			stack_remove(ui.popup_stack, i);
+			stack_remove(ui->popup_stack, i);
 			continue;
 		}
 	}
@@ -275,9 +502,9 @@ bool ui_popup_is_open(ui_id_t id)
 {
 	bool result = false;
 
-	for (size_t i = 0; i < ui.popup_stack.at; i++)
+	for (size_t i = 0; i < ui->popup_stack.at; i++)
 	{
-		if (ui.popup_stack.values[i].id.value == id.value)
+		if (ui->popup_stack.values[i].id.value == id.value)
 		{
 			result = true;
 			break;
@@ -293,30 +520,30 @@ bool ui_popup_is_open(ui_id_t id)
 
 void ui_add_window(ui_window_t *window)
 {
-	dll_push_back(ui.windows.first_window, ui.windows.last_window, window);
+	dll_push_back(ui->windows.first_window, ui->windows.last_window, window);
 }
 
 void ui_remove_window(ui_window_t *window)
 {
-	dll_remove(ui.windows.first_window, ui.windows.last_window, window);
+	dll_remove(ui->windows.first_window, ui->windows.last_window, window);
 }
 
 void ui_bring_window_to_front(ui_window_t *window)
 {
-	dll_remove   (ui.windows.first_window, ui.windows.last_window, window);
-	dll_push_back(ui.windows.first_window, ui.windows.last_window, window);
+	dll_remove   (ui->windows.first_window, ui->windows.last_window, window);
+	dll_push_back(ui->windows.first_window, ui->windows.last_window, window);
 }
 
 void ui_send_window_to_back(ui_window_t *window)
 {
-	dll_remove    (ui.windows.first_window, ui.windows.last_window, window);
-	dll_push_front(ui.windows.first_window, ui.windows.last_window, window);
+	dll_remove    (ui->windows.first_window, ui->windows.last_window, window);
+	dll_push_front(ui->windows.first_window, ui->windows.last_window, window);
 }
 
 void ui_focus_window(ui_window_t *window)
 {
-	ui.windows.focus_window = window;
-	ui.has_focus            = true;
+	ui->windows.focus_window = window;
+	ui->has_focus            = true;
 }
 
 void ui_open_window(ui_window_t *window)
@@ -330,9 +557,9 @@ void ui_close_window(ui_window_t *window)
 {
 	window->open = false;
 	ui_send_window_to_back(window);
-	if (ui.windows.focus_window == window && ui.windows.last_window != window)
+	if (ui->windows.focus_window == window && ui->windows.last_window != window)
 	{
-		ui_focus_window(ui.windows.last_window);
+		ui_focus_window(ui->windows.last_window);
 	}
 }
 
@@ -352,7 +579,7 @@ void ui_process_windows(void)
 {
 	ui_window_t *hovered_window = NULL;
 
-	for (ui_window_t *window = ui.windows.first_window;
+	for (ui_window_t *window = ui->windows.first_window;
 		 window;
 		 window = window->next)
 	{
@@ -367,7 +594,7 @@ void ui_process_windows(void)
 
 			if (ui_is_active(id))
 			{
-				v2_t new_p = add(ui.input->mouse_p, ui.drag_offset);
+				v2_t new_p = add(ui->input.mouse_p, ui->drag_offset);
 				window->rect = rect2_reposition_min(window->rect, new_p); 
 			}
 
@@ -380,14 +607,14 @@ void ui_process_windows(void)
 			ui_id_t id_se = ui_id(S("tray_id_se"));
 			ui_id_t id_sw = ui_id(S("tray_id_sw"));
 
-			if (ui_is_hot(id_n))  { ui.cursor_reset_delay = 1; ui.cursor = Cursor_resize_ns; };
-			if (ui_is_hot(id_e))  { ui.cursor_reset_delay = 1; ui.cursor = Cursor_resize_ew; };
-			if (ui_is_hot(id_s))  { ui.cursor_reset_delay = 1; ui.cursor = Cursor_resize_ns; };
-			if (ui_is_hot(id_w))  { ui.cursor_reset_delay = 1; ui.cursor = Cursor_resize_ew; };
-			if (ui_is_hot(id_ne)) { ui.cursor_reset_delay = 1; ui.cursor = Cursor_resize_nesw; };
-			if (ui_is_hot(id_nw)) { ui.cursor_reset_delay = 1; ui.cursor = Cursor_resize_nwse; };
-			if (ui_is_hot(id_se)) { ui.cursor_reset_delay = 1; ui.cursor = Cursor_resize_nwse; };
-			if (ui_is_hot(id_sw)) { ui.cursor_reset_delay = 1; ui.cursor = Cursor_resize_nesw; };
+			if (ui_is_hot(id_n))  { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_ns; };
+			if (ui_is_hot(id_e))  { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_ew; };
+			if (ui_is_hot(id_s))  { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_ns; };
+			if (ui_is_hot(id_w))  { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_ew; };
+			if (ui_is_hot(id_ne)) { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_nesw; };
+			if (ui_is_hot(id_nw)) { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_nwse; };
+			if (ui_is_hot(id_se)) { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_nwse; };
+			if (ui_is_hot(id_sw)) { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_nesw; };
 
 			ui_rect_edge_t tray_region = 0;
 
@@ -402,9 +629,9 @@ void ui_process_windows(void)
 
 			if (tray_region)
 			{
-				v2_t delta = {0, 0}; // @UiInput sub(ui.input->mouse_p, ui.input->mouse_pressed_p);
+				v2_t delta = sub(ui->input.mouse_p, ui->input.mouse_p_on_lmb);
 
-				window->rect = ui.resize_original_rect;
+				window->rect = ui->resize_original_rect;
 				if (tray_region & UI_RECT_EDGE_E) window->rect = rect2_extend_right(window->rect,  delta.x);
 				if (tray_region & UI_RECT_EDGE_W) window->rect = rect2_extend_left (window->rect, -delta.x);
 				if (tray_region & UI_RECT_EDGE_N) window->rect = rect2_extend_up   (window->rect,  delta.y);
@@ -437,7 +664,7 @@ void ui_process_windows(void)
 
 			if (interaction & UI_PRESSED)
 			{
-				ui.drag_offset = sub(window->rect.min, ui.input->mouse_p);
+				ui->drag_offset = sub(window->rect.min, ui->input.mouse_p);
 			}
 
 			rect2_t tray_init = interact_total;
@@ -462,7 +689,7 @@ void ui_process_windows(void)
 
 			if (tray_interaction & UI_PRESSED)
 			{
-				ui.resize_original_rect = window->rect;
+				ui->resize_original_rect = window->rect;
 			}
 
 			// draw window
@@ -472,7 +699,7 @@ void ui_process_windows(void)
 
 			string_t title = string_from_storage(window->title);
 
-			bool has_focus = ui_has_focus() && (window == ui.windows.focus_window);
+			bool has_focus = ui_has_focus() && (window == ui->windows.focus_window);
 
 			float focus_t = ui_interpolate_f32(ui_id(S("focus")), has_focus);
 			float shadow_amount = lerp(0.15f, 0.25f, focus_t);
@@ -486,7 +713,7 @@ void ui_process_windows(void)
 			ui_draw_rect_roundedness_shadow(rect2_shrink(total, 1.0f), make_v4(0, 0, 0, 0), make_v4(5, 5, 5, 5), shadow_amount, 32.0f);
 			ui_draw_rect_roundedness(title_bar, interpolated_title_bar_color, make_v4(2, 0, 2, 0));
 			ui_draw_rect_roundedness(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), make_v4(0, 2, 0, 2));
-			ui_draw_text(&ui.style.header_font, ui_text_center_p(&ui.style.header_font, title_bar_minus_outline, title), title);
+			ui_draw_text(&ui->style.header_font, ui_text_center_p(&ui->style.header_font, title_bar_minus_outline, title), title);
 			ui_draw_rect_roundedness_outline(total, ui_color(UI_COLOR_WINDOW_OUTLINE), make_v4(2, 2, 2, 2), 2.0f);
 
 			// handle window contents
@@ -500,7 +727,7 @@ void ui_process_windows(void)
 
 			ui_push_clip_rect(rect);
 
-			window->focused = (window == ui.windows.last_window);
+			window->focused = (window == ui->windows.last_window);
 			window->draw_proc(window);
 
 			ui_pop_clip_rect();
@@ -514,21 +741,19 @@ void ui_process_windows(void)
 
 	if (hovered_window)
 	{
-		ui.hovered = true;
+		ui->hovered = true;
 		hovered_window->hovered = true;
 	}
 
-	/* @UIInput
-	if (ui_mouse_buttons_pressed(ui.input, Button_any, false))
+	if (ui_button_pressed(UiButton_any, false))
 	{
 		if (hovered_window)
 		{
 			ui_bring_window_to_front(hovered_window);
 		}
 
-		ui.windows.focus_window = hovered_window;
+		ui->windows.focus_window = hovered_window;
 	}
-	*/
 }
 
 //
@@ -537,18 +762,18 @@ void ui_process_windows(void)
 
 ui_anim_t *ui_get_anim(ui_id_t id, v4_t init_value)
 {
-	ui_anim_t *result = table_find_object(&ui.style.animation_index, id.value);
+	ui_anim_t *result = table_find_object(&ui->style.animation_index, id.value);
 
 	if (!result)
 	{
 		/*
-		result = pool_add(&ui.style.animation_state);
+		result = pool_add(&ui->style.animation_state);
 		*/
-		ui_anim_pool_allocate(&ui.style.animation_state, &result);
+		ui_anim_pool_allocate(&ui->style.animation_state, &result);
 		result->id        = id;
 		result->t_target  = init_value;
 		result->t_current = init_value;
-		table_insert_object(&ui.style.animation_index, id.value, result);
+		table_insert_object(&ui->style.animation_index, id.value, result);
 	}
 
 	ASSERT(result->id.value == id.value);
@@ -557,7 +782,7 @@ ui_anim_t *ui_get_anim(ui_id_t id, v4_t init_value)
 	result->c_t = ui_scalar(UI_SCALAR_ANIMATION_STIFFNESS);
 	result->c_v = ui_scalar(UI_SCALAR_ANIMATION_DAMPEN);
 
-	result->last_touched_frame_index = ui.frame_index;
+	result->last_touched_frame_index = ui->frame_index;
 
 	return result;
 }
@@ -615,60 +840,60 @@ v4_t ui_set_v4(ui_id_t id, v4_t target)
 
 float ui_scalar(ui_style_scalar_t scalar)
 {
-	if (stack_empty(ui.style.scalars[scalar])) return ui.style.base_scalars[scalar];
-	else                                       return stack_top(ui.style.scalars[scalar]);
+	if (stack_empty(ui->style.scalars[scalar])) return ui->style.base_scalars[scalar];
+	else                                       return stack_top(ui->style.scalars[scalar]);
 }
 
 void ui_push_scalar(ui_style_scalar_t scalar, float value)
 {
-    stack_push(ui.style.scalars[scalar], value);
+    stack_push(ui->style.scalars[scalar], value);
 }
 
 float ui_pop_scalar(ui_style_scalar_t scalar)
 {
-    return stack_pop(ui.style.scalars[scalar]);
+    return stack_pop(ui->style.scalars[scalar]);
 }
 
 v4_t ui_color(ui_style_color_t color)
 {
-	if (stack_empty(ui.style.colors[color])) return ui.style.base_colors[color];
-	else                                     return stack_top(ui.style.colors[color]);
+	if (stack_empty(ui->style.colors[color])) return ui->style.base_colors[color];
+	else                                     return stack_top(ui->style.colors[color]);
 }
 
 void ui_push_color(ui_style_color_t color, v4_t value)
 {
-    stack_push(ui.style.colors[color], value);
+    stack_push(ui->style.colors[color], value);
 }
 
 v4_t ui_pop_color(ui_style_color_t color)
 {
-    return stack_pop(ui.style.colors[color]);
+    return stack_pop(ui->style.colors[color]);
 }
 
 void ui_set_font_height(float size)
 {
-	if (ui.style.font.initialized)
-		destroy_font_atlas(&ui.style.font);
+	if (ui->style.font.initialized)
+		destroy_font_atlas(&ui->style.font);
 
-	if (ui.style.header_font.initialized)
-		destroy_font_atlas(&ui.style.header_font);
+	if (ui->style.header_font.initialized)
+		destroy_font_atlas(&ui->style.header_font);
 
 	font_range_t ranges[] = {
 		{ .start = ' ', .end = '~' },
 	};
 
-	ui.style.font        = make_font_atlas_from_memory(ui.style.font_data, ARRAY_COUNT(ranges), ranges, size);
-	ui.style.header_font = make_font_atlas_from_memory(ui.style.header_font_data, ARRAY_COUNT(ranges), ranges, 1.5f*size);
+	ui->style.font        = make_font_atlas_from_memory(ui->style.font_data, ARRAY_COUNT(ranges), ranges, size);
+	ui->style.header_font = make_font_atlas_from_memory(ui->style.header_font_data, ARRAY_COUNT(ranges), ranges, 1.5f*size);
 }
 
 float ui_font_height(void)
 {
-	return ui.style.font.font_height;
+	return ui->style.font.font_height;
 }
 
 float ui_header_font_height(void)
 {
-	return ui.style.header_font.font_height;
+	return ui->style.header_font.font_height;
 }
 
 //
@@ -677,18 +902,18 @@ float ui_header_font_height(void)
 
 void ui_push_clip_rect(rect2_t rect)
 {
-	if (ALWAYS(!stack_full(ui.clip_rect_stack)))
+	if (ALWAYS(!stack_full(ui->clip_rect_stack)))
 	{
 		r_rect2_fixed_t fixed = rect2_to_fixed(rect);
-		stack_push(ui.clip_rect_stack, fixed);
+		stack_push(ui->clip_rect_stack, fixed);
 	}
 }
 
 void ui_pop_clip_rect(void)
 {
-	if (ALWAYS(!stack_empty(ui.clip_rect_stack)))
+	if (ALWAYS(!stack_empty(ui->clip_rect_stack)))
 	{
-		stack_pop(ui.clip_rect_stack);
+		stack_pop(ui->clip_rect_stack);
 	}
 }
 
@@ -698,9 +923,9 @@ fn_local r_rect2_fixed_t ui_get_clip_rect(void)
 		0, 0, UINT16_MAX, UINT16_MAX,
 	};
 
-	if (!stack_empty(ui.clip_rect_stack))
+	if (!stack_empty(ui->clip_rect_stack))
 	{
-		clip_rect = stack_top(ui.clip_rect_stack);
+		clip_rect = stack_top(ui->clip_rect_stack);
 	}
 
 	return clip_rect;
@@ -733,7 +958,7 @@ rect2_t ui_text_op(font_atlas_t *font, v2_t p, string_t text, v4_t color, ui_tex
 
                 ui_push_command(
 					(ui_render_command_key_t){
-						.layer  = ui.render_layer,
+						.layer  = ui->render_layer,
 						.window = 0,
 					},
 
@@ -836,12 +1061,12 @@ rect2_t ui_draw_text_aligned(font_atlas_t *font, rect2_t rect, string_t text, v2
 
 void ui_reset_render_commands(void)
 {
-	ui.render_commands.count = 0;
+	ui->render_commands.count = 0;
 }
 
 void ui_push_command(ui_render_command_key_t key, const ui_render_command_t *command)
 {
-	ui_render_command_list_t *list = &ui.render_commands;
+	ui_render_command_list_t *list = &ui->render_commands;
 
 	if (ALWAYS(list->count < list->capacity))
 	{
@@ -858,7 +1083,7 @@ void ui_push_command(ui_render_command_key_t key, const ui_render_command_t *com
 
 void ui_sort_render_commands(void)
 {
-	radix_sort_u32(&ui.render_commands.keys[0].u32, ui.render_commands.count);
+	radix_sort_u32(&ui->render_commands.keys[0].u32, ui->render_commands.count);
 }
 
 // TODO: remove... silly function
@@ -868,7 +1093,7 @@ fn_local void ui_do_rect(r_ui_rect_t rect)
 
 	ui_push_command(
 		(ui_render_command_key_t){
-			.layer  = ui.render_layer,
+			.layer  = ui->render_layer,
 			.window = 0,
 		},
 		&(ui_render_command_t){
@@ -989,7 +1214,7 @@ void ui_draw_circle(v2_t p, float radius, v4_t color)
 
 bool ui_mouse_in_rect(rect2_t rect)
 {
-	return rect2_contains_point(rect, ui.input->mouse_p);
+	return rect2_contains_point(rect, ui->input.mouse_p);
 }
 
 ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, ui_priority_t priority)
@@ -1002,10 +1227,10 @@ ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, 
 	hit_rect.max.x = ceilf(hit_rect.max.x);
 	hit_rect.max.y = ceilf(hit_rect.max.y);
 
-	if (ui.panels.current_panel)
-		hit_rect = rect2_intersect(ui.panels.current_panel->rect_init, rect);
+	if (ui->panels.current_panel)
+		hit_rect = rect2_intersect(ui->panels.current_panel->rect_init, rect);
 
-	bool hovered = rect2_contains_point(hit_rect, ui.input->mouse_p);
+	bool hovered = rect2_contains_point(hit_rect, ui->input.mouse_p);
 
 	if (hovered)
 	{
@@ -1017,8 +1242,7 @@ ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, 
 	{
 		result |= UI_HELD;
 
-		/* @UIInput
-		if (ui_mouse_buttons_released(ui.input, Button_left, false))
+		if (ui_button_released(Button_left, false))
 		{
 			if (hovered)
 			{
@@ -1029,21 +1253,18 @@ ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, 
 
 			ui_clear_active();
 		}
-		*/
 	}
 
 	if (ui_is_hot(id))
 	{
 		result |= UI_HOT;
 
-		/* @UIInput
-		if (ui_mouse_buttons_pressed(ui.input, Button_left, false))
+		if (ui_button_pressed(Button_left, false))
 		{
 			result |= UI_PRESSED;
-			ui.drag_anchor = sub(ui.input->mouse_p, rect2_center(rect));
+			ui->drag_anchor = sub(ui->input.mouse_p, rect2_center(rect));
 			ui_set_active(id);
 		}
-		*/
 	}
 
 	return result;
@@ -1053,9 +1274,9 @@ ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect)
 {
 	ui_priority_t priority = UI_PRIORITY_DEFAULT;
 
-	if (ui.override_priority != UI_PRIORITY_DEFAULT)
+	if (ui->override_priority != UI_PRIORITY_DEFAULT)
 	{
-		priority = ui.override_priority;
+		priority = ui->override_priority;
 	}
 
 	return ui_default_widget_behaviour_priority(id, rect, priority);
@@ -1121,7 +1342,7 @@ void ui_panel_begin(rect2_t rect)
 
 void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 {
-	ASSERT(ui.initialized);
+	ASSERT(ui->initialized);
 
 	if (id.value) 
 	{
@@ -1129,7 +1350,7 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 
 		if (ui_mouse_in_rect(rect))
 		{
-			ui.next_hovered_panel = id;
+			ui->next_hovered_panel = id;
 		}
 	}
 
@@ -1147,7 +1368,7 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 		{
 			if (ui_is_hovered_panel(id))
 			{
-				state->scroll_offset_y -= ui.input->mouse_wheel;
+				state->scroll_offset_y -= ui->input.mouse_wheel;
 				state->scroll_offset_y = flt_clamp(state->scroll_offset_y, 0.0f, max(0.0f, state->scrollable_height_y + ui_scalar(UI_SCALAR_WIDGET_MARGIN) - rect2_height(rect)));
 			}
 
@@ -1164,7 +1385,7 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 
 			if (ui_is_active(scrollbar_id))
 			{
-				float relative_y = CLAMP((ui.input.mouse_p.y - ui.drag_anchor.y) - scroll_area.min.y - handle_half_size, 0.0f, scroll_area_height - handle_size);
+				float relative_y = CLAMP((ui->input.mouse_p.y - ui->drag_anchor.y) - scroll_area.min.y - handle_half_size, 0.0f, scroll_area_height - handle_size);
 				pct = 1.0f - (relative_y / (scroll_area_height - handle_size));
 			}
 
@@ -1206,9 +1427,9 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 
 void ui_panel_end(void)
 {
-	ASSERT(ui.initialized);
+	ASSERT(ui->initialized);
 
-	ui_panel_t *panel = ui.panels.current_panel;
+	ui_panel_t *panel = ui->panels.current_panel;
 
 	if (ALWAYS(panel))
 	{
@@ -1230,7 +1451,7 @@ void ui_panel_end(void)
 
 void ui_seperator(void)
 {
-	if (NEVER(!ui.initialized)) 
+	if (NEVER(!ui->initialized)) 
 		return;
 
 	rect2_t *layout = ui_layout_rect();
@@ -1246,39 +1467,39 @@ void ui_seperator(void)
 
 void ui_label(string_t label)
 {
-	if (NEVER(!ui.initialized)) 
+	if (NEVER(!ui->initialized)) 
 		return;
 
-	rect2_t rect = ui_default_label_rect(&ui.style.font, label);
+	rect2_t rect = ui_default_label_rect(&ui->style.font, label);
 	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
 	rect2_t text_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
-	ui_draw_text(&ui.style.font, ui_text_default_align_p(&ui.style.font, text_rect, label), label);
+	ui_draw_text(&ui->style.font, ui_text_default_align_p(&ui->style.font, text_rect, label), label);
 }
 
 void ui_header(string_t label)
 {
-	if (NEVER(!ui.initialized)) 
+	if (NEVER(!ui->initialized)) 
 		return;
 
-	rect2_t rect = ui_default_label_rect(&ui.style.header_font, label);
+	rect2_t rect = ui_default_label_rect(&ui->style.header_font, label);
 	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
 	rect2_t text_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
-	ui_draw_text(&ui.style.header_font, ui_text_default_align_p(&ui.style.header_font, text_rect, label), label);
+	ui_draw_text(&ui->style.header_font, ui_text_default_align_p(&ui->style.header_font, text_rect, label), label);
 }
 
 float ui_label_width(string_t label)
 {
-    return ui_text_width(&ui.style.font, label) + 2.0f*ui_widget_padding();
+    return ui_text_width(&ui->style.font, label) + 2.0f*ui_widget_padding();
 }
 
 void ui_progress_bar(string_t label, float progress)
 {
-	if (NEVER(!ui.initialized)) 
+	if (NEVER(!ui->initialized)) 
 		return;
 
-	rect2_t rect = ui_default_label_rect(&ui.style.font, label);
+	rect2_t rect = ui_default_label_rect(&ui->style.font, label);
 	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
 
 	rect2_t text_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
@@ -1293,7 +1514,7 @@ void ui_progress_bar(string_t label, float progress)
 	ui_draw_rect(tray, ui_color(UI_COLOR_PROGRESS_BAR_EMPTY));
 	ui_draw_rect(filled, ui_color(UI_COLOR_PROGRESS_BAR_FILLED));
 
-	ui_draw_text(&ui.style.font, ui_text_default_align_p(&ui.style.font, text_rect, label), label);
+	ui_draw_text(&ui->style.font, ui_text_default_align_p(&ui->style.font, text_rect, label), label);
 }
 
 typedef enum ui_widget_state_t
@@ -1350,13 +1571,13 @@ bool ui_button(string_t label)
 {
 	bool result = false;
 
-	if (NEVER(!ui.initialized)) 
+	if (NEVER(!ui->initialized)) 
 		return result;
 
 	ui_id_t id = ui_id(label);
 
 	v2_t min_widget_size;
-	min_widget_size.x = ui_text_width(&ui.style.font, label);
+	min_widget_size.x = ui_text_width(&ui->style.font, label);
 	min_widget_size.y = ui_font_height();
 
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
@@ -1379,7 +1600,7 @@ bool ui_button(string_t label)
 	ui_draw_rect(shadow, ui_color(UI_COLOR_WIDGET_SHADOW));
 	ui_draw_rect(rect, color);
 
-	ui_draw_text_aligned(&ui.style.font, rect, label, make_v2(0.5f, 0.5f));
+	ui_draw_text_aligned(&ui->style.font, rect, label, make_v2(0.5f, 0.5f));
 
 	return result;
 }
@@ -1388,12 +1609,12 @@ bool ui_checkbox(string_t label, bool *result_value)
 {
 	bool result = false;
 
-	if (NEVER(!ui.initialized)) 
+	if (NEVER(!ui->initialized)) 
 		return result;
 
 	ui_id_t id = ui_id_pointer(result_value);
 
-	float label_width   = ui_text_width(&ui.style.font, label);
+	float label_width   = ui_text_width(&ui->style.font, label);
 	float label_padding = ui_scalar(UI_SCALAR_TEXT_MARGIN);
 
 	v2_t min_widget_size;
@@ -1469,7 +1690,7 @@ bool ui_checkbox(string_t label, bool *result_value)
 
 	// --- draw label ---
 
-	v2_t p = ui_text_align_p(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
+	v2_t p = ui_text_align_p(&ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
 	p.x += label_padding;
 	p.y += hover_lift;
 
@@ -1483,7 +1704,7 @@ bool ui_checkbox(string_t label, bool *result_value)
 	text_color = ui_interpolate_v4(ui_child_id(id, S("text_color")), text_color);
 
 	UI_COLOR(UI_COLOR_TEXT, text_color)
-	ui_draw_text(&ui.style.font, p, label);
+	ui_draw_text(&ui->style.font, p, label);
 
 	return result;
 }
@@ -1492,7 +1713,7 @@ bool ui_option_buttons(string_t label, int *value, int count, string_t *options)
 {
     bool result = false;
 
-	if (NEVER(!ui.initialized)) 
+	if (NEVER(!ui->initialized)) 
 		return result;
 
 	if (NEVER(!value))
@@ -1503,13 +1724,13 @@ bool ui_option_buttons(string_t label, int *value, int count, string_t *options)
 
 	ui_id_t id = ui_id(label);
 
-	float label_width   = ui_text_width(&ui.style.font, label);
+	float label_width   = ui_text_width(&ui->style.font, label);
 	float label_padding = 0.33f*ui_font_height();
 
 	float button_labels_width = 0.0f;
 	for (int i = 0; i < count; i++)
 	{
-		button_labels_width += ui_text_width(&ui.style.font, options[i]);
+		button_labels_width += ui_text_width(&ui->style.font, options[i]);
 	}
 
 	v2_t min_widget_size = { label_width + label_padding + button_labels_width, ui_font_height() };
@@ -1551,7 +1772,7 @@ bool ui_option_buttons(string_t label, int *value, int count, string_t *options)
     }
 	ui_pop_id();
 
-	ui_draw_text_aligned(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
+	ui_draw_text_aligned(&ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
     return result;
 }
@@ -1563,7 +1784,7 @@ bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t
 
     bool result = false;
 
-	if (NEVER(!ui.initialized)) 
+	if (NEVER(!ui->initialized)) 
 		return result;
 
 	if (NEVER(!selected_index))
@@ -1576,7 +1797,7 @@ bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t
 
 	ui_push_id(id);
 
-	float label_width   = ui_text_width(&ui.style.font, label);
+	float label_width   = ui_text_width(&ui->style.font, label);
 	float label_padding = 0.33f*ui_font_height();
 
 	float max_name_width = 0.0f;
@@ -1584,7 +1805,7 @@ bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t
 	float *heights = m_alloc_array_nozero(temp, count, float);
 	for (size_t i = 0; i < count; i++)
 	{
-		v2_t dim = ui_text_dim(&ui.style.font, names[i]);
+		v2_t dim = ui_text_dim(&ui->style.font, names[i]);
 		if (max_name_width < dim.x) max_name_width = dim.x;
 
 		float padded_height = dim.y + ui_widget_padding();
@@ -1597,7 +1818,7 @@ bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
 
 	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
-	ui_draw_text_aligned(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
+	ui_draw_text_aligned(&ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
 	ui_hoverable(id, label_rect);
 
@@ -1631,8 +1852,8 @@ bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t
 		dropdown_rect.max.y = rect.min.y;
 		dropdown_rect.min.y = dropdown_rect.max.y - clamped_height - 2.0f*ui_scalar(UI_SCALAR_WIDGET_MARGIN);
 
-		ui_render_layer_t old_layer = ui.render_layer;
-		ui.render_layer = UI_LAYER_OVERLAY_BACKGROUND;
+		ui_render_layer_t old_layer = ui->render_layer;
+		ui->render_layer = UI_LAYER_OVERLAY_BACKGROUND;
 
 		ui_push_clip_rect(dropdown_rect);
 		{
@@ -1649,8 +1870,8 @@ bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t
 
 		ui_panel_begin_ex(ui_child_id(id, S("panel")), dropdown_rect, UI_PANEL_SCROLLABLE_VERT);
 		{
-			ui_priority_t old_priority = ui.override_priority;
-			ui.override_priority = UI_PRIORITY_OVERLAY;
+			ui_priority_t old_priority = ui->override_priority;
+			ui->override_priority = UI_PRIORITY_OVERLAY;
 
 			ui_id_t dropdown_id = ui_id(S("dropdown"));
 			ui_default_widget_behaviour(dropdown_id, dropdown_rect);
@@ -1668,8 +1889,8 @@ bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t
 			}
 			ui_pop_id();
 
-			ui.render_layer = old_layer;
-			ui.override_priority = old_priority;
+			ui->render_layer = old_layer;
+			ui->override_priority = old_priority;
 		}
 		ui_panel_end();
 
@@ -1678,7 +1899,7 @@ bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t
 
 	if (result)
 	{
-		ui.focused_id = UI_ID_NULL;
+		ui->focused_id = UI_ID_NULL;
 		ui_close_popup(id);
 	}
 
@@ -1719,7 +1940,7 @@ typedef struct ui_slider__params_t
 
 fn_local void ui_slider__impl(ui_id_t id, rect2_t rect, ui_slider__params_t *p)
 {
-	if (NEVER(!ui.initialized)) 
+	if (NEVER(!ui->initialized)) 
 		return;
 
 	float slider_w           = rect2_width(rect);
@@ -1727,7 +1948,7 @@ fn_local void ui_slider__impl(ui_id_t id, rect2_t rect, ui_slider__params_t *p)
 	float slider_effective_w = slider_w - handle_w;
 
 	// TODO: This is needlessly confusing
-	float relative_x = CLAMP((ui.input->mouse_p.x - ui.drag_anchor.x) - rect.min.x - 0.5f*handle_w, 0.0f, slider_effective_w);
+	float relative_x = CLAMP((ui->input.mouse_p.x - ui->drag_anchor.x) - rect.min.x - 0.5f*handle_w, 0.0f, slider_effective_w);
 
 	float t_slider = 0.0f;
 
@@ -1814,12 +2035,12 @@ fn_local void ui_slider__impl(ui_id_t id, rect2_t rect, ui_slider__params_t *p)
 		} break;
 	}
 
-	ui_draw_text_aligned(&ui.style.font, body, value_text, make_v2(0.5f, 0.5f));
+	ui_draw_text_aligned(&ui->style.font, body, value_text, make_v2(0.5f, 0.5f));
 }
 
 bool ui_slider(string_t label, float *v, float min, float max)
 {
-	if (NEVER(!ui.initialized)) 
+	if (NEVER(!ui->initialized)) 
 		return false;
 
 	if (NEVER(!v)) 
@@ -1830,7 +2051,7 @@ bool ui_slider(string_t label, float *v, float min, float max)
 	ui_id_t id = ui_id_pointer(v);
 
 	v2_t min_widget_size;
-	min_widget_size.x = ui_text_width(&ui.style.font, label) + 32.0f;
+	min_widget_size.x = ui_text_width(&ui->style.font, label) + 32.0f;
 	min_widget_size.y = ui_font_height();
 
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
@@ -1838,7 +2059,7 @@ bool ui_slider(string_t label, float *v, float min, float max)
 
 	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
 
-	ui_draw_text_aligned(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
+	ui_draw_text_aligned(&ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
 	ui_slider__params_t p = {
 		.type = UI_SLIDER__F32,
@@ -1856,7 +2077,7 @@ bool ui_slider(string_t label, float *v, float min, float max)
 
 bool ui_slider_int_ex(string_t label, int *v, int min, int max, ui_slider_flags_t flags)
 {
-	if (NEVER(!ui.initialized)) 
+	if (NEVER(!ui->initialized)) 
 		return false;
 
 	if (NEVER(!v)) 
@@ -1870,14 +2091,14 @@ bool ui_slider_int_ex(string_t label, int *v, int min, int max, ui_slider_flags_
 
 	v2_t min_widget_size;
 	min_widget_size.y = ui_font_height();
-	min_widget_size.x = ui_text_width(&ui.style.font, label) + 32.0f + 2.0f*min_widget_size.y + 2.0f*widget_margin;
+	min_widget_size.x = ui_text_width(&ui->style.font, label) + 32.0f + 2.0f*min_widget_size.y + 2.0f*widget_margin;
 
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
 	ui_hoverable(id, rect);
 
 	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
 
-	ui_draw_text_aligned(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
+	ui_draw_text_aligned(&ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
 	if (flags & UI_SLIDER_FLAGS_INC_DEC_BUTTONS)
 	{
@@ -1966,7 +2187,7 @@ fn_local float ui_text_edit__get_caret_x(prepared_glyphs_t *prep, size_t index)
 
 void ui_text_edit(string_t label, dynamic_string_t *buffer)
 {
-	if (NEVER(!ui.initialized)) 
+	if (NEVER(!ui->initialized)) 
 		return;
 
 	arena_t *temp = m_get_temp(NULL, 0);
@@ -1996,27 +2217,27 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 
 	if (ui_is_hot(id))
 	{
-		ui.cursor = Cursor_text_input;
+		ui->cursor = Cursor_text_input;
 	}
 
-	bool inserted_character = false;
 	bool has_focus          = ui_id_has_focus(id);
+	bool inserted_character = false;
 	bool selection_active   = state->cursor != state->selection_start;
 
 	if (has_focus)
 	{
-		for (platform_event_t *event = ui.input->first_event;
+		for (ui_event_t *event = ui_iterate_events();
 			 event;
-			 event = event->next)
+			 event = ui_event_next(event))
 		{
 			switch (event->kind)
 			{
-				case Event_text:
+				case UiEvent_text:
 				{
-					for (size_t i = 0; i < event->text.text.count; i++)
+					for (size_t i = 0; i < event->text.count; i++)
 					{
 						// TODO: Unicode
-						char c = event->text.text.data[i];
+						char c = event->text.data[i];
 
 						if (c >= 32 && c < 127)
 						{
@@ -2032,15 +2253,16 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 						}
 					}
 
-					// @UiInput platform_consume_event(event);
+					ui_consume_event(event);
 				} break;
 
-				case Event_key:
+				case UiEvent_key:
 				{
-					if (event->key.pressed)
+					if (event->pressed)
 					{
-						switch (event->key.keycode)
+						switch (event->keycode)
 						{
+							// @UiInput: dedicated UI keycodes?
 							case Key_left:
 							{
 								if (selection_active && !event->shift)
@@ -2065,9 +2287,10 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 									}
 								}
 
-								// @UIInput platform_consume_event(event);
+								ui_consume_event(event);
 							} break;
 
+							// @UiInput: dedicated UI keycodes?
 							case Key_right:
 							{
 								if (selection_active && !event->shift)
@@ -2090,15 +2313,16 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 										state->selection_start = state->cursor;
 									}
 
-									// @UIInput platform_consume_event(event);
+									ui_consume_event(event);
 								}
 							} break;
 
+							// @UiInput: dedicated UI keycodes?
 							case Key_delete:
 							case Key_backspace:
 							{
-								bool delete    = event->key.keycode == Key_delete;
-								bool backspace = event->key.keycode == Key_backspace;
+								bool delete    = event->keycode == Key_delete;
+								bool backspace = event->keycode == Key_backspace;
 
 								size_t start = (size_t)state->selection_start;
 								size_t end   = (size_t)state->cursor;
@@ -2118,17 +2342,22 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 								state->cursor          = start;
 								state->selection_start = state->cursor;
 
-								if (delete)    debug_notif(COLORF_BLUE, 2.0f, Sf("delete    (s: %zu, e: %zu (#%zu))", start, end, remove_count));
-								if (backspace) debug_notif(COLORF_BLUE, 2.0f, Sf("backspace (s: %zu, e: %zu (#%zu))", start, end, remove_count));
+								if (delete)    debug_notif(COLORF_BLUE, 2.0f, 
+														   Sf("delete    (s: %zu, e: %zu (#%zu))", start, end, remove_count));
+								if (backspace) debug_notif(COLORF_BLUE, 2.0f, 
+														   Sf("backspace (s: %zu, e: %zu (#%zu))", start, end, remove_count));
+
+								ui_consume_event(event);
 							} break;
 
+							// @UiInput: dedicated UI keycodes?
 							case 'A':
 							{
 								if (event->ctrl)
 								{
 									state->selection_start = 0;
 									state->cursor          = buffer->count;
-									// @UIInput platform_consume_event(event);
+									ui_consume_event(event);
 								}
 							} break;
 						}
@@ -2142,24 +2371,24 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 	rect2_t  buffer_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
 
 	ui_draw_rect(rect, ui_color(UI_COLOR_SLIDER_BACKGROUND));
-	ui_draw_text_aligned(&ui.style.font, buffer_rect, string, make_v2(0.0f, 0.5f));
-	ui_draw_text_aligned(&ui.style.font, label_rect, label, make_v2(0.0f, 0.5f));
+	ui_draw_text_aligned(&ui->style.font, buffer_rect, string, make_v2(0.0f, 0.5f));
+	ui_draw_text_aligned(&ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
 
 	if (has_focus)
 	{
-		prepared_glyphs_t prep = atlas_prepare_glyphs(&ui.style.font, temp, string);
+		prepared_glyphs_t prep = atlas_prepare_glyphs(&ui->style.font, temp, string);
 
 		if (prep.count > 0)
 		{
 			if (interaction & UI_PRESSED)
 			{
-				float mouse_offset_x = ui.input->mouse_p.x - buffer_rect.min.x;
+				float mouse_offset_x = ui->input.mouse_p.x - buffer_rect.min.x;
 				state->cursor = (int)ui_text_edit__find_insert_point_from_offset(&prep, mouse_offset_x);
 				state->selection_start = state->cursor;
 			}
 			else if (interaction & UI_HELD)
 			{
-				float mouse_offset_x = ui.input->mouse_p.x - buffer_rect.min.x;
+				float mouse_offset_x = ui->input.mouse_p.x - buffer_rect.min.x;
 				state->cursor = (int)ui_text_edit__find_insert_point_from_offset(&prep, mouse_offset_x);
 			}
 
@@ -2208,136 +2437,144 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 
 void ui_tooltip(string_t text)
 {
-	if (!stack_full(ui.tooltip_stack))
+	if (!stack_full(ui->tooltip_stack))
 	{
-		ui_tooltip_t *tooltip = stack_add(ui.tooltip_stack);
+		ui_tooltip_t *tooltip = stack_add(ui->tooltip_stack);
 		string_into_storage(tooltip->text, text);
 	}
 }
 
 void ui_hover_tooltip(string_t text)
 {
-	string_into_storage(ui.next_tooltip, text);
+	string_into_storage(ui->next_tooltip, text);
 }
 
 //
 // Core
 //
 
-ui_t ui = {
-	.state = INIT_POOL(ui_state_t),
+void ui_init(ui_t *state)
+{
+	zero_struct(state);
+	state->state = (pool_t)INIT_POOL(ui_state_t);
+}
 
-	/*
-	.style = {
-		.animation_state = INIT_POOL(ui_anim_t),
-	},
-	*/
-};
+void equip_ui(ui_t *state)
+{
+	DEBUG_ASSERT_MSG(!ui, "Unequip the previous UI state before you equip this new one, please");
+	ui = state;
+}
+
+void unequip_ui(void)
+{
+	DEBUG_ASSERT_MSG(ui, "You should only call unequip_ui if there's actually a ui equipped");
+	ui = NULL;
+}
 
 bool ui_is_cold(ui_id_t id)
 {
-	return (ui.hot.value != id.value && ui.active.value != id.value);
+	return (ui->hot.value != id.value && ui->active.value != id.value);
 }
 
 bool ui_is_next_hot(ui_id_t id)
 {
-	return ui.next_hot.value == id.value;
+	return ui->next_hot.value == id.value;
 }
 
 bool ui_is_hot(ui_id_t id)
 {
-	return ui.hot.value == id.value;
+	return ui->hot.value == id.value;
 }
 
 bool ui_is_active(ui_id_t id)
 {
-	return ui.active.value == id.value;
+	return ui->active.value == id.value;
 }
 
 bool ui_is_hovered_panel(ui_id_t id)
 {
-	return ui.hovered_panel.value == id.value;
+	return ui->hovered_panel.value == id.value;
 }
 
 void ui_set_hot(ui_id_t id)
 {
-	if (!ui.active.value)
+	if (!ui->active.value)
 	{
-		ui.hot = id;
+		ui->hot = id;
 	}
 }
 
 void ui_set_next_hot(ui_id_t id, ui_priority_t priority)
 {
-	if (ui.next_hot_priority <= priority)
+	if (ui->next_hot_priority <= priority)
 	{
-		ui.next_hot          = id;
-		ui.next_hot_priority = priority;
+		ui->next_hot          = id;
+		ui->next_hot_priority = priority;
 	}
 }
 
 void ui_set_active(ui_id_t id)
 {
-	ui.active = id;
-	ui.focused_id = id;
+	ui->active = id;
+	ui->focused_id = id;
 }
 
 void ui_clear_next_hot(void)
 {
-	ui.next_hot.value = 0;
+	ui->next_hot.value = 0;
 }
 
 void ui_clear_hot(void)
 {
-	ui.hot.value = 0;
+	ui->hot.value = 0;
 }
 
 void ui_clear_active(void)
 {
-	ui.active.value = 0;
+	ui->active.value = 0;
 }
 
 bool ui_has_focus(void)
 {
-	return ui.has_focus && ui.app_has_focus;
+	return ui->has_focus && ui->app_has_focus;
 }
 
 bool ui_id_has_focus(ui_id_t id)
 {
-	return ui.has_focus && ui.focused_id.value == id.value;
+	return ui->has_focus && ui->focused_id.value == id.value;
 }
 
 ui_state_t *ui_get_state(ui_id_t id)
 {
-	ui_state_t *result = table_find_object(&ui.state_index, id.value);
+	ui_state_t *result = table_find_object(&ui->state_index, id.value);
 
 	if (!result)
 	{
-		result = pool_add(&ui.state);
+		result = pool_add(&ui->state);
 		result->id                  = id;
-		result->created_frame_index = ui.frame_index;
-		table_insert_object(&ui.state_index, id.value, result);
+		result->created_frame_index = ui->frame_index;
+		table_insert_object(&ui->state_index, id.value, result);
 	}
 
 	ASSERT(result->id.value == id.value);
 
-	result->last_touched_frame_index = ui.frame_index;
+	result->last_touched_frame_index = ui->frame_index;
 	return result;
 }
 
 bool ui_state_is_new(ui_state_t *state)
 {
-	return state->created_frame_index == ui.frame_index;
+	return state->created_frame_index == ui->frame_index;
 }
 
 void ui_hoverable(ui_id_t id, rect2_t rect)
 {
 	if (ui_mouse_in_rect(rect))
 	{
-		ui.next_hovered_widget = id;
+		ui->next_hovered_widget = id;
 	}
 
-	string_t next_tooltip = string_from_storage(ui.next_tooltip);
+	string_t next_tooltip = string_from_storage(ui->next_tooltip);
 
 	if (!string_empty(next_tooltip) && 
 		ui_is_hovered_delay(id, ui_scalar(UI_SCALAR_TOOLTIP_DELAY)))
@@ -2345,25 +2582,25 @@ void ui_hoverable(ui_id_t id, rect2_t rect)
 		ui_tooltip(next_tooltip);
 	}
 
-	ui.next_tooltip.count = 0;
+	ui->next_tooltip.count = 0;
 }
 
 bool ui_is_hovered(ui_id_t id)
 {
-	return ui.hovered_widget.value == id.value;
+	return ui->hovered_widget.value == id.value;
 }
 
 bool ui_is_hovered_delay(ui_id_t id, float delay)
 {
-	return ui_is_hovered(id) && (ui.hover_time_seconds >= delay);
+	return ui_is_hovered(id) && (ui->hover_time_seconds >= delay);
 }
 
 static void ui_initialize(void)
 {
-	ASSERT(!ui.initialized);
+	ASSERT(!ui->initialized);
 
-	ui.style.font_data        = fs_read_entire_file(&ui.arena, S("gamedata/fonts/NotoSans/NotoSans-Regular.ttf"));
-	ui.style.header_font_data = fs_read_entire_file(&ui.arena, S("gamedata/fonts/NotoSans/NotoSans-Bold.ttf"));
+	ui->style.font_data        = fs_read_entire_file(&ui->arena, S("gamedata/fonts/NotoSans/NotoSans-Regular.ttf"));
+	ui->style.header_font_data = fs_read_entire_file(&ui->arena, S("gamedata/fonts/NotoSans/NotoSans-Bold.ttf"));
 	ui_set_font_height(18.0f);
 
 	v4_t background    = make_v4(0.20f, 0.15f, 0.17f, 1.0f);
@@ -2374,80 +2611,82 @@ static void ui_initialize(void)
 	v4_t active = make_v4(0.30f, 0.55f, 0.50f, 1.0f);
 	v4_t fired  = make_v4(0.45f, 0.65f, 0.55f, 1.0f);
 
-	ui.style.base_scalars[UI_SCALAR_TOOLTIP_DELAY         ] = 0.0f;
-	ui.style.base_scalars[UI_SCALAR_ANIMATION_RATE        ] = 40.0f;
-	ui.style.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS   ] = 512.0f;
-	ui.style.base_scalars[UI_SCALAR_ANIMATION_DAMPEN      ] = 32.0f;
-	ui.style.base_scalars[UI_SCALAR_ANIMATION_LENGTH_LIMIT] = FLT_MAX;
-	ui.style.base_scalars[UI_SCALAR_HOVER_LIFT            ] = 1.5f;
-	ui.style.base_scalars[UI_SCALAR_WINDOW_MARGIN         ] = 0.0f;
-	ui.style.base_scalars[UI_SCALAR_WIDGET_MARGIN         ] = 1.0f;
-	ui.style.base_scalars[UI_SCALAR_TEXT_MARGIN           ] = 2.2f;
-	ui.style.base_scalars[UI_SCALAR_ROUNDEDNESS           ] = 2.5f;
-	ui.style.base_scalars[UI_SCALAR_TEXT_ALIGN_X          ] = 0.5f;
-	ui.style.base_scalars[UI_SCALAR_TEXT_ALIGN_Y          ] = 0.5f;
-	ui.style.base_scalars[UI_SCALAR_SCROLLBAR_WIDTH       ] = 12.0f;
-	ui.style.base_scalars[UI_SCALAR_SLIDER_HANDLE_RATIO   ] = 1.0f / 4.0f;
-	ui.style.base_colors [UI_COLOR_TEXT                   ] = make_v4(0.95f, 0.90f, 0.85f, 1.0f);
-	ui.style.base_colors [UI_COLOR_TEXT_SHADOW            ] = make_v4(0.00f, 0.00f, 0.00f, 0.50f);
-	ui.style.base_colors [UI_COLOR_WIDGET_SHADOW          ] = make_v4(0.00f, 0.00f, 0.00f, 0.20f);
-	ui.style.base_colors [UI_COLOR_WINDOW_BACKGROUND      ] = background;
-	ui.style.base_colors [UI_COLOR_WINDOW_TITLE_BAR       ] = make_v4(0.45f, 0.25f, 0.25f, 1.0f);
-	ui.style.base_colors [UI_COLOR_WINDOW_TITLE_BAR_HOT   ] = make_v4(0.45f, 0.22f, 0.22f, 1.0f);
-	ui.style.base_colors [UI_COLOR_WINDOW_CLOSE_BUTTON    ] = make_v4(0.35f, 0.15f, 0.15f, 1.0f);
-	ui.style.base_colors [UI_COLOR_WINDOW_OUTLINE         ] = make_v4(0.1f, 0.1f, 0.1f, 0.20f);
-	ui.style.base_colors [UI_COLOR_PROGRESS_BAR_EMPTY     ] = background_hi;
-	ui.style.base_colors [UI_COLOR_PROGRESS_BAR_FILLED    ] = hot;
-	ui.style.base_colors [UI_COLOR_BUTTON_IDLE            ] = foreground;
-	ui.style.base_colors [UI_COLOR_BUTTON_HOT             ] = hot;
-	ui.style.base_colors [UI_COLOR_BUTTON_ACTIVE          ] = active;
-	ui.style.base_colors [UI_COLOR_BUTTON_FIRED           ] = fired;
-	ui.style.base_colors [UI_COLOR_SLIDER_BACKGROUND      ] = background_hi;
-	ui.style.base_colors [UI_COLOR_SLIDER_FOREGROUND      ] = foreground;
-	ui.style.base_colors [UI_COLOR_SLIDER_HOT             ] = hot;
-	ui.style.base_colors [UI_COLOR_SLIDER_ACTIVE          ] = active;
+	ui->style.base_scalars[UI_SCALAR_TOOLTIP_DELAY         ] = 0.0f;
+	ui->style.base_scalars[UI_SCALAR_ANIMATION_RATE        ] = 40.0f;
+	ui->style.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS   ] = 512.0f;
+	ui->style.base_scalars[UI_SCALAR_ANIMATION_DAMPEN      ] = 32.0f;
+	ui->style.base_scalars[UI_SCALAR_ANIMATION_LENGTH_LIMIT] = FLT_MAX;
+	ui->style.base_scalars[UI_SCALAR_HOVER_LIFT            ] = 1.5f;
+	ui->style.base_scalars[UI_SCALAR_WINDOW_MARGIN         ] = 0.0f;
+	ui->style.base_scalars[UI_SCALAR_WIDGET_MARGIN         ] = 1.0f;
+	ui->style.base_scalars[UI_SCALAR_TEXT_MARGIN           ] = 2.2f;
+	ui->style.base_scalars[UI_SCALAR_ROUNDEDNESS           ] = 2.5f;
+	ui->style.base_scalars[UI_SCALAR_TEXT_ALIGN_X          ] = 0.5f;
+	ui->style.base_scalars[UI_SCALAR_TEXT_ALIGN_Y          ] = 0.5f;
+	ui->style.base_scalars[UI_SCALAR_SCROLLBAR_WIDTH       ] = 12.0f;
+	ui->style.base_scalars[UI_SCALAR_SLIDER_HANDLE_RATIO   ] = 1.0f / 4.0f;
+	ui->style.base_colors [UI_COLOR_TEXT                   ] = make_v4(0.95f, 0.90f, 0.85f, 1.0f);
+	ui->style.base_colors [UI_COLOR_TEXT_SHADOW            ] = make_v4(0.00f, 0.00f, 0.00f, 0.50f);
+	ui->style.base_colors [UI_COLOR_WIDGET_SHADOW          ] = make_v4(0.00f, 0.00f, 0.00f, 0.20f);
+	ui->style.base_colors [UI_COLOR_WINDOW_BACKGROUND      ] = background;
+	ui->style.base_colors [UI_COLOR_WINDOW_TITLE_BAR       ] = make_v4(0.45f, 0.25f, 0.25f, 1.0f);
+	ui->style.base_colors [UI_COLOR_WINDOW_TITLE_BAR_HOT   ] = make_v4(0.45f, 0.22f, 0.22f, 1.0f);
+	ui->style.base_colors [UI_COLOR_WINDOW_CLOSE_BUTTON    ] = make_v4(0.35f, 0.15f, 0.15f, 1.0f);
+	ui->style.base_colors [UI_COLOR_WINDOW_OUTLINE         ] = make_v4(0.1f, 0.1f, 0.1f, 0.20f);
+	ui->style.base_colors [UI_COLOR_PROGRESS_BAR_EMPTY     ] = background_hi;
+	ui->style.base_colors [UI_COLOR_PROGRESS_BAR_FILLED    ] = hot;
+	ui->style.base_colors [UI_COLOR_BUTTON_IDLE            ] = foreground;
+	ui->style.base_colors [UI_COLOR_BUTTON_HOT             ] = hot;
+	ui->style.base_colors [UI_COLOR_BUTTON_ACTIVE          ] = active;
+	ui->style.base_colors [UI_COLOR_BUTTON_FIRED           ] = fired;
+	ui->style.base_colors [UI_COLOR_SLIDER_BACKGROUND      ] = background_hi;
+	ui->style.base_colors [UI_COLOR_SLIDER_FOREGROUND      ] = foreground;
+	ui->style.base_colors [UI_COLOR_SLIDER_HOT             ] = hot;
+	ui->style.base_colors [UI_COLOR_SLIDER_ACTIVE          ] = active;
 
-	ui.render_commands.capacity = UI_RENDER_COMMANDS_CAPACITY;
-	ui.render_commands.keys     = m_alloc_array_nozero(&ui.arena, ui.render_commands.capacity, ui_render_command_key_t);
-	ui.render_commands.commands = m_alloc_array_nozero(&ui.arena, ui.render_commands.capacity, ui_render_command_t);
+	ui->render_commands.capacity = UI_RENDER_COMMANDS_CAPACITY;
+	ui->render_commands.keys     = m_alloc_array_nozero(&ui->arena, ui->render_commands.capacity, ui_render_command_key_t);
+	ui->render_commands.commands = m_alloc_array_nozero(&ui->arena, ui->render_commands.capacity, ui_render_command_t);
 
-	ui.initialized = true;
+	ui->initialized = true;
 }
 
-bool ui_begin(input_t *input, float dt)
+bool ui_begin(float dt)
 {
-	if (!ui.initialized)
+	if (!ui->initialized)
 	{
 		ui_initialize();
 	}
 
-	ui.input = input;
-	ui.dt    = dt;
+	ui__trickle_input(&ui->input, &ui->queued_input);
 
-	ui.last_frame_ui_rect_count = ui.render_commands.count;
+	//ui->input = input;
+	ui->dt    = dt;
+
+	ui->last_frame_ui_rect_count = ui->render_commands.count;
     ui_reset_render_commands();
 
-	for (pool_iter_t it = pool_iter(&ui.state); 
+	for (pool_iter_t it = pool_iter(&ui->state); 
 		 pool_iter_valid(&it); 
 		 pool_iter_next(&it))
 	{
 		ui_state_t *state = it.data;
 
-		if (state->last_touched_frame_index < ui.frame_index)
+		if (state->last_touched_frame_index < ui->frame_index)
 		{
-			table_remove(&ui.state_index, state->id.value);
-			pool_rem_item(&ui.state, state);
+			table_remove(&ui->state_index, state->id.value);
+			pool_rem_item(&ui->state, state);
 		}
 	}
 
-	for_pool(it, &ui.style.animation_state)
+	for_pool(it, &ui->style.animation_state)
 	{
 		// TODO: Figure out the situation with pool_free taking a handle but
 		// we don't have a handle when iterating?
-		ui_anim_handle_t handle = ui_anim_handle_from_index(&ui.style.animation_state, it);
-		ui_anim_t *anim = &ui.style.animation_state.items[it];
+		ui_anim_handle_t handle = ui_anim_handle_from_index(&ui->style.animation_state, it);
+		ui_anim_t *anim = &ui->style.animation_state.items[it];
 
-		if (anim->last_touched_frame_index >= ui.frame_index)
+		if (anim->last_touched_frame_index >= ui->frame_index)
 		{
 			float length_limit = anim->length_limit;
 			float c_t = anim->c_t;
@@ -2469,64 +2708,64 @@ bool ui_begin(input_t *input, float dt)
 			v4_t accel_v = mul(-c_v, velocity);
 			v4_t accel = add(accel_t, accel_v);
 
-			velocity = add(velocity, mul(ui.dt, accel));
-			current  = add(current,  mul(ui.dt, velocity));
+			velocity = add(velocity, mul(ui->dt, accel));
+			current  = add(current,  mul(ui->dt, velocity));
 
 			anim->t_current  = current;
 			anim->t_velocity = velocity;
 		}
 		else
 		{
-			table_remove(&ui.style.animation_index, anim->id.value);
-			ui_anim_pool_free(&ui.style.animation_state, handle);
+			table_remove(&ui->style.animation_index, anim->id.value);
+			ui_anim_pool_free(&ui->style.animation_state, handle);
 		}
 	}
 
-	ui.frame_index += 1;
+	ui->frame_index += 1;
 	
 	// now that the frame index is incremented, clear the current frame arena
 	arena_t *frame_arena = ui_frame_arena();
 	m_reset_and_decommit(frame_arena);
 
-	ui.current_time = os_hires_time();
+	ui->current_time = os_hires_time();
 
-    if (!ui.active.value)
+    if (!ui->active.value)
 	{
-		if (ui.next_hovered_widget.value &&
-			ui.next_hovered_widget.value != ui.hovered_widget.value)
+		if (ui->next_hovered_widget.value &&
+			ui->next_hovered_widget.value != ui->hovered_widget.value)
 		{
-			ui.hover_time = ui.current_time;
+			ui->hover_time = ui->current_time;
 		}
 
-		ui.hot            = ui.next_hot;
-		ui.hovered_panel  = ui.next_hovered_panel;
-		ui.hovered_widget = ui.next_hovered_widget;
+		ui->hot            = ui->next_hot;
+		ui->hovered_panel  = ui->next_hovered_panel;
+		ui->hovered_widget = ui->next_hovered_widget;
 	}
 
-	ui.hover_time_seconds = 0.0f;
+	ui->hover_time_seconds = 0.0f;
 
-	if (ui.hovered_widget.value)
+	if (ui->hovered_widget.value)
 	{
-		ui.hover_time_seconds = (float)os_seconds_elapsed(ui.hover_time, ui.current_time);
+		ui->hover_time_seconds = (float)os_seconds_elapsed(ui->hover_time, ui->current_time);
 	}
 
-	ui.next_hot            = UI_ID_NULL;
-	ui.next_hot_priority   = UI_PRIORITY_DEFAULT;
-	ui.next_hovered_panel  = UI_ID_NULL;
-	ui.next_hovered_widget = UI_ID_NULL;
+	ui->next_hot            = UI_ID_NULL;
+	ui->next_hot_priority   = UI_PRIORITY_DEFAULT;
+	ui->next_hovered_panel  = UI_ID_NULL;
+	ui->next_hovered_widget = UI_ID_NULL;
 
-	ui.hovered = false;
+	ui->hovered = false;
 	
-	if (ui.cursor_reset_delay > 0)
+	if (ui->cursor_reset_delay > 0)
 	{
-		ui.cursor_reset_delay -= 1;
+		ui->cursor_reset_delay -= 1;
 	}
 	else
 	{
-		ui.cursor = Cursor_arrow;
+		ui->cursor = Cursor_arrow;
 	}
 
-	return ui.has_focus;
+	return ui->has_focus;
 }
 
 void ui_end(void)
@@ -2541,35 +2780,35 @@ void ui_end(void)
 	float font_height = ui_font_height();
 	float at_y = 32.0f;
 
-	for (size_t i = 0; i < stack_count(ui.tooltip_stack); i++)
+	for (size_t i = 0; i < stack_count(ui->tooltip_stack); i++)
 	{
-		ui_tooltip_t *tooltip = &ui.tooltip_stack.values[i];
+		ui_tooltip_t *tooltip = &ui->tooltip_stack.values[i];
 
 		string_t text = string_from_storage(tooltip->text);
 
-		float text_w = ui_text_width(&ui.style.font, text);
+		float text_w = ui_text_width(&ui->style.font, text);
 
 		float center_x = 0.5f*(float)res_x;
 		rect2_t rect = rect2_center_dim(make_v2(center_x, at_y), make_v2(4.0f + text_w, font_height));
 
 		ui_draw_rect_shadow(rect, make_v4(0, 0, 0, 0.5f), 0.20f, 32.0f);
-		ui_draw_text_aligned(&ui.style.font, rect, text, make_v2(0.5f, 0.5f));
-		at_y += ui.style.font.y_advance;
+		ui_draw_text_aligned(&ui->style.font, rect, text, make_v2(0.5f, 0.5f));
+		at_y += ui->style.font.y_advance;
 	}
 
-	stack_reset(ui.tooltip_stack);
+	stack_reset(ui->tooltip_stack);
 
-	debug_notif_t *notifs           = ui.first_debug_notif;
+	debug_notif_t *notifs           = ui->first_debug_notif;
 	debug_notif_t *surviving_notifs = NULL;
 
 	v2_t notif_at = { 4, res_y - 4 };
 
-	ui.first_debug_notif = NULL;
+	ui->first_debug_notif = NULL;
 	while (notifs)
 	{
 		debug_notif_t *notif = sll_pop(notifs);
 
-		v2_t text_dim = ui_text_dim(&ui.style.font, notif->text);
+		v2_t text_dim = ui_text_dim(&ui->style.font, notif->text);
 
 		v2_t pos = add(notif_at, make_v2(0, -text_dim.y));
 
@@ -2579,11 +2818,11 @@ void ui_end(void)
 		color.w *= smoothstep(saturate(4.0f * lifetime_t));
 
 		UI_COLOR(UI_COLOR_TEXT, color)
-		ui_draw_text(&ui.style.font, pos, notif->text);
+		ui_draw_text(&ui->style.font, pos, notif->text);
 
 		notif_at.y -= text_dim.y + 4.0;
 
-		notif->lifetime -= ui.dt;
+		notif->lifetime -= ui->dt;
 		if (notif->lifetime > 0.0f)
 		{
 			sll_push(surviving_notifs, notif);
@@ -2596,52 +2835,37 @@ void ui_end(void)
 		debug_notif_replicate(notif);
 	}
 
-	for (platform_event_t *event = ui.input->first_event;
-		 event;
-		 event = event->next)
+	if (ui_button_pressed(UiButton_any, true))
 	{
-		switch (event->kind)
-		{
-			case Event_mouse_button:
-			{
-				if (event->mouse_button.pressed)
-				{
-					ui.has_focus = ui.hovered;
-					// @UIInput platform_consume_event(event);
-				}
-			} break;
+		ui->has_focus = ui->hovered;
+	}
 
-			case Event_key:
-			{
-				if (event->key.pressed)
-				{
-					if (event->key.keycode == Key_escape)
-					{
-						if (ui_id_valid(ui.focused_id))
-						{
-							ui.focused_id = UI_ID_NULL;
-							// @UIInput platform_consume_event(event);
-						}
-						else if (ui_has_focus())
-						{
-							ui.has_focus = false;
-							// @UIInput platform_consume_event(event);
-						}
-					}
-				}
-			} break;
+	if (ui->has_focus && ui_key_pressed(Key_escape, true))
+	{
+		if (ui_id_valid(ui->focused_id))
+		{
+			ui->focused_id = UI_ID_NULL;
+		}
+		else
+		{
+			ui->has_focus = false;
 		}
 	}
 
-	ASSERT(ui.panels.current_panel == NULL);
-	ASSERT(ui.id_stack.at == 0);
+	ASSERT(ui->panels.current_panel == NULL);
+	ASSERT(ui->id_stack.at == 0);
 
 	ui_sort_render_commands();
-}
 
-ui_render_command_list_t *ui_get_render_commands(void)
-{
-    return &ui.render_commands;
+	if (ui->input.events.head)
+	{
+		ASSERT(ui->input.events.tail);
+
+		ui->input.events.tail->next = ui->first_free_event;
+		ui->first_free_event = ui->input.events.head;
+		ui->input.events.head = NULL;
+		ui->input.events.tail = NULL;
+	}
 }
 
 void debug_text(v4_t color, string_t fmt, ...)
@@ -2672,14 +2896,14 @@ void debug_notif_va(v4_t color, float time, string_t fmt, va_list args)
 		string_t text = string_format(ui_frame_arena(), string_null_terminate(temp, fmt).data, args);
 
 		debug_notif_t *notif = m_alloc_struct(ui_frame_arena(), debug_notif_t);
-		notif->id            = ui_id_u64(ui.next_notif_id++);
+		notif->id            = ui_id_u64(ui->next_notif_id++);
 		notif->color         = color;
 		notif->text          = text;
 		notif->init_lifetime = time;
 		notif->lifetime      = time;
 
-		notif->next = ui.first_debug_notif;
-		ui.first_debug_notif = notif;
+		notif->next = ui->first_debug_notif;
+		ui->first_debug_notif = notif;
 	}
 }
 
@@ -2688,6 +2912,6 @@ void debug_notif_replicate(debug_notif_t *notif)
 	debug_notif_t *repl = m_copy_struct(ui_frame_arena(), notif);
 	repl->text = string_copy(ui_frame_arena(), repl->text);
 
-	repl->next = ui.first_debug_notif;
-	ui.first_debug_notif = repl;
+	repl->next = ui->first_debug_notif;
+	ui->first_debug_notif = repl;
 }

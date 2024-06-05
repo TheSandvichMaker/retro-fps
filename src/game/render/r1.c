@@ -237,7 +237,7 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 			},
 			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
 			.render_target_count     = 1,
-			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm,
+			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm_srgb,
 		});
 	}
 
@@ -258,8 +258,8 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 					.src_blend       = RhiBlend_src_alpha,
 					.dst_blend       = RhiBlend_inv_src_alpha,
 					.blend_op        = RhiBlendOp_add,
-					.src_blend_alpha = RhiBlend_src_alpha,
-					.dst_blend_alpha = RhiBlend_inv_src_alpha,
+					.src_blend_alpha = RhiBlend_inv_dest_alpha,
+					.dst_blend_alpha = RhiBlend_one,
 					.blend_op_alpha  = RhiBlendOp_add,
 					.write_mask      = RhiColorWriteEnable_all,
 				},
@@ -267,7 +267,7 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 			},
 			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
 			.render_target_count     = 1,
-			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm,
+			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm_srgb,
 		});
 	}
 }

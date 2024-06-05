@@ -370,7 +370,9 @@ void app_init(platform_init_io_t *io)
 	app_state_t *app = m_bootstrap(app_state_t, arena);
 	io->app_state = app;
 
-	app->ui            = m_alloc_struct(&app->arena, ui_t);
+	app->ui = m_alloc_struct(&app->arena, ui_t);
+	ui_init(app->ui);
+
 	app->action_system = m_alloc_struct(&app->arena, action_system_t);
 
 	equip_action_system(app->action_system);
@@ -464,67 +466,6 @@ void app_init(platform_init_io_t *io)
 	unequip_gamestate();
 }
 
-fn_local void tick_game  (gamestate_t *game, float dt);
-fn_local void tick_ui    (/*ui_t        *ui,*/   float dt);
-fn_local void render_game(gamestate_t *game, rhi_window_t window);
-
-fn_local void app_tick(platform_tick_io_t *io)
-{
-	app_state_t     *app            = io->app_state;
-	gamestate_t     *game           = app->game;
-	action_system_t *action_system  = app->action_system;
-	//ui_t            *ui             = app->ui;
-	//r1_state_t       *r1             = app->r1;
-
-	equip_action_system(action_system);
-	ingest_action_system_input(io->input);
-
-	suppress_actions(ui.has_focus);
-
-	const double sim_rate = 240.0;
-	const double dt       = 1.0 / sim_rate;
-
-	// clamp frame time to avoid death spirals
-	double frame_time = MIN(io->frame_time, 0.1);
-
-	app->accumulator += frame_time;
-
-	bool first_iteration = true;
-	while (app->accumulator >= dt)
-	{
-		tick_game(game, (float)dt);
-		app->accumulator -= dt;
-
-		if (first_iteration)
-		{
-			action_system_clear_sticky_edges();
-			first_iteration = false;
-		}
-	}
-
-	unequip_action_system();
-
-	/*
-	for (platform_event_t *event = io->first_event;
-		 event;
-		 event = event->next)
-	{
-		case Event_mouse_move:
-		{
-			ui_event_t *ui_event = ui_allocate_event();
-			ui_event->kind = UIEvent_mouse_move;
-		} break;
-	}
-	*/
-
-	tick_ui((float)frame_time);
-
-	rhi_window_t window = io->rhi_window;
-	render_game(game, window);
-
-	process_asset_changes();
-}
-
 fn_local void tick_game(gamestate_t *game, float dt)
 {
 	map_t    *map    = game->map;
@@ -554,28 +495,113 @@ fn_local void tick_game(gamestate_t *game, float dt)
 	mixer_set_listener(camera->p, negate(camera->computed_z));
 }
 
-fn_local void tick_ui(/*ui_t *ui, */float dt)
+fn_local void tick_ui(input_t *input, gamestate_t *game, ui_t *the_ui, float dt)
 {
 	(void)dt;
 
-	// @Globals
-	// equip_ui(ui);
+	equip_ui(the_ui);
 
-	/*
-	ui_begin(NULL, dt);
+	// TODO: Is it cool or stupid that we're just translating between events
+	// for "no" reason?
+	// Cool:   decouple UI from platform abstraction
+	// Uncool: cringe duplicate work
+	for (platform_event_t *event = input->first_event;
+		 event;
+		 event = event->next)
+	{
+		switch (event->kind)
+		{
+			case Event_mouse_move:
+			{
+				ui_push_input_event(&(ui_event_t){
+					.kind    = UiEvent_mouse_move,
+					.mouse_p = event->mouse_move.mouse_p,
+					.ctrl    = event->ctrl,
+					.alt     = event->alt,
+					.shift   = event->shift,
+				});
+			} break;
+
+			case Event_mouse_wheel:
+			{
+				ui_push_input_event(&(ui_event_t){
+					.kind        = UiEvent_mouse_wheel,
+					.mouse_wheel = event->mouse_wheel.wheel,
+					.mouse_p     = event->mouse_wheel.mouse_p,
+					.ctrl        = event->ctrl,
+					.alt         = event->alt,
+					.shift       = event->shift,
+				});
+			} break;
+
+			case Event_mouse_button:
+			{
+				ui_buttons_t button = 0;
+
+				switch (event->mouse_button.button)
+				{
+					case Button_left:   button = UiButton_left;   break;
+					case Button_middle: button = UiButton_middle; break;
+					case Button_right:  button = UiButton_right;  break;
+					case Button_x1:     button = UiButton_x1;     break;
+					case Button_x2:     button = UiButton_x2;     break;
+				}
+
+				ui_push_input_event(&(ui_event_t){
+					.kind    = UiEvent_mouse_button,
+					.mouse_p = event->mouse_button.mouse_p,
+					.pressed = event->mouse_button.pressed,
+					.button  = button,
+					.ctrl    = event->ctrl,
+					.alt     = event->alt,
+					.shift   = event->shift,
+				});
+			} break;
+
+			case Event_key:
+			{
+				ui_push_input_event(&(ui_event_t){
+					.kind    = UiEvent_key,
+					.keycode = event->key.keycode,
+					.pressed = event->key.pressed,
+					.ctrl    = event->ctrl,
+					.alt     = event->alt,
+					.shift   = event->shift,
+				});
+			} break;
+
+			case Event_text:
+			{
+				ui_event_t ui_event = { 
+					.kind    = UiEvent_text,
+					.ctrl    = event->ctrl,
+					.alt     = event->alt,
+					.shift   = event->shift,
+				};
+				string_into_storage(ui_event.text, string_from_storage(event->text.text));
+
+				ui_push_input_event(&ui_event);
+			} break;
+		}
+	}
+
+	equip_gamestate(game);
+
+	ui_begin(dt);
 	{
 		update_and_render_in_game_editor();
 	}
     ui_end();
-	*/
 
-	//io->cursor = ui.cursor;
+	unequip_gamestate();
+
+	//io->cursor = ui->cursor;
 
 	// @Globals
-	//unequip_ui();
+	unequip_ui();
 }
 
-fn_local void render_game(/*r1_t *r1, */gamestate_t *game, rhi_window_t window)
+fn_local void render_game(/*r1_t *r1, */gamestate_t *game, ui_render_command_list_t *ui_commands, rhi_window_t window)
 {
 	// @Globals
 	// equip_r1(r1);
@@ -626,12 +652,55 @@ fn_local void render_game(/*r1_t *r1, */gamestate_t *game, rhi_window_t window)
 		r1_render_game_view(list, backbuffer, &view, map);
 	}
 
-	ui_render_command_list_t *ui_commands = ui_get_render_commands();
 	r1_render_ui(list, backbuffer, ui_commands);
 
 	rhi_end_frame();
 
 	// unequip_r1();
+}
+
+fn_local void app_tick(platform_tick_io_t *io)
+{
+	app_state_t     *app            = io->app_state;
+	gamestate_t     *game           = app->game;
+	action_system_t *action_system  = app->action_system;
+	ui_t            *the_ui         = app->ui;
+	//r1_state_t       *r1             = app->r1;
+
+	equip_action_system(action_system);
+	ingest_action_system_input(io->input);
+
+	suppress_actions(the_ui->has_focus);
+
+	const double sim_rate = 240.0;
+	const double dt       = 1.0 / sim_rate;
+
+	// clamp frame time to avoid death spirals
+	double frame_time = MIN(io->frame_time, 0.1);
+
+	app->accumulator += frame_time;
+
+	bool first_iteration = true;
+	while (app->accumulator >= dt)
+	{
+		tick_game(game, (float)dt);
+		app->accumulator -= dt;
+
+		if (first_iteration)
+		{
+			action_system_clear_sticky_edges();
+			first_iteration = false;
+		}
+	}
+
+	unequip_action_system();
+
+	tick_ui(io->input, game, the_ui, (float)frame_time);
+
+	rhi_window_t window = io->rhi_window;
+	render_game(game, &the_ui->render_commands, window);
+
+	process_asset_changes();
 }
 
 #if 0

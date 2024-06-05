@@ -715,7 +715,12 @@ void rhi_resize_window(rhi_window_t handle, uint32_t new_width, uint32_t new_hei
 
 		frame_buffer->desc = rhi_texture_desc_from_d3d12_resource_desc(&rt_desc);
 
-		ID3D12Device_CreateRenderTargetView(g_rhi.device, frame_buffer->resource, NULL, frame_buffer->rtv.cpu);
+		D3D12_RENDER_TARGET_VIEW_DESC rtv_desc = {
+			.Format        = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+			.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D,
+		};
+
+		ID3D12Device_CreateRenderTargetView(g_rhi.device, frame_buffer->resource, &rtv_desc, frame_buffer->rtv.cpu);
 	}
 }
 
