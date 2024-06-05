@@ -870,6 +870,22 @@ v4_t ui_pop_color(ui_style_color_t color)
     return stack_pop(ui->style.colors[color]);
 }
 
+void ui_push_font(ui_style_font_t font_id, font_atlas_t *font)
+{
+	stack_push(ui->style.fonts[font_id], font);
+}
+
+font_atlas_t *ui_pop_font(ui_style_font_t font_id)
+{
+	return stack_pop(ui->style.fonts[font_id]);
+}
+
+font_atlas_t *ui_font(ui_style_font_t font_id)
+{
+	if (stack_empty(ui->style.fonts[font_id])) return ui->style.base_fonts[font_id];
+	else                                       return stack_top(ui->style.fonts[font_id]);
+}
+
 void ui_set_font_height(float size)
 {
 	if (ui->style.font.initialized)
@@ -2453,12 +2469,6 @@ void ui_hover_tooltip(string_t text)
 // Core
 //
 
-void ui_init(ui_t *state)
-{
-	zero_struct(state);
-	state->state = (pool_t)INIT_POOL(ui_state_t);
-}
-
 void equip_ui(ui_t *state)
 {
 	DEBUG_ASSERT_MSG(!ui, "Unequip the previous UI state before you equip this new one, please");
@@ -2597,6 +2607,9 @@ bool ui_is_hovered_delay(ui_id_t id, float delay)
 
 static void ui_initialize(void)
 {
+	zero_struct(ui);
+	ui->state = (pool_t)INIT_POOL(ui_state_t);
+
 	ASSERT(!ui->initialized);
 
 	ui->style.font_data        = fs_read_entire_file(&ui->arena, S("gamedata/fonts/NotoSans/NotoSans-Regular.ttf"));
@@ -2644,6 +2657,9 @@ static void ui_initialize(void)
 	ui->style.base_colors [UI_COLOR_SLIDER_HOT             ] = hot;
 	ui->style.base_colors [UI_COLOR_SLIDER_ACTIVE          ] = active;
 
+	ui->style.base_fonts[UiFont_default] = &ui->style.font; // @UiFonts
+	ui->style.base_fonts[UiFont_header]  = &ui->style.header_font; // @UiFonts
+
 	ui->render_commands.capacity = UI_RENDER_COMMANDS_CAPACITY;
 	ui->render_commands.keys     = m_alloc_array_nozero(&ui->arena, ui->render_commands.capacity, ui_render_command_key_t);
 	ui->render_commands.commands = m_alloc_array_nozero(&ui->arena, ui->render_commands.capacity, ui_render_command_t);
@@ -2653,10 +2669,8 @@ static void ui_initialize(void)
 
 bool ui_begin(float dt)
 {
-	if (!ui->initialized)
-	{
-		ui_initialize();
-	}
+	ASSERT(ui);
+	ASSERT(ui->initialized);
 
 	ui__trickle_input(&ui->input, &ui->queued_input);
 

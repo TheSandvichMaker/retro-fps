@@ -738,6 +738,21 @@ rhi_texture_t rhi_get_current_backbuffer(rhi_window_t handle)
 	return result;
 }
 
+v2_t rhi_get_window_client_size(rhi_window_t handle)
+{
+	v2_t result = {0};
+
+	d3d12_window_t *window = pool_get(&g_rhi.windows, handle);
+
+	if (ALWAYS(window))
+	{
+		result.x = (float)window->w;
+		result.y = (float)window->h;
+	}
+
+	return result;
+}
+
 uint64_t rhi_get_frame_sync_cpu_freq(void)
 {
 	return g_rhi.qpc_freq;

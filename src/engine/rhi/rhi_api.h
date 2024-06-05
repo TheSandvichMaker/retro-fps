@@ -27,6 +27,7 @@ DEFINE_HANDLE_TYPE(rhi_pso_t);
 
 fn void rhi_resize_window(rhi_window_t window, uint32_t new_width, uint32_t new_height);
 fn rhi_texture_t rhi_get_current_backbuffer(rhi_window_t window);
+fn v2_t rhi_get_window_client_size(rhi_window_t window);
 
 typedef struct rhi_frame_statistics_t
 {

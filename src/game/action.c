@@ -1,3 +1,37 @@
+string_t get_action_name(action_t action)
+{
+	string_t result = S("<invalid action>");
+
+	switch (action)
+	{
+		case Action_none:          result = S("<none>");        break;
+		case Action_left:          result = S("left");          break;
+		case Action_right:         result = S("right");         break;
+		case Action_forward:       result = S("forward");       break;
+		case Action_back:          result = S("back");          break;
+		case Action_jump:          result = S("jump");          break;
+		case Action_run:           result = S("run");           break;
+		case Action_crouch:        result = S("crouch");        break;
+		case Action_fire1:         result = S("fire1");         break;
+		case Action_fire2:         result = S("fire2");         break;
+		case Action_next_weapon:   result = S("next_weapon");   break;
+		case Action_prev_weapon:   result = S("prev_weapon");   break;
+		case Action_weapon1:       result = S("weapon1");       break;
+		case Action_weapon2:       result = S("weapon2");       break;
+		case Action_weapon3:       result = S("weapon3");       break;
+		case Action_weapon4:       result = S("weapon4");       break;
+		case Action_weapon5:       result = S("weapon5");       break;
+		case Action_weapon6:       result = S("weapon6");       break;
+		case Action_weapon7:       result = S("weapon7");       break;
+		case Action_weapon8:       result = S("weapon8");       break;
+		case Action_weapon9:       result = S("weapon9");       break;
+		case Action_escape:        result = S("escape");        break;
+		case Action_toggle_noclip: result = S("toggle_noclip"); break;
+	}
+
+	return result;
+}
+
 void equip_action_system(action_system_t *action_system)
 {
 	g_actions = action_system;
@@ -71,17 +105,23 @@ void ingest_action_system_input(input_t *input)
 				// TODO: bit scan forward or something, maybe. Daniel Lemire has a blog post about quickly scanning bit vectors.
 				// here:      https://lemire.me/blog/2018/02/21/iterating-over-set-bits-quickly/
 				// also this: https://lemire.me/blog/2018/03/08/iterating-over-set-bits-quickly-simd-edition/
-				for (uint64_t action_index = 0; action_index < 64; action_index++)
+				for (uint64_t action_index = 0; action_index < Action_COUNT; action_index++)
 				{
 					if (actions_mask & (1ull << action_index))
 					{
 						action_state_t *action_state = &actions->action_states[action_index];
 						if (event->key.pressed)
 						{
+							log(ActionSystem, Spam, "Action '%s' triggered by key '%s'", 
+								get_action_name(action_index).data, keycode_to_string(keycode).data);
+
 							action_state->pressed  |= true;
 						}
 						else
 						{
+							log(ActionSystem, Spam, "Action '%s' untriggered by key '%s'", 
+								get_action_name(action_index).data, keycode_to_string(keycode).data);
+
 							action_state->released |= true;
 						}
 						action_state->held = event->key.pressed;
@@ -96,17 +136,23 @@ void ingest_action_system_input(input_t *input)
 
 			if (actions_mask)
 			{
-				for (uint64_t action_index = 0; action_index < 64; action_index++)
+				for (uint64_t action_index = 0; action_index < Action_COUNT; action_index++)
 				{
 					if (actions_mask & (1ull << action_index))
 					{
 						action_state_t *action_state = &actions->action_states[action_index];
 						if (event->mouse_button.pressed)
 						{
+							log(ActionSystem, Spam, "Action '%s' triggered by %s mouse button", 
+								get_action_name(action_index).data, mouse_button_to_string(button).data);
+
 							action_state->pressed  |= true;
 						}
 						else
 						{
+							log(ActionSystem, Spam, "Action '%s' untriggered by %s mouse button", 
+								get_action_name(action_index).data, mouse_button_to_string(button).data);
+
 							action_state->released |= true;
 						}
 						action_state->held = event->mouse_button.pressed;

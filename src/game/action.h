@@ -37,6 +37,10 @@ typedef enum action_t
 	Action_COUNT,
 } action_t;
 
+static_assert(Action_COUNT <= 64, "Actions are currently stored in u64 bit masks, so they need to fit in there");
+
+fn string_t get_action_name(action_t action);
+
 typedef enum action_axis_t
 {
 	ActionAxis_move_x,

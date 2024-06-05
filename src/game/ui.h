@@ -289,6 +289,16 @@ typedef enum ui_style_color_t
     UI_COLOR_COUNT,
 } ui_style_color_t;
 
+typedef enum ui_style_font_t
+{
+	UiFont_none,
+
+	UiFont_default,
+	UiFont_header,
+
+	UiFont_COUNT,
+} ui_style_font_t;
+
 DEFINE_POOL(ui_anim_t, ui_anim, 2048);
 
 typedef struct ui_style_t
@@ -297,11 +307,13 @@ typedef struct ui_style_t
 	ui_anim_pool_t animation_state;
 	table_t animation_index;
 
-	float base_scalars[UI_SCALAR_COUNT];
-	v4_t  base_colors [UI_COLOR_COUNT];
+	float         base_scalars[UI_SCALAR_COUNT];
+	v4_t          base_colors [UI_COLOR_COUNT];
+	font_atlas_t *base_fonts  [UiFont_COUNT];
 
     stack_t(float, UI_STYLE_STACK_COUNT) scalars[UI_SCALAR_COUNT];
     stack_t(v4_t,  UI_STYLE_STACK_COUNT) colors [UI_COLOR_COUNT];
+	stack_t(font_atlas_t *, UI_STYLE_STACK_COUNT) fonts[UiFont_COUNT];
 
 	string_t font_data; // so we can rebuild the font at different sizes without going out to disk
 	font_atlas_t font;
@@ -330,10 +342,13 @@ fn v4_t  ui_color             (ui_style_color_t color);
 fn void  ui_push_color        (ui_style_color_t color, v4_t value);
 fn v4_t  ui_pop_color         (ui_style_color_t color);
 
-fn void  ui_push_color2       (ui_style_color_t color, v4_t value);
-fn v4_t  ui_pop_color2        (void);
-
 #define UI_COLOR(color, value) DEFER_LOOP(ui_push_color(color, value), ui_pop_color(color))
+
+fn void          ui_push_font(ui_style_font_t font_id, font_atlas_t *font);
+fn font_atlas_t *ui_pop_font (ui_style_font_t font_id);
+fn font_atlas_t *ui_font     (ui_style_font_t font_id);
+
+#define UI_Font(font_id, font) DEFER_LOOP(ui_push_font(font_id, font), ui_pop_font(font_id))
 
 fn void  ui_set_font_height   (float height);
 fn float ui_font_height       (void);
@@ -646,7 +661,6 @@ fn_local arena_t *ui_frame_arena(void)
 	return result;
 }
 
-fn void ui_init   (ui_t *state);
 fn void equip_ui  (ui_t *state);
 fn void unequip_ui(void);
 

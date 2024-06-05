@@ -24,8 +24,14 @@ void ui_equip_layout(ui_layout_t *layout)
 
 void ui_unequip_layout(void)
 {
-	DEBUG_ASSERT_MSG(!ui->layout, "You don't have a layout equipped!");
+	DEBUG_ASSERT_MSG(ui->layout, "You don't have a layout equipped!");
 	ui->layout = NULL;
+}
+
+rect2_t layout_rect(void)
+{
+	ui_layout_t *layout = ui_get_layout();
+	return layout->rect;
 }
 
 void layout_prepare_even_spacing(uint32_t item_count)
@@ -180,12 +186,16 @@ void layout_end_flow(ui_layout_flow_t old_flow)
 	layout->flow = old_flow;
 }
 
-rect2_t layout_cut_internal(const ui_layout_cut_t *cut)
+ui_layout_cut_restore_t layout_begin_cut_internal(const ui_layout_cut_t *cut)
 {
 	ui_layout_t *layout = ui_get_layout();
 
 	DEBUG_ASSERT_MSG(cut->size.kind > UiSize_none && cut->size.kind < UiSize_COUNT,
 					 "You need to pass a valid ui_size to cut anything!");
+
+	//
+	// do cut
+	//
 
 	rect2_t active, remainder;
 	rect2_cut(layout->rect, layout->flow, cut->size, &active, &remainder);
@@ -193,6 +203,49 @@ rect2_t layout_cut_internal(const ui_layout_cut_t *cut)
 	// "nest" into active rect
 	layout->rect = active;
 
-	// return remainder so it can be restored as the active rect later
-	return remainder;
+	//
+	// handle optional parameters
+	//
+
+	ui_layout_flow_t old_flow = layout->flow;
+
+	if (cut->flow != Flow_none)
+	{
+		layout->flow = cut->flow;
+	}
+
+	if (cut->push_clip_rect)
+	{
+		ui_push_clip_rect(layout->rect);
+	}
+
+	if (cut->margin_x.kind != UiSize_none) layout->rect = rect2_cut_margins_horizontally(layout->rect, cut->margin_x);
+	if (cut->margin_y.kind != UiSize_none) layout->rect = rect2_cut_margins_vertically  (layout->rect, cut->margin_y);
+
+	//
+	// create "restore" data
+	//
+
+	ui_layout_cut_restore_t restore = {
+		.rect             = remainder,
+		.pushed_clip_rect = cut->push_clip_rect,
+		.flow             = old_flow,
+	};
+
+	return restore;
+}
+
+void layout_end_cut_internal(ui_layout_cut_restore_t *restore)
+{
+	ui_layout_t *layout = ui_get_layout();
+
+	layout->rect = restore->rect;
+	layout->flow = restore->flow;
+
+	if (restore->pushed_clip_rect)
+	{
+		ui_pop_clip_rect();
+	}
+
+	restore->exit = true;
 }

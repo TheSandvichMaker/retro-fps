@@ -97,6 +97,8 @@ fn void ui_unequip_layout(void);
 
 fn ui_layout_t *ui_get_layout(void);
 
+fn rect2_t layout_rect(void);
+
 fn void layout_prepare_even_spacing(uint32_t item_count);
 fn void layout_place_widget(ui_widget_context_t *context, ui_widget_func_t widget);
 
@@ -125,22 +127,40 @@ fn void             layout_end_flow  (ui_layout_flow_t old_flow);
 
 #define Layout_Flow(flow)                                      \
 	for (ui_layout_flow_t _old_flow = layout_begin_flow(flow); \
-		 _old_flow != Flow_none;                               \
-		 layout_end_flow(_old_flow), _old_flow = Flow_none)
+		 _old_flow != Flow_COUNT;                              \
+		 layout_end_flow(_old_flow), _old_flow = Flow_COUNT)
 
 typedef struct ui_layout_cut_t
 {
-	ui_size_t size;
+	ui_size_t        size;
+	bool             push_clip_rect;
+	ui_layout_flow_t flow;
+	ui_size_t        margin_x;
+	ui_size_t        margin_y;
 } ui_layout_cut_t;
 
-fn rect2_t layout_cut_internal(const ui_layout_cut_t *cut);
+typedef struct ui_layout_cut_restore_t
+{
+	bool             exit;
+	rect2_t          rect;
+	bool             pushed_clip_rect;
+	ui_layout_flow_t flow;
+} ui_layout_cut_restore_t;
 
-#define Layout_Cut(size)                                          \
-	for (rect2_t _remainder_rect = layout_cut_internal(&(ui_layout_cut_t){ \
-			 .size = ui_size_none(),                              \
-		 });                                                      \
-		 _remainder_rect.min.x != INFINITY;                       \
-		 g_layout->rect = _remainder_rect, _remainder_rect.min.x = INFINITY)
+fn ui_layout_cut_restore_t layout_begin_cut_internal(const ui_layout_cut_t *cut);
+fn void                    layout_end_cut_internal  (ui_layout_cut_restore_t *restore);
+
+#define Layout_Cut(...)                                                                       \
+	for (ui_layout_cut_restore_t _cut_restore = layout_begin_cut_internal(&(ui_layout_cut_t){ \
+			 .size           = ui_sz_none(),                                                  \
+			 .push_clip_rect = false,                                                         \
+			 .flow           = Flow_none,                                                     \
+			 .margin_x       = ui_sz_pix(0.0f),                                               \
+			 .margin_y       = ui_sz_pix(0.0f),                                               \
+			 ##__VA_ARGS__                                                                    \
+		 });                                                                                  \
+		 !_cut_restore.exit;                                                                  \
+		 layout_end_cut_internal(&_cut_restore))
 
 
 //
@@ -149,116 +169,142 @@ fn rect2_t layout_cut_internal(const ui_layout_cut_t *cut);
 
 fn_local float ui_size_to_width(rect2_t rect, ui_size_t size)
 {
-	float w = rect2_width(rect);
+	float x = 0.0f;
 
 	switch (size.kind)
 	{
-		case UiSize_pct: w = size.value*w; break;
-		case UiSize_pix: /* all good */    break;
+		case UiSize_none: /* all good! don't do anything! */ break;
+		case UiSize_pct: x = size.value*rect2_width(rect);   break;
+		case UiSize_pix: x = size.value;                     break;
 
 		default:
 	    {
-			w = -1.0f;
+			x = -1.0f;
 			log(UI, Error, "Invalid kind of size (kind = %d, value = %f) passed to ui_size_to_width", size.kind, size.value);
 	    } break;
 	}
 
-	return w;
+	return x;
 }
 
 fn_local float ui_size_to_height(rect2_t rect, ui_size_t size)
 {
-	float h = rect2_height(rect);
+	float y = 0.0f;
 
 	switch (size.kind)
 	{
-		case UiSize_pct: h = size.value*h; break;
-		case UiSize_pix: /* all good */    break;
+		case UiSize_none: /* all good! don't do anything! */ break;
+		case UiSize_pct: y = size.value*rect2_height(rect);  break;
+		case UiSize_pix: y = size.value;                     break;
 
 		default:
 	    {
-			h = -1.0f;
+			y = -1.0f;
 			log(UI, Error, "Invalid kind of size (kind = %d, value = %f) passed to ui_size_to_height", size.kind, size.value);
 	    } break;
 	}
 
-	return h;
+	return y;
 }
 
 fn_local void rect2_cut_from_left(rect2_t rect, ui_size_t size, rect2_t *l, rect2_t *r)
 {
 	float x = ui_size_to_width(rect, size);
 
-	*l = (rect2_t){
-		.min.x = rect.min.x,
-		.max.x = rect.min.x + x,
-		.min.y = rect.min.y,
-		.max.y = rect.max.y,
-	};
+	if (l)
+	{
+		*l = (rect2_t){
+			.min.x = rect.min.x,
+			.max.x = rect.min.x + x,
+			.min.y = rect.min.y,
+			.max.y = rect.max.y,
+		};
+	}
 
-	*r = (rect2_t){
-		.min.x = rect.min.x + x,
-		.max.x = rect.max.x,
-		.min.y = rect.min.y,
-		.max.y = rect.max.y,
-	};
+	if (r)
+	{
+		*r = (rect2_t){
+			.min.x = rect.min.x + x,
+			.max.x = rect.max.x,
+			.min.y = rect.min.y,
+			.max.y = rect.max.y,
+		};
+	}
 }
 
-fn_local void rect2_cut_from_right(rect2_t rect, ui_size_t size, rect2_t *l, rect2_t *r)
+fn_local void rect2_cut_from_right(rect2_t rect, ui_size_t size, rect2_t *r, rect2_t *l)
 {
 	float x = ui_size_to_width(rect, size);
 
-	*l = (rect2_t){
-		.min.x = rect.min.x,
-		.max.x = rect.max.x - x,
-		.min.y = rect.min.y,
-		.max.y = rect.max.y,
-	};
+	if (l)
+	{
+		*l = (rect2_t){
+			.min.x = rect.min.x,
+			.max.x = rect.max.x - x,
+			.min.y = rect.min.y,
+			.max.y = rect.max.y,
+		};
+	}
 
-	*r = (rect2_t){
-		.min.x = rect.max.x - x,
-		.max.x = rect.max.x,
-		.min.y = rect.min.y,
-		.max.y = rect.max.y,
-	};
+	if (r)
+	{
+		*r = (rect2_t){
+			.min.x = rect.max.x - x,
+			.max.x = rect.max.x,
+			.min.y = rect.min.y,
+			.max.y = rect.max.y,
+		};
+	}
 }
 
-fn_local void rect2_cut_from_top(rect2_t rect, ui_size_t size, rect2_t *b, rect2_t *t)
+fn_local void rect2_cut_from_top(rect2_t rect, ui_size_t size, rect2_t *t, rect2_t *b)
 {
 	float x = ui_size_to_height(rect, size);
 
-	*b = (rect2_t){
-		.min.x = rect.min.x,
-		.max.x = rect.max.x,
-		.min.y = rect.min.y,
-		.max.y = rect.max.y - x,
-	};
+	if (b)
+	{
+		*b = (rect2_t){
+			.min.x = rect.min.x,
+			.max.x = rect.max.x,
+			.min.y = rect.min.y,
+			.max.y = rect.max.y - x,
+		};
+	}
 
-	*t = (rect2_t){
-		.min.x = rect.min.x,
-		.max.x = rect.max.x,
-		.min.y = rect.max.y - x,
-		.max.y = rect.max.y,
-	};
+	if (t)
+	{
+		*t = (rect2_t){
+			.min.x = rect.min.x,
+			.max.x = rect.max.x,
+			.min.y = rect.max.y - x,
+			.max.y = rect.max.y,
+		};
+	}
 }
 
 fn_local void rect2_cut_from_bottom(rect2_t rect, ui_size_t size, rect2_t *b, rect2_t *t)
 {
 	float x = ui_size_to_height(rect, size);
 
-	*b = (rect2_t){
-		.min.x = rect.min.x,
-		.max.x = rect.max.x,
-		.min.y = rect.min.y,
-		.max.y = rect.min.y + x,
-	};
+	if (b)
+	{
+		*b = (rect2_t){
+			.min.x = rect.min.x,
+			.max.x = rect.max.x,
+			.min.y = rect.min.y,
+			.max.y = rect.min.y + x,
+		};
+	}
 
-	*t = (rect2_t){
-		.min.x = rect.min.x,
-		.max.x = rect.max.x,
-		.min.y = rect.min.y + x,
-		.max.y = rect.max.y,
-	};
+	if (t)
+	{
+		*t = (rect2_t){
+			.min.x = rect.min.x,
+			.max.x = rect.max.x,
+			.min.y = rect.min.y + x,
+			.max.y = rect.max.y,
+		};
+	}
 }
 
 fn_local void rect2_cut(rect2_t rect, ui_layout_flow_t flow, ui_size_t size, rect2_t *active, rect2_t *remainder)
@@ -267,14 +313,34 @@ fn_local void rect2_cut(rect2_t rect, ui_layout_flow_t flow, ui_size_t size, rec
 	{
 		case Flow_north: rect2_cut_from_bottom(rect, size, active, remainder); break;
 		case Flow_east:  rect2_cut_from_left  (rect, size, active, remainder); break;
-		case Flow_south: rect2_cut_from_top   (rect, size, remainder, active); break;
-		case Flow_west:  rect2_cut_from_right (rect, size, remainder, active); break;
+		case Flow_south: rect2_cut_from_top   (rect, size, active, remainder); break;
+		case Flow_west:  rect2_cut_from_right (rect, size, active, remainder); break;
 
 		default:
 		{
-			*active    = (rect2_t){0};
-			*remainder = rect;
+			if (active)    *active    = (rect2_t){0};
+			if (remainder) *remainder = rect;
 			log(UI, Error, "Called rect2_cut with invalid flow");
 		} break;
 	}
+}
+
+fn_local rect2_t rect2_cut_margins_horizontally(rect2_t rect, ui_size_t size)
+{
+	rect2_t result = rect;
+
+	rect2_cut_from_left (result, size, NULL, &result);
+	rect2_cut_from_right(result, size, NULL, &result);
+
+	return result;
+}
+
+fn_local rect2_t rect2_cut_margins_vertically(rect2_t rect, ui_size_t size)
+{
+	rect2_t result = rect;
+
+	rect2_cut_from_top   (result, size, NULL, &result);
+	rect2_cut_from_bottom(result, size, NULL, &result);
+
+	return result;
 }

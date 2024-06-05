@@ -10,13 +10,17 @@ string_t log_level_to_string[] = {
 };
 
 string_t log_category_to_string[] = {
+
 	[LogCat_None]          = Sc("None"),
+	[LogCat_ActionSystem]  = Sc("ActionSystem"),
 	[LogCat_Asset]         = Sc("Asset"),
 	[LogCat_Mixer]         = Sc("Mixer"),
 	[LogCat_Renderer]      = Sc("Renderer"),
 	[LogCat_Renderer_DX11] = Sc("Renderer_DX11"),
+	[LogCat_UI]            = Sc("UI"),
 	[LogCat_RHI_D3D12]     = Sc("RHI_D3D12"),
 	[LogCat_AssetPacker]   = Sc("AssetPacker"),
+	[LogCat_MapLoad]       = Sc("MapLoad"),
 	[LogCat_Game]          = Sc("Game"),
 	[LogCat_Max]           = Sc("INVALID LOG CATEGORY"),
 };

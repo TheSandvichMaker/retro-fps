@@ -116,3 +116,8 @@ string_t cvar_read_string(cvar_t *cvar)
 	
 	return cvar->as.string;
 }
+
+table_iter_t cvar_iter(void)
+{
+	return table_iter(&g_cvars.cvar_table);
+}

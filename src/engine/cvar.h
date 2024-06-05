@@ -114,3 +114,5 @@ fn void cvar_write_bool  (cvar_t *cvar, bool     value);
 fn void cvar_write_i32   (cvar_t *cvar, int32_t  value);
 fn void cvar_write_f32   (cvar_t *cvar, float    value);
 fn void cvar_write_string(cvar_t *cvar, string_t value);
+
+fn table_iter_t cvar_iter(void);

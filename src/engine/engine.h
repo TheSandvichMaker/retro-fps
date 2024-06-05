@@ -10,6 +10,7 @@
 #include "audio_playback.h"
 #include "cvar.h"
 #include "platform.h"
+#include "platform_bonus.h"
 #include "profiler.h"
 
 #include "rhi/rhi_api.h"

@@ -10,7 +10,6 @@
 #include "bvh.h"
 #include "camera.h"
 #include "collision_geometry.h"
-#include "convar.h"
 #include "dream.h"
 #include "font.h"
 #include "freeverb.h"
@@ -30,6 +29,7 @@
 #include "ui.h"
 #include "ui_layout.h"
 #include "convex_hull_debugger.h" // @IncludeOrder
+#include "editor_console.h"
 
 #include "render/r1.h" // @IncludeOrder
 

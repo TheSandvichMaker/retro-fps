@@ -19,7 +19,6 @@
 #include "bvh.c"
 #include "camera.c"
 #include "collision_geometry.c"
-#include "convar.c"
 #include "convex_hull_debugger.c"
 #include "font.c"
 #include "freeverb.c"
@@ -37,6 +36,7 @@
 #include "render_helpers.c"
 #include "ui.c"
 #include "ui_layout.c"
+#include "editor_console.c"
 
 #include "render/r1.c"
 
@@ -48,6 +48,7 @@ typedef struct app_state_t
 
 	gamestate_t     *game;
 	action_system_t *action_system;
+	console_t       *console;
 	ui_t            *ui;
 
 	bitmap_font_t   debug_font;
@@ -76,6 +77,17 @@ v3_t player_view_direction(player_t *player)
     dir = rotor3_rotatev(r_yaw,   dir);
 
     return dir;
+}
+
+CVAR_F32(cvar_player_sprint_multiplier, "player.sprint_multiplier", 2.0f);
+CVAR_F32(cvar_player_jump_force,        "player.jump_force",        300.0f);
+CVAR_F32(cvar_player_crouch_speed,      "player.crouch_speed",      0.15f);
+
+fn_local void register_player_cvars(void)
+{
+	cvar_register(&cvar_player_sprint_multiplier);
+	cvar_register(&cvar_player_jump_force);
+	cvar_register(&cvar_player_crouch_speed);
 }
 
 void player_noclip(player_t *player, float dt)
@@ -367,15 +379,24 @@ global action_system_t g_game_action_system = {0};
 
 void app_init(platform_init_io_t *io)
 {
+	register_player_cvars();
+
 	app_state_t *app = m_bootstrap(app_state_t, arena);
 	io->app_state = app;
 
 	app->ui = m_alloc_struct(&app->arena, ui_t);
-	ui_init(app->ui);
+
+	// @Globals - this is stupid
+	equip_ui(app->ui);
+	ui_initialize();
+	unequip_ui();
 
 	app->action_system = m_alloc_struct(&app->arena, action_system_t);
-
 	equip_action_system(app->action_system);
+
+	app->console = m_alloc_struct(&app->arena, console_t);
+	// @UiFonts - this is stupid
+	app->console->font = &app->ui->style.font;
 
 	bind_key_action(Action_left,           Key_a);
 	bind_key_action(Action_right,          Key_d);
@@ -495,11 +516,11 @@ fn_local void tick_game(gamestate_t *game, float dt)
 	mixer_set_listener(camera->p, negate(camera->computed_z));
 }
 
-fn_local void tick_ui(input_t *input, gamestate_t *game, ui_t *the_ui, float dt)
+fn_local void tick_ui(app_state_t *app, input_t *input, v2_t client_size, float dt)
 {
 	(void)dt;
 
-	equip_ui(the_ui);
+	equip_ui(app->ui);
 
 	// TODO: Is it cool or stupid that we're just translating between events
 	// for "no" reason?
@@ -586,11 +607,12 @@ fn_local void tick_ui(input_t *input, gamestate_t *game, ui_t *the_ui, float dt)
 		}
 	}
 
-	equip_gamestate(game);
+	equip_gamestate(app->game);
 
 	ui_begin(dt);
 	{
 		update_and_render_in_game_editor();
+		update_and_draw_console(app->console, client_size, dt);
 	}
     ui_end();
 
@@ -602,12 +624,10 @@ fn_local void tick_ui(input_t *input, gamestate_t *game, ui_t *the_ui, float dt)
 	unequip_ui();
 }
 
-fn_local void render_game(/*r1_t *r1, */gamestate_t *game, ui_render_command_list_t *ui_commands, rhi_window_t window)
+fn_local void render_game(/*r1_t *r1, */gamestate_t *game, rhi_window_t window)
 {
 	// @Globals
 	// equip_r1(r1);
-
-	rhi_begin_frame();
 
 	rhi_command_list_t *list = rhi_get_command_list();
 	rhi_texture_t backbuffer = rhi_get_current_backbuffer(window);
@@ -652,10 +672,6 @@ fn_local void render_game(/*r1_t *r1, */gamestate_t *game, ui_render_command_lis
 		r1_update_window_resources(window);
 		r1_render_game_view(list, backbuffer, &view, map);
 	}
-
-	r1_render_ui(list, backbuffer, ui_commands);
-
-	rhi_end_frame();
 
 	// unequip_r1();
 }
@@ -702,10 +718,17 @@ fn_local void app_tick(platform_tick_io_t *io)
 
 	unequip_action_system();
 
-	tick_ui(io->input, game, the_ui, (float)frame_time);
-
 	rhi_window_t window = io->rhi_window;
-	render_game(game, &the_ui->render_commands, window);
+	v2_t client_size = rhi_get_window_client_size(window);
+
+	tick_ui(app, io->input, client_size, (float)frame_time);
+
+	rhi_begin_frame();
+
+	render_game(game, window);
+	r1_render_ui(rhi_get_command_list(), rhi_get_current_backbuffer(window), &the_ui->render_commands);
+
+	rhi_end_frame();
 
 	process_asset_changes();
 
