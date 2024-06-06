@@ -6,6 +6,19 @@
 
 #define array_expand(type, ...) ARRAY_COUNT(((type[]){ __VA_ARGS__ })), (type[]){ __VA_ARGS__ }
 
+fn_local uint64_t next_pow2(uint64_t x)
+{
+	x--;
+	x |= x >> 1;
+	x |= x >> 2;
+	x |= x >> 4;
+	x |= x >> 8;
+	x |= x >> 16;
+	x |= x >> 32;
+	x++;
+	return x;
+}
+
 #define IS_POW2(x) (!((x) & ((x) - 1)))
 
 // linked list macros
@@ -111,5 +124,7 @@ fn void copy_memory(void *dst, const void *src, size_t size);
 fn uintptr_t align_forward(uintptr_t address, uintptr_t align);
 fn uintptr_t align_backward(uintptr_t address, uintptr_t align);
 fn void *align_address(void *address, uintptr_t align);
+
+fn uint16_t checked_add_u16(uint16_t a, uint16_t b);
 
 #define for_array(it, arr) for (size_t it = 0; it < ARRAY_COUNT(arr); it++)

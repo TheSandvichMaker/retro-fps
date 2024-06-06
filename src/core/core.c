@@ -6,6 +6,7 @@
 
 #include "arena.c"
 #include "args_parser.c"
+#include "simple_heap.c"
 
 #include "hashtable.c"
 #include "math.c"

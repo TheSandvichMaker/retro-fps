@@ -16,13 +16,38 @@ static inline uint64_t count_set_bits64(uint64_t x)
 #endif
 }
 
-static inline void bit_scan_reverse64(unsigned long *index, uint64_t mask)
+static inline void bit_scan_forward64(unsigned long *index, uint64_t mask)
 {
 #if _MSC_VER
-    _BitScanReverse64(index, mask);
+    _BitScanForward64(index, mask);
 #else
 #error TODO: Implement
 #endif
+}
+
+fn_local unsigned long bit_scan_reverse_u64(uint64_t x)
+{
+#if _MSC_VER
+	unsigned long index;
+    _BitScanReverse64(&index, x);
+#else
+#error TODO: Implement
+#endif
+	return index;
+}
+
+fn_local uint64_t count_leading_zeros_u64(uint64_t x)
+{
+#if _MSC_VER
+	return __lzcnt64(x);
+#else
+#error TODO: Implement
+#endif
+}
+
+fn_local uint64_t count_trailing_zeros_u64(uint64_t x)
+{
+	return 64 - count_leading_zeros_u64(x);
 }
 
 #define read_cpu_timer __rdtsc

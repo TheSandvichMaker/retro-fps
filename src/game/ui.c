@@ -1388,7 +1388,7 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 
 		// rect2_t scroll_area = rect2_cut_right(&rect, ui_scalar(UI_SCALAR_SCROLLBAR_WIDTH));
 
-		ui_panel_state_t *state = &ui_get_state(id)->panel;
+		ui_panel_state_t *state = ui_get_state(id, NULL, ui_panel_state_t);
 
 		if (state->scrollable_height_y > 0.0f)
 		{
@@ -1459,11 +1459,11 @@ void ui_panel_end(void)
 
 	if (ALWAYS(panel))
 	{
-		ui_state_t *state = ui_get_state(panel->id);
+		ui_panel_state_t *state = ui_get_state(panel->id, NULL, ui_panel_state_t);
 
 		if (panel->flags & UI_PANEL_SCROLLABLE_VERT)
 		{
-			state->panel.scrollable_height_y = abs_ss(panel->rect_layout.max.y - panel->rect_layout.min.y);
+			state->scrollable_height_y = abs_ss(panel->rect_layout.max.y - panel->rect_layout.min.y);
 		}
 
 		if (panel->id.value)
@@ -2237,7 +2237,7 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
 	label_rect = rect2_shrink(label_rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
 
-	ui_text_edit_state_t *state = &ui_get_state(id)->text_edit;
+	ui_text_edit_state_t *state = ui_get_state(id, NULL, ui_text_edit_state_t);
 
 	ui_interaction_t interaction = ui_default_widget_behaviour(id, rect);
 
@@ -2564,27 +2564,33 @@ bool ui_id_has_focus(ui_id_t id)
 	return ui->has_focus && ui->focused_id.value == id.value;
 }
 
-ui_state_t *ui_get_state(ui_id_t id)
+void *ui_get_state_raw(ui_id_t id, bool *first_touch, uint16_t size)
 {
-	ui_state_t *result = table_find_object(&ui->state_index, id.value);
+	ui_state_header_t *state = table_find_object(&ui->state_index, id.value);
 
-	if (!result)
+	if (!state)
 	{
-		result = pool_add(&ui->state);
-		result->id                  = id;
-		result->created_frame_index = ui->frame_index;
-		table_insert_object(&ui->state_index, id.value, result);
+		uint16_t real_size = checked_add_u16(sizeof(ui_state_header_t), size);
+
+		state = simple_heap_alloc_nozero(&ui->state_allocator, real_size);
+		state->id                  = id;
+		state->size                = real_size;
+		state->created_frame_index = ui->frame_index;
+		table_insert_object(&ui->state_index, id.value, state);
+
+		if (first_touch) *first_touch = true;
+	}
+	else if (first_touch)
+	{
+		*first_touch = false;
 	}
 
-	ASSERT(result->id.value == id.value);
+	ASSERT(state->id.value == id.value);
 
-	result->last_touched_frame_index = ui->frame_index;
+	state->last_touched_frame_index = ui->frame_index;
+
+	void *result = state + 1;
 	return result;
-}
-
-bool ui_state_is_new(ui_state_t *state)
-{
-	return state->created_frame_index == ui->frame_index;
 }
 
 void ui_hoverable(ui_id_t id, rect2_t rect)
@@ -2618,7 +2624,9 @@ bool ui_is_hovered_delay(ui_id_t id, float delay)
 static void ui_initialize(void)
 {
 	zero_struct(ui);
-	ui->state = (pool_t)INIT_POOL(ui_state_t);
+	// ui->state = (pool_t)INIT_POOL(ui_state_t);
+
+	simple_heap_init(&ui->state_allocator, &ui->arena);
 
 	ASSERT(!ui->initialized);
 
@@ -2690,16 +2698,14 @@ bool ui_begin(float dt)
 	ui->last_frame_ui_rect_count = ui->render_commands.count;
     ui_reset_render_commands();
 
-	for (pool_iter_t it = pool_iter(&ui->state); 
-		 pool_iter_valid(&it); 
-		 pool_iter_next(&it))
+	for (table_iter_t it = table_iter(&ui->state_index); table_iter_next(&it);)
 	{
-		ui_state_t *state = it.data;
+		ui_state_header_t *state = it.ptr;
 
 		if (state->last_touched_frame_index < ui->frame_index)
 		{
 			table_remove(&ui->state_index, state->id.value);
-			pool_rem_item(&ui->state, state);
+			simple_heap_free(&ui->state_allocator, state, state->size);
 		}
 	}
 

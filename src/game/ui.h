@@ -478,21 +478,14 @@ fn void ui_close_popup(ui_id_t id);
 //
 //
 
-typedef struct ui_state_t
+typedef struct ui_state_header_t
 {
 	ui_id_t id;
-
-	uint64_t created_frame_index;
-	uint64_t last_touched_frame_index;
-
-	bool opened;
-
-	union
-	{
-		ui_panel_state_t     panel;
-		ui_text_edit_state_t text_edit;
-	};
-} ui_state_t;
+	uint16_t size;
+	PAD(2);
+	uint32_t created_frame_index;
+	uint32_t last_touched_frame_index;
+} ui_state_header_t;
 
 #define UI_TOOLTIP_STACK_COUNT (16)
 #define UI_MAX_TOOLTIP_LENGTH  (256)
@@ -548,6 +541,7 @@ fn void ui_push_command(ui_render_command_key_t key, const ui_render_command_t *
 fn void ui_reset_render_commands(void);
 fn void ui_sort_render_commands(void);
 
+PAD(4);
 #define UI_ID_STACK_COUNT (32)
 
 typedef struct ui_popup_t
@@ -624,7 +618,12 @@ typedef struct ui_t
 	stack_t(ui_tooltip_t, UI_TOOLTIP_STACK_COUNT) tooltip_stack;
 	stack_t(ui_popup_t, UI_POPUP_STACK_COUNT) popup_stack;
 
+	/*
 	pool_t  state;
+	*/
+
+	simple_heap_t state_allocator;
+
 	table_t state_index;
 
 	platform_cursor_t cursor;
@@ -685,8 +684,8 @@ fn void ui_hoverable       (ui_id_t id, rect2_t rect);
 fn bool ui_is_hovered      (ui_id_t id);
 fn bool ui_is_hovered_delay(ui_id_t id, float delay);
 
-fn ui_state_t *ui_get_state(ui_id_t id);
-fn bool ui_state_is_new(ui_state_t *state);
+fn void *ui_get_state_raw(ui_id_t id, bool *first_touch, uint16_t size);
+#define ui_get_state(id, first_touch, type) (type *)ui_get_state_raw(id, first_touch, sizeof(type))
 
 fn bool ui_begin(float dt);
 fn void ui_end(void);

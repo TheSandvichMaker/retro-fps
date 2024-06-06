@@ -29,6 +29,7 @@
 #include "polymorphic_pool.h"
 #include "pool.h"
 #include "random.h"
+#include "simple_heap.h"
 #include "sort.h"
 #include "stretchy_buffer.h"
 #include "string.h"

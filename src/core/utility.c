@@ -54,3 +54,10 @@ void copy_memory(void *dest_init, const void *source_init, size_t size)
     }
 #endif
 }
+
+uint16_t checked_add_u16(uint16_t a, uint16_t b)
+{
+	uint32_t result = a + b;
+	ASSERT(result <= UINT16_MAX);
+	return (uint16_t)result;
+}
