@@ -350,9 +350,7 @@ fn font_t *ui_font     (ui_style_font_t font_id);
 
 #define UI_Font(font_id, font) DEFER_LOOP(ui_push_font(font_id, font), ui_pop_font(font_id))
 
-fn void  ui_set_font_height   (float height);
-fn float ui_font_height       (void);
-fn float ui_header_font_height(void);
+fn void ui_set_font_height(float height);
 
 //
 // Draw

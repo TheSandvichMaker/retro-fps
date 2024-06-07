@@ -100,7 +100,7 @@ fn ui_layout_t *ui_get_layout(void);
 fn rect2_t layout_rect(void);
 
 fn void layout_prepare_even_spacing(uint32_t item_count);
-fn void layout_place_widget(ui_widget_context_t *context, ui_widget_func_t widget);
+fn rect2_t layout_place_widget(v2_t widget_size);
 
 fn rect2_t layout_make_justified_rect(v2_t bounds);
 

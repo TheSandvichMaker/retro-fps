@@ -455,7 +455,7 @@ rect2_t ui_default_label_rect(font_t *font, string_t label)
 			case RECT2_CUT_TOP:
 			case RECT2_CUT_BOTTOM:
 			{
-				a += font->font_height;
+				a += font->height;
 			} break;
 		}
 
@@ -645,7 +645,7 @@ void ui_process_windows(void)
 
 			rect2_t rect = window->rect;
 
-			float   title_bar_height = ui_header_font_height() + ui_widget_padding();
+			float   title_bar_height = ui_font(UiFont_header)->height + ui_widget_padding();
 			rect2_t title_bar = rect2_add_top(rect, title_bar_height);
 
 			rect2_t total = rect2_union(title_bar, rect);
@@ -906,20 +906,6 @@ void ui_set_font_height(float size)
 
 	ui->style.font        = make_font_from_memory(S("UI Font"), ui->style.font_data, ARRAY_COUNT(ranges), ranges, size);
 	ui->style.header_font = make_font_from_memory(S("UI Header Font"), ui->style.header_font_data, ARRAY_COUNT(ranges), ranges, 1.5f*size);
-}
-
-float ui_font_height(void)
-{
-	// @UiFonts
-	DEBUG_ASSERT(ui->style.font);
-	return ui->style.font ? ui->style.font->font_height : 0.0f;
-}
-
-float ui_header_font_height(void)
-{
-	// @UiFonts
-	DEBUG_ASSERT(ui->style.header_font);
-	return ui->style.font ? ui->style.header_font->font_height : 0.0f;
 }
 
 //
@@ -1240,6 +1226,7 @@ void ui_draw_circle(v2_t p, float radius, v4_t color)
 
 bool ui_mouse_in_rect(rect2_t rect)
 {
+	// TODO: Intersect with clip rect here
 	return rect2_contains_point(rect, ui->input.mouse_p);
 }
 
@@ -1482,7 +1469,7 @@ void ui_seperator(void)
 
 	rect2_t *layout = ui_layout_rect();
 
-	float margin = 2.0f*ui_font_height();
+	float margin = 2.0f*ui_font(UiFont_default)->height;
 	rect2_t rect = rect2_cut_top(layout, margin);
 	float w = rect2_width(rect);
 	float h = 2.0f*ui_scalar(UI_SCALAR_WIDGET_MARGIN);
@@ -1604,7 +1591,7 @@ bool ui_button(string_t label)
 
 	v2_t min_widget_size;
 	min_widget_size.x = ui_text_width(ui->style.font, label);
-	min_widget_size.y = ui_font_height();
+	min_widget_size.y = ui_font(UiFont_default)->height;
 
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
 	ui_hoverable(id, rect);
@@ -1644,7 +1631,7 @@ bool ui_checkbox(string_t label, bool *result_value)
 	float label_padding = ui_scalar(UI_SCALAR_TEXT_MARGIN);
 
 	v2_t min_widget_size;
-	min_widget_size.y = ui_font_height();
+	min_widget_size.y = ui_font(UiFont_default)->height;
 	min_widget_size.x = label_width + label_padding + min_widget_size.y;
 
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
@@ -1751,7 +1738,7 @@ bool ui_option_buttons(string_t label, int *value, int count, string_t *options)
 	ui_id_t id = ui_id(label);
 
 	float label_width   = ui_text_width(ui->style.font, label);
-	float label_padding = 0.33f*ui_font_height();
+	float label_padding = 0.33f*ui_font(UiFont_default)->height;
 
 	float button_labels_width = 0.0f;
 	for (int i = 0; i < count; i++)
@@ -1759,11 +1746,11 @@ bool ui_option_buttons(string_t label, int *value, int count, string_t *options)
 		button_labels_width += ui_text_width(ui->style.font, options[i]);
 	}
 
-	v2_t min_widget_size = { label_width + label_padding + button_labels_width, ui_font_height() };
+	v2_t min_widget_size = { label_width + label_padding + button_labels_width, ui_font(UiFont_default)->height };
 
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
 
-	rect2_t label_rect = rect2_cut_left(&rect, label_width + label_padding);
+	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
 	label_rect = rect2_shrink(label_rect, 0.5f*ui_widget_padding());
 
 	ui_hoverable(id, label_rect);
@@ -1824,7 +1811,7 @@ bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t
 	ui_push_id(id);
 
 	float label_width   = ui_text_width(ui->style.font, label);
-	float label_padding = 0.33f*ui_font_height();
+	float label_padding = 0.33f*ui_font(UiFont_default)->height;
 
 	float max_name_width = 0.0f;
 	float total_height = 0.0f;
@@ -1839,7 +1826,7 @@ bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t
 		total_height += padded_height;
 	}
 
-	v2_t min_widget_size = { label_width + label_padding + max_name_width, ui_font_height() };
+	v2_t min_widget_size = { label_width + label_padding + max_name_width, ui_font(UiFont_default)->height };
 
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
 
@@ -2078,7 +2065,7 @@ bool ui_slider(string_t label, float *v, float min, float max)
 
 	v2_t min_widget_size;
 	min_widget_size.x = ui_text_width(ui->style.font, label) + 32.0f;
-	min_widget_size.y = ui_font_height();
+	min_widget_size.y = ui_font(UiFont_default)->height;
 
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
 	ui_hoverable(id, rect);
@@ -2116,7 +2103,7 @@ bool ui_slider_int_ex(string_t label, int *v, int min, int max, ui_slider_flags_
 	float widget_margin = ui_scalar(UI_SCALAR_WIDGET_MARGIN);
 
 	v2_t min_widget_size;
-	min_widget_size.y = ui_font_height();
+	min_widget_size.y = ui_font(UiFont_default)->height;
 	min_widget_size.x = ui_text_width(ui->style.font, label) + 32.0f + 2.0f*min_widget_size.y + 2.0f*widget_margin;
 
 	rect2_t rect = ui_cut_widget_rect(min_widget_size);
@@ -2224,7 +2211,7 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 	if (!ui_override_rect(&rect))
 	{
 		ui_panel_t *panel = ui_panel();
-		rect = rect2_cut_top(&panel->rect_layout, ui_font_height() + ui_widget_padding());
+		rect = rect2_cut_top(&panel->rect_layout, ui_font(UiFont_default)->height + ui_widget_padding());
 	}
 
 	ui_id_t id = ui_id_pointer(buffer);
@@ -2396,13 +2383,15 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 	string_t string      = buffer->string;
 	rect2_t  buffer_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
 
+	font_t *font = ui_font(UiFont_default);
+
 	ui_draw_rect(rect, ui_color(UI_COLOR_SLIDER_BACKGROUND));
-	ui_draw_text_aligned(ui->style.font, buffer_rect, string, make_v2(0.0f, 0.5f));
-	ui_draw_text_aligned(ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
+	ui_draw_text_aligned(font, buffer_rect, string, make_v2(0.0f, 0.5f));
+	ui_draw_text_aligned(font, label_rect, label, make_v2(0.0f, 0.5f));
 
 	if (has_focus)
 	{
-		prepared_glyphs_t prep = font_prepare_glyphs(ui->style.font, temp, string);
+		prepared_glyphs_t prep = font_prepare_glyphs(font, temp, string);
 
 		if (prep.count > 0)
 		{
@@ -2807,7 +2796,7 @@ void ui_end(void)
 	int res_x = 1920;
 	int res_y = 1080;
 
-	float font_height = ui_font_height();
+	float font_height = ui_font(UiFont_default)->height;
 	float at_y = 32.0f;
 
 	for (size_t i = 0; i < stack_count(ui->tooltip_stack); i++)

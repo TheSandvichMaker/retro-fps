@@ -67,15 +67,11 @@ void layout_prepare_even_spacing(uint32_t item_count)
 	}
 }
 
-void layout_place_widget(ui_widget_context_t *context, ui_widget_func_t widget)
+rect2_t layout_place_widget(v2_t widget_size)
 {
 	ui_layout_t *layout = ui_get_layout();
 
 	rect2_t rect = {0};
-
-	widget(context, UiWidgetMode_get_size, rect);
-
-	v2_t bounds = context->min_size;
 
 	if (layout->prepared_rect_count > 0)
 	{
@@ -98,16 +94,15 @@ void layout_place_widget(ui_widget_context_t *context, ui_widget_func_t widget)
 	else if (layout->wants_justify)
 	{
 		// justify stuff
-		rect = layout_make_justified_rect(bounds);
+		rect = layout_make_justified_rect(widget_size);
 	}
 	else
 	{
 		// cut stuff, maybe insert margins here somehow
-		rect2_cut(layout->rect, layout->flow, ui_sz_pix(bounds.e[layout->flow_axis]), &rect, &layout->rect);
+		rect2_cut(layout->rect, layout->flow, ui_sz_pix(widget_size.e[layout->flow_axis]), &rect, &layout->rect);
 	}
 
-	// maybe interact and draw doesn't need to be separate in this scheme
-	widget(context, UiWidgetMode_interact_and_draw, rect);
+	return rect;
 }
 
 rect2_t layout_make_justified_rect(v2_t leaf_dim)

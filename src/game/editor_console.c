@@ -4,7 +4,7 @@ void update_and_draw_console(console_t *console, v2_t resolution, float dt)
 
 	float line_spacing = console->font->y_advance;
 
-	float console_height = 17.0*line_spacing; // space for 24 lines + input box
+	float console_height = 17.0*line_spacing;
 
 	rect2_t console_area = rect2_from_min_dim(make_v2(0, resolution.y - console_height - 1.0),
 											  make_v2(resolution.x, console_height));

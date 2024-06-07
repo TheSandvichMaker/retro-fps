@@ -62,7 +62,7 @@ font_t *make_font_from_memory(string_t cosmetic_name, string_t font_data, size_t
 
 			result->oversampling_x = 2;
 			result->oversampling_y = 2;
-			result->font_height = font_size;
+			result->height      = font_size;
 			result->ascent      = font_scale*(float)ascent;
 			result->descent     = font_scale*(float)descent;
 			result->line_gap    = font_scale*(float)line_gap;

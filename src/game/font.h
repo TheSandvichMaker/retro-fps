@@ -24,7 +24,7 @@ typedef struct font_t
 	int oversampling_x;
 	int oversampling_y;
 
-	float    font_height;
+	float    height;
 	float    ascent;
 	float    descent;
 	float    line_gap;
