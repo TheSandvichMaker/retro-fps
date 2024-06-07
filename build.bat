@@ -10,19 +10,11 @@ set release_flags=/O2 /MT
 set linker_flags=/opt:ref /incremental:no /libpath:..\external\lib\x64
 set libraries=user32.lib dxguid.lib d3d11.lib dxgi.lib d3dcompiler.lib gdi32.lib user32.lib ole32.lib ksuser.lib shell32.lib Synchronization.lib DbgHelp.lib d3d12.lib GameInput.lib
 
-rem copy garbage
+rem copy binaries
 
 robocopy external\bin run *.exe *.dll *.pdb /S > NUL
 
 pushd build
-
-if not exist dxc_wrapper_debug.obj (
-	echo]
-	echo building dxc wrapper... :(
-	echo]
-	cl /c ..\src\engine\rhi\d3d12\dxc.cpp /Fo:dxc_wrapper_debug.obj %flags% %debug_flags%
-	cl /c ..\src\engine\rhi\d3d12\dxc.cpp /Fo:dxc_wrapper_release.obj %flags% %release_flags%
-)
 
 rem ========================================================================================================================
 
@@ -34,7 +26,7 @@ echo]
 
 ..\tools\ctime -begin win32_retro_debug.ctm
 
-cl ..\src\engine\entry_win32.c dxc_wrapper_debug.obj /Fe:win32_retro_debug.exe %flags% %debug_flags% /link %linker_flags% %libraries%
+cl ..\src\engine\entry_win32.c ..\src\engine\rhi\d3d12\dxc.cpp /Fe:win32_retro_debug.exe %flags% %debug_flags% /link %linker_flags% %libraries%
 set last_error=%ERRORLEVEL%
 
 ..\tools\ctime -end win32_retro_debug.ctm %last_error%
@@ -54,7 +46,7 @@ echo]
 
 ..\tools\ctime -begin win32_retro_release.ctm
 
-cl ..\src\engine\entry_win32.c dxc_wrapper_release.obj /Fe:win32_retro_release.exe %flags% %release_flags% /link %linker_flags% %libraries%
+cl ..\src\engine\entry_win32.c ..\src\engine\rhi\d3d12\dxc.cpp /Fe:win32_retro_release.exe %flags% %release_flags% /link %linker_flags% %libraries%
 set last_error=%ERRORLEVEL%
 
 ..\tools\ctime -end win32_retro_release.ctm %last_error%
