@@ -14,6 +14,10 @@ typedef struct ui_id_t
 {
 	uint64_t value;
 #if DREAM_SLOW
+	// TODO: It's nice in the debugger, but for everything else I'd rather store these names in a table indexed by the ID.
+	// Or at change it to a pointer somehow, so we're storing 16 bytes instead of 72
+	// Could probably just allocate from the temp/frame arena actually... But there is a risk of keeping around an old ID
+	// that will have its memory stomped... Not a huge deal, though.
 	string_storage_t(64) _name;
 #endif
 } ui_id_t;
@@ -248,42 +252,38 @@ fn void ui_process_windows(void);
 // Style
 //
 
+#define UI_ANIM_SLEEPY_THRESHOLD (0.01f)
+
 typedef struct ui_anim_t
 {
-	uint64_t last_touched_frame_index;
-
-	float length_limit;
-	float c_t;
-	float c_v;
-	v4_t  t_target;
-	v4_t  t_current;
-	v4_t  t_velocity;
+	// TODO: Do I actually need to track this like this?
+	uint32_t last_touched_frame_index;  // 4
+	// TODO: These parameters could be pulled out
+	float length_limit;                 // 8
+	float c_t;                          // 12
+	float c_v;                          // 16
+	// TODO: These could probably be stored in fixed point
+	v4_t  t_target;                     // 32
+	v4_t  t_current;                    // 48
+	v4_t  t_velocity;                   // 64
 } ui_anim_t;
+
+typedef struct ui_anim_sleepy_t
+{
+	// we only need to remember t_current so we know if we need to wake up
+	v4_t t_current;
+} ui_anim_sleepy_t; 
 
 typedef struct ui_anim_list_t
 {
 	int32_t active_count;
 	int32_t sleepy_count;
 
-	union
-	{
-		ui_id_t ids[2048];
-		struct
-		{
-			ui_id_t active_ids[1024];
-			ui_id_t sleepy_ids[1024];
-		};
-	};
+	ui_id_t active_ids[1024];
+	ui_id_t sleepy_ids[1024];
 
-	union
-	{
-		ui_anim_t anims[2048];
-		struct
-		{
-			ui_anim_t active[1024];
-			ui_anim_t sleepy[1024];
-		};
-	};
+	ui_anim_t        active[1024];
+	ui_anim_sleepy_t sleepy[1024];
 
 	ui_anim_t null;
 } ui_anim_list_t;

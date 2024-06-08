@@ -768,44 +768,74 @@ void ui_process_windows(void)
 // Style
 //
 
-ui_anim_t *ui_get_anim(ui_id_t id, v4_t init_value)
+ui_anim_t *ui_get_anim(ui_id_t id, v4_t target)
 {
 	ui_anim_list_t *list = &ui->anim_list;
 
-	int32_t anim_index = -1;
+	ui_id_t          *restrict active_ids   = list->active_ids;
+	ui_id_t          *restrict sleepy_ids   = list->sleepy_ids;
+	ui_anim_t        *restrict active_anims = list->active;
+	ui_anim_sleepy_t *restrict sleepy_anims = list->sleepy;
 
-	for (int32_t i = 0; i < list->active_count; i++)
-	{
-		if (ui_id_equal(list->active_ids[i], id))
-		{
-			anim_index = i;
-			break;
-		}
-	}
-
-	for (int32_t i = 0; i < list->sleepy_count; i++)
-	{
-		if (ui_id_equal(list->sleepy_ids[i], id))
-		{
-			anim_index = i + 1024;
-			break;
-		}
-	}
+	int32_t active_count = list->active_count;
+	int32_t sleepy_count = list->sleepy_count;
 
 	ui_anim_t *result = NULL;
-
-	if (anim_index != -1)
+	for (int32_t active_index = 0; active_index < active_count; active_index++)
 	{
-		result = &list->anims[anim_index];
-	}
-	else
-	{
-		if (list->active_count < ARRAY_COUNT(list->active))
+		if (ui_id_equal(active_ids[active_index], id))
 		{
-			anim_index = list->active_count++;
+			result = &active_anims[active_index];
+			break;
+		}
+	}
 
-			list->ids[anim_index] = id;
-			result = &list->anims[anim_index];
+	if (!result)
+	{
+		for (int32_t sleepy_index = 0; sleepy_index < sleepy_count; sleepy_index++)
+		{
+			if (ui_id_equal(sleepy_ids[sleepy_index], id))
+			{
+				ui_anim_sleepy_t *sleepy = &sleepy_anims[sleepy_index];
+				
+				if (vlen(sub(target, sleepy->t_current)) >= ui->dt*UI_ANIM_SLEEPY_THRESHOLD)
+				{
+					ui_anim_t as_active = {
+						.t_current = sleepy->t_current,
+						.t_target  = target,
+					};
+
+					// add to active array
+					int32_t active_index = active_count++;
+					active_ids  [active_index] = sleepy_ids[sleepy_index];
+					active_anims[active_index] = as_active;
+
+					// remove from sleepy array
+					int32_t swap_index = --sleepy_count;
+					sleepy_ids  [sleepy_index] = sleepy_ids  [swap_index];
+					sleepy_anims[sleepy_index] = sleepy_anims[swap_index];
+
+					result = &active_anims[active_index];
+				}
+				else
+				{
+					result = &list->null;
+					result->t_current = target;
+				}
+
+				break;
+			}
+		}
+	}
+
+	if (!result)
+	{
+		if (active_count < ARRAY_COUNT(list->active))
+		{
+			int32_t anim_index = active_count++;
+
+			active_ids[anim_index] = id;
+			result = &active_anims[anim_index];
 
 			log(UI, Spam, "Spawned anim %.*s", Sx(UI_ID_GET_NAME(id)));
 		}
@@ -816,27 +846,25 @@ ui_anim_t *ui_get_anim(ui_id_t id, v4_t init_value)
 			log(UI, Warning, "Ran out of space for UI anims for ID %.*s", Sx(UI_ID_GET_NAME(id)));
 		}
 
-		result->t_current = init_value;
+		result->t_current = target;
 	}
+
+	list->active_count = active_count;
+	list->sleepy_count = sleepy_count;
 
 	result->last_touched_frame_index = ui->frame_index;
 	result->length_limit             = ui_scalar(UI_SCALAR_ANIMATION_LENGTH_LIMIT);
 	result->c_t                      = ui_scalar(UI_SCALAR_ANIMATION_STIFFNESS);
 	result->c_v                      = ui_scalar(UI_SCALAR_ANIMATION_DAMPEN);
+	result->t_target                 = target;
 
 	return result;
 }
 
-float ui_interpolate_f32_start(ui_id_t id, float target, float start)
-{
-	ui_anim_t *result = ui_get_anim(id, v4_from_scalar(start));
-	result->t_target.x = target;
-	return result->t_current.x;
-}
-
 float ui_interpolate_f32(ui_id_t id, float target)
 {
-	return ui_interpolate_f32_start(id, target, target);
+	ui_anim_t *result = ui_get_anim(id, v4_from_scalar(target));
+	return result->t_current.x;
 }
 
 float ui_set_f32(ui_id_t id, float target)
@@ -2705,40 +2733,13 @@ static void ui_initialize(void)
 
 fn_local void ui_tick_ui_animations(ui_anim_list_t *list, float dt)
 {
-	const float sleepy_threshold = 0.001f;
-
-	ui_id_t   *restrict active_ids = list->active_ids;
-	ui_id_t   *restrict sleepy_ids = list->sleepy_ids;
-	ui_anim_t *restrict active_anims = list->active;
-	ui_anim_t *restrict sleepy_anims = list->sleepy;
+	ui_id_t          *restrict active_ids = list->active_ids;
+	ui_id_t          *restrict sleepy_ids = list->sleepy_ids;
+	ui_anim_t        *restrict active_anims = list->active;
+	ui_anim_sleepy_t *restrict sleepy_anims = list->sleepy;
 
 	int32_t active_count = list->active_count;
 	int32_t sleepy_count = list->sleepy_count;
-
-	for (int32_t sleepy_index = 0; sleepy_index < sleepy_count;)
-	{
-		ui_anim_t *anim = &sleepy_anims[sleepy_index];
-
-		v4_t target  = anim->t_target;
-		v4_t current = anim->t_current;
-
-		if (vlen(sub(current, target)) >= sleepy_threshold)
-		{
-			// add to active array
-			int32_t active_index = active_count++;
-			active_ids  [active_index] = sleepy_ids  [sleepy_index];
-			active_anims[active_index] = sleepy_anims[sleepy_index];
-
-			// remove from sleepy array
-			int32_t swap_index = --sleepy_count;
-			sleepy_ids  [sleepy_index] = sleepy_ids  [swap_index];
-			sleepy_anims[sleepy_index] = sleepy_anims[swap_index];
-		}
-		else
-		{
-			sleepy_index++;
-		}
-	}
 
 	for (size_t active_index = 0; active_index < active_count;)
 	{
@@ -2762,7 +2763,8 @@ fn_local void ui_tick_ui_animations(ui_anim_list_t *list, float dt)
 				current = v4_max(current, min);
 			}
 
-			v4_t accel_t = mul( c_t, sub(target, current));
+			v4_t delta   = sub(target, current);
+			v4_t accel_t = mul( c_t, delta);
 			v4_t accel_v = mul(-c_v, velocity);
 			v4_t accel = add(accel_t, accel_v);
 
@@ -2772,14 +2774,16 @@ fn_local void ui_tick_ui_animations(ui_anim_list_t *list, float dt)
 			anim->t_current  = current;
 			anim->t_velocity = velocity;
 
-			if (vlen(accel_t) < 0.001f)
+			if (vlen(velocity) < dt*UI_ANIM_SLEEPY_THRESHOLD)
 			{
-				anim->t_current = target;
+				ui_anim_sleepy_t as_sleepy = {
+					.t_current = target,
+				};
 
 				// add to sleepy array
 				int32_t sleepy_index = sleepy_count++;
-				sleepy_ids  [sleepy_index] = list->active_ids[active_index];
-				sleepy_anims[sleepy_index] = list->active    [active_index];
+				sleepy_ids  [sleepy_index] = active_ids[active_index];
+				sleepy_anims[sleepy_index] = as_sleepy;
 
 				// remove from active array
 				int32_t swap_index = --active_count;

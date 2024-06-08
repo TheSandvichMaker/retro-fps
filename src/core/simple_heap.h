@@ -12,7 +12,7 @@ typedef struct simple_heap_block_header_t
 typedef struct simple_heap_t
 {
 	arena_t *arena;
-	simple_heap_block_header_t free_block_lists[10];
+	simple_heap_block_header_t free_block_lists[12];
 } simple_heap_t;
 
 fn void  simple_heap_init        (simple_heap_t *heap, arena_t *arena);
