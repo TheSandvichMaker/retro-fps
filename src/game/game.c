@@ -516,7 +516,7 @@ fn_local void tick_game(gamestate_t *game, float dt)
 	mixer_set_listener(camera->p, negate(camera->computed_z));
 }
 
-fn_local void tick_ui(app_state_t *app, input_t *input, v2_t client_size, float dt)
+fn_local platform_cursor_t tick_ui(app_state_t *app, input_t *input, v2_t client_size, float dt)
 {
 	(void)dt;
 
@@ -612,16 +612,17 @@ fn_local void tick_ui(app_state_t *app, input_t *input, v2_t client_size, float 
 	ui_begin(dt);
 	{
 		update_and_render_in_game_editor();
-		update_and_draw_console(app->console, client_size, dt);
+		(void)client_size;
+		//update_and_draw_console(app->console, client_size, dt);
 	}
     ui_end();
 
 	unequip_gamestate();
 
-	//io->cursor = ui->cursor;
-
 	// @Globals
 	unequip_ui();
+
+	return app->ui->cursor;
 }
 
 fn_local void render_game(/*r1_t *r1, */gamestate_t *game, rhi_window_t window)
@@ -721,7 +722,7 @@ fn_local void app_tick(platform_tick_io_t *io)
 	rhi_window_t window = io->rhi_window;
 	v2_t client_size = rhi_get_window_client_size(window);
 
-	tick_ui(app, io->input, client_size, (float)frame_time);
+	io->cursor = tick_ui(app, io->input, client_size, (float)frame_time);
 
 	rhi_begin_frame();
 

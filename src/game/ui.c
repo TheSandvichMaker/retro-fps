@@ -36,15 +36,13 @@ ui_id_t ui_child_id(ui_id_t parent, string_t string)
 
 		result.value = hash;
 
-#if DREAM_SLOW
-		string_storage_append(&result.name, string);
-#endif
+		UI_ID_APPEND_NAME(result, string);
 	}
 
 	return result;
 }
 
-ui_id_t ui_id_pointer(void *pointer)
+ui_id_t ui_id_pointer_(void *pointer UI_ID_NAME_PARAM)
 {
 	ui_id_t result = { (uint64_t)(uintptr_t)pointer };
 
@@ -54,10 +52,15 @@ ui_id_t ui_id_pointer(void *pointer)
 		ui->next_id = UI_ID_NULL;
 	}
 
+	if (result.value)
+	{
+		UI_ID_SET_NAME(result, name);
+	}
+
 	return result;
 }
 
-ui_id_t ui_id_u64(uint64_t u64)
+ui_id_t ui_id_u64_(uint64_t u64 UI_ID_NAME_PARAM)
 {
 	ui_id_t result = { u64 };
 
@@ -65,6 +68,11 @@ ui_id_t ui_id_u64(uint64_t u64)
 	{
 		result = ui->next_id;
 		ui->next_id = UI_ID_NULL;
+	}
+
+	if (result.value)
+	{
+		UI_ID_SET_NAME(result, name);
 	}
 
 	return result;
@@ -762,52 +770,73 @@ void ui_process_windows(void)
 
 ui_anim_t *ui_get_anim(ui_id_t id, v4_t init_value)
 {
-	ui_anim_t *result = table_find_object(&ui->style.animation_index, id.value);
+	ui_anim_list_t *list = &ui->anim_list;
 
-	if (!result)
+	int32_t anim_index = -1;
+
+	for (int32_t i = 0; i < list->active_count; i++)
 	{
-		/*
-		result = pool_add(&ui->style.animation_state);
-		*/
-		ui_anim_pool_allocate(&ui->style.animation_state, &result);
-		result->id        = id;
-		result->t_target  = init_value;
-		result->t_current = init_value;
-		table_insert_object(&ui->style.animation_index, id.value, result);
+		if (ui_id_equal(list->active_ids[i], id))
+		{
+			anim_index = i;
+			break;
+		}
 	}
 
-	ASSERT(result->id.value == id.value);
+	for (int32_t i = 0; i < list->sleepy_count; i++)
+	{
+		if (ui_id_equal(list->sleepy_ids[i], id))
+		{
+			anim_index = i + 1024;
+			break;
+		}
+	}
 
-	result->length_limit = ui_scalar(UI_SCALAR_ANIMATION_LENGTH_LIMIT);
-	result->c_t = ui_scalar(UI_SCALAR_ANIMATION_STIFFNESS);
-	result->c_v = ui_scalar(UI_SCALAR_ANIMATION_DAMPEN);
+	ui_anim_t *result = NULL;
+
+	if (anim_index != -1)
+	{
+		result = &list->anims[anim_index];
+	}
+	else
+	{
+		if (list->active_count < ARRAY_COUNT(list->active))
+		{
+			anim_index = list->active_count++;
+
+			list->ids[anim_index] = id;
+			result = &list->anims[anim_index];
+
+			log(UI, Spam, "Spawned anim %.*s", Sx(UI_ID_GET_NAME(id)));
+		}
+		else
+		{
+			result = &list->null;
+
+			log(UI, Warning, "Ran out of space for UI anims for ID %.*s", Sx(UI_ID_GET_NAME(id)));
+		}
+
+		result->t_current = init_value;
+	}
 
 	result->last_touched_frame_index = ui->frame_index;
+	result->length_limit             = ui_scalar(UI_SCALAR_ANIMATION_LENGTH_LIMIT);
+	result->c_t                      = ui_scalar(UI_SCALAR_ANIMATION_STIFFNESS);
+	result->c_v                      = ui_scalar(UI_SCALAR_ANIMATION_DAMPEN);
 
 	return result;
 }
 
 float ui_interpolate_f32_start(ui_id_t id, float target, float start)
 {
-	ui_anim_t *anim = ui_get_anim(id, v4_from_scalar(start));
-	anim->t_target.x = target;
-
-	return anim->t_current.x;
+	ui_anim_t *result = ui_get_anim(id, v4_from_scalar(start));
+	result->t_target.x = target;
+	return result->t_current.x;
 }
 
 float ui_interpolate_f32(ui_id_t id, float target)
 {
 	return ui_interpolate_f32_start(id, target, target);
-}
-
-float ui_interpolate_snappy_f32(ui_id_t id, float target)
-{
-	ui_anim_t *anim = ui_get_anim(id, v4_from_scalar(target));
-	anim->t_target.x = target;
-	anim->c_t *= 2.0f;
-	anim->c_v *= 2.0f;
-
-	return anim->t_current.x;
 }
 
 float ui_set_f32(ui_id_t id, float target)
@@ -2674,36 +2703,46 @@ static void ui_initialize(void)
 	ui->initialized = true;
 }
 
-bool ui_begin(float dt)
+fn_local void ui_tick_ui_animations(ui_anim_list_t *list, float dt)
 {
-	ASSERT(ui);
-	ASSERT(ui->initialized);
+	const float sleepy_threshold = 0.001f;
 
-	ui__trickle_input(&ui->input, &ui->queued_input);
+	ui_id_t   *restrict active_ids = list->active_ids;
+	ui_id_t   *restrict sleepy_ids = list->sleepy_ids;
+	ui_anim_t *restrict active_anims = list->active;
+	ui_anim_t *restrict sleepy_anims = list->sleepy;
 
-	//ui->input = input;
-	ui->dt    = dt;
+	int32_t active_count = list->active_count;
+	int32_t sleepy_count = list->sleepy_count;
 
-	ui->last_frame_ui_rect_count = ui->render_commands.count;
-    ui_reset_render_commands();
-
-	for (table_iter_t it = table_iter(&ui->state_index); table_iter_next(&it);)
+	for (int32_t sleepy_index = 0; sleepy_index < sleepy_count;)
 	{
-		ui_state_header_t *state = it.ptr;
+		ui_anim_t *anim = &sleepy_anims[sleepy_index];
 
-		if (state->last_touched_frame_index < ui->frame_index)
+		v4_t target  = anim->t_target;
+		v4_t current = anim->t_current;
+
+		if (vlen(sub(current, target)) >= sleepy_threshold)
 		{
-			table_remove(&ui->state_index, state->id.value);
-			simple_heap_free(&ui->state_allocator, state, state->size);
+			// add to active array
+			int32_t active_index = active_count++;
+			active_ids  [active_index] = sleepy_ids  [sleepy_index];
+			active_anims[active_index] = sleepy_anims[sleepy_index];
+
+			// remove from sleepy array
+			int32_t swap_index = --sleepy_count;
+			sleepy_ids  [sleepy_index] = sleepy_ids  [swap_index];
+			sleepy_anims[sleepy_index] = sleepy_anims[swap_index];
+		}
+		else
+		{
+			sleepy_index++;
 		}
 	}
 
-	for_pool(it, &ui->style.animation_state)
+	for (size_t active_index = 0; active_index < active_count;)
 	{
-		// TODO: Figure out the situation with pool_free taking a handle but
-		// we don't have a handle when iterating?
-		ui_anim_handle_t handle = ui_anim_handle_from_index(&ui->style.animation_state, it);
-		ui_anim_t *anim = &ui->style.animation_state.items[it];
+		ui_anim_t *anim = &active_anims[active_index];
 
 		if (anim->last_touched_frame_index >= ui->frame_index)
 		{
@@ -2727,18 +2766,69 @@ bool ui_begin(float dt)
 			v4_t accel_v = mul(-c_v, velocity);
 			v4_t accel = add(accel_t, accel_v);
 
-			velocity = add(velocity, mul(ui->dt, accel));
-			current  = add(current,  mul(ui->dt, velocity));
+			velocity = add(velocity, mul(dt, accel));
+			current  = add(current,  mul(dt, velocity));
 
 			anim->t_current  = current;
 			anim->t_velocity = velocity;
+
+			if (vlen(accel_t) < 0.001f)
+			{
+				anim->t_current = target;
+
+				// add to sleepy array
+				int32_t sleepy_index = sleepy_count++;
+				sleepy_ids  [sleepy_index] = list->active_ids[active_index];
+				sleepy_anims[sleepy_index] = list->active    [active_index];
+
+				// remove from active array
+				int32_t swap_index = --active_count;
+				active_ids  [active_index] = active_ids  [swap_index];
+				active_anims[active_index] = active_anims[swap_index];
+			}
+			else
+			{
+				active_index++;
+			}
 		}
 		else
 		{
-			table_remove(&ui->style.animation_index, anim->id.value);
-			ui_anim_pool_free(&ui->style.animation_state, handle);
+			// remove from active array
+			int32_t swap_index = --active_count;
+			active_ids  [active_index] = active_ids  [swap_index];
+			active_anims[active_index] = active_anims[swap_index];
 		}
 	}
+
+	list->active_count = active_count;
+	list->sleepy_count = sleepy_count;
+}
+
+bool ui_begin(float dt)
+{
+	ASSERT(ui);
+	ASSERT(ui->initialized);
+
+	ui__trickle_input(&ui->input, &ui->queued_input);
+
+	//ui->input = input;
+	ui->dt = dt;
+
+	ui->last_frame_ui_rect_count = ui->render_commands.count;
+    ui_reset_render_commands();
+
+	for (table_iter_t it = table_iter(&ui->state_index); table_iter_next(&it);)
+	{
+		ui_state_header_t *state = it.ptr;
+
+		if (state->last_touched_frame_index < ui->frame_index)
+		{
+			table_remove(&ui->state_index, state->id.value);
+			simple_heap_free(&ui->state_allocator, state, state->size);
+		}
+	}
+
+	ui_tick_ui_animations(&ui->anim_list, dt);
 
 	ui->frame_index += 1;
 	

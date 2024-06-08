@@ -14,20 +14,49 @@ typedef struct ui_id_t
 {
 	uint64_t value;
 #if DREAM_SLOW
-	string_storage_t(64) name;
+	string_storage_t(64) _name;
 #endif
 } ui_id_t;
 
 #define UI_ID_NULL (ui_id_t){0}
 
-fn ui_id_t ui_id        (string_t string);
-fn ui_id_t ui_child_id  (ui_id_t parent, string_t string);
-fn ui_id_t ui_id_pointer(void *pointer);
-fn ui_id_t ui_id_u64    (uint64_t u64);
+#if DREAM_SLOW
+
+#define UI_ID_SET_NAME(id, name)    (string_into_storage((id)._name, name))
+#define UI_ID_APPEND_NAME(id, name) (string_storage_append(&(id)._name, name))
+#define UI_ID_GET_NAME(id)          (string_from_storage((id)._name))
+
+#define UI_ID_NAME_PARAM , string_t name
+
+#define ui_id_pointer(pointer) ui_id_pointer_(pointer, S(#pointer))
+#define ui_id_u64(u64)         ui_id_u64_    (u64, S(#u64))
+
+#else
+
+#define UI_ID_SET_NAME(id, name)    
+#define UI_ID_APPEND_NAME(id, name) 
+#define UI_ID_GET_NAME(id)          S("<unavailable>")
+
+#define UI_ID_NAME_PARAM
+
+#define ui_id_pointer(pointer) ui_id_pointer_(pointer)
+#define ui_id_u64(u64)         ui_id_u64_    (u64)
+
+#endif
+
+fn ui_id_t ui_id         (string_t string);
+fn ui_id_t ui_child_id   (ui_id_t parent, string_t string);
+fn ui_id_t ui_id_pointer_(void *pointer UI_ID_NAME_PARAM);
+fn ui_id_t ui_id_u64_    (uint64_t u64 UI_ID_NAME_PARAM);
 
 fn_local bool ui_id_valid(ui_id_t id)
 {
 	return id.value != 0;
+}
+
+fn_local bool ui_id_equal(ui_id_t a, ui_id_t b)
+{
+	return a.value == b.value;
 }
 
 fn void ui_set_next_id(ui_id_t id);
@@ -221,7 +250,6 @@ fn void ui_process_windows(void);
 
 typedef struct ui_anim_t
 {
-	ui_id_t  id;
 	uint64_t last_touched_frame_index;
 
 	float length_limit;
@@ -231,6 +259,34 @@ typedef struct ui_anim_t
 	v4_t  t_current;
 	v4_t  t_velocity;
 } ui_anim_t;
+
+typedef struct ui_anim_list_t
+{
+	int32_t active_count;
+	int32_t sleepy_count;
+
+	union
+	{
+		ui_id_t ids[2048];
+		struct
+		{
+			ui_id_t active_ids[1024];
+			ui_id_t sleepy_ids[1024];
+		};
+	};
+
+	union
+	{
+		ui_anim_t anims[2048];
+		struct
+		{
+			ui_anim_t active[1024];
+			ui_anim_t sleepy[1024];
+		};
+	};
+
+	ui_anim_t null;
+} ui_anim_list_t;
 
 #define UI_STYLE_STACK_COUNT 32
 
@@ -299,14 +355,8 @@ typedef enum ui_style_font_t
 	UiFont_COUNT,
 } ui_style_font_t;
 
-DEFINE_POOL(ui_anim_t, ui_anim, 2048);
-
 typedef struct ui_style_t
 {
-	// pool_t animation_state;
-	ui_anim_pool_t animation_state;
-	table_t animation_index;
-
 	float   base_scalars[UI_SCALAR_COUNT];
 	v4_t    base_colors [UI_COLOR_COUNT];
 	font_t *base_fonts  [UiFont_COUNT];
@@ -322,12 +372,11 @@ typedef struct ui_style_t
 	font_t *header_font;
 } ui_style_t;
 
-fn ui_anim_t *ui_get_anim        (ui_id_t id, v4_t init_value);
-fn float ui_interpolate_f32      (ui_id_t id, float target);
-fn float ui_interpolate_f32_start(ui_id_t id, float target, float start);
-fn float ui_set_f32              (ui_id_t id, float target);
-fn v4_t  ui_interpolate_v4       (ui_id_t id, v4_t  target);
-fn v4_t  ui_set_v4               (ui_id_t id, v4_t  target);
+fn ui_anim_t *ui_get_anim  (ui_id_t id, v4_t init_value);
+fn float ui_interpolate_f32(ui_id_t id, float target);
+fn float ui_set_f32        (ui_id_t id, float target);
+fn v4_t  ui_interpolate_v4 (ui_id_t id, v4_t  target);
+fn v4_t  ui_set_v4         (ui_id_t id, v4_t  target);
 
 fn float ui_scalar            (ui_style_scalar_t scalar);
 fn void  ui_push_scalar       (ui_style_scalar_t scalar, float value);
@@ -616,13 +665,10 @@ typedef struct ui_t
 	stack_t(ui_tooltip_t, UI_TOOLTIP_STACK_COUNT) tooltip_stack;
 	stack_t(ui_popup_t, UI_POPUP_STACK_COUNT) popup_stack;
 
-	/*
-	pool_t  state;
-	*/
-
+	table_t       state_index;
 	simple_heap_t state_allocator;
 
-	table_t state_index;
+	ui_anim_list_t anim_list;
 
 	platform_cursor_t cursor;
 	int               cursor_reset_delay;

@@ -31,3 +31,5 @@ void loud_error(int line, string_t file, const char *fmt, ...);
 void loud_error_va(int line, string_t file, const char *fmt, va_list args);
 void fatal_error(int line, string_t file, const char *fmt, ...);
 void fatal_error_va(int line, string_t file, const char *fmt, va_list args);
+
+#define ARRAY_AT(array, index) (*(ASSERT((index) >= 0 && ((index) < ARRAY_COUNT(array))), &array[index]))

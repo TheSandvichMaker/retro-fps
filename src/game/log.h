@@ -48,3 +48,13 @@ typedef struct log_loc_t
 fn void logs_  (const log_loc_t *loc, log_category_t cat, log_level_t level, string_t message);
 fn void log_   (const log_loc_t *loc, log_category_t cat, log_level_t level, const char *fmt, ...);
 fn void log_va_(const log_loc_t *loc, log_category_t cat, log_level_t level, const char *fmt, va_list args);
+
+#if DREAM_SLOW
+#define LOGS_SLOW(cat, level, message)     logs  (cat, level, message)
+#define LOG_SLOW(cat, level, fmt, ...)     log   (cat, level, fmt, ##__VA_ARGS__)
+#define LOG_VA_SLOW(cat, level, fmt, args) log_va(cat, level, fmt, args)
+#else
+#define logs_slow(...)     
+#define log_slow(...)     
+#define log_va_slow(...) 
+#endif
