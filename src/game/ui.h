@@ -453,12 +453,6 @@ fn ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect);
 // Base Widgets
 //
 
-typedef struct ui_text_edit_state_t
-{
-	size_t selection_start;
-	size_t cursor;
-} ui_text_edit_state_t;
-
 typedef struct ui_panel_state_t
 {
 	float scrollable_height_x;
@@ -497,7 +491,6 @@ fn bool ui_slider        (string_t text, float *value, float min, float max);
 fn bool ui_slider_ex     (string_t label, float *v, float min, float max, float granularity);
 fn bool ui_slider_int    (string_t text, int *value, int min, int max);
 fn bool ui_slider_int_ex (string_t text, int *value, int min, int max, ui_slider_flags_t flags);
-fn void ui_text_edit     (string_t label, dynamic_string_t *buffer);
 fn void ui_tooltip       (string_t text);
 fn void ui_hover_tooltip (string_t text);
 

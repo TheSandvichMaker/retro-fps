@@ -22,3 +22,4 @@ fn bool ui_row_radio_buttons(ui_row_builder_t *builder, string_t label, int *sta
 fn bool ui_row_checkbox     (ui_row_builder_t *builder, string_t label, bool *v);
 fn bool ui_row_slider_int   (ui_row_builder_t *builder, string_t label, int   *v, int   min, int   max);
 fn bool ui_row_slider       (ui_row_builder_t *builder, string_t label, float *f, float min, float max);
+fn void ui_row_text_edit    (ui_row_builder_t *builder, string_t label, dynamic_string_t *buffer);

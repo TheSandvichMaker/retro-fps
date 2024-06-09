@@ -31,14 +31,12 @@ fn void    ui_scrollable_region_end     (ui_id_t id, rect2_t final_rect);
 // Header
 //
 
-fn v2_t ui_compute_header_size(string_t label);
 fn void ui_header_new(rect2_t rect, string_t label);
 
 //
 // Label
 //
 
-fn v2_t ui_compute_label_size(string_t label);
 fn void ui_label_new(rect2_t rect, string_t label);
 
 //
@@ -51,14 +49,12 @@ fn void ui_progress_bar_new(rect2_t rect, string_t label, float progress);
 // Button
 //
 
-fn v2_t ui_compute_button_size(string_t label);
 fn bool ui_button_new(rect2_t rect, string_t label);
 
 //
 // Checkbox
 //
 
-fn v2_t ui_compute_checkbox_size(void);
 fn bool ui_checkbox_new(rect2_t rect, bool *result_value);
 
 //
@@ -111,3 +107,15 @@ fn bool ui_slider_new_ex(rect2_t rect, float *v, float min, float max, float gra
 fn bool ui_slider_new(rect2_t rect, float *v, float min, float max);
 fn bool ui_slider_int_new_ex(rect2_t rect, int32_t *v, int32_t min, int32_t max, ui_slider_flags_new_t flags);
 fn bool ui_slider_int_new(rect2_t rect, int32_t *v, int32_t min, int32_t max);
+
+//
+// Text Edit
+//
+
+typedef struct ui_text_edit_state_t
+{
+	size_t selection_start;
+	size_t cursor;
+} ui_text_edit_state_t;
+
+fn void ui_text_edit(rect2_t rect, dynamic_string_t *buffer);

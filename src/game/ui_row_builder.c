@@ -45,9 +45,9 @@ void ui_row_split(ui_row_builder_t *builder, rect2_t *label, rect2_t *widget)
 
 void ui_row_header(ui_row_builder_t *builder, string_t label)
 {
-	v2_t dim = ui_compute_header_size(label);
+	float height = ui_font(UiFont_header)->height;
 
-	rect2_t row = ui_row_ex(builder, dim.y, true);
+	rect2_t row = ui_row_ex(builder, height, true);
 	ui_header_new(row, label);
 }
 
@@ -157,11 +157,20 @@ bool ui_row_slider_int(ui_row_builder_t *builder, string_t label, int *v, int mi
 	return ui_slider_int_new(widget_rect, v, min, max);
 }
 
-fn bool ui_row_slider(ui_row_builder_t *builder, string_t label, float *f, float min, float max)
+bool ui_row_slider(ui_row_builder_t *builder, string_t label, float *f, float min, float max)
 {
 	rect2_t label_rect, widget_rect;
 	ui_row_split(builder, &label_rect, &widget_rect);
 
 	ui_label_new(label_rect, label);
 	return ui_slider_new(widget_rect, f, min, max);
+}
+
+void ui_row_text_edit(ui_row_builder_t *builder, string_t label, dynamic_string_t *buffer)
+{
+	rect2_t label_rect, widget_rect;
+	ui_row_split(builder, &label_rect, &widget_rect);
+
+	ui_label_new(label_rect, label);
+	ui_text_edit(widget_rect, buffer);
 }

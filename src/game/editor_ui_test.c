@@ -34,8 +34,8 @@ void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *wi
 
 	state->edit_buffer.data     = state->edit_buffer_storage;
 	state->edit_buffer.capacity = ARRAY_COUNT(state->edit_buffer_storage);
-	ui_hover_tooltip(S("Text edit state box"));
-	ui_text_edit(S("Text Edit"), &state->edit_buffer);
+	//ui_hover_tooltip(S("Text edit state box"));
+	//ui_text_edit(S("Text Edit"), &state->edit_buffer);
 
 	ui_checkbox(S("Debug Drawing"), &r1->debug_drawing_enabled);
 
