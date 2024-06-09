@@ -105,8 +105,8 @@ bool ui_row_radio_buttons(ui_row_builder_t *builder, string_t label, int *state,
 
 			bool active = (current_state == i);
 
-			UI_Scalar(UiScalar_roundedness, 0.0f)
-			UI_Color(UiColor_roundedness, roundedness)
+			UI_Scalar          (UiScalar_roundedness, 0.0f)
+			UI_Color           (UiColor_roundedness, roundedness)
 			UI_ColorConditional(UiColor_button_idle, ui_color(UiColor_button_active), active)
 			if (ui_button_new(button_rect, option_labels[i]))
 			{
@@ -130,7 +130,7 @@ bool ui_row_checkbox(ui_row_builder_t *builder, string_t label, bool *v)
 	rect2_t row = ui_row(builder);
 
 	rect2_t checkbox_rect;
-	rect2_cut_from_left(row, ui_sz_aspect(1.0f),                            &checkbox_rect, &row);
+	rect2_cut_from_left(row, ui_sz_aspect(1.0f),                           &checkbox_rect, &row);
 	rect2_cut_from_left(row, ui_sz_pix(ui_scalar(UiScalar_widget_margin)), NULL,           &row);
 
 	ui_label_new(row, label);

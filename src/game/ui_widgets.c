@@ -87,11 +87,15 @@ void ui_scrollable_region_end(ui_id_t id, rect2_t final_rect)
 		float scrollbar_offset   = ui_interpolate_f32(ui_child_id(id, S("scrollbar")), scroll_pct*scrollbar_movement);
 
 		rect2_t handle;
-		rect2_cut_from_top(inner_tray, ui_sz_pix(scrollbar_offset), NULL,    &inner_tray);
-		rect2_cut_from_top(inner_tray, ui_sz_pix(scrollbar_size),   &handle, &inner_tray);
-		rect2_cut_from_top(inner_tray, ui_sz_pct(1.0f),             NULL,    &inner_tray);
+		{
+			rect2_t cut_rect = inner_tray;
+			rect2_cut_from_top(cut_rect, ui_sz_pix(scrollbar_offset), NULL,    &cut_rect);
+			rect2_cut_from_top(cut_rect, ui_sz_pix(scrollbar_size),   &handle, &cut_rect);
+		}
 
+		ui_push_clip_rect(inner_tray);
 		ui_draw_rect(handle, ui_color(UiColor_slider_foreground));
+		ui_pop_clip_rect();
 
 	}
 
@@ -188,24 +192,13 @@ bool ui_button_new(rect2_t rect, string_t label)
 
 	ui_style_color_t color_id = UiColor_button_idle;
 
-	if (ui_is_active(id))
+	if (ui_mouse_in_rect(rect))
 	{
-		if (ui_button_released(UiButton_left, true))
-		{
-			float   release_margin = 8.0f;
-			rect2_t release_rect   = rect2_add_radius(rect, v2s(release_margin));
-
-			if (ui_mouse_in_rect(release_rect))
-			{
-				result = true;
-			}
-
-			ui_clear_active();
-		}
-
-		color_id = UiColor_button_active;
+		// @UiPriority
+		ui_set_next_hot(id, UI_PRIORITY_DEFAULT);
 	}
-	else if (ui_is_hot(id))
+
+	if (ui_is_hot(id))
 	{
 		if (ui_button_pressed(UiButton_left, true))
 		{
@@ -214,10 +207,32 @@ bool ui_button_new(rect2_t rect, string_t label)
 
 		color_id = UiColor_button_hot;
 	}
-	else if (ui_mouse_in_rect(rect))
+
+	if (ui_is_active(id))
 	{
-		// @UiPriority
-		ui_set_next_hot(id, UI_PRIORITY_DEFAULT);
+		float   release_margin = ui_scalar(UiScalar_release_margin);
+		rect2_t release_rect   = rect2_add_radius(rect, v2s(release_margin));
+
+		bool will_trigger_if_released = ui_mouse_in_rect(release_rect);
+
+		if (ui_button_released(UiButton_left, true))
+		{
+			if (will_trigger_if_released)
+			{
+				result = true;
+			}
+
+			ui_clear_active();
+		}
+
+		if (will_trigger_if_released)
+		{
+			color_id = UiColor_button_active;
+		}
+		else
+		{
+			color_id = UiColor_button_hot;
+		}
 	}
 
 	if (result)
@@ -226,13 +241,19 @@ bool ui_button_new(rect2_t rect, string_t label)
 		ui_set_v4(id, ui_color(UiColor_button_fired));
 	}
 
+	float hover_lift = ui_button_style_hover_lift(id);
+
 	v4_t color        = ui_color(color_id);
 	v4_t color_interp = ui_interpolate_v4(id, color);
 
-	ui_draw_rect(rect, color_interp);
+	rect2_t shadow = rect;
+	rect2_t button = rect2_add_offset(rect, make_v2(0.0f, hover_lift));
+
+	ui_draw_rect(shadow, ui_color(UiColor_widget_shadow));
+	ui_draw_rect(button, color_interp);
 
 	ui_push_clip_rect(rect);
-	ui_draw_text_aligned(ui_font(UiFont_default), rect, label, make_v2(0.5f, 0.5f));
+	ui_draw_text_aligned(ui_font(UiFont_default), button, label, make_v2(0.5f, 0.5f));
 	ui_pop_clip_rect();
 
 	return result;
@@ -262,6 +283,21 @@ bool ui_checkbox_new(rect2_t rect, bool *result_value)
 
 	ui_style_color_t color_id = UiColor_button_idle;
 
+	if (ui_mouse_in_rect(rect))
+	{
+		ui_set_next_hot(id, UI_PRIORITY_DEFAULT);
+	}
+
+	if (ui_is_hot(id))
+	{
+		if (ui_button_pressed(UiButton_left, true))
+		{
+			ui_set_active(id);
+		}
+
+		color_id = UiColor_button_hot;
+	}
+
 	if (ui_is_active(id))
 	{
 		if (ui_button_released(UiButton_left, true))
@@ -280,19 +316,6 @@ bool ui_checkbox_new(rect2_t rect, bool *result_value)
 
 			ui_clear_active();
 		}
-	}
-	else if (ui_is_hot(id))
-	{
-		if (ui_button_pressed(UiButton_left, true))
-		{
-			ui_set_active(id);
-		}
-
-		color_id = UiColor_button_hot;
-	}
-	else if (ui_mouse_in_rect(rect))
-	{
-		ui_set_next_hot(id, UI_PRIORITY_DEFAULT);
 	}
 
 	if (*result_value)
@@ -366,15 +389,23 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 		rect2_t dec = rect2_cut_left (&rect, h);
 		rect2_t inc = rect2_cut_right(&rect, h);
 
-		rect = rect2_cut_margins_horizontally(rect, ui_sz_pix(ui_scalar(UiScalar_widget_margin)));
+		//rect = rect2_cut_margins_horizontally(rect, ui_sz_pix(ui_scalar(UiScalar_widget_margin)));
 
 		int32_t delta = 0;
 
+		float roundedness = ui_scalar(UiScalar_roundedness);
+
+		// @UiRoundednessHack
+		UI_Scalar(UiScalar_roundedness, 0.0f)
+		UI_Color (UiColor_roundedness, make_v4(0, 0, roundedness, roundedness))
 		if (ui_button_new(dec, S("-")))
 		{
 			delta = -1;
 		}
 
+		// @UiRoundednessHack
+		UI_Scalar(UiScalar_roundedness, 0.0f)
+		UI_Color (UiColor_roundedness, make_v4(roundedness, roundedness, 0, 0))
 		if (ui_button_new(inc, S("+")))
 		{
 			delta =  1;
@@ -442,6 +473,8 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 	rect2_t handle = rect2_cut_left(&rect, handle_w);
 	rect2_t right  = rect;
 
+	handle = rect2_cut_margins_horizontally(handle, ui_sz_pix(ui_scalar(UiScalar_widget_margin)));
+
 	(void)left;
 	(void)right;
 
@@ -458,10 +491,14 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 	rect2_t shadow = handle;
 	handle = rect2_add_offset(handle, make_v2(0, hover_lift));
 
-	ui_draw_rect(body, ui_color(UiColor_slider_background));
+	UI_Scalar(UiScalar_roundedness, 0.0f)
+	{
+		ui_draw_rect(body, ui_color(UiColor_slider_background));
+		ui_draw_rect(right, ui_color(UiColor_slider_background));
+	}
+
 	ui_draw_rect(shadow, ui_color(UiColor_widget_shadow));
 	ui_draw_rect(handle, color);
-	ui_draw_rect(right, ui_color(UiColor_slider_background));
 
 	string_t value_text = {0};
 

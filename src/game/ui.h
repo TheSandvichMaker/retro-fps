@@ -282,6 +282,9 @@ typedef enum ui_style_scalar_t
 
     UiScalar_slider_handle_ratio,
 
+	// interaction
+	UiScalar_release_margin,
+
     UiScalar_count,
 } ui_style_scalar_t;
 
