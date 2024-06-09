@@ -9,7 +9,7 @@ ui_row_builder_t ui_make_row_builder(rect2_t rect)
 
 rect2_t ui_row_ex(ui_row_builder_t *builder, float height, bool draw_background)
 {
-	float margin = ui_scalar(UI_SCALAR_ROW_MARGIN);
+	float margin = ui_scalar(UiScalar_row_margin);
 	float bot_margin = ceilf(0.5f*margin);
 	float top_margin = margin - bot_margin;
 
@@ -18,7 +18,7 @@ rect2_t ui_row_ex(ui_row_builder_t *builder, float height, bool draw_background)
 
 	if (draw_background)
 	{
-		UI_SCALAR(UI_SCALAR_ROUNDEDNESS, 0.0f)
+		UI_Scalar(UiScalar_roundedness, 0.0f)
 		ui_draw_rect(row, make_v4(0, 0, 0, 0.25f));
 	}
 
@@ -33,7 +33,6 @@ rect2_t ui_row_ex(ui_row_builder_t *builder, float height, bool draw_background)
 
 rect2_t ui_row(ui_row_builder_t *builder)
 {
-	// && (builder->row_index & 1) == 0
 	float height = ui_default_row_height();
 	return ui_row_ex(builder, height, false);
 }
@@ -84,19 +83,31 @@ bool ui_row_radio_buttons(ui_row_builder_t *builder, string_t label, int *state,
 
 	if (option_count > 0)
 	{
-		float margin       = ui_scalar(UI_SCALAR_WIDGET_MARGIN);
+		float margin       = ui_scalar(UiScalar_widget_margin);
 		float margin_space = (float)(option_count - 1)*margin;
 		float button_width = (rect2_width(widget_rect) - margin_space) / (float)option_count;
 
 		for (int i = 0; i < option_count; i++)
 		{
+			bool is_first = i == 0;
+			bool is_last  = i == option_count - 1;
+
+			v4_t roundedness = {
+				is_last  ? ui_scalar(UiScalar_roundedness) : 0.0f,
+				is_last  ? ui_scalar(UiScalar_roundedness) : 0.0f,
+				is_first ? ui_scalar(UiScalar_roundedness) : 0.0f,
+				is_first ? ui_scalar(UiScalar_roundedness) : 0.0f,
+			};
+
 			rect2_t button_rect;
 			rect2_cut_from_left(widget_rect, ui_sz_pix(button_width), &button_rect, &widget_rect);
 			rect2_cut_from_left(widget_rect, ui_sz_pix(margin), NULL, &widget_rect);
 
 			bool active = (current_state == i);
 
-			UI_ColorConditional(UI_COLOR_BUTTON_IDLE, ui_color(UI_COLOR_BUTTON_ACTIVE), active)
+			UI_Scalar(UiScalar_roundedness, 0.0f)
+			UI_Color(UiColor_roundedness, roundedness)
+			UI_ColorConditional(UiColor_button_idle, ui_color(UiColor_button_active), active)
 			if (ui_button_new(button_rect, option_labels[i]))
 			{
 				new_state = i;
@@ -115,6 +126,16 @@ bool ui_row_radio_buttons(ui_row_builder_t *builder, string_t label, int *state,
 
 bool ui_row_checkbox(ui_row_builder_t *builder, string_t label, bool *v)
 {
+#if UI_ROW_CHECKBOX_ON_LEFT
+	rect2_t row = ui_row(builder);
+
+	rect2_t checkbox_rect;
+	rect2_cut_from_left(row, ui_sz_aspect(1.0f),                            &checkbox_rect, &row);
+	rect2_cut_from_left(row, ui_sz_pix(ui_scalar(UiScalar_widget_margin)), NULL,           &row);
+
+	ui_label_new(row, label);
+	return ui_checkbox_new(checkbox_rect, v);
+#else
 	rect2_t label_rect, widget_rect;
 	ui_row_split(builder, &label_rect, &widget_rect);
 
@@ -124,6 +145,7 @@ bool ui_row_checkbox(ui_row_builder_t *builder, string_t label, bool *v)
 	rect2_cut_from_right(widget_rect, ui_sz_aspect(1.0f), &checkbox_rect, NULL);
 
 	return ui_checkbox_new(checkbox_rect, v);
+#endif
 }
 
 bool ui_row_slider_int(ui_row_builder_t *builder, string_t label, int *v, int min, int max)

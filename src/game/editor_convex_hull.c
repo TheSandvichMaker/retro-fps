@@ -375,7 +375,7 @@ void editor_do_convex_hull_debugger_window(editor_convex_hull_debugger_t *debugg
 
 	if (debugger->brute_force_triggered_success_timer > 0.0f)
 	{
-		UI_COLOR(UI_COLOR_TEXT, make_v4(0.5f, 1.0f, 0.2f, 1.0f))
+		UI_Color(UiColor_text, make_v4(0.5f, 1.0f, 0.2f, 1.0f))
 		ui_label(S("Brute force test passed."));
 
 		debugger->brute_force_triggered_success_timer -= ui->dt;
@@ -383,7 +383,7 @@ void editor_do_convex_hull_debugger_window(editor_convex_hull_debugger_t *debugg
 
 	if (debugger->brute_force_triggered_error_timer > 0.0f)
 	{
-		UI_COLOR(UI_COLOR_TEXT, COLORF_RED)
+		UI_Color(UiColor_text, COLORF_RED)
 		ui_label(S("BRUTE FORCE TEST FOUND A DEGENERATE HULL!?!?!"));
 
 		debugger->brute_force_triggered_error_timer -= ui->dt;
@@ -391,11 +391,11 @@ void editor_do_convex_hull_debugger_window(editor_convex_hull_debugger_t *debugg
 
 	if (degenerate_hull)
 	{
-		UI_COLOR(UI_COLOR_TEXT, COLORF_RED)
+		UI_Color(UiColor_text, COLORF_RED)
 		ui_label(S("!! DEGENERATE CONVEX HULL !!"));
 		if (triangle_is_degenerate[0])
 		{
-			UI_COLOR(UI_COLOR_TEXT, COLORF_RED)
+			UI_Color(UiColor_text, COLORF_RED)
 			ui_label(S("THE FIRST TRIANGLE IS DEGENERATE, THAT'S NO GOOD"));
 		}
 		ui_label(Sf("Degenerate Triangle Count: %d", degenerate_triangle_count));
@@ -403,17 +403,17 @@ void editor_do_convex_hull_debugger_window(editor_convex_hull_debugger_t *debugg
 
 	if (duplicate_triangle_count > 0)
 	{
-		UI_COLOR(UI_COLOR_TEXT, COLORF_ORANGE)
+		UI_Color(UiColor_text, COLORF_ORANGE)
 		ui_label(Sf("There are %d duplicate triangles!", duplicate_triangle_count));
 	}
 
 	if (no_area_triangle_count > 0)
 	{
-		UI_COLOR(UI_COLOR_TEXT, COLORF_ORANGE)
+		UI_Color(UiColor_text, COLORF_ORANGE)
 		ui_label(Sf("There are %d triangles with (nearly) 0 area!", no_area_triangle_count));
 		if (triangle_is_degenerate[0])
 		{
-			UI_COLOR(UI_COLOR_TEXT, COLORF_ORANGE)
+			UI_Color(UiColor_text, COLORF_ORANGE)
 			ui_label(S("The first triangle has no area, which seems bad"));
 		}
 	}

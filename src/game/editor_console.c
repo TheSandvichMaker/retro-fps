@@ -11,7 +11,7 @@ void update_and_draw_console(console_t *console, v2_t resolution, float dt)
 
 	ui->render_layer = UI_LAYER_BACKGROUND;
 
-	v4_t console_background_color = ui_color(UI_COLOR_WINDOW_BACKGROUND);
+	v4_t console_background_color = ui_color(UiColor_window_background);
 	console_background_color.w = 0.5f;
 
 	ui_draw_rect_shadow(console_area, console_background_color, 0.25f, 16.0f);

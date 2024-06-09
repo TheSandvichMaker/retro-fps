@@ -104,7 +104,7 @@ rect2_t layout_place_widget(v2_t widget_size)
 		rect2_cut(layout->rect, layout->flow, ui_sz_pix(widget_size.e[axis]), &rect, &layout->rect);
 	}
 
-	ui_size_t margin = ui_sz_pix(ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+	ui_size_t margin = ui_sz_pix(ui_scalar(UiScalar_widget_margin));
 	rect = rect2_cut_margins(rect, margin);
 
 	return rect;

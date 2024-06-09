@@ -255,63 +255,66 @@ typedef struct ui_anim_list_t
 
 typedef enum ui_style_scalar_t
 {
-	UI_SCALAR_TOOLTIP_DELAY,
+	UiScalar_tooltip_delay,
 
-    UI_SCALAR_ANIMATION_RATE,
+    UiScalar_animation_rate,
 
-	UI_SCALAR_ANIMATION_STIFFNESS,
-	UI_SCALAR_ANIMATION_DAMPEN,
-	UI_SCALAR_ANIMATION_LENGTH_LIMIT,
-	UI_SCALAR_HOVER_LIFT,
+	UiScalar_animation_stiffness,
+	UiScalar_animation_dampen,
+	UiScalar_animation_length_limit,
+	UiScalar_hover_lift,
 
-    UI_SCALAR_WINDOW_MARGIN,
-    UI_SCALAR_WIDGET_MARGIN,
-    UI_SCALAR_ROW_MARGIN,
-    UI_SCALAR_TEXT_MARGIN,
+    UiScalar_window_margin,
+    UiScalar_widget_margin,
+    UiScalar_row_margin,
+    UiScalar_text_margin,
 
-	UI_SCALAR_ROUNDEDNESS,
+	UiScalar_roundedness,
 
-    UI_SCALAR_TEXT_ALIGN_X,
-    UI_SCALAR_TEXT_ALIGN_Y,
+    UiScalar_text_align_x,
+    UiScalar_text_align_y,
 
-    UI_SCALAR_LABEL_ALIGN_X,
-    UI_SCALAR_LABEL_ALIGN_Y,
+    UiScalar_label_align_x,
+    UiScalar_label_align_y,
 
-	UI_SCALAR_SCROLL_TRAY_WIDTH,
-	UI_SCALAR_MIN_SCROLL_BAR_SIZE,
+	UiScalar_scroll_tray_width,
+	UiScalar_min_scroll_bar_size,
 
-    UI_SCALAR_SLIDER_HANDLE_RATIO,
+    UiScalar_slider_handle_ratio,
 
-    UI_SCALAR_COUNT,
+    UiScalar_count,
 } ui_style_scalar_t;
 
 typedef enum ui_style_color_t
 {
-    UI_COLOR_TEXT,
-    UI_COLOR_TEXT_SHADOW,
+    UiColor_text,
+    UiColor_text_shadow,
 
-	UI_COLOR_WIDGET_SHADOW,
+	UiColor_widget_shadow,
 
-    UI_COLOR_WINDOW_BACKGROUND,
-    UI_COLOR_WINDOW_TITLE_BAR,
-    UI_COLOR_WINDOW_TITLE_BAR_HOT,
-    UI_COLOR_WINDOW_CLOSE_BUTTON,
-    UI_COLOR_WINDOW_OUTLINE,
+    UiColor_window_background,
+    UiColor_window_title_bar,
+    UiColor_window_title_bar_hot,
+    UiColor_window_close_button,
+    UiColor_window_outline,
 
-    UI_COLOR_PROGRESS_BAR_EMPTY,
-    UI_COLOR_PROGRESS_BAR_FILLED,
+    UiColor_progress_bar_empty,
+    UiColor_progress_bar_filled,
 
-    UI_COLOR_BUTTON_IDLE,
-    UI_COLOR_BUTTON_HOT,
-    UI_COLOR_BUTTON_ACTIVE,
-    UI_COLOR_BUTTON_FIRED,
+    UiColor_button_idle,
+    UiColor_button_hot,
+    UiColor_button_active,
+    UiColor_button_fired,
 
-    UI_COLOR_SLIDER_BACKGROUND,
-    UI_COLOR_SLIDER_FOREGROUND,
-    UI_COLOR_SLIDER_HOT,
-    UI_COLOR_SLIDER_ACTIVE,
+    UiColor_slider_background,
+    UiColor_slider_foreground,
+    UiColor_slider_hot,
+    UiColor_slider_active,
 
-    UI_COLOR_COUNT,
+	// TODO: Replace hack with something more sane
+	UiColor_roundedness,
+
+    UiColor_count,
 } ui_style_color_t;
 
 typedef enum ui_style_font_t
@@ -326,12 +329,12 @@ typedef enum ui_style_font_t
 
 typedef struct ui_style_t
 {
-	float   base_scalars[UI_SCALAR_COUNT];
-	v4_t    base_colors [UI_COLOR_COUNT];
+	float   base_scalars[UiScalar_count];
+	v4_t    base_colors [UiColor_count];
 	font_t *base_fonts  [UiFont_COUNT];
 
-    stack_t(float, UI_STYLE_STACK_COUNT) scalars[UI_SCALAR_COUNT];
-    stack_t(v4_t,  UI_STYLE_STACK_COUNT) colors [UI_COLOR_COUNT];
+    stack_t(float, UI_STYLE_STACK_COUNT) scalars[UiScalar_count];
+    stack_t(v4_t,  UI_STYLE_STACK_COUNT) colors [UiColor_count];
 	stack_t(font_t *, UI_STYLE_STACK_COUNT) fonts[UiFont_COUNT];
 
 	string_t font_data; // so we can rebuild the font at different sizes without going out to disk
@@ -355,13 +358,13 @@ fn float ui_pop_scalar        (ui_style_scalar_t scalar);
 fn void  ui_push_scalar2      (ui_style_scalar_t scalar, float value);
 fn float ui_pop_scalar2       (void);
 
-#define UI_SCALAR(scalar, value) DEFER_LOOP(ui_push_scalar(scalar, value), ui_pop_scalar(scalar))
+#define UI_Scalar(scalar, value) DEFER_LOOP(ui_push_scalar(scalar, value), ui_pop_scalar(scalar))
 
 fn v4_t  ui_color             (ui_style_color_t color);
 fn void  ui_push_color        (ui_style_color_t color, v4_t value);
 fn v4_t  ui_pop_color         (ui_style_color_t color);
 
-#define UI_COLOR(color, value) DEFER_LOOP(ui_push_color(color, value), ui_pop_color(color))
+#define UI_Color(color, value) DEFER_LOOP(ui_push_color(color, value), ui_pop_color(color))
 
 #define UI_ColorConditional(color, value, condition)   \
 	DEFER_LOOP(                                        \

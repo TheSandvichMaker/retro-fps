@@ -129,7 +129,7 @@ void editor_process_windows(editor_t *editor)
 
 			rect2_t rect = window->rect;
 
-			float   title_bar_height = ui_font(UiFont_header)->height + ui_widget_padding();
+			float   title_bar_height = ui_font(UiFont_header)->height + 2.0f*ui_scalar(UiScalar_text_margin) + 4.0f;
 			rect2_t title_bar = rect2_add_top(rect, title_bar_height);
 
 			rect2_t total = rect2_union(title_bar, rect);
@@ -188,7 +188,7 @@ void editor_process_windows(editor_t *editor)
 			float focus_t = ui_interpolate_f32(ui_id(S("focus")), has_focus);
 			float shadow_amount = lerp(0.15f, 0.25f, focus_t);
 
-			v4_t  title_bar_color           = ui_color(UI_COLOR_WINDOW_TITLE_BAR);
+			v4_t  title_bar_color           = ui_color(UiColor_window_title_bar);
 			float title_bar_luma            = luminance(title_bar_color.xyz);
 			v4_t  title_bar_color_greyscale = make_v4(title_bar_luma, title_bar_luma, title_bar_luma, 1.0f);
 
@@ -196,17 +196,17 @@ void editor_process_windows(editor_t *editor)
 
 			ui_draw_rect_roundedness_shadow(rect2_shrink(total, 1.0f), make_v4(0, 0, 0, 0), make_v4(5, 5, 5, 5), shadow_amount, 32.0f);
 			ui_draw_rect_roundedness(title_bar, interpolated_title_bar_color, make_v4(2, 0, 2, 0));
-			ui_draw_rect_roundedness(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), make_v4(0, 2, 0, 2));
+			ui_draw_rect_roundedness(rect, ui_color(UiColor_window_background), make_v4(0, 2, 0, 2));
 			ui_push_clip_rect(title_bar);
 			ui_draw_text(ui->style.header_font, ui_text_center_p(ui->style.header_font, title_bar_minus_outline, title), title);
 			ui_pop_clip_rect();
-			ui_draw_rect_roundedness_outline(total, ui_color(UI_COLOR_WINDOW_OUTLINE), make_v4(2, 2, 2, 2), 2.0f);
+			ui_draw_rect_roundedness_outline(total, ui_color(UiColor_window_outline), make_v4(2, 2, 2, 2), 2.0f);
 
 			// handle window contents
 
-			float margin = ui_scalar(UI_SCALAR_WIDGET_MARGIN);
-			rect = rect2_shrink(rect, margin);
-			rect = rect2_pillarbox(rect, ui_scalar(UI_SCALAR_WINDOW_MARGIN));
+			// float margin = ui_scalar(UiScalar_widget_margin);
+			// rect = rect2_shrink(rect, margin);
+			// rect = rect2_pillarbox(rect, ui_scalar(UiScalar_window_margin));
 
 			// TODO: Custom scrollbar rendering for windows?
 			ui_panel_begin_ex(ui_id(S("panel")), rect, UI_PANEL_SCROLLABLE_VERT);

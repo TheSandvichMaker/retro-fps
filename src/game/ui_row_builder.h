@@ -1,5 +1,7 @@
 #pragma once
 
+#define UI_ROW_CHECKBOX_ON_LEFT 1
+
 typedef struct ui_row_builder_t
 {
 	rect2_t  rect;

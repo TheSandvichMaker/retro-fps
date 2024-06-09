@@ -164,7 +164,7 @@ void editor_do_lightmap_window(editor_lightmap_state_t *lm_editor, editor_window
 
 		ui_row_header(&builder, S("Bake Results"));
 
-		UI_SCALAR(UI_SCALAR_TEXT_ALIGN_X, 0.0f)
+		UI_Scalar(UiScalar_text_align_x, 0.0f)
 		{
 			ui_row_label(&builder, Sf("Total Bake Time:  %02u:%02u:%03u", minutes, seconds, microseconds));
 			ui_row_label(&builder, Sf("Fogmap Resolution: %u %u %u", map->fogmap_w, map->fogmap_h, map->fogmap_d));
@@ -219,7 +219,7 @@ void editor_do_lightmap_window(editor_lightmap_state_t *lm_editor, editor_window
 				r_texture_desc_t desc;
 				render->describe_texture(poly->lightmap, &desc);
 
-				ui_push_scalar(UI_SCALAR_TEXT_ALIGN_X, 0.0f);
+				ui_push_scalar(UiScalar_text_align_x, 0.0f);
 
 				ui_label(Sf("Resolution: %u x %u", desc.w, desc.h));
 				if (lm_editor->pixel_selection_active)
@@ -243,7 +243,7 @@ void editor_do_lightmap_window(editor_lightmap_state_t *lm_editor, editor_window
 					ui_label(S(""));
 				}
 
-				ui_pop_scalar(UI_SCALAR_TEXT_ALIGN_X);
+				ui_pop_scalar(UiScalar_text_align_x);
 
 #if 0
                 // TODO: Reimplement with UI draw commands

@@ -121,7 +121,7 @@ fn_local void show_render_stats(void)
 	{
 		r1_stats_t stats = r1_report_stats(temp);
 
-		UI_SCALAR(UI_SCALAR_TEXT_ALIGN_X, 0.5f)
+		UI_Scalar(UiScalar_text_align_x, 0.5f)
 		{
 			double total = 0.0f;
 
@@ -162,13 +162,13 @@ fn_local void fullscreen_update_and_render_top_editor_bar(void)
 
 #if 0
         // TODO: Replace with UI draw calls
-        r_immediate_rect2_filled(bar, ui_color(UI_COLOR_WINDOW_BACKGROUND));
+        r_immediate_rect2_filled(bar, ui_color(UiColor_window_background));
         r_immediate_flush();
 #endif
 
-        rect2_t inner_bar = rect2_shrink(bar, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+        rect2_t inner_bar = rect2_shrink(bar, ui_scalar(UiScalar_widget_margin));
 
-		UI_SCALAR(UI_SCALAR_HOVER_LIFT, 0.0f)
+		UI_Scalar(UiScalar_hover_lift, 0.0f)
         UI_PANEL(inner_bar)
         {
 			ui_set_layout_direction(RECT2_CUT_LEFT);
@@ -209,7 +209,7 @@ fn_local void fullscreen_update_and_render_top_editor_bar(void)
                 
                 bool active = menu->toggle ? *menu->toggle : menu->window->open;
 
-                if (active) ui_push_color(UI_COLOR_BUTTON_IDLE, ui_color(UI_COLOR_BUTTON_ACTIVE));
+                if (active) ui_push_color(UiColor_button_idle, ui_color(UI_COLOR_BUTTON_ACTIVE));
 
                 if (ui_button(menu->name))
                 {
@@ -220,7 +220,7 @@ fn_local void fullscreen_update_and_render_top_editor_bar(void)
 					}
                 }
 
-                if (active) ui_pop_color(UI_COLOR_BUTTON_IDLE);
+                if (active) ui_pop_color(UiColor_button_idle);
             }
 
             ui_label(S("  Menus: "));
@@ -296,7 +296,7 @@ void update_and_render_in_game_editor(void)
         .max = { (float)res_x, (float)res_y },
     };
 
-    UI_SCALAR(UI_SCALAR_WIDGET_MARGIN, 0.0f)
+    UI_Scalar(UiScalar_widget_margin, 0.0f)
     ui_panel_begin(fullscreen_rect);
 	{
 		editor.fullscreen_layout = ui_layout_rect();

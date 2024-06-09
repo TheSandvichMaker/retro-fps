@@ -620,7 +620,8 @@ fn_local platform_cursor_t tick_ui(app_state_t *app, input_t *input, v2_t client
 	{
 		//update_and_render_in_game_editor();
 		editor_update_and_render(app->editor);
-		update_and_draw_console(app->console, client_size, dt);
+		(void)client_size;
+		// update_and_draw_console(app->console, client_size, dt);
 	}
     ui_end();
 

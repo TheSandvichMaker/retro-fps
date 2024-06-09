@@ -19,18 +19,18 @@ void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *wi
 	}
 
 	ui_hover_tooltip(S("Size of the inner margin for windows"));
-	ui_slider_ex(S("UI Window Margin"), &ui->style.base_scalars[UI_SCALAR_WINDOW_MARGIN], 0.0f, 8.0f, 1.0f);
+	ui_slider_ex(S("UI Window Margin"), &ui->style.base_scalars[UiScalar_window_margin], 0.0f, 8.0f, 1.0f);
 	ui_hover_tooltip(S("Size of the margin between widgets"));
-	ui_slider_ex(S("UI Widget Margin"), &ui->style.base_scalars[UI_SCALAR_WIDGET_MARGIN], 0.0f, 8.0f, 1.0f);
+	ui_slider_ex(S("UI Widget Margin"), &ui->style.base_scalars[UiScalar_widget_margin], 0.0f, 8.0f, 1.0f);
 	ui_hover_tooltip(S("Size of the margin between widgets and their text contents (e.g. a button and its label)"));
-	ui_slider_ex(S("UI Text Margin"), &ui->style.base_scalars[UI_SCALAR_TEXT_MARGIN], 0.0f, 8.0f, 1.0f);
-	ui_slider_ex(S("UI Row Margin"), &ui->style.base_scalars[UI_SCALAR_ROW_MARGIN], 0.0f, 8.0f, 1.0f);
+	ui_slider_ex(S("UI Text Margin"), &ui->style.base_scalars[UiScalar_text_margin], 0.0f, 8.0f, 1.0f);
+	ui_slider_ex(S("UI Row Margin"), &ui->style.base_scalars[UiScalar_row_margin], 0.0f, 8.0f, 1.0f);
 	ui_hover_tooltip(S("Roundedness of UI elements in pixel radius"));
-	ui_slider_ex(S("UI Roundedness"), &ui->style.base_scalars[UI_SCALAR_ROUNDEDNESS], 0.0f, 12.0f, 1.0f);
+	ui_slider_ex(S("UI Roundedness"), &ui->style.base_scalars[UiScalar_roundedness], 0.0f, 12.0f, 1.0f);
 	ui_hover_tooltip(S("Spring stiffness coefficient for animations"));
-	ui_slider(S("UI Animation Stiffness"), &ui->style.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS], 1.0f, 1024.0f);
+	ui_slider(S("UI Animation Stiffness"), &ui->style.base_scalars[UiScalar_animation_stiffness], 1.0f, 1024.0f);
 	ui_hover_tooltip(S("Spring dampen coefficient for animations"));
-	ui_slider(S("UI Animation Dampen"), &ui->style.base_scalars[UI_SCALAR_ANIMATION_DAMPEN], 1.0f, 128.0f);
+	ui_slider(S("UI Animation Dampen"), &ui->style.base_scalars[UiScalar_animation_dampen], 1.0f, 128.0f);
 
 	state->edit_buffer.data     = state->edit_buffer_storage;
 	state->edit_buffer.capacity = ARRAY_COUNT(state->edit_buffer_storage);

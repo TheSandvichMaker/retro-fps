@@ -437,7 +437,7 @@ float ui_divide_space(float item_count)
 
 float ui_widget_padding(void)
 {
-	return 2.0f*ui_scalar(UI_SCALAR_WIDGET_MARGIN) + 2.0f*ui_scalar(UI_SCALAR_TEXT_MARGIN);
+	return 2.0f*ui_scalar(UiScalar_widget_margin) + 2.0f*ui_scalar(UiScalar_text_margin);
 }
 
 bool ui_override_rect(rect2_t *override)
@@ -486,7 +486,7 @@ rect2_t ui_default_label_rect(font_t *font, string_t label)
 
 float ui_default_row_height(void)
 {
-	float margin     = 2.0f*(ui_scalar(UI_SCALAR_TEXT_MARGIN) + ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+	float margin     = 2.0f*ui_scalar(UiScalar_text_margin);
 	float row_height = ui_font(UiFont_default)->height + margin;
 	return row_height;
 }
@@ -633,9 +633,9 @@ ui_anim_t *ui_get_anim(ui_id_t id, v4_t target)
 	list->sleepy_count = sleepy_count;
 
 	result->last_touched_frame_index = ui->frame_index;
-	result->length_limit             = ui_scalar(UI_SCALAR_ANIMATION_LENGTH_LIMIT);
-	result->c_t                      = ui_scalar(UI_SCALAR_ANIMATION_STIFFNESS);
-	result->c_v                      = ui_scalar(UI_SCALAR_ANIMATION_DAMPEN);
+	result->length_limit             = ui_scalar(UiScalar_animation_length_limit);
+	result->c_t                      = ui_scalar(UiScalar_animation_stiffness);
+	result->c_v                      = ui_scalar(UiScalar_animation_dampen);
 	result->t_target                 = target;
 
 	PROFILE_END_FUNC;
@@ -881,13 +881,13 @@ v2_t ui_text_center_p(font_t *font, rect2_t rect, string_t text)
 
 v2_t ui_text_default_align_p(font_t *font, rect2_t rect, string_t text)
 {
-	return ui_text_align_p(font, rect, text, make_v2(ui_scalar(UI_SCALAR_TEXT_ALIGN_X), ui_scalar(UI_SCALAR_TEXT_ALIGN_Y)));
+	return ui_text_align_p(font, rect, text, make_v2(ui_scalar(UiScalar_text_align_x), ui_scalar(UiScalar_text_align_y)));
 }
 
 rect2_t ui_draw_text(font_t *font, v2_t p, string_t text)
 {
-	v4_t text_color   = ui_color(UI_COLOR_TEXT);
-	v4_t shadow_color = ui_color(UI_COLOR_TEXT_SHADOW);
+	v4_t text_color   = ui_color(UiColor_text);
+	v4_t shadow_color = ui_color(UiColor_text_shadow);
 
 	shadow_color.w *= text_color.w;
 
@@ -900,8 +900,8 @@ rect2_t ui_draw_text_aligned(font_t *font, rect2_t rect, string_t text, v2_t ali
 {
 	v2_t p = ui_text_align_p(font, rect, text, align);
 
-	v4_t text_color   = ui_color(UI_COLOR_TEXT);
-	v4_t shadow_color = ui_color(UI_COLOR_TEXT_SHADOW);
+	v4_t text_color   = ui_color(UiColor_text);
+	v4_t shadow_color = ui_color(UiColor_text_shadow);
 
 	shadow_color.w *= text_color.w;
 
@@ -914,8 +914,8 @@ rect2_t ui_draw_text_aligned(font_t *font, rect2_t rect, string_t text, v2_t ali
 rect2_t ui_draw_text_default_alignment(font_t *font, rect2_t rect, string_t text)
 {
 	v2_t align = {
-		.x = ui_scalar(UI_SCALAR_TEXT_ALIGN_X),
-		.y = ui_scalar(UI_SCALAR_TEXT_ALIGN_Y),
+		.x = ui_scalar(UiScalar_text_align_x),
+		.y = ui_scalar(UiScalar_text_align_y),
 	};
 	return ui_draw_text_aligned(font, rect, text, align);
 }
@@ -923,8 +923,8 @@ rect2_t ui_draw_text_default_alignment(font_t *font, rect2_t rect, string_t text
 rect2_t ui_draw_text_label_alignment(font_t *font, rect2_t rect, string_t text)
 {
 	v2_t align = {
-		.x = ui_scalar(UI_SCALAR_LABEL_ALIGN_X),
-		.y = ui_scalar(UI_SCALAR_LABEL_ALIGN_Y),
+		.x = ui_scalar(UiScalar_label_align_x),
+		.y = ui_scalar(UiScalar_label_align_y),
 	};
 	return ui_draw_text_aligned(font, rect, text, align);
 }
@@ -978,7 +978,7 @@ void ui_draw_rect(rect2_t rect, v4_t color)
 
 	ui_do_rect((r_ui_rect_t){
 		.rect        = rect, 
-		.roundedness = v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS)),
+		.roundedness = add(v4_from_scalar(ui_scalar(UiScalar_roundedness)), ui_color(UiColor_roundedness)),
 		.color_00    = color_packed,
 		.color_10    = color_packed,
 		.color_11    = color_packed,
@@ -992,7 +992,7 @@ void ui_draw_rect_shadow(rect2_t rect, v4_t color, float shadow_amount, float sh
 
 	ui_do_rect((r_ui_rect_t){
 		.rect          = rect, 
-		.roundedness   = v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS)),
+		.roundedness   = v4_from_scalar(ui_scalar(UiScalar_roundedness)),
 		.color_00      = color_packed,
 		.color_10      = color_packed,
 		.color_11      = color_packed,
@@ -1008,7 +1008,7 @@ void ui_draw_rect_roundedness(rect2_t rect, v4_t color, v4_t roundness)
 
 	ui_do_rect((r_ui_rect_t){
 		.rect        = rect, 
-		.roundedness = mul(roundness, v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS))),
+		.roundedness = mul(roundness, v4_from_scalar(ui_scalar(UiScalar_roundedness))),
 		.color_00    = color_packed,
 		.color_10    = color_packed,
 		.color_11    = color_packed,
@@ -1022,7 +1022,7 @@ void ui_draw_rect_roundedness_shadow(rect2_t rect, v4_t color, v4_t roundness, f
 
 	ui_do_rect((r_ui_rect_t){
 		.rect        = rect, 
-		.roundedness = mul(roundness, v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS))),
+		.roundedness = mul(roundness, v4_from_scalar(ui_scalar(UiScalar_roundedness))),
 		.color_00    = color_packed,
 		.color_10    = color_packed,
 		.color_11    = color_packed,
@@ -1038,7 +1038,7 @@ void ui_draw_rect_outline(rect2_t rect, v4_t color, float width)
 
 	ui_do_rect((r_ui_rect_t){
 		.rect         = rect, 
-		.roundedness  = v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS)),
+		.roundedness  = v4_from_scalar(ui_scalar(UiScalar_roundedness)),
 		.color_00     = color_packed,
 		.color_10     = color_packed,
 		.color_11     = color_packed,
@@ -1053,7 +1053,7 @@ void ui_draw_rect_roundedness_outline(rect2_t rect, v4_t color, v4_t roundedness
 
 	ui_do_rect((r_ui_rect_t){
 		.rect         = rect, 
-		.roundedness  = mul(roundedness, v4_from_scalar(ui_scalar(UI_SCALAR_ROUNDEDNESS))),
+		.roundedness  = mul(roundedness, v4_from_scalar(ui_scalar(UiScalar_roundedness))),
 		.color_00     = color_packed,
 		.color_10     = color_packed,
 		.color_11     = color_packed,
@@ -1158,7 +1158,7 @@ float ui_roundedness_ratio(rect2_t rect)
 	float w = rect2_width (rect);
 	float h = rect2_height(rect);
 	float c = 0.5f*min(w, h);
-	float ratio = ui_scalar(UI_SCALAR_ROUNDEDNESS) / c;
+	float ratio = ui_scalar(UiScalar_roundedness) / c;
 	return ratio;
 }
 
@@ -1183,21 +1183,21 @@ rect2_t ui_cut_widget_rect(v2_t min_size)
 
 		float a = ui_widget_padding() + (layout_is_horz ? min_size.x : min_size.y);
 		rect = rect2_do_cut((rect2_cut_t){ .side = panel->layout_direction, .rect = &panel->rect_layout }, a);
-		rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+		rect = rect2_shrink(rect, ui_scalar(UiScalar_widget_margin));
 	}
 	return rect;
 }
 
 float ui_hover_lift(ui_id_t id)
 {
-	float hover_lift = ui_is_hot(id) ? ui_scalar(UI_SCALAR_HOVER_LIFT) : 0.0f;
+	float hover_lift = ui_is_hot(id) ? ui_scalar(UiScalar_hover_lift) : 0.0f;
 	hover_lift = ui_interpolate_f32(ui_child_id(id, S("hover_lift")), hover_lift);
 	return hover_lift;
 }
 
 float ui_button_style_hover_lift(ui_id_t id)
 {
-	float hover_lift = ui_is_hot(id) && !ui_is_active(id) ? ui_scalar(UI_SCALAR_HOVER_LIFT) : 0.0f;
+	float hover_lift = ui_is_hot(id) && !ui_is_active(id) ? ui_scalar(UiScalar_hover_lift) : 0.0f;
 	hover_lift = ui_interpolate_f32(ui_child_id(id, S("hover_lift")), hover_lift);
 	return hover_lift;
 }
@@ -1231,7 +1231,7 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 	{
 		ASSERT(id.value);
 
-		// rect2_t scroll_area = rect2_cut_right(&rect, ui_scalar(UI_SCALAR_SCROLLBAR_WIDTH));
+		// rect2_t scroll_area = rect2_cut_right(&rect, ui_scalar(UiScalar_scrollbar_width));
 
 		ui_panel_state_t *state = ui_get_state(id, NULL, ui_panel_state_t);
 
@@ -1240,7 +1240,7 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 			if (ui_is_hovered_panel(id))
 			{
 				state->scroll_offset_y -= ui->input.mouse_wheel;
-				state->scroll_offset_y = flt_clamp(state->scroll_offset_y, 0.0f, max(0.0f, state->scrollable_height_y + ui_scalar(UI_SCALAR_WIDGET_MARGIN) - rect2_height(rect)));
+				state->scroll_offset_y = flt_clamp(state->scroll_offset_y, 0.0f, max(0.0f, state->scrollable_height_y + ui_scalar(UiScalar_widget_margin) - rect2_height(rect)));
 			}
 
 			// ui_id_t scrollbar_id = ui_child_id(id, S("scrollbar"));
@@ -1274,11 +1274,11 @@ void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags)
 
 			ui_default_widget_behaviour(scrollbar_id, handle);
 
-			v4_t color = ui_color(UI_COLOR_SLIDER_FOREGROUND);
+			v4_t color = ui_color(UiColor_slider_foreground);
 
-			ui_draw_rect(top, ui_color(UI_COLOR_SLIDER_BACKGROUND));
+			ui_draw_rect(top, ui_color(UiColor_slider_background));
 			ui_draw_rect(handle, color);
-			ui_draw_rect(bot, ui_color(UI_COLOR_SLIDER_BACKGROUND));
+			ui_draw_rect(bot, ui_color(UiColor_slider_background));
 #endif
 
 			offset_y = roundf(ui_interpolate_f32(ui_id_pointer(&state->scroll_offset_y), state->scroll_offset_y));
@@ -1330,7 +1330,7 @@ void ui_seperator(void)
 	float margin = 2.0f*ui_font(UiFont_default)->height;
 	rect2_t rect = rect2_cut_top(layout, margin);
 	float w = rect2_width(rect);
-	float h = 2.0f*ui_scalar(UI_SCALAR_WIDGET_MARGIN);
+	float h = 2.0f*ui_scalar(UiScalar_widget_margin);
 
 	rect2_t seperator = rect2_center_dim(rect2_center(rect), make_v2(w, h));
 	ui_draw_rect(seperator, make_v4(0.1f, 0.1f, 0.1f, 0.25f));
@@ -1342,9 +1342,9 @@ void ui_label(string_t label)
 		return;
 
 	rect2_t rect = ui_default_label_rect(ui->style.font, label);
-	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+	rect = rect2_shrink(rect, ui_scalar(UiScalar_widget_margin));
 
-	rect2_t text_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
+	rect2_t text_rect = rect2_shrink(rect, ui_scalar(UiScalar_text_margin));
 	ui_draw_text(ui->style.font, ui_text_default_align_p(ui->style.font, text_rect, label), label);
 }
 
@@ -1354,9 +1354,9 @@ void ui_header(string_t label)
 		return;
 
 	rect2_t rect = ui_default_label_rect(ui->style.header_font, label);
-	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+	rect = rect2_shrink(rect, ui_scalar(UiScalar_widget_margin));
 
-	rect2_t text_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
+	rect2_t text_rect = rect2_shrink(rect, ui_scalar(UiScalar_text_margin));
 	ui_draw_text(ui->style.header_font, ui_text_default_align_p(ui->style.header_font, text_rect, label), label);
 }
 
@@ -1371,9 +1371,9 @@ void ui_progress_bar(string_t label, float progress)
 		return;
 
 	rect2_t rect = ui_default_label_rect(ui->style.font, label);
-	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+	rect = rect2_shrink(rect, ui_scalar(UiScalar_widget_margin));
 
-	rect2_t text_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
+	rect2_t text_rect = rect2_shrink(rect, ui_scalar(UiScalar_text_margin));
 
 	// TODO: Unhardcore direction
 
@@ -1382,8 +1382,8 @@ void ui_progress_bar(string_t label, float progress)
 	rect2_t tray   = rect;
 	rect2_t filled = rect2_cut_left(&rect, progress*width);
 
-	ui_draw_rect(tray, ui_color(UI_COLOR_PROGRESS_BAR_EMPTY));
-	ui_draw_rect(filled, ui_color(UI_COLOR_PROGRESS_BAR_FILLED));
+	ui_draw_rect(tray, ui_color(UiColor_progress_bar_empty));
+	ui_draw_rect(filled, ui_color(UiColor_progress_bar_filled));
 
 	ui_draw_text(ui->style.font, ui_text_default_align_p(ui->style.font, text_rect, label), label);
 }
@@ -1417,7 +1417,7 @@ fn_local v4_t ui_animate_colors(ui_id_t id, uint32_t interaction, v4_t cold, v4_
 	}
 
 	v4_t  target    = cold;
-	float stiffness = ui_scalar(UI_SCALAR_ANIMATION_STIFFNESS);
+	float stiffness = ui_scalar(UiScalar_animation_stiffness);
 
 	if (interaction & UI_HOT)
 	{
@@ -1432,7 +1432,7 @@ fn_local v4_t ui_animate_colors(ui_id_t id, uint32_t interaction, v4_t cold, v4_
 
 	v4_t interp_color;
 
-	UI_SCALAR(UI_SCALAR_ANIMATION_STIFFNESS, stiffness)
+	UI_Scalar(UiScalar_animation_stiffness, stiffness)
 	interp_color = ui_interpolate_v4(color_id, target);
 
 	return interp_color;
@@ -1458,17 +1458,17 @@ bool ui_button(string_t label)
 	result = interaction & UI_FIRED;
 
 	v4_t color = ui_animate_colors(id, interaction, 
-								   ui_color(UI_COLOR_BUTTON_IDLE),
-								   ui_color(UI_COLOR_BUTTON_HOT),
-								   ui_color(UI_COLOR_BUTTON_ACTIVE),
-								   ui_color(UI_COLOR_BUTTON_FIRED));
+								   ui_color(UiColor_button_idle),
+								   ui_color(UiColor_button_hot),
+								   ui_color(UiColor_button_active),
+								   ui_color(UiColor_button_fired));
 
 	float hover_lift = ui_button_style_hover_lift(id);
 
 	rect2_t shadow = rect;
 	rect = rect2_add_offset(rect, make_v2(0.0f, hover_lift));
 
-	ui_draw_rect(shadow, ui_color(UI_COLOR_WIDGET_SHADOW));
+	ui_draw_rect(shadow, ui_color(UiColor_widget_shadow));
 	ui_draw_rect(rect, color);
 
 	ui_draw_text_aligned(ui->style.font, rect, label, make_v2(0.5f, 0.5f));
@@ -1486,7 +1486,7 @@ bool ui_checkbox(string_t label, bool *result_value)
 	ui_id_t id = ui_id_pointer(result_value);
 
 	float label_width   = ui_text_width(ui->style.font, label);
-	float label_padding = ui_scalar(UI_SCALAR_TEXT_MARGIN);
+	float label_padding = ui_scalar(UiScalar_text_margin);
 
 	v2_t min_widget_size;
 	min_widget_size.y = ui_font(UiFont_default)->height;
@@ -1533,28 +1533,28 @@ bool ui_checkbox(string_t label, bool *result_value)
 	}
 
 	v4_t color = ui_animate_colors(id, interaction, 
-								   ui_color(UI_COLOR_BUTTON_IDLE),
-								   ui_color(UI_COLOR_BUTTON_HOT),
-								   ui_color(UI_COLOR_BUTTON_ACTIVE),
-								   ui_color(UI_COLOR_BUTTON_FIRED));
+								   ui_color(UiColor_button_idle),
+								   ui_color(UiColor_button_hot),
+								   ui_color(UiColor_button_active),
+								   ui_color(UiColor_button_fired));
 
-	UI_SCALAR(UI_SCALAR_ROUNDEDNESS, outer_roundedness)
+	UI_Scalar(UiScalar_roundedness, outer_roundedness)
 	{
 		rect2_t checkbox_shadow = checkbox_rect;
 		checkbox_rect = rect2_add_offset(checkbox_rect, make_v2(0, hover_lift));
 
-		ui_draw_rect_outline(checkbox_shadow, ui_color(UI_COLOR_WIDGET_SHADOW), checkbox_thickness_pixels);
+		ui_draw_rect_outline(checkbox_shadow, ui_color(UiColor_widget_shadow), checkbox_thickness_pixels);
 		ui_draw_rect_outline(checkbox_rect, color, checkbox_thickness_pixels);
 	}
 
 	if (value) 
 	{
-		UI_SCALAR(UI_SCALAR_ROUNDEDNESS, inner_roundedness)
+		UI_Scalar(UiScalar_roundedness, inner_roundedness)
 		{
 			rect2_t check_shadow = check_rect;
 			check_rect = rect2_add_offset(check_rect, make_v2(0, hover_lift));
 
-			ui_draw_rect(check_shadow, ui_color(UI_COLOR_WIDGET_SHADOW));
+			ui_draw_rect(check_shadow, ui_color(UiColor_widget_shadow));
 			ui_draw_rect(check_rect, color);
 		}
 	}
@@ -1565,7 +1565,7 @@ bool ui_checkbox(string_t label, bool *result_value)
 	p.x += label_padding;
 	p.y += hover_lift;
 
-	v4_t text_color = ui_color(UI_COLOR_TEXT);
+	v4_t text_color = ui_color(UiColor_text);
 
 	if (!value)
 	{
@@ -1574,7 +1574,7 @@ bool ui_checkbox(string_t label, bool *result_value)
 
 	text_color = ui_interpolate_v4(ui_child_id(id, S("text_color")), text_color);
 
-	UI_COLOR(UI_COLOR_TEXT, text_color)
+	UI_Color(UiColor_text, text_color)
 	ui_draw_text(ui->style.font, p, label);
 
 	return result;
@@ -1622,10 +1622,10 @@ bool ui_option_buttons(string_t label, int *value, int count, string_t *options)
 
             if (selected)
             {
-                ui_push_color(UI_COLOR_BUTTON_IDLE, ui_color(UI_COLOR_BUTTON_ACTIVE));
+                ui_push_color(UiColor_button_idle, ui_color(UiColor_button_active));
             }
 
-            ui_set_next_rect(rect2_shrink(rect2_cut_left(&rect, size), ui_scalar(UI_SCALAR_WIDGET_MARGIN)));
+            ui_set_next_rect(rect2_shrink(rect2_cut_left(&rect, size), ui_scalar(UiScalar_widget_margin)));
             bool pressed = ui_button(options[i]);
 
             result |= pressed;
@@ -1637,7 +1637,7 @@ bool ui_option_buttons(string_t label, int *value, int count, string_t *options)
 
             if (selected)
             {
-                ui_pop_color(UI_COLOR_BUTTON_IDLE);
+                ui_pop_color(UiColor_button_idle);
             }
         }
     }
@@ -1721,7 +1721,7 @@ bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t
 
 		rect2_t dropdown_rect = rect;
 		dropdown_rect.max.y = rect.min.y;
-		dropdown_rect.min.y = dropdown_rect.max.y - clamped_height - 2.0f*ui_scalar(UI_SCALAR_WIDGET_MARGIN);
+		dropdown_rect.min.y = dropdown_rect.max.y - clamped_height - 2.0f*ui_scalar(UiScalar_widget_margin);
 
 		ui_render_layer_t old_layer = ui->render_layer;
 		ui->render_layer = UI_LAYER_OVERLAY_BACKGROUND;
@@ -1730,13 +1730,13 @@ bool ui_combo_box(string_t label, size_t *selected_index, size_t count, string_t
 		{
 			rect2_t shadow_rect = rect2_add_offset(dropdown_rect, make_v2(4, -4));
 			ui_draw_rect_roundedness_shadow(shadow_rect, make_v4(0, 0, 0, 0.25f), make_v4(0, 1, 0, 1), 0.25f, 16.0f);
-			ui_draw_rect_roundedness_shadow(dropdown_rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), make_v4(0, 1, 0, 1), 0.25f, 16.0f);
+			ui_draw_rect_roundedness_shadow(dropdown_rect, ui_color(UiColor_window_background), make_v4(0, 1, 0, 1), 0.25f, 16.0f);
 		}
 		ui_pop_clip_rect();
 
-		float margin = max(ui_scalar(UI_SCALAR_WIDGET_MARGIN), 0.5f*ui_scalar(UI_SCALAR_ROUNDEDNESS));
+		float margin = max(ui_scalar(UiScalar_widget_margin), 0.5f*ui_scalar(UiScalar_roundedness));
 		dropdown_rect = rect2_shrink(dropdown_rect, margin);
-		dropdown_rect = rect2_pillarbox(dropdown_rect, ui_scalar(UI_SCALAR_WINDOW_MARGIN));
+		dropdown_rect = rect2_pillarbox(dropdown_rect, ui_scalar(UiScalar_window_margin));
 		ui_push_clip_rect(dropdown_rect);
 
 		ui_panel_begin_ex(ui_child_id(id, S("panel")), dropdown_rect, UI_PANEL_SCROLLABLE_VERT);
@@ -1816,7 +1816,7 @@ fn_local void ui_slider__impl(ui_id_t id, rect2_t rect, ui_slider__params_t *p)
 		return;
 
 	float slider_w           = rect2_width(rect);
-	float handle_w           = max(16.0f, slider_w*ui_scalar(UI_SCALAR_SLIDER_HANDLE_RATIO));
+	float handle_w           = max(16.0f, slider_w*ui_scalar(UiScalar_slider_handle_ratio));
 	float slider_effective_w = slider_w - handle_w;
 
 	// TODO: This is needlessly confusing
@@ -1876,20 +1876,20 @@ fn_local void ui_slider__impl(ui_id_t id, rect2_t rect, ui_slider__params_t *p)
 	ui_interaction_t interaction = ui_default_widget_behaviour(id, handle);
 
 	v4_t color = ui_animate_colors(id, interaction, 
-								   ui_color(UI_COLOR_SLIDER_FOREGROUND),
-								   ui_color(UI_COLOR_SLIDER_HOT),
-								   ui_color(UI_COLOR_SLIDER_ACTIVE),
-								   ui_color(UI_COLOR_SLIDER_ACTIVE));
+								   ui_color(UiColor_slider_foreground),
+								   ui_color(UiColor_slider_hot),
+								   ui_color(UiColor_slider_active),
+								   ui_color(UiColor_slider_active));
 
 	float hover_lift = ui_hover_lift(id);
 
 	rect2_t shadow = handle;
 	handle = rect2_add_offset(handle, make_v2(0, hover_lift));
 
-	ui_draw_rect(body, ui_color(UI_COLOR_SLIDER_BACKGROUND));
-	ui_draw_rect(shadow, ui_color(UI_COLOR_WIDGET_SHADOW));
+	ui_draw_rect(body, ui_color(UiColor_slider_background));
+	ui_draw_rect(shadow, ui_color(UiColor_widget_shadow));
 	ui_draw_rect(handle, color);
-	ui_draw_rect(right, ui_color(UI_COLOR_SLIDER_BACKGROUND));
+	ui_draw_rect(right, ui_color(UiColor_slider_background));
 
 	string_t value_text = {0};
 
@@ -1964,7 +1964,7 @@ bool ui_slider_int_ex(string_t label, int *v, int min, int max, ui_slider_flags_
 
 	ui_id_t id = ui_id_pointer(v);
 
-	float widget_margin = ui_scalar(UI_SCALAR_WIDGET_MARGIN);
+	float widget_margin = ui_scalar(UiScalar_widget_margin);
 
 	v2_t min_widget_size;
 	min_widget_size.y = ui_font(UiFont_default)->height;
@@ -2083,10 +2083,10 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 
 	ui_hoverable(id, rect);
 
-	rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+	rect = rect2_shrink(rect, ui_scalar(UiScalar_widget_margin));
 
 	rect2_t label_rect = rect2_cut_left(&rect, 0.5f*rect2_width(rect));
-	label_rect = rect2_shrink(label_rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
+	label_rect = rect2_shrink(label_rect, ui_scalar(UiScalar_text_margin));
 
 	ui_text_edit_state_t *state = ui_get_state(id, NULL, ui_text_edit_state_t);
 
@@ -2245,11 +2245,11 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 	}
 
 	string_t string      = buffer->string;
-	rect2_t  buffer_rect = rect2_shrink(rect, ui_scalar(UI_SCALAR_TEXT_MARGIN));
+	rect2_t  buffer_rect = rect2_shrink(rect, ui_scalar(UiScalar_text_margin));
 
 	font_t *font = ui_font(UiFont_default);
 
-	ui_draw_rect(rect, ui_color(UI_COLOR_SLIDER_BACKGROUND));
+	ui_draw_rect(rect, ui_color(UiColor_slider_background));
 	ui_draw_text_aligned(font, buffer_rect, string, make_v2(0.0f, 0.5f));
 	ui_draw_text_aligned(font, label_rect, label, make_v2(0.0f, 0.5f));
 
@@ -2288,7 +2288,7 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 			rect2_t cursor_rect = rect2_from_min_dim(make_v2(cursor_p - 1.0f, buffer_rect.min.y + 2.0f), make_v2(2.0f, rect2_height(buffer_rect) - 4.0f));
 			rect2_t selection_rect = rect2_min_max(make_v2(selection_start_p, buffer_rect.min.y), make_v2(selection_end_p, buffer_rect.max.y));
 
-			v4_t caret_color = ui_color(UI_COLOR_TEXT);
+			v4_t caret_color = ui_color(UiColor_text);
 			caret_color.w = 0.75f;
 
 			if (selection_size == 0)
@@ -2300,7 +2300,7 @@ void ui_text_edit(string_t label, dynamic_string_t *buffer)
 		}
 		else
 		{
-			v4_t caret_color = ui_color(UI_COLOR_TEXT);
+			v4_t caret_color = ui_color(UiColor_text);
 			caret_color.w = 0.75f;
 
 			ui_draw_rect_roundedness(rect2_from_min_dim(make_v2(buffer_rect.min.x - 1.0f, buffer_rect.min.y + 2.0f),
@@ -2456,7 +2456,7 @@ void ui_hoverable(ui_id_t id, rect2_t rect)
 	string_t next_tooltip = string_from_storage(ui->next_tooltip);
 
 	if (!string_empty(next_tooltip) && 
-		ui_is_hovered_delay(id, ui_scalar(UI_SCALAR_TOOLTIP_DELAY)))
+		ui_is_hovered_delay(id, ui_scalar(UiScalar_tooltip_delay)))
 	{
 		ui_tooltip(next_tooltip);
 	}
@@ -2495,42 +2495,42 @@ static void ui_initialize(void)
 	v4_t active = make_v4(0.30f, 0.55f, 0.50f, 1.0f);
 	v4_t fired  = make_v4(0.45f, 0.65f, 0.55f, 1.0f);
 
-	ui->style.base_scalars[UI_SCALAR_TOOLTIP_DELAY         ] = 0.0f;
-	ui->style.base_scalars[UI_SCALAR_ANIMATION_RATE        ] = 40.0f;
-	ui->style.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS   ] = 512.0f;
-	ui->style.base_scalars[UI_SCALAR_ANIMATION_DAMPEN      ] = 32.0f;
-	ui->style.base_scalars[UI_SCALAR_ANIMATION_LENGTH_LIMIT] = FLT_MAX;
-	ui->style.base_scalars[UI_SCALAR_HOVER_LIFT            ] = 1.0f;
-	ui->style.base_scalars[UI_SCALAR_WINDOW_MARGIN         ] = 0.0f;
-	ui->style.base_scalars[UI_SCALAR_WIDGET_MARGIN         ] = 2.0f;
-	ui->style.base_scalars[UI_SCALAR_ROW_MARGIN            ] = 2.0f;
-	ui->style.base_scalars[UI_SCALAR_TEXT_MARGIN           ] = 2.0f;
-	ui->style.base_scalars[UI_SCALAR_ROUNDEDNESS           ] = 2.0f;
-	ui->style.base_scalars[UI_SCALAR_TEXT_ALIGN_X          ] = 0.5f;
-	ui->style.base_scalars[UI_SCALAR_TEXT_ALIGN_Y          ] = 0.5f;
-	ui->style.base_scalars[UI_SCALAR_LABEL_ALIGN_X         ] = 0.0f;
-	ui->style.base_scalars[UI_SCALAR_LABEL_ALIGN_Y         ] = 0.5f;
-	ui->style.base_scalars[UI_SCALAR_SCROLL_TRAY_WIDTH     ] = 16.0f;
-	ui->style.base_scalars[UI_SCALAR_MIN_SCROLL_BAR_SIZE   ] = 32.0f;
-	ui->style.base_scalars[UI_SCALAR_SLIDER_HANDLE_RATIO   ] = 1.0f / 4.0f;
-	ui->style.base_colors [UI_COLOR_TEXT                   ] = make_v4(0.95f, 0.90f, 0.85f, 1.0f);
-	ui->style.base_colors [UI_COLOR_TEXT_SHADOW            ] = make_v4(0.00f, 0.00f, 0.00f, 0.50f);
-	ui->style.base_colors [UI_COLOR_WIDGET_SHADOW          ] = make_v4(0.00f, 0.00f, 0.00f, 0.20f);
-	ui->style.base_colors [UI_COLOR_WINDOW_BACKGROUND      ] = background;
-	ui->style.base_colors [UI_COLOR_WINDOW_TITLE_BAR       ] = make_v4(0.45f, 0.25f, 0.25f, 1.0f);
-	ui->style.base_colors [UI_COLOR_WINDOW_TITLE_BAR_HOT   ] = make_v4(0.45f, 0.22f, 0.22f, 1.0f);
-	ui->style.base_colors [UI_COLOR_WINDOW_CLOSE_BUTTON    ] = make_v4(0.35f, 0.15f, 0.15f, 1.0f);
-	ui->style.base_colors [UI_COLOR_WINDOW_OUTLINE         ] = make_v4(0.1f, 0.1f, 0.1f, 0.20f);
-	ui->style.base_colors [UI_COLOR_PROGRESS_BAR_EMPTY     ] = background_hi;
-	ui->style.base_colors [UI_COLOR_PROGRESS_BAR_FILLED    ] = hot;
-	ui->style.base_colors [UI_COLOR_BUTTON_IDLE            ] = foreground;
-	ui->style.base_colors [UI_COLOR_BUTTON_HOT             ] = hot;
-	ui->style.base_colors [UI_COLOR_BUTTON_ACTIVE          ] = active;
-	ui->style.base_colors [UI_COLOR_BUTTON_FIRED           ] = fired;
-	ui->style.base_colors [UI_COLOR_SLIDER_BACKGROUND      ] = background_hi;
-	ui->style.base_colors [UI_COLOR_SLIDER_FOREGROUND      ] = foreground;
-	ui->style.base_colors [UI_COLOR_SLIDER_HOT             ] = hot;
-	ui->style.base_colors [UI_COLOR_SLIDER_ACTIVE          ] = active;
+	ui->style.base_scalars[UiScalar_tooltip_delay         ] = 0.0f;
+	ui->style.base_scalars[UiScalar_animation_rate        ] = 40.0f;
+	ui->style.base_scalars[UiScalar_animation_stiffness   ] = 512.0f;
+	ui->style.base_scalars[UiScalar_animation_dampen      ] = 32.0f;
+	ui->style.base_scalars[UiScalar_animation_length_limit] = FLT_MAX;
+	ui->style.base_scalars[UiScalar_hover_lift            ] = 1.0f;
+	ui->style.base_scalars[UiScalar_window_margin         ] = 0.0f;
+	ui->style.base_scalars[UiScalar_widget_margin         ] = 2.0f;
+	ui->style.base_scalars[UiScalar_row_margin            ] = 2.0f;
+	ui->style.base_scalars[UiScalar_text_margin           ] = 2.0f;
+	ui->style.base_scalars[UiScalar_roundedness           ] = 2.0f;
+	ui->style.base_scalars[UiScalar_text_align_x          ] = 0.5f;
+	ui->style.base_scalars[UiScalar_text_align_y          ] = 0.5f;
+	ui->style.base_scalars[UiScalar_label_align_x         ] = 0.0f;
+	ui->style.base_scalars[UiScalar_label_align_y         ] = 0.5f;
+	ui->style.base_scalars[UiScalar_scroll_tray_width     ] = 16.0f;
+	ui->style.base_scalars[UiScalar_min_scroll_bar_size   ] = 32.0f;
+	ui->style.base_scalars[UiScalar_slider_handle_ratio   ] = 1.0f / 4.0f;
+	ui->style.base_colors [UiColor_text                   ] = make_v4(0.95f, 0.90f, 0.85f, 1.0f);
+	ui->style.base_colors [UiColor_text_shadow            ] = make_v4(0.00f, 0.00f, 0.00f, 0.50f);
+	ui->style.base_colors [UiColor_widget_shadow          ] = make_v4(0.00f, 0.00f, 0.00f, 0.20f);
+	ui->style.base_colors [UiColor_window_background      ] = background;
+	ui->style.base_colors [UiColor_window_title_bar       ] = make_v4(0.45f, 0.25f, 0.25f, 1.0f);
+	ui->style.base_colors [UiColor_window_title_bar_hot   ] = make_v4(0.45f, 0.22f, 0.22f, 1.0f);
+	ui->style.base_colors [UiColor_window_close_button    ] = make_v4(0.35f, 0.15f, 0.15f, 1.0f);
+	ui->style.base_colors [UiColor_window_outline         ] = make_v4(0.1f, 0.1f, 0.1f, 0.20f);
+	ui->style.base_colors [UiColor_progress_bar_empty     ] = background_hi;
+	ui->style.base_colors [UiColor_progress_bar_filled    ] = hot;
+	ui->style.base_colors [UiColor_button_idle            ] = foreground;
+	ui->style.base_colors [UiColor_button_hot             ] = hot;
+	ui->style.base_colors [UiColor_button_active          ] = active;
+	ui->style.base_colors [UiColor_button_fired           ] = fired;
+	ui->style.base_colors [UiColor_slider_background      ] = background_hi;
+	ui->style.base_colors [UiColor_slider_foreground      ] = foreground;
+	ui->style.base_colors [UiColor_slider_hot             ] = hot;
+	ui->style.base_colors [UiColor_slider_active          ] = active;
 
 	ui->style.base_fonts[UiFont_default] = ui->style.font; // @UiFonts
 	ui->style.base_fonts[UiFont_header]  = ui->style.header_font; // @UiFonts
@@ -2763,7 +2763,7 @@ void ui_end(void)
 		v4_t color = notif->color;
 		color.w *= smoothstep(saturate(4.0f * lifetime_t));
 
-		UI_COLOR(UI_COLOR_TEXT, color)
+		UI_Color(UiColor_text, color)
 		ui_draw_text(ui->style.font, pos, notif->text);
 
 		notif_at.y -= text_dim.y + 4.0;

@@ -55,31 +55,31 @@ void ui_widget_checkbox(ui_widget_context_t *context, ui_widget_mode_t mode, rec
 			float outer_roundedness = ui_roundedness_ratio_to_abs(checkbox_rect, roundedness_ratio);
 			float inner_roundedness = ui_roundedness_ratio_to_abs(check_rect, roundedness_ratio);
 
-			UI_SCALAR(UI_SCALAR_ROUNDEDNESS, outer_roundedness)
+			UI_Scalar(UiScalar_roundedness, outer_roundedness)
 			{
 				rect2_t checkbox_shadow = checkbox_rect;
 				checkbox_rect = rect2_add_offset(checkbox_rect, make_v2(0, hover_lift));
 
-				ui_draw_rect_outline(checkbox_shadow, ui_color(UI_COLOR_WIDGET_SHADOW), checkbox_thickness_pixels);
+				ui_draw_rect_outline(checkbox_shadow, ui_color(UiColor_widget_shadow), checkbox_thickness_pixels);
 				ui_draw_rect_outline(checkbox_rect, color, checkbox_thickness_pixels);
 			}
 
 			if (context->is_active) 
 			{
-				UI_SCALAR(UI_SCALAR_ROUNDEDNESS, inner_roundedness)
+				UI_Scalar(UiScalar_roundedness, inner_roundedness)
 				{
 					rect2_t check_shadow = check_rect;
 					check_rect = rect2_add_offset(check_rect, make_v2(0, hover_lift));
 
-					ui_draw_rect(check_shadow, ui_color(UI_COLOR_WIDGET_SHADOW));
+					ui_draw_rect(check_shadow, ui_color(UiColor_widget_shadow));
 					ui_draw_rect(check_rect, color);
 				}
 			}
 
 			v2_t p          = ui_text_align_p(ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
-			v4_t text_color = ui_interpolate_v4(ui_child_id(id, S("text_color")), ui_color(UI_COLOR_TEXT));
+			v4_t text_color = ui_interpolate_v4(ui_child_id(id, S("text_color")), ui_color(UiColor_text));
 
-			UI_COLOR(UI_COLOR_TEXT, text_color)
+			UI_Color(UiColor_text, text_color)
 			{
 				ui_draw_text(ui->style.font, p, label);
 			}
@@ -247,31 +247,31 @@ void ui_widget_checkbox_draw(ui_widget_context_t *context, rect2_t rect)
 	float outer_roundedness = ui_roundedness_ratio_to_abs(checkbox_rect, roundedness_ratio);
 	float inner_roundedness = ui_roundedness_ratio_to_abs(check_rect, roundedness_ratio);
 
-	UI_SCALAR(UI_SCALAR_ROUNDEDNESS, outer_roundedness)
+	UI_Scalar(UiScalar_roundedness, outer_roundedness)
 	{
 		rect2_t checkbox_shadow = checkbox_rect;
 		checkbox_rect = rect2_add_offset(checkbox_rect, make_v2(0, hover_lift));
 
-		ui_draw_rect_outline(checkbox_shadow, ui_color(UI_COLOR_WIDGET_SHADOW), checkbox_thickness_pixels);
+		ui_draw_rect_outline(checkbox_shadow, ui_color(UiColor_widget_shadow), checkbox_thickness_pixels);
 		ui_draw_rect_outline(checkbox_rect, color, checkbox_thickness_pixels);
 	}
 
 	if (context->active) 
 	{
-		UI_SCALAR(UI_SCALAR_ROUNDEDNESS, inner_roundedness)
+		UI_Scalar(UiScalar_roundedness, inner_roundedness)
 		{
 			rect2_t check_shadow = check_rect;
 			check_rect = rect2_add_offset(check_rect, make_v2(0, hover_lift));
 
-			ui_draw_rect(check_shadow, ui_color(UI_COLOR_WIDGET_SHADOW));
+			ui_draw_rect(check_shadow, ui_color(UiColor_widget_shadow));
 			ui_draw_rect(check_rect, color);
 		}
 	}
 
 	v2_t p          = ui_text_align_p(ui->style.font, label_rect, label, make_v2(0.0f, 0.5f));
-	v4_t text_color = ui_interpolate_v4(ui_child_id(id, S("text_color")), ui_color(UI_COLOR_TEXT));
+	v4_t text_color = ui_interpolate_v4(ui_child_id(id, S("text_color")), ui_color(UiColor_text));
 
-	UI_COLOR(UI_COLOR_TEXT, text_color)
+	UI_Color(UiColor_text, text_color)
 	{
 		ui_draw_text(ui->style.font, p, label);
 	}

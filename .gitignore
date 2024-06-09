@@ -7,6 +7,7 @@ build
 *.wav
 *.raddbgi
 *.rdi
+*.bak
 
 .vs
 ctm
