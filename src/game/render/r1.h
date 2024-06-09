@@ -1,5 +1,7 @@
 #pragma once
 
+// #include "r1_ui.h"
+
 enum { R1MaxUiRects = 4096 }; // TODO: Transient GPU allocator with CreatePlacedResource
 enum { R1MaxRegions = 512  };
 
@@ -28,6 +30,8 @@ typedef struct r1_state_t
 	uint64_t timestamp_frequency;
 	uint32_t next_region_index;
 	string_storage_t(256) region_identifiers[R1MaxRegions];
+
+	//r1_ui_render_state_t ui;
 
 	struct
 	{

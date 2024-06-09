@@ -226,8 +226,7 @@ typedef enum ui_style_scalar_t
 {
 	UiScalar_tooltip_delay,
 
-    UiScalar_animation_rate,
-
+	UiScalar_animation_enabled,
 	UiScalar_animation_stiffness,
 	UiScalar_animation_dampen,
 	UiScalar_animation_length_limit,

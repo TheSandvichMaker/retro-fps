@@ -102,11 +102,11 @@ typedef struct ui_slider_params_t
 	};
 } ui_slider_params_t;
 
-fn void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p);
-fn bool ui_slider_ex(rect2_t rect, float *v, float min, float max, float granularity, ui_slider_flags_t flags);
-fn bool ui_slider(rect2_t rect, float *v, float min, float max);
+fn void ui_slider_base  (ui_id_t id, rect2_t rect, ui_slider_params_t *p);
+fn bool ui_slider_ex    (rect2_t rect, float *v, float min, float max, float granularity, ui_slider_flags_t flags);
+fn bool ui_slider       (rect2_t rect, float *v, float min, float max);
 fn bool ui_slider_int_ex(rect2_t rect, int32_t *v, int32_t min, int32_t max, ui_slider_flags_t flags);
-fn bool ui_slider_int(rect2_t rect, int32_t *v, int32_t min, int32_t max);
+fn bool ui_slider_int   (rect2_t rect, int32_t *v, int32_t min, int32_t max);
 
 //
 // Text Edit

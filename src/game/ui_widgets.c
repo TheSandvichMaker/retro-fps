@@ -220,10 +220,10 @@ bool ui_button(rect2_t rect, string_t label)
 	rect2_t shadow = rect;
 	rect2_t button = rect2_add_offset(rect, make_v2(0.0f, hover_lift));
 
-	ui_draw_rect(shadow, ui_color(UiColor_widget_shadow));
+	ui_draw_rect(shadow, mul(color_interp, 0.5f));
 	ui_draw_rect(button, color_interp);
 
-	ui_push_clip_rect(rect);
+	ui_push_clip_rect(button);
 	ui_draw_text_aligned(ui_font(UiFont_default), button, label, make_v2(0.5f, 0.5f));
 	ui_pop_clip_rect();
 
@@ -433,7 +433,11 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 	rect2_t handle = rect2_cut_left(&rect, handle_w);
 	rect2_t right  = rect;
 
-	handle = rect2_cut_margins_horizontally(handle, ui_sz_pix(ui_scalar(UiScalar_widget_margin)));
+	// TODO: don't hack this logic
+	if (p->flags & UiSliderFlags_inc_dec_buttons)
+	{
+		handle = rect2_cut_margins_horizontally(handle, ui_sz_pix(ui_scalar(UiScalar_widget_margin)));
+	}
 
 	(void)left;
 	(void)right;
@@ -457,7 +461,7 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 		ui_draw_rect(right, ui_color(UiColor_slider_background));
 	}
 
-	ui_draw_rect(shadow, ui_color(UiColor_widget_shadow));
+	ui_draw_rect(shadow, mul(color, 0.5f));
 	ui_draw_rect(handle, color);
 
 	string_t value_text = {0};

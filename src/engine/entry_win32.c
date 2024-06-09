@@ -734,7 +734,7 @@ int wWinMain(HINSTANCE instance,
 			win32_lock_cursor(&input_context, window, tick_io.cursor_locked);
 		}
 
-		if (cursor != last_cursor)
+		//if (cursor != last_cursor)
 		{
 			if (input_context.cursor_is_in_client_rect)
 			{

@@ -183,7 +183,7 @@ void editor_process_windows(editor_t *editor)
 
 			string_t title = string_from_storage(window->title);
 
-			bool has_focus = ui_has_focus() && (window == editor->focus_window);
+			bool has_focus = /*ui_has_focus() &&*/ (window == editor->focus_window);
 
 			float focus_t = ui_interpolate_f32(ui_id(S("focus")), has_focus);
 			float shadow_amount = lerp(0.15f, 0.25f, focus_t);

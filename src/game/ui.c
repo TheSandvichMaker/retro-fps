@@ -430,86 +430,96 @@ ui_anim_t *ui_get_anim(ui_id_t id, v4_t target)
 
 	ui_anim_list_t *list = &ui->anim_list;
 
-	ui_id_t          *restrict active_ids   = list->active_ids;
-	ui_id_t          *restrict sleepy_ids   = list->sleepy_ids;
-	ui_anim_t        *restrict active_anims = list->active;
-	ui_anim_sleepy_t *restrict sleepy_anims = list->sleepy;
-
-	int32_t active_count = list->active_count;
-	int32_t sleepy_count = list->sleepy_count;
-
 	ui_anim_t *result = NULL;
-	for (int32_t active_index = 0; active_index < active_count; active_index++)
-	{
-		if (ui_id_equal(active_ids[active_index], id))
-		{
-			result = &active_anims[active_index];
-			break;
-		}
-	}
 
-	if (!result)
+	bool enabled = ui_scalar(UiScalar_animation_enabled) != 0.0f;
+	if (enabled)
 	{
-		for (int32_t sleepy_index = 0; sleepy_index < sleepy_count; sleepy_index++)
+		ui_id_t          *restrict active_ids   = list->active_ids;
+		ui_id_t          *restrict sleepy_ids   = list->sleepy_ids;
+		ui_anim_t        *restrict active_anims = list->active;
+		ui_anim_sleepy_t *restrict sleepy_anims = list->sleepy;
+
+		int32_t active_count = list->active_count;
+		int32_t sleepy_count = list->sleepy_count;
+
+		for (int32_t active_index = 0; active_index < active_count; active_index++)
 		{
-			if (ui_id_equal(sleepy_ids[sleepy_index], id))
+			if (ui_id_equal(active_ids[active_index], id))
 			{
-				ui_anim_sleepy_t *sleepy = &sleepy_anims[sleepy_index];
-				sleepy->last_touched_frame_index = ui->frame_index;
-				
-				if (vlen(sub(target, sleepy->t_current)) >= ui->dt*UI_ANIM_SLEEPY_THRESHOLD)
-				{
-					ui_anim_t as_active = {
-						.t_current = sleepy->t_current,
-						.t_target  = target,
-					};
-
-					// add to active array
-					int32_t active_index = active_count++;
-					active_ids  [active_index] = sleepy_ids[sleepy_index];
-					active_anims[active_index] = as_active;
-
-					// remove from sleepy array
-					int32_t swap_index = --sleepy_count;
-					sleepy_ids  [sleepy_index] = sleepy_ids  [swap_index];
-					sleepy_anims[sleepy_index] = sleepy_anims[swap_index];
-
-					result = &active_anims[active_index];
-				}
-				else
-				{
-					result = &list->null;
-					result->t_current = target;
-				}
-
+				result = &active_anims[active_index];
 				break;
 			}
 		}
+
+		if (!result)
+		{
+			for (int32_t sleepy_index = 0; sleepy_index < sleepy_count; sleepy_index++)
+			{
+				if (ui_id_equal(sleepy_ids[sleepy_index], id))
+				{
+					ui_anim_sleepy_t *sleepy = &sleepy_anims[sleepy_index];
+					sleepy->last_touched_frame_index = ui->frame_index;
+					
+					if (vlen(sub(target, sleepy->t_current)) >= ui->dt*UI_ANIM_SLEEPY_THRESHOLD)
+					{
+						ui_anim_t as_active = {
+							.t_current = sleepy->t_current,
+							.t_target  = target,
+						};
+
+						// add to active array
+						int32_t active_index = active_count++;
+						active_ids  [active_index] = sleepy_ids[sleepy_index];
+						active_anims[active_index] = as_active;
+
+						// remove from sleepy array
+						int32_t swap_index = --sleepy_count;
+						sleepy_ids  [sleepy_index] = sleepy_ids  [swap_index];
+						sleepy_anims[sleepy_index] = sleepy_anims[swap_index];
+
+						result = &active_anims[active_index];
+					}
+					else
+					{
+						result = &list->null;
+						result->t_current = target;
+					}
+
+					break;
+				}
+			}
+		}
+
+		if (!result)
+		{
+			if (active_count < ARRAY_COUNT(list->active))
+			{
+				int32_t anim_index = active_count++;
+
+				active_ids[anim_index] = id;
+				result = &active_anims[anim_index];
+
+				log(UI, Spam, "Spawned anim %.*s", Sx(UI_ID_GET_NAME(id)));
+			}
+			else
+			{
+				result = &list->null;
+
+				log(UI, Warning, "Ran out of space for UI anims for ID %.*s", Sx(UI_ID_GET_NAME(id)));
+			}
+
+			result->t_current = target;
+		}
+
+		list->active_count = active_count;
+		list->sleepy_count = sleepy_count;
 	}
-
-	if (!result)
+	else
 	{
-		if (active_count < ARRAY_COUNT(list->active))
-		{
-			int32_t anim_index = active_count++;
-
-			active_ids[anim_index] = id;
-			result = &active_anims[anim_index];
-
-			log(UI, Spam, "Spawned anim %.*s", Sx(UI_ID_GET_NAME(id)));
-		}
-		else
-		{
-			result = &list->null;
-
-			log(UI, Warning, "Ran out of space for UI anims for ID %.*s", Sx(UI_ID_GET_NAME(id)));
-		}
-
+		result = &list->null;
 		result->t_current = target;
 	}
-
-	list->active_count = active_count;
-	list->sleepy_count = sleepy_count;
 
 	result->last_touched_frame_index = ui->frame_index;
 	result->length_limit             = ui_scalar(UiScalar_animation_length_limit);
@@ -983,18 +993,24 @@ ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, 
 {
 	uint32_t result = 0;
 
-	rect2_t hit_rect = rect;
-	hit_rect.min.x = floorf(hit_rect.min.x);
-	hit_rect.min.y = floorf(hit_rect.min.y);
-	hit_rect.max.x = ceilf(hit_rect.max.x);
-	hit_rect.max.y = ceilf(hit_rect.max.y);
-
-	bool hovered = ui_mouse_in_rect(hit_rect);
+	bool hovered = ui_mouse_in_rect(rect);
 
 	if (hovered)
 	{
         ui_set_next_hot(id, priority);
 		result |= UI_HOVERED;
+	}
+
+	if (ui_is_hot(id))
+	{
+		result |= UI_HOT;
+
+		if (ui_button_pressed(UiButton_left, false))
+		{
+			result |= UI_PRESSED;
+			ui->drag_anchor = sub(ui->input.mouse_p, rect2_center(rect));
+			ui_set_active(id);
+		}
 	}
 
 	if (ui_is_active(id))
@@ -1011,18 +1027,6 @@ ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, 
 			result |= UI_RELEASED;
 
 			ui_clear_active();
-		}
-	}
-
-	if (ui_is_hot(id))
-	{
-		result |= UI_HOT;
-
-		if (ui_button_pressed(UiButton_left, false))
-		{
-			result |= UI_PRESSED;
-			ui->drag_anchor = sub(ui->input.mouse_p, rect2_center(rect));
-			ui_set_active(id);
 		}
 	}
 
@@ -1076,7 +1080,7 @@ v4_t ui_animate_colors(ui_id_t id, uint32_t interaction, v4_t cold, v4_t hot, v4
 		target = hot;
 	}
 
-	if (interaction & UI_PRESSED)
+	if (interaction & (UI_PRESSED|UI_HELD))
 	{
 		target = active;
 		stiffness *= 2.0f;
@@ -1277,7 +1281,7 @@ static void ui_initialize(void)
 	ui->style.header_font_data = fs_read_entire_file(&ui->arena, S("gamedata/fonts/NotoSans/NotoSans-Bold.ttf"));
 	ui_set_font_height(18.0f);
 
-	v4_t background    = make_v4(0.20f, 0.15f, 0.17f, 1.0f);
+	v4_t background    = make_v4(0.19f, 0.15f, 0.17f, 1.0f);
 	v4_t background_hi = make_v4(0.22f, 0.18f, 0.18f, 1.0f);
 	v4_t foreground    = make_v4(0.33f, 0.28f, 0.28f, 1.0f);
 
@@ -1286,7 +1290,7 @@ static void ui_initialize(void)
 	v4_t fired  = make_v4(0.45f, 0.65f, 0.55f, 1.0f);
 
 	ui->style.base_scalars[UiScalar_tooltip_delay         ] = 0.0f;
-	ui->style.base_scalars[UiScalar_animation_rate        ] = 40.0f;
+	ui->style.base_scalars[UiScalar_animation_enabled     ] = 1.0f;
 	ui->style.base_scalars[UiScalar_animation_stiffness   ] = 512.0f;
 	ui->style.base_scalars[UiScalar_animation_dampen      ] = 32.0f;
 	ui->style.base_scalars[UiScalar_animation_length_limit] = FLT_MAX;
@@ -1307,7 +1311,7 @@ static void ui_initialize(void)
 	ui->style.base_colors [UiColor_text_shadow            ] = make_v4(0.00f, 0.00f, 0.00f, 0.50f);
 	ui->style.base_colors [UiColor_widget_shadow          ] = make_v4(0.00f, 0.00f, 0.00f, 0.20f);
 	ui->style.base_colors [UiColor_window_background      ] = background;
-	ui->style.base_colors [UiColor_window_title_bar       ] = make_v4(0.45f, 0.25f, 0.25f, 1.0f);
+	ui->style.base_colors [UiColor_window_title_bar       ] = make_v4(0.25f, 0.35f, 0.30f, 1.0f);
 	ui->style.base_colors [UiColor_window_title_bar_hot   ] = make_v4(0.45f, 0.22f, 0.22f, 1.0f);
 	ui->style.base_colors [UiColor_window_close_button    ] = make_v4(0.35f, 0.15f, 0.15f, 1.0f);
 	ui->style.base_colors [UiColor_window_outline         ] = make_v4(0.1f, 0.1f, 0.1f, 0.20f);

@@ -23,6 +23,11 @@ void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *wi
 	ui_hover_tooltip(S("This checkbox does nothing! GOOD DAY SIR!!"));
 	ui_row_checkbox(&builder, S("Checkbox That Does Nothing"), &check_me);
 
+	if (ui_row_checkbox(&builder, S("Disable UI Animations"), &state->animations_disabled))
+	{
+		ui->style.base_scalars[UiScalar_animation_enabled] = (float)(!state->animations_disabled);
+	}
+
 	ui_row_slider    (&builder, S("Float Slider"), &state->slider_f32, -1.0f, 1.0f);
 	ui_row_slider_int(&builder, S("Int Slider"), &state->slider_i32, 0, 8);
 
@@ -51,6 +56,9 @@ void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *wi
 
 	ui_hover_tooltip(S("Spring dampen coefficient for animations"));
 	ui_row_slider(&builder, S("UI Animation Dampen"), &ui->style.base_scalars[UiScalar_animation_dampen], 1.0f, 128.0f);
+
+	ui_hover_tooltip(S("Height to which buttons and sliders lift when hovered over"));
+	ui_row_slider_ex(&builder, S("UI Hover Lift"), &ui->style.base_scalars[UiScalar_hover_lift], 1.0f, 8.0f, 1.0f);
 
 	state->edit_buffer.data     = state->edit_buffer_storage;
 	state->edit_buffer.capacity = ARRAY_COUNT(state->edit_buffer_storage);

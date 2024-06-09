@@ -36,14 +36,6 @@ void editor_do_lightmap_window(editor_lightmap_state_t *lm_editor, editor_window
 	{
 		ui_row_header(&builder, S("Bake Settings"));
 
-		static string_storage_t(128) storage;
-		static dynamic_string_t      buffer;
-
-		buffer.data     = storage.data;
-		buffer.capacity = string_storage_size(storage);
-
-		ui_row_text_edit(&builder, S("Random Text Edit"), &buffer);
-
 		local_persist int bake_preset              = 0;
 		local_persist int ray_count                = 2;
 		local_persist int ray_recursion            = 2;
@@ -333,11 +325,6 @@ void editor_do_lightmap_window(editor_lightmap_state_t *lm_editor, editor_window
 
 			ui_row_label(&builder, Sf("time elapsed:  %02u:%02u", minutes, seconds));
 		}
-	}
-
-	for (int i = 0; i < 32; i++)
-	{
-		ui_row_label(&builder, S("useless label!"));
 	}
 
 	ui_scrollable_region_end(scroll_region_id, builder.rect);

@@ -4,6 +4,7 @@ typedef struct editor_window_t editor_window_t;
 
 typedef struct editor_ui_test_state_t
 {
+	bool animations_disabled;
 	float            slider_f32;
 	int              slider_i32;
 	char             edit_buffer_storage[256];

@@ -1,3 +1,7 @@
+#include "r1.h"
+
+// #include "r1_ui.c"
+
 typedef enum r_parameter_slot_t
 {
 	R1ParameterSlot_draw = 0,
@@ -234,6 +238,36 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 			.rasterizer = {
 				.cull_mode     = RhiCullMode_back,
 				.front_winding = RhiWinding_ccw,
+			},
+			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
+			.render_target_count     = 1,
+			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm_srgb,
+		});
+	}
+
+	m_scoped_temp
+	{
+		string_t source = fs_read_entire_file(temp, S("../src/shaders/ui.hlsl"));
+
+		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("ui.hlsl"), S("MainVS"), S("vs_6_8"));
+		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("ui.hlsl"), S("MainPS"), S("ps_6_8"));
+
+		r1->psos.ui = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
+			.debug_name = S("UI PSO"),
+			.vs = vs,
+			.ps = ps,
+			.blend = {
+				.render_target[0] = {
+					.blend_enable    = true,
+					.src_blend       = RhiBlend_src_alpha,
+					.dst_blend       = RhiBlend_inv_src_alpha,
+					.blend_op        = RhiBlendOp_add,
+					.src_blend_alpha = RhiBlend_inv_dest_alpha,
+					.dst_blend_alpha = RhiBlend_one,
+					.blend_op_alpha  = RhiBlendOp_add,
+					.write_mask      = RhiColorWriteEnable_all,
+				},
+				.sample_mask = 0xFFFFFFFF,
 			},
 			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
 			.render_target_count     = 1,
