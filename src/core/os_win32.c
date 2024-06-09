@@ -116,8 +116,7 @@ void loud_error_va(int line, string_t file, const char *fmt, va_list args)
                                                    "Error: %.*s\nLine: %d\nFile: %.*s\n", Sx(message), line, Sx(file));
 
     MessageBoxA(NULL, formatted.data, "Fatal Error", MB_OK);
-
-    __debugbreak();
+	DEBUG_BREAK();
 }
 
 void fatal_error(int line, string_t file, const char *fmt, ...)
@@ -133,19 +132,33 @@ void fatal_error_va(int line, string_t file, const char *fmt, va_list args)
     char buffer[4096];
 
     string_t message   = string_format_into_buffer_va(buffer, sizeof(buffer), fmt, args);
+
+#if DREAM_DEVELOPER
+    string_t formatted = string_format_into_buffer(buffer + message.count, sizeof(buffer) - message.count, 
+                                                   "Fatal error: %.*s\nLine: %d\nFile: %.*s\n\n'Abort' to exit process, 'Retry' to break in debugger, 'Ignore' to ignore the error and continue regardless.", Sx(message), line, Sx(file));
+
+    int result = MessageBoxA(NULL, formatted.data, "Fatal Error", MB_ABORTRETRYIGNORE|MB_DEFBUTTON1|MB_SYSTEMMODAL);
+
+	if (result == IDABORT)
+	{
+		DEBUG_BREAK();
+		FatalExit(1);
+	}
+	else if (result == IDRETRY)
+	{
+		DEBUG_BREAK();
+	}
+	else
+	{
+		/* do nothing... */
+	}
+#else
     string_t formatted = string_format_into_buffer(buffer + message.count, sizeof(buffer) - message.count, 
                                                    "Fatal error: %.*s\nLine: %d\nFile: %.*s\n", Sx(message), line, Sx(file));
 
     MessageBoxA(NULL, formatted.data, "Fatal Error", MB_OK);
-
-    __debugbreak();
-
-	// Trick to stop "unreachable code" warnings
-	if (formatted.count > 0)
-	{
-		// @ThreadSafety: Make sure threads are in a known state before exiting!
-		ExitProcess(1);
-	}
+	FatalExit(1);
+#endif
 }
 
 void win32_hresult_error_box(HRESULT hr, const char *message, ...)

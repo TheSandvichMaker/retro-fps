@@ -208,9 +208,6 @@ void editor_process_windows(editor_t *editor)
 			// rect = rect2_shrink(rect, margin);
 			// rect = rect2_pillarbox(rect, ui_scalar(UiScalar_window_margin));
 
-			// TODO: Custom scrollbar rendering for windows?
-			ui_panel_begin_ex(ui_id(S("panel")), rect, UI_PANEL_SCROLLABLE_VERT);
-
 			ui_push_clip_rect(rect);
 
 			window->focused = has_focus;
@@ -234,8 +231,6 @@ void editor_process_windows(editor_t *editor)
 			}
 
 			ui_pop_clip_rect();
-
-			ui_panel_end();
 
 			window->hovered = false;
 		}
@@ -278,6 +273,9 @@ void editor_init(editor_t *editor)
 	editor->windows[EditorWindow_lightmap].kind    = EditorWindow_lightmap;
 	editor->windows[EditorWindow_convex_hull].kind = EditorWindow_convex_hull;
 	editor->windows[EditorWindow_ui_test].kind     = EditorWindow_ui_test;
+
+	editor_init_lightmap_stuff(&editor->lightmap);
+	editor_init_convex_hull_debugger(&editor->convex_hull);
 }
 
 void editor_update_and_render(editor_t *editor)

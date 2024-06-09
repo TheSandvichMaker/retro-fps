@@ -83,7 +83,7 @@ fn_local bool table_find_slot(const table_t *table, uint64_t key, uint64_t *slot
     return result;
 }
 
-bool table_find(const table_t *table, uint64_t key, uint64_t *value)
+bool table_find_entry(const table_t *table, uint64_t key, uint64_t **entry)
 {
 	bool result = false;
 
@@ -92,7 +92,24 @@ bool table_find(const table_t *table, uint64_t key, uint64_t *value)
 	{
 		table_entry_t *entries = TABLE_UNTAG_POINTER(table->entries);
 
-		*value = entries[slot].value;
+		*entry = &entries[slot].value;
+		result = true;
+	}
+
+	return result;
+}
+
+bool table_find(const table_t *table, uint64_t key, uint64_t *value)
+{
+	bool result = false;
+
+	uint64_t *entry;
+	if (table_find_entry(table, key, &entry))
+	{
+		if (value)
+		{
+			*value = *entry;
+		}
 		result = true;
 	}
 

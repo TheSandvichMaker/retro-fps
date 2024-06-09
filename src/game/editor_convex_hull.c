@@ -19,6 +19,8 @@ void editor_init_convex_hull_debugger(editor_convex_hull_debugger_t *debugger)
 	debugger->brute_force_min_point_count            = 4;
 	debugger->brute_force_max_point_count            = 256;
 	debugger->brute_force_iterations_per_point_count = 4096;
+
+	debugger->initialized = true;
 }
 
 fn_local void generate_new_random_convex_hull(editor_convex_hull_debugger_t *debugger, size_t point_count, random_series_t *r)
@@ -278,6 +280,20 @@ void editor_do_convex_hull_debugger_window(editor_convex_hull_debugger_t *debugg
 {
 	(void)window;
 
+	ui_scrollable_region_flags_t scroll_flags = 
+		UiScrollableRegionFlags_scroll_vertical|
+		UiScrollableRegionFlags_draw_scroll_bar;
+
+	rect2_t rect = window->rect;
+	rect = rect2_shrink(rect, 1.0f);
+
+	ui_id_t scroll_region_id = ui_child_id(ui_id_pointer(debugger), S("scroll_region"));
+	rect2_t content_rect = ui_scrollable_region_begin_ex(scroll_region_id, rect, scroll_flags);
+
+	content_rect = rect2_shrink(content_rect, 1.0f);
+
+	ui_row_builder_t builder = ui_make_row_builder(content_rect);
+
 	triangle_mesh_t *mesh  = &debugger->mesh;
 	hull_debug_t    *debug = &debugger->debug;
 
@@ -308,15 +324,15 @@ void editor_do_convex_hull_debugger_window(editor_convex_hull_debugger_t *debugg
 		triangle_has_no_area      = diagnostics->triangle_has_no_area;
 	}
 
-	ui_header(S("Generate Random Hull"));
+	ui_row_header(&builder, S("Generate Random Hull"));
 
 	bool changed = false;
-	changed |= ui_slider_int(S("Random Seed"), &debugger->random_seed, 1, 128);
-	changed |= ui_slider_int(S("Point Count"), &debugger->point_count, 8, 256);
+	changed |= ui_row_slider_int(&builder, S("Random Seed"), &debugger->random_seed, 1, 128);
+	changed |= ui_row_slider_int(&builder, S("Point Count"), &debugger->point_count, 8, 256);
 
-	ui_checkbox(S("Automatically Recalculate Hull"), &debugger->automatically_recalculate_hull);
+	ui_row_checkbox(&builder, S("Automatically Recalculate Hull"), &debugger->automatically_recalculate_hull);
 
-	bool should_recalculate = ui_button(S("Calculate Random Convex Hull"));
+	bool should_recalculate = ui_row_button(&builder, S("Calculate Random Convex Hull"));
 	if (debugger->automatically_recalculate_hull && changed)                 should_recalculate = true;
 	if (debugger->automatically_recalculate_hull && !debugger->initialized) should_recalculate = true;
 
@@ -328,7 +344,7 @@ void editor_do_convex_hull_debugger_window(editor_convex_hull_debugger_t *debugg
 
 	if (mesh->triangle_count > 0)
 	{
-		if (ui_button(S("Delete Convex Hull Data")))
+		if (ui_row_button(&builder, S("Delete Convex Hull Data")))
 		{
 			m_release(&debugger->mesh_arena);
 			m_release(&debugger->debug.arena);
@@ -337,13 +353,13 @@ void editor_do_convex_hull_debugger_window(editor_convex_hull_debugger_t *debugg
 		}
 	}
 
-	ui_seperator();
-	ui_header(S("Brute Force Tester"));
-	ui_slider_int(S("Min Points"), &debugger->brute_force_min_point_count, 4, 256);
-	ui_slider_int(S("Max Points"), &debugger->brute_force_max_point_count, 4, 256);
-	ui_slider_int(S("Iterations Per Count"), &debugger->brute_force_iterations_per_point_count, 1, 4096);
+	// ui_seperator();
+	ui_row_header(&builder, S("Brute Force Tester"));
+	ui_row_slider_int(&builder, S("Min Points"), &debugger->brute_force_min_point_count, 4, 256);
+	ui_row_slider_int(&builder, S("Max Points"), &debugger->brute_force_max_point_count, 4, 256);
+	ui_row_slider_int(&builder, S("Iterations Per Count"), &debugger->brute_force_iterations_per_point_count, 1, 4096);
 
-	if (ui_button(S("Run Brute Force Test")))
+	if (ui_row_button(&builder, S("Run Brute Force Test")))
 	{
 		random_series_t r = { (uint32_t)debugger->random_seed };
 
@@ -376,7 +392,7 @@ void editor_do_convex_hull_debugger_window(editor_convex_hull_debugger_t *debugg
 	if (debugger->brute_force_triggered_success_timer > 0.0f)
 	{
 		UI_Color(UiColor_text, make_v4(0.5f, 1.0f, 0.2f, 1.0f))
-		ui_label(S("Brute force test passed."));
+		ui_row_label(&builder, S("Brute force test passed."));
 
 		debugger->brute_force_triggered_success_timer -= ui->dt;
 	}
@@ -384,7 +400,7 @@ void editor_do_convex_hull_debugger_window(editor_convex_hull_debugger_t *debugg
 	if (debugger->brute_force_triggered_error_timer > 0.0f)
 	{
 		UI_Color(UiColor_text, COLORF_RED)
-		ui_label(S("BRUTE FORCE TEST FOUND A DEGENERATE HULL!?!?!"));
+		ui_row_label(&builder, S("BRUTE FORCE TEST FOUND A DEGENERATE HULL!?!?!"));
 
 		debugger->brute_force_triggered_error_timer -= ui->dt;
 	}
@@ -392,44 +408,44 @@ void editor_do_convex_hull_debugger_window(editor_convex_hull_debugger_t *debugg
 	if (degenerate_hull)
 	{
 		UI_Color(UiColor_text, COLORF_RED)
-		ui_label(S("!! DEGENERATE CONVEX HULL !!"));
+		ui_row_label(&builder, S("!! DEGENERATE CONVEX HULL !!"));
 		if (triangle_is_degenerate[0])
 		{
 			UI_Color(UiColor_text, COLORF_RED)
-			ui_label(S("THE FIRST TRIANGLE IS DEGENERATE, THAT'S NO GOOD"));
+			ui_row_label(&builder, S("THE FIRST TRIANGLE IS DEGENERATE, THAT'S NO GOOD"));
 		}
-		ui_label(Sf("Degenerate Triangle Count: %d", degenerate_triangle_count));
+		ui_row_label(&builder, Sf("Degenerate Triangle Count: %d", degenerate_triangle_count));
 	}
 
 	if (duplicate_triangle_count > 0)
 	{
 		UI_Color(UiColor_text, COLORF_ORANGE)
-		ui_label(Sf("There are %d duplicate triangles!", duplicate_triangle_count));
+		ui_row_label(&builder, Sf("There are %d duplicate triangles!", duplicate_triangle_count));
 	}
 
 	if (no_area_triangle_count > 0)
 	{
 		UI_Color(UiColor_text, COLORF_ORANGE)
-		ui_label(Sf("There are %d triangles with (nearly) 0 area!", no_area_triangle_count));
+		ui_row_label(&builder, Sf("There are %d triangles with (nearly) 0 area!", no_area_triangle_count));
 		if (triangle_is_degenerate[0])
 		{
 			UI_Color(UiColor_text, COLORF_ORANGE)
-			ui_label(S("The first triangle has no area, which seems bad"));
+			ui_row_label(&builder, S("The first triangle has no area, which seems bad"));
 		}
 	}
 
 	if (debug->step_count > 0)
 	{
-		ui_seperator();
-		ui_header(S("Step-By-Step Visualizer"));
-		ui_checkbox(S("Show initial points"), &debugger->show_points);
-		ui_checkbox(S("Show processed edge"), &debugger->show_processed_edge);
-		ui_checkbox(S("Show non-processed edges"), &debugger->show_non_processed_edges);
-		ui_checkbox(S("Show new triangle"), &debugger->show_new_triangle);
-		ui_checkbox(S("Show all triangles"), &debugger->show_triangles);
-		ui_checkbox(S("Show duplicate triangles"), &debugger->show_duplicate_triangles);
-		ui_checkbox(S("Show wireframe"), &debugger->show_wireframe);
-		ui_slider_int(S("Step"), &debugger->current_step_index, 0, (int)(debugger->debug.step_count));
+		// ui_seperator();
+		ui_row_header(&builder, S("Step-By-Step Visualizer"));
+		ui_row_checkbox(&builder, S("Show initial points"), &debugger->show_points);
+		ui_row_checkbox(&builder, S("Show processed edge"), &debugger->show_processed_edge);
+		ui_row_checkbox(&builder, S("Show non-processed edges"), &debugger->show_non_processed_edges);
+		ui_row_checkbox(&builder, S("Show new triangle"), &debugger->show_new_triangle);
+		ui_row_checkbox(&builder, S("Show all triangles"), &debugger->show_triangles);
+		ui_row_checkbox(&builder, S("Show duplicate triangles"), &debugger->show_duplicate_triangles);
+		ui_row_checkbox(&builder, S("Show wireframe"), &debugger->show_wireframe);
+		ui_row_slider_int(&builder, S("Step"), &debugger->current_step_index, 0, (int)(debugger->debug.step_count));
 
 		if (debugger->current_step_index > (int)debugger->debug.step_count)
 			debugger->current_step_index = (int)debugger->debug.step_count;
@@ -449,10 +465,10 @@ void editor_do_convex_hull_debugger_window(editor_convex_hull_debugger_t *debugg
 
 		if (ALWAYS(step))
 		{
-			ui_label(Sf("edge count: %zu", step->edge_count));
-			ui_label(Sf("triangle count: %zu", step->triangle_count));
+			ui_row_label(&builder, Sf("edge count: %zu", step->edge_count));
+			ui_row_label(&builder, Sf("triangle count: %zu", step->triangle_count));
 
-			ui_slider_int(S("Test Tetrahedron Index"), &debugger->test_tetrahedron_index, -1, (int)(debug->initial_points_count) - 1);
+			ui_row_slider_int(&builder, S("Test Tetrahedron Index"), &debugger->test_tetrahedron_index, -1, (int)(debug->initial_points_count) - 1);
 
 			if (debugger->test_tetrahedron_index > (int)debug->initial_points_count - 1)
 				debugger->test_tetrahedron_index = (int)debug->initial_points_count - 1;
@@ -465,14 +481,14 @@ void editor_do_convex_hull_debugger_window(editor_convex_hull_debugger_t *debugg
 				v3_t p = debug->initial_points[debugger->test_tetrahedron_index];
 
 				float volume = tetrahedron_signed_volume(t.a, t.b, t.c, p);
-				ui_label(Sf("Tetrahedron Volume: %f", volume));
+				ui_row_label(&builder, Sf("Tetrahedron Volume: %f", volume));
 
 				float area = triangle_area_sq(t.a, t.b, p);
-				ui_label(Sf("Squared Triangle Area: %f", area));
+				ui_row_label(&builder, Sf("Squared Triangle Area: %f", area));
 			}
 		}
 	}
 
-	debugger->initialized = true;
+	ui_scrollable_region_end(scroll_region_id, builder.rect);
 }
 

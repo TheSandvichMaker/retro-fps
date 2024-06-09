@@ -4,6 +4,8 @@
 
 rect2_t ui_scrollable_region_begin_ex(ui_id_t id, rect2_t start_rect, ui_scrollable_region_flags_t flags)
 {
+	ui_validate_widget(id);
+
 	ui_scrollable_region_state_t *state = ui_get_state(id, NULL, ui_scrollable_region_state_t);
 	state->flags      = flags;
 	state->start_rect = start_rect;
@@ -106,7 +108,7 @@ void ui_scrollable_region_end(ui_id_t id, rect2_t final_rect)
 // Header
 //
 
-void ui_header_new(rect2_t rect, string_t label)
+void ui_header(rect2_t rect, string_t label)
 {
 	ui_push_clip_rect(rect);
 
@@ -120,7 +122,7 @@ void ui_header_new(rect2_t rect, string_t label)
 // Label
 //
 
-void ui_label_new(rect2_t rect, string_t label)
+void ui_label(rect2_t rect, string_t label)
 {
 	ui_push_clip_rect(rect);
 
@@ -134,7 +136,7 @@ void ui_label_new(rect2_t rect, string_t label)
 // Progress Bar
 //
 
-void ui_progress_bar_new(rect2_t rect, string_t label, float progress)
+void ui_progress_bar(rect2_t rect, string_t label, float progress)
 {
 	rect2_t filled, tray;
 	rect2_cut_from_left(rect, ui_sz_pct(progress), &filled, &tray);
@@ -149,9 +151,10 @@ void ui_progress_bar_new(rect2_t rect, string_t label, float progress)
 // Button
 //
 
-bool ui_button_new(rect2_t rect, string_t label)
+bool ui_button(rect2_t rect, string_t label)
 {
 	ui_id_t id = ui_id(label);
+	ui_validate_widget(id);
 
 	bool result = false;
 
@@ -231,9 +234,10 @@ bool ui_button_new(rect2_t rect, string_t label)
 // Checkbox
 //
 
-bool ui_checkbox_new(rect2_t rect, bool *result_value)
+bool ui_checkbox(rect2_t rect, bool *result_value)
 {
 	ui_id_t id = ui_id_pointer(result_value);
+	ui_validate_widget(id);
 
 	bool result = false;
 
@@ -354,7 +358,7 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 		// @UiRoundednessHack
 		UI_Scalar(UiScalar_roundedness, 0.0f)
 		UI_Color (UiColor_roundedness, make_v4(0, 0, roundedness, roundedness))
-		if (ui_button_new(dec, S("-")))
+		if (ui_button(dec, S("-")))
 		{
 			delta = -1;
 		}
@@ -362,7 +366,7 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 		// @UiRoundednessHack
 		UI_Scalar(UiScalar_roundedness, 0.0f)
 		UI_Color (UiColor_roundedness, make_v4(roundedness, roundedness, 0, 0))
-		if (ui_button_new(inc, S("+")))
+		if (ui_button(inc, S("+")))
 		{
 			delta =  1;
 		}
@@ -476,7 +480,7 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 	ui_pop_id();
 }
 
-bool ui_slider_new_ex(rect2_t rect, float *v, float min, float max, float granularity, ui_slider_flags_new_t flags)
+bool ui_slider_ex(rect2_t rect, float *v, float min, float max, float granularity, ui_slider_flags_t flags)
 {
 	if (NEVER(!ui->initialized)) 
 		return false;
@@ -487,6 +491,7 @@ bool ui_slider_new_ex(rect2_t rect, float *v, float min, float max, float granul
 	float init_v = *v;
 
 	ui_id_t id = ui_id_pointer(v);
+	ui_validate_widget(id);
 
 	// @UiHoverable
 	ui_hoverable(id, rect);
@@ -508,12 +513,12 @@ bool ui_slider_new_ex(rect2_t rect, float *v, float min, float max, float granul
 	return *v != init_v;
 }
 
-bool ui_slider_new(rect2_t rect, float *v, float min, float max)
+bool ui_slider(rect2_t rect, float *v, float min, float max)
 {
-	return ui_slider_new_ex(rect, v, min, max, 0.01f, 0);
+	return ui_slider_ex(rect, v, min, max, 0.01f, 0);
 }
 
-bool ui_slider_int_new_ex(rect2_t rect, int32_t *v, int32_t min, int32_t max, ui_slider_flags_new_t flags)
+bool ui_slider_int_ex(rect2_t rect, int32_t *v, int32_t min, int32_t max, ui_slider_flags_t flags)
 {
 	if (NEVER(!ui->initialized)) 
 		return false;
@@ -524,6 +529,7 @@ bool ui_slider_int_new_ex(rect2_t rect, int32_t *v, int32_t min, int32_t max, ui
 	int32_t init_v = *v;
 
 	ui_id_t id = ui_id_pointer(v);
+	ui_validate_widget(id);
 
 	// @UiHoverable
 	ui_hoverable(id, rect);
@@ -544,9 +550,9 @@ bool ui_slider_int_new_ex(rect2_t rect, int32_t *v, int32_t min, int32_t max, ui
 	return *v != init_v;
 }
 
-bool ui_slider_int_new(rect2_t rect, int32_t *v, int32_t min, int32_t max)
+bool ui_slider_int(rect2_t rect, int32_t *v, int32_t min, int32_t max)
 {
-	return ui_slider_int_new_ex(rect, v, min, max, UiSliderFlags_inc_dec_buttons);
+	return ui_slider_int_ex(rect, v, min, max, UiSliderFlags_inc_dec_buttons);
 }
 
 //
@@ -600,6 +606,8 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 	m_scope_begin(temp);
 
 	ui_id_t id = ui_id_pointer(buffer);
+	ui_validate_widget(id);
+
 	ui_push_id(id);
 
 	ui_hoverable(id, rect);

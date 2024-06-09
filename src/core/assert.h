@@ -34,3 +34,27 @@ void fatal_error_va(int line, string_t file, const char *fmt, va_list args);
 
 #define ARRAY_AT(array, index) (*(ASSERT((index) >= 0 && ((index) < ARRAY_COUNT(array))), &array[index]))
 #define ARRAY_AT_N(array, index, n) (*(ASSERT((index) >= 0 && ((index) < (n))), &array[index]))
+
+#define DEBUG_BREAK() __debugbreak()
+
+typedef struct debug_break_state_t
+{
+	bool triggered;
+} debug_break_state_t;
+
+// TODO: This could have the debug break register itself to some global table
+// so that the triggered state of them could be reset / inhibited through UI.
+#define DEBUG_BREAK_ONCE(out_debug_break_state)                       \
+	do                                                                \
+	{                                                                 \
+		static debug_break_state_t MACRO_IDENT(debug_break_state);    \
+		if (!MACRO_IDENT(debug_break_state).triggered)                \
+		{                                                             \
+			DEBUG_BREAK();                                            \
+			MACRO_IDENT(debug_break_state).triggered = true;          \
+		}                                                             \
+		if (out_debug_break_state)                                    \
+		{                                                             \
+			*out_debug_break_state = &MACRO_IDENT(debug_break_state); \
+		}                                                             \
+	} while (false)

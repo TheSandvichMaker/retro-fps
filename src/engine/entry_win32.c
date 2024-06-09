@@ -613,8 +613,7 @@ int wWinMain(HINSTANCE instance,
     GetCursorPos(&prev_cursor_point);
     ScreenToClient(window, &prev_cursor_point);
 
-	platform_cursor_t cursor      = Cursor_arrow;
-	platform_cursor_t last_cursor = cursor;
+	platform_cursor_t last_cursor = Cursor_arrow;
 
 	win32_input_context_t input_context = {
 		.arena             = &win32_arena,
@@ -675,14 +674,7 @@ int wWinMain(HINSTANCE instance,
 
 		//
 
-		// if (frame_time > 0.25)
-		// {
-		// 	frame_time = 0.25;
-		// }
-
 		current_time = new_time;
-
-		// accumulator += frame_time;
 
 		//
 		// input
@@ -728,6 +720,7 @@ int wWinMain(HINSTANCE instance,
 		};
 
 		hooks.tick(&tick_io);
+		platform_cursor_t cursor = tick_io.cursor;
 
 		if (tick_io.request_exit)
 		{
@@ -741,28 +734,31 @@ int wWinMain(HINSTANCE instance,
 			win32_lock_cursor(&input_context, window, tick_io.cursor_locked);
 		}
 
-		if (input_context.cursor_is_in_client_rect)
+		if (cursor != last_cursor)
 		{
-			if (cursor == Cursor_none)
+			if (input_context.cursor_is_in_client_rect)
 			{
-				SetCursor(NULL);
-			}
-			else
-			{
-				wchar_t *win32_cursor = IDC_ARROW;
-				switch (cursor)
+				if (cursor == Cursor_none)
 				{
-					case Cursor_arrow:       win32_cursor = IDC_ARROW;    break;
-					case Cursor_text_input:  win32_cursor = IDC_IBEAM;    break;
-					case Cursor_resize_all:  win32_cursor = IDC_SIZEALL;  break;
-					case Cursor_resize_ew:   win32_cursor = IDC_SIZEWE;   break;
-					case Cursor_resize_ns:   win32_cursor = IDC_SIZENS;   break;
-					case Cursor_resize_nesw: win32_cursor = IDC_SIZENESW; break;
-					case Cursor_resize_nwse: win32_cursor = IDC_SIZENWSE; break;
-					case Cursor_hand:        win32_cursor = IDC_HAND;     break;
-					case Cursor_not_allowed: win32_cursor = IDC_NO;       break;
+					SetCursor(NULL);
 				}
-				SetCursor(LoadCursor(NULL, win32_cursor));
+				else
+				{
+					wchar_t *win32_cursor = IDC_ARROW;
+					switch (cursor)
+					{
+						case Cursor_arrow:       win32_cursor = IDC_ARROW;    break;
+						case Cursor_text_input:  win32_cursor = IDC_IBEAM;    break;
+						case Cursor_resize_all:  win32_cursor = IDC_SIZEALL;  break;
+						case Cursor_resize_ew:   win32_cursor = IDC_SIZEWE;   break;
+						case Cursor_resize_ns:   win32_cursor = IDC_SIZENS;   break;
+						case Cursor_resize_nesw: win32_cursor = IDC_SIZENESW; break;
+						case Cursor_resize_nwse: win32_cursor = IDC_SIZENWSE; break;
+						case Cursor_hand:        win32_cursor = IDC_HAND;     break;
+						case Cursor_not_allowed: win32_cursor = IDC_NO;       break;
+					}
+					SetCursor(LoadCursor(NULL, win32_cursor));
+				}
 			}
 		}
 		last_cursor = cursor;

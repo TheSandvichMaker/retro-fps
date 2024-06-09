@@ -48,13 +48,13 @@ void ui_row_header(ui_row_builder_t *builder, string_t label)
 	float height = ui_font(UiFont_header)->height;
 
 	rect2_t row = ui_row_ex(builder, height, true);
-	ui_header_new(row, label);
+	ui_header(row, label);
 }
 
 void ui_row_label(ui_row_builder_t *builder, string_t label)
 {
 	rect2_t rect = ui_row(builder);
-	ui_label_new(rect, label);
+	ui_label(rect, label);
 }
 
 fn void ui_row_progress_bar(ui_row_builder_t *builder, string_t label, float progress)
@@ -62,13 +62,13 @@ fn void ui_row_progress_bar(ui_row_builder_t *builder, string_t label, float pro
 	float height = 0.75f*ui_default_row_height();
 
 	rect2_t rect = ui_row_ex(builder, height, false);
-	ui_progress_bar_new(rect, label, progress);
+	ui_progress_bar(rect, label, progress);
 }
 
 bool ui_row_button(ui_row_builder_t *builder, string_t label)
 {
 	rect2_t rect = ui_row(builder);
-	return ui_button_new(rect, label);
+	return ui_button(rect, label);
 }
 
 bool ui_row_radio_buttons(ui_row_builder_t *builder, string_t label, int *state, string_t *option_labels, int option_count)
@@ -76,7 +76,7 @@ bool ui_row_radio_buttons(ui_row_builder_t *builder, string_t label, int *state,
 	rect2_t label_rect, widget_rect;
 	ui_row_split(builder, &label_rect, &widget_rect);
 
-	ui_label_new(label_rect, label);
+	ui_label(label_rect, label);
 
 	int current_state = state ? *state : 0;
 	int new_state = current_state;
@@ -108,7 +108,7 @@ bool ui_row_radio_buttons(ui_row_builder_t *builder, string_t label, int *state,
 			UI_Scalar          (UiScalar_roundedness, 0.0f)
 			UI_Color           (UiColor_roundedness, roundedness)
 			UI_ColorConditional(UiColor_button_idle, ui_color(UiColor_button_active), active)
-			if (ui_button_new(button_rect, option_labels[i]))
+			if (ui_button(button_rect, option_labels[i]))
 			{
 				new_state = i;
 			}
@@ -133,18 +133,18 @@ bool ui_row_checkbox(ui_row_builder_t *builder, string_t label, bool *v)
 	rect2_cut_from_left(row, ui_sz_aspect(1.0f),                           &checkbox_rect, &row);
 	rect2_cut_from_left(row, ui_sz_pix(ui_scalar(UiScalar_widget_margin)), NULL,           &row);
 
-	ui_label_new(row, label);
-	return ui_checkbox_new(checkbox_rect, v);
+	ui_label(row, label);
+	return ui_checkbox(checkbox_rect, v);
 #else
 	rect2_t label_rect, widget_rect;
 	ui_row_split(builder, &label_rect, &widget_rect);
 
-	ui_label_new(label_rect, label);
+	ui_label(label_rect, label);
 
 	rect2_t checkbox_rect;
 	rect2_cut_from_right(widget_rect, ui_sz_aspect(1.0f), &checkbox_rect, NULL);
 
-	return ui_checkbox_new(checkbox_rect, v);
+	return ui_checkbox(checkbox_rect, v);
 #endif
 }
 
@@ -153,8 +153,17 @@ bool ui_row_slider_int(ui_row_builder_t *builder, string_t label, int *v, int mi
 	rect2_t label_rect, widget_rect;
 	ui_row_split(builder, &label_rect, &widget_rect);
 
-	ui_label_new(label_rect, label);
-	return ui_slider_int_new(widget_rect, v, min, max);
+	ui_label(label_rect, label);
+	return ui_slider_int(widget_rect, v, min, max);
+}
+
+bool ui_row_slider_int_ex(ui_row_builder_t *builder, string_t label, int *v, int min, int max, ui_slider_flags_t flags)
+{
+	rect2_t label_rect, widget_rect;
+	ui_row_split(builder, &label_rect, &widget_rect);
+
+	ui_label(label_rect, label);
+	return ui_slider_int_ex(widget_rect, v, min, max, flags);
 }
 
 bool ui_row_slider(ui_row_builder_t *builder, string_t label, float *f, float min, float max)
@@ -162,8 +171,17 @@ bool ui_row_slider(ui_row_builder_t *builder, string_t label, float *f, float mi
 	rect2_t label_rect, widget_rect;
 	ui_row_split(builder, &label_rect, &widget_rect);
 
-	ui_label_new(label_rect, label);
-	return ui_slider_new(widget_rect, f, min, max);
+	ui_label(label_rect, label);
+	return ui_slider(widget_rect, f, min, max);
+}
+
+bool ui_row_slider_ex(ui_row_builder_t *builder, string_t label, float *f, float min, float max, float granularity)
+{
+	rect2_t label_rect, widget_rect;
+	ui_row_split(builder, &label_rect, &widget_rect);
+
+	ui_label(label_rect, label);
+	return ui_slider_ex(widget_rect, f, min, max, granularity, 0);
 }
 
 void ui_row_text_edit(ui_row_builder_t *builder, string_t label, dynamic_string_t *buffer)
@@ -171,6 +189,6 @@ void ui_row_text_edit(ui_row_builder_t *builder, string_t label, dynamic_string_
 	rect2_t label_rect, widget_rect;
 	ui_row_split(builder, &label_rect, &widget_rect);
 
-	ui_label_new(label_rect, label);
+	ui_label(label_rect, label);
 	ui_text_edit(widget_rect, buffer);
 }

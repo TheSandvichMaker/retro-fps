@@ -1,7 +1,10 @@
 void update_and_draw_console(console_t *console, v2_t resolution, float dt)
 {
 	(void)dt;
+	(void)console;
+	(void)resolution;
 
+#if 0
 	float line_spacing = ui_default_row_height();
 
 	float console_height = 17.0f*line_spacing;
@@ -126,4 +129,5 @@ void update_and_draw_console(console_t *console, v2_t resolution, float dt)
 	}
 
 	ui_unequip_layout();
+#endif
 }

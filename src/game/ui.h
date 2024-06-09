@@ -63,6 +63,13 @@ fn_local bool ui_id_equal(ui_id_t a, ui_id_t b)
 	return a.value == b.value;
 }
 
+fn void ui_validate_widget_(ui_id_t id, const char *description);
+#define ui_validate_widget(id) ui_validate_widget_(id, __func__)
+
+// TODO: begin/end validation
+// fn void ui_validate_widget_begin(ui_id_t id, string_t description);
+// fn void ui_validate_widget_end  (ui_id_t id, string_t description);
+
 fn void ui_set_next_id(ui_id_t id);
 fn void ui_push_id    (ui_id_t id);
 fn void ui_pop_id     (void);
@@ -155,44 +162,6 @@ fn float       ui_mouse_wheel    (bool consume);
 
 /* external use */
 fn void ui_push_input_event(const ui_event_t *event);
-
-//
-// Panels
-//
-
-typedef uint32_t ui_panel_flags_t;
-
-typedef struct ui_panel_t
-{
-	union
-	{
-		struct ui_panel_t *parent;
-		struct ui_panel_t *next_free;
-	};
-
-	ui_id_t          id;
-
-	ui_panel_flags_t flags;
-
-	rect2_cut_side_t layout_direction;
-	rect2_t          rect_init;
-	rect2_t          rect_layout;
-} ui_panel_t;
-
-typedef struct ui_panels_t
-{
-	ui_panel_t *current_panel;
-	ui_panel_t *first_free_panel;
-} ui_panels_t;
-
-fn ui_panel_t *ui_push_panel(ui_id_t id, rect2_t rect, ui_panel_flags_t flags);
-fn void        ui_pop_panel (void);
-fn ui_panel_t *ui_panel     (void);
-
-fn rect2_t *ui_layout_rect         (void);
-fn void     ui_set_layout_direction(rect2_cut_side_t side);
-fn void     ui_set_next_rect       (rect2_t rect);
-fn float    ui_divide_space        (float item_count);
 
 // layout helpers
 fn float   ui_widget_padding    (void);
@@ -429,6 +398,7 @@ fn float   ui_button_style_hover_lift (ui_id_t id);
 fn rect2_t ui_cut_widget_rect         (v2_t min_size);
 fn float   ui_roundedness_ratio       (rect2_t rect);
 fn float   ui_roundedness_ratio_to_abs(rect2_t rect, float ratio);
+fn v4_t    ui_animate_colors          (ui_id_t id, uint32_t interaction, v4_t cold, v4_t hot, v4_t active, v4_t fired);
 
 typedef uint32_t ui_interaction_t;
 typedef enum ui_interaction_enum_t
@@ -455,47 +425,8 @@ fn ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect);
 // Base Widgets
 //
 
-typedef struct ui_panel_state_t
-{
-	float scrollable_height_x;
-	float scrollable_height_y;
-	float scroll_offset_x;
-	float scroll_offset_y;
-} ui_panel_state_t;
-
-typedef enum ui_panel_flags_enum_t
-{
-	UI_PANEL_SCROLLABLE_HORZ = 0x1,
-	UI_PANEL_SCROLLABLE_VERT = 0x2,
-} ui_panel_flags_enum_t;
-
-fn void ui_panel_begin   (rect2_t rect);
-fn void ui_panel_begin_ex(ui_id_t id, rect2_t rect, ui_panel_flags_t flags);
-fn void ui_panel_end     (void);
-
-#define UI_PANEL(rect) DEFER_LOOP(ui_panel_begin(rect), ui_panel_end())
-
-typedef uint32_t ui_slider_flags_t;
-typedef enum ui_slider_flags_enum_t
-{
-	UI_SLIDER_FLAGS_INC_DEC_BUTTONS = 0x1,
-} ui_slider_flags_enum_t;
-
-fn void ui_seperator     (void);
-fn void ui_label         (string_t text);
-fn void ui_header        (string_t text);
-fn void ui_progress_bar  (string_t text, float progress);
-fn bool ui_button        (string_t text);
-fn bool ui_checkbox      (string_t text, bool *value);
-fn bool ui_option_buttons(string_t text, int *value, int count, string_t *names);
-fn bool ui_combo_box     (string_t text, size_t *selected_index, size_t count, string_t *names);
-fn bool ui_slider        (string_t text, float *value, float min, float max);
-fn bool ui_slider_ex     (string_t label, float *v, float min, float max, float granularity);
-fn bool ui_slider_int    (string_t text, int *value, int min, int max);
-fn bool ui_slider_int_ex (string_t text, int *value, int min, int max, ui_slider_flags_t flags);
-fn void ui_tooltip       (string_t text);
-fn void ui_hover_tooltip (string_t text);
-
+fn void ui_tooltip(string_t text);
+fn void ui_hover_tooltip(string_t text);
 fn bool ui_popup_is_open(ui_id_t id);
 fn void ui_open_popup(ui_id_t id);
 fn void ui_close_popup(ui_id_t id);
@@ -634,6 +565,8 @@ typedef struct ui_t
 
 	ui_id_t focused_id;
 
+	table_t widget_validation_table;
+
 	v2_t    drag_anchor;
 	v2_t    drag_offset;
 	rect2_t resize_original_rect;
@@ -662,7 +595,6 @@ typedef struct ui_t
 	ui_event_queue_t queued_input;
 	ui_input_t       input;
 
-	ui_panels_t  panels;
 	ui_style_t   style;
 
 	debug_notif_t *first_debug_notif;

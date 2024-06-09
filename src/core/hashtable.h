@@ -26,8 +26,9 @@ typedef struct table_t
     table_entry_t *entries;
 } table_t;
 
-fn bool table_find          (const table_t *table, uint64_t key, uint64_t *value);
-fn void table_insert        (      table_t *table, uint64_t key, uint64_t  value);
+fn bool table_find_entry    (const table_t *table, uint64_t key, uint64_t **value);
+fn bool table_find          (const table_t *table, uint64_t key, uint64_t  *value);
+fn void table_insert        (      table_t *table, uint64_t key, uint64_t   value);
 fn bool table_remove        (      table_t *table, uint64_t key);
 
 fn void *table_find_object  (const table_t *table, uint64_t key);

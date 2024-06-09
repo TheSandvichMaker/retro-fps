@@ -51,6 +51,7 @@
 #define DEG_TO_RAD (PI32 / 180.0f)
 #define RAD_TO_DEG (180.0f / PI32)
 #define PAD(n) char PASTE(pad__, __LINE__)[n]
+#define MACRO_IDENT(ident) PASTE(ident, __LINE__)
 
 #define MASK_BITS(n) ((1 << ((n) + 1)) - 1)
 #define TOGGLE_BIT(x, n, b) ((b) ? ((x)|(n)) : ((x)&~(n)))
