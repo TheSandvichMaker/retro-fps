@@ -494,6 +494,7 @@ bool ui_slider_new_ex(rect2_t rect, float *v, float min, float max, float granul
 	ui_slider_params_t p = {
 		.type  = UiSlider_f32,
 		.flags = flags,
+		.increment_amount = 1,
 		.f32 = {
 			.granularity = granularity,
 			.v           = v,
@@ -530,6 +531,7 @@ bool ui_slider_int_new_ex(rect2_t rect, int32_t *v, int32_t min, int32_t max, ui
 	ui_slider_params_t p = {
 		.type  = UiSlider_i32,
 		.flags = flags,
+		.increment_amount = 1,
 		.i32 = {
 			.v           = v,
 			.min         = min,

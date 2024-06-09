@@ -13,7 +13,8 @@ void editor_do_lightmap_window(editor_lightmap_state_t *lm_editor, editor_window
 
 	rect = rect2_shrink(rect, 1.0f);
 
-	rect2_t content_rect = ui_scrollable_region_begin_ex(ui_id_pointer(lm_editor), rect, scroll_flags);
+	ui_id_t scroll_region_id = ui_child_id(ui_id_pointer(lm_editor), S("scroll_region"));
+	rect2_t content_rect = ui_scrollable_region_begin_ex(scroll_region_id, rect, scroll_flags);
 
 	content_rect = rect2_shrink(content_rect, 1.0f);
 
@@ -339,7 +340,7 @@ void editor_do_lightmap_window(editor_lightmap_state_t *lm_editor, editor_window
 		ui_row_label(&builder, S("useless label!"));
 	}
 
-	ui_scrollable_region_end(ui_id_pointer(lm_editor), builder.rect);
+	ui_scrollable_region_end(scroll_region_id, builder.rect);
 }
 
 /*

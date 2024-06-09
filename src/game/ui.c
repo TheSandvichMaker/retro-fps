@@ -961,23 +961,27 @@ fn_local void ui_do_rect(r_ui_rect_t rect)
 {
 	rect.clip_rect = ui_get_clip_rect();
 
-	v2_t  dim             = rect2_dim(rect.rect);
-	float max_roundedness = mul(0.5f, min(dim.x, dim.y));
+	rect2_t clip_rect = rect2_from_fixed(rect.clip_rect);
+	if (rect2_area(rect2_intersect(rect.rect, clip_rect)) > 0.0f)
+	{
+		v2_t  dim             = rect2_dim(rect.rect);
+		float max_roundedness = mul(0.5f, min(dim.x, dim.y));
 
-	rect.roundedness.x = min(rect.roundedness.x, max_roundedness);
-	rect.roundedness.z = min(rect.roundedness.z, max_roundedness);
-	rect.roundedness.y = min(rect.roundedness.y, max_roundedness);
-	rect.roundedness.w = min(rect.roundedness.w, max_roundedness);
+		rect.roundedness.x = min(rect.roundedness.x, max_roundedness);
+		rect.roundedness.z = min(rect.roundedness.z, max_roundedness);
+		rect.roundedness.y = min(rect.roundedness.y, max_roundedness);
+		rect.roundedness.w = min(rect.roundedness.w, max_roundedness);
 
-	ui_push_command(
-		(ui_render_command_key_t){
-			.layer  = ui->render_layer,
-			.window = 0,
-		},
-		&(ui_render_command_t){
-			.rect = rect,
-		}
-	);
+		ui_push_command(
+			(ui_render_command_key_t){
+				.layer  = ui->render_layer,
+				.window = 0,
+			},
+			&(ui_render_command_t){
+				.rect = rect,
+			}
+		);
+	}
 }
 
 void ui_draw_rect(rect2_t rect, v4_t color)

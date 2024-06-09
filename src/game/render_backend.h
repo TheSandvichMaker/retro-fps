@@ -273,6 +273,7 @@ typedef struct r_rect2_fixed_t
 } r_rect2_fixed_t;
 
 fn r_rect2_fixed_t rect2_to_fixed(rect2_t rect);
+fn rect2_t rect2_from_fixed(r_rect2_fixed_t rect);
 fn r_rect2_fixed_t rect2_fixed_intersect(r_rect2_fixed_t a, r_rect2_fixed_t b);
 
 typedef enum r_ui_rect_flags_t

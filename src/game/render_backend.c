@@ -33,6 +33,17 @@ r_rect2_fixed_t rect2_to_fixed(rect2_t rect)
 	return result;
 }
 
+rect2_t rect2_from_fixed(r_rect2_fixed_t rect)
+{
+	rect2_t result = {
+		.min.x = (float)rect.min_x,
+		.min.y = (float)rect.min_y,
+		.max.x = (float)rect.max_x,
+		.max.y = (float)rect.max_y,
+	};
+	return result;
+}
+
 r_rect2_fixed_t rect2_fixed_intersect(r_rect2_fixed_t a, r_rect2_fixed_t b)
 {
 	r_rect2_fixed_t result;

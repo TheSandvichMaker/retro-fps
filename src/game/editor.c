@@ -102,24 +102,24 @@ void editor_process_windows(editor_t *editor)
 
 			ui_rect_edge_t tray_region = 0;
 
-			if (ui_is_active(id_n))  tray_region = UI_RECT_EDGE_N;
-			if (ui_is_active(id_e))  tray_region = UI_RECT_EDGE_E;
-			if (ui_is_active(id_s))  tray_region = UI_RECT_EDGE_S;
-			if (ui_is_active(id_w))  tray_region = UI_RECT_EDGE_W;
-			if (ui_is_active(id_ne)) tray_region = UI_RECT_EDGE_N|UI_RECT_EDGE_E;
-			if (ui_is_active(id_nw)) tray_region = UI_RECT_EDGE_N|UI_RECT_EDGE_W;
-			if (ui_is_active(id_se)) tray_region = UI_RECT_EDGE_S|UI_RECT_EDGE_E;
-			if (ui_is_active(id_sw)) tray_region = UI_RECT_EDGE_S|UI_RECT_EDGE_W;
+			if (ui_is_active(id_n))  tray_region = UiRectEdge_n;
+			if (ui_is_active(id_e))  tray_region = UiRectEdge_e;
+			if (ui_is_active(id_s))  tray_region = UiRectEdge_s;
+			if (ui_is_active(id_w))  tray_region = UiRectEdge_w;
+			if (ui_is_active(id_ne)) tray_region = UiRectEdge_n|UiRectEdge_e;
+			if (ui_is_active(id_nw)) tray_region = UiRectEdge_n|UiRectEdge_w;
+			if (ui_is_active(id_se)) tray_region = UiRectEdge_s|UiRectEdge_e;
+			if (ui_is_active(id_sw)) tray_region = UiRectEdge_s|UiRectEdge_w;
 
 			if (tray_region)
 			{
 				v2_t delta = sub(ui->input.mouse_p, ui->input.mouse_p_on_lmb);
 
 				window->rect = ui->resize_original_rect;
-				if (tray_region & UI_RECT_EDGE_E) window->rect = rect2_extend_right(window->rect,  delta.x);
-				if (tray_region & UI_RECT_EDGE_W) window->rect = rect2_extend_left (window->rect, -delta.x);
-				if (tray_region & UI_RECT_EDGE_N) window->rect = rect2_extend_up   (window->rect,  delta.y);
-				if (tray_region & UI_RECT_EDGE_S) window->rect = rect2_extend_down (window->rect, -delta.y);
+				if (tray_region & UiRectEdge_e) window->rect = rect2_extend_right(window->rect,  delta.x);
+				if (tray_region & UiRectEdge_w) window->rect = rect2_extend_left (window->rect, -delta.x);
+				if (tray_region & UiRectEdge_n) window->rect = rect2_extend_up   (window->rect,  delta.y);
+				if (tray_region & UiRectEdge_s) window->rect = rect2_extend_down (window->rect, -delta.y);
 
 				rect2_t min_rect = rect2_from_min_dim(window->rect.min, make_v2(64, 64));
 				window->rect = rect2_union(window->rect, min_rect);

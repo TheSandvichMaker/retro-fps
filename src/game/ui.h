@@ -204,10 +204,10 @@ fn float   ui_default_row_height(void);
 typedef uint32_t ui_rect_edge_t;
 typedef enum ui_rect_edge_enum_t
 {
-	UI_RECT_EDGE_N = (1 << 0),
-	UI_RECT_EDGE_E = (1 << 1),
-	UI_RECT_EDGE_S = (1 << 2),
-	UI_RECT_EDGE_W = (1 << 3),
+	UiRectEdge_n = (1 << 0),
+	UiRectEdge_e = (1 << 1),
+	UiRectEdge_s = (1 << 2),
+	UiRectEdge_w = (1 << 3),
 } ui_rect_edge_enum_t;
 
 //
@@ -285,7 +285,7 @@ typedef enum ui_style_scalar_t
 	// interaction
 	UiScalar_release_margin,
 
-    UiScalar_count,
+    UiScalar_COUNT,
 } ui_style_scalar_t;
 
 typedef enum ui_style_color_t
@@ -317,7 +317,7 @@ typedef enum ui_style_color_t
 	// TODO: Replace hack with something more sane
 	UiColor_roundedness,
 
-    UiColor_count,
+    UiColor_COUNT,
 } ui_style_color_t;
 
 typedef enum ui_style_font_t
@@ -332,12 +332,12 @@ typedef enum ui_style_font_t
 
 typedef struct ui_style_t
 {
-	float   base_scalars[UiScalar_count];
-	v4_t    base_colors [UiColor_count];
+	float   base_scalars[UiScalar_COUNT];
+	v4_t    base_colors [UiColor_COUNT];
 	font_t *base_fonts  [UiFont_COUNT];
 
-    stack_t(float, UI_STYLE_STACK_COUNT) scalars[UiScalar_count];
-    stack_t(v4_t,  UI_STYLE_STACK_COUNT) colors [UiColor_count];
+    stack_t(float, UI_STYLE_STACK_COUNT) scalars[UiScalar_COUNT];
+    stack_t(v4_t,  UI_STYLE_STACK_COUNT) colors [UiColor_COUNT];
 	stack_t(font_t *, UI_STYLE_STACK_COUNT) fonts[UiFont_COUNT];
 
 	string_t font_data; // so we can rebuild the font at different sizes without going out to disk
@@ -358,10 +358,12 @@ fn r_rect2_fixed_t ui_get_clip_rect(void);
 fn void  ui_push_scalar       (ui_style_scalar_t scalar, float value);
 fn float ui_pop_scalar        (ui_style_scalar_t scalar);
 
-fn void  ui_push_scalar2      (ui_style_scalar_t scalar, float value);
-fn float ui_pop_scalar2       (void);
-
 #define UI_Scalar(scalar, value) DEFER_LOOP(ui_push_scalar(scalar, value), ui_pop_scalar(scalar))
+
+#define UI_ScalarConditional(scalar, value, condition)        \
+	DEFER_LOOP(                                               \
+		(condition ? (ui_push_scalar(scalar, value), 1) : 0), \
+		(condition ? (ui_pop_scalar (scalar),        1) : 0))
 
 fn v4_t  ui_color             (ui_style_color_t color);
 fn void  ui_push_color        (ui_style_color_t color, v4_t value);
@@ -369,8 +371,8 @@ fn v4_t  ui_pop_color         (ui_style_color_t color);
 
 #define UI_Color(color, value) DEFER_LOOP(ui_push_color(color, value), ui_pop_color(color))
 
-#define UI_ColorConditional(color, value, condition)   \
-	DEFER_LOOP(                                        \
+#define UI_ColorConditional(color, value, condition)        \
+	DEFER_LOOP(                                             \
 		(condition ? (ui_push_color(color, value), 1) : 0), \
 		(condition ? (ui_pop_color (color),        1) : 0))
 
