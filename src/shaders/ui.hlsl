@@ -61,10 +61,9 @@ struct VSOut
 };
 
 VSOut MainVS(uint vertex_id       : SV_VertexID, 
-			 uint instance_offset : SV_StartInstanceLocation,
 			 uint instance_id     : SV_InstanceID)
 {
-	const UIRect rect = draw.rects.Get()[instance_offset + instance_id];
+	const UIRect rect = draw.rects.Get()[instance_id];
 
 	const float r = rect.shadow_radius + 1.0f;
 
@@ -90,7 +89,7 @@ VSOut MainVS(uint vertex_id       : SV_VertexID,
 	VSOut OUT;
 	OUT.pos   = float4(pos, 0, 1);
     OUT.uv    = uv;
-	OUT.id    = instance_offset + instance_id;
+	OUT.id    = instance_id;
 	OUT.color = color;
 	return OUT;
 }

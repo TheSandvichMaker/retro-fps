@@ -136,7 +136,7 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 	{
 		string_t source = fs_read_entire_file(temp, S("../src/shaders/shadow.hlsl"));
 
-		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("shadow.hlsl"), S("MainVS"), S("vs_6_8"));
+		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("shadow.hlsl"), S("MainVS"), S("vs_6_6"));
 
 		r1->psos.sun_shadows = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
 			.vs = vs,
@@ -159,8 +159,8 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 	{
 		string_t source = fs_read_entire_file(temp, S("../src/shaders/brush.hlsl"));
 
-		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("brush.hlsl"), S("MainVS"), S("vs_6_8"));
-		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("brush.hlsl"), S("MainPS"), S("ps_6_8"));
+		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("brush.hlsl"), S("MainVS"), S("vs_6_6"));
+		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("brush.hlsl"), S("MainPS"), S("ps_6_6"));
 
 		r1->psos.map = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
 			.debug_name = S("Map PSO"),
@@ -192,8 +192,8 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 	{
 		string_t source = fs_read_entire_file(temp, S("../src/shaders/debug_lines.hlsl"));
 
-		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("debug_lines.hlsl"), S("MainVS"), S("vs_6_8"));
-		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("debug_lines.hlsl"), S("MainPS"), S("ps_6_8"));
+		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("debug_lines.hlsl"), S("MainVS"), S("vs_6_6"));
+		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("debug_lines.hlsl"), S("MainPS"), S("ps_6_6"));
 
 		r1->psos.debug_lines = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
 			.debug_name = S("Debug Lines PSO"),
@@ -224,8 +224,8 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 	{
 		string_t source = fs_read_entire_file(temp, S("../src/shaders/post.hlsl"));
 
-		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("post.hlsl"), S("MainVS"), S("vs_6_8"));
-		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("post.hlsl"), S("MainPS"), S("ps_6_8"));
+		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("post.hlsl"), S("MainVS"), S("vs_6_6"));
+		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("post.hlsl"), S("MainPS"), S("ps_6_6"));
 
 		r1->psos.post_process = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
 			.debug_name = S("Post Process PSO"),
@@ -249,8 +249,8 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 	{
 		string_t source = fs_read_entire_file(temp, S("../src/shaders/ui.hlsl"));
 
-		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("ui.hlsl"), S("MainVS"), S("vs_6_8"));
-		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("ui.hlsl"), S("MainPS"), S("ps_6_8"));
+		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("ui.hlsl"), S("MainVS"), S("vs_6_6"));
+		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("ui.hlsl"), S("MainPS"), S("ps_6_6"));
 
 		r1->psos.ui = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
 			.debug_name = S("UI PSO"),
@@ -279,8 +279,8 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 	{
 		string_t source = fs_read_entire_file(temp, S("../src/shaders/ui.hlsl"));
 
-		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("ui.hlsl"), S("MainVS"), S("vs_6_8"));
-		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("ui.hlsl"), S("MainPS"), S("ps_6_8"));
+		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("ui.hlsl"), S("MainVS"), S("vs_6_6"));
+		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("ui.hlsl"), S("MainPS"), S("ps_6_6"));
 
 		r1->psos.ui = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
 			.debug_name = S("UI PSO"),

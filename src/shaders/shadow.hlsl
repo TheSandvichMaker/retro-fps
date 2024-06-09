@@ -12,9 +12,9 @@ struct VS_OUT
 	float4 position : SV_Position;
 };
 
-VS_OUT MainVS(uint vertex_offset : SV_StartVertexLocation, uint vertex_index : SV_VertexID)
+VS_OUT MainVS(uint vertex_index : SV_VertexID)
 {
-	float3 position = draw.positions.Get().Load(vertex_offset + vertex_index);
+	float3 position = draw.positions.Get().Load(vertex_index);
 
 	VS_OUT OUT;
 	OUT.position = mul(view.sun_matrix, float4(position, 1));
