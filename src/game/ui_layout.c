@@ -75,7 +75,7 @@ rect2_t layout_place_widget(v2_t widget_size)
 
 	if (layout->prepared_rect_count > 0)
 	{
-		DEBUG_ASSERT_MSG(!layout->wants_justify, "You can't justify and have prepared rects at the same time.");
+		DEBUG_ASSERT_MSG(!layout->flow == Flow_justify, "You can't justify and have prepared rects at the same time.");
 
 		ui_prepared_rect_t *prep = sll_pop(layout->first_prepared_rect);
 		layout->prepared_rect_count -= 1;
@@ -91,16 +91,21 @@ rect2_t layout_place_widget(v2_t widget_size)
 		prep->next = ui->first_free_prepared_rect;
 		ui->first_free_prepared_rect = prep;
 	}
-	else if (layout->wants_justify)
+	else if (layout->flow == Flow_justify)
 	{
 		// justify stuff
 		rect = layout_make_justified_rect(widget_size);
 	}
 	else
 	{
+		ui_axis_t axis = ui_flow_axis(layout->flow);
+
 		// cut stuff, maybe insert margins here somehow
-		rect2_cut(layout->rect, layout->flow, ui_sz_pix(widget_size.e[layout->flow_axis]), &rect, &layout->rect);
+		rect2_cut(layout->rect, layout->flow, ui_sz_pix(widget_size.e[axis]), &rect, &layout->rect);
 	}
+
+	ui_size_t margin = ui_sz_pix(ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+	rect = rect2_cut_margins(rect, margin);
 
 	return rect;
 }
@@ -109,7 +114,7 @@ rect2_t layout_make_justified_rect(v2_t leaf_dim)
 {
 	ui_layout_t *layout = ui_get_layout();
 
-	DEBUG_ASSERT_MSG(layout->wants_justify, "Don't call this function if you don't want a justified rect!");
+	DEBUG_ASSERT_MSG(layout->flow == Flow_justify, "Don't call this function if you don't want a justified rect!");
 
 	float justify_x = layout->justify_x;
 	float justify_y = layout->justify_y;
@@ -132,30 +137,6 @@ rect2_t layout_make_justified_rect(v2_t leaf_dim)
 	layout->rect = (rect2_t){0};
 
 	return result;
-}
-
-void layout_begin_justify(const ui_layout_justify_t *justify)
-{
-	ui_layout_t *layout = ui_get_layout();
-
-	DEBUG_ASSERT_MSG(layout->wants_justify, "layout_begin/end_justify do not currently handle nested calls properly");
-
-	layout->wants_justify = true;
-	layout->justify_x = justify->x;
-	layout->justify_y = justify->y;
-}
-
-void layout_end_justify(void)
-{
-	ui_layout_t *layout = ui_get_layout();
-
-	DEBUG_ASSERT_MSG(layout->wants_justify, 
-					 "you should call layout_begin_justify before calling layout_end_justify "
-					 "(and they don't handle nested calls properly)");
-
-	layout->wants_justify = false;
-	layout->justify_x = -1.0f;
-	layout->justify_y = -1.0f;
 }
 
 ui_layout_flow_t layout_begin_flow(ui_layout_flow_t flow)
@@ -217,6 +198,9 @@ ui_layout_cut_restore_t layout_begin_cut_internal(const ui_layout_cut_t *cut)
 	if (cut->margin_x.kind != UiSize_none) layout->rect = rect2_cut_margins_horizontally(layout->rect, cut->margin_x);
 	if (cut->margin_y.kind != UiSize_none) layout->rect = rect2_cut_margins_vertically  (layout->rect, cut->margin_y);
 
+	layout->justify_x = cut->justify_x;
+	layout->justify_y = cut->justify_y;
+
 	//
 	// create "restore" data
 	//
@@ -234,8 +218,8 @@ void layout_end_cut_internal(ui_layout_cut_restore_t *restore)
 {
 	ui_layout_t *layout = ui_get_layout();
 
-	layout->rect = restore->rect;
-	layout->flow = restore->flow;
+	layout->rect         = restore->rect;
+	layout->flow         = restore->flow;
 
 	if (restore->pushed_clip_rect)
 	{

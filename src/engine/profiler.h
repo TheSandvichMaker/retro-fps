@@ -43,7 +43,7 @@ extern profiler_slot_t  profiler_slots[];
 
 #define CREATE_PROFILER_TABLE profiler_slot_t profiler_slots[__COUNTER__ + 1]; uint64_t profiler_slots_count = __COUNTER__;
 
-#define PROF__VAR(var) CONCAT(Prof__, var)
+#define PROF__VAR(var) PASTE(Prof__, var)
 #define PROF__ID (__COUNTER__ + 1)
 
 #define PROFILE_BEGIN_INTERNAL_(in_variable, in_tag, in_id, in_bytes)     \
@@ -99,11 +99,6 @@ extern profiler_slot_t  profiler_slots[];
 
 #endif
 
-fn_local void init_profiler(void)
-{
-	profiler.start_tsc = read_cpu_timer();
-}
-
 fn_local double tsc_to_s(uint64_t tsc, uint64_t freq)
 {
 	return ((double)tsc / (double)freq);
@@ -114,55 +109,7 @@ fn_local double tsc_to_ms(uint64_t tsc, uint64_t freq)
 	return 1000.0*tsc_to_s(tsc, freq);
 }
 
-#if 0
-static void print_profiler_stats(void)
+fn_local void profiler_begin_frame(void)
 {
-	profiler.end_tsc = read_cpu_timer();
-
-	uint64_t cpu_freq = estimate_cpu_timer_frequency(250);
-	double total_time_ms = tsc_to_ms(profiler.end_tsc - profiler.start_tsc, cpu_freq);
-
-	fprintf(stderr, "Estimated CPU frequency: %llu\n", cpu_freq);
-	fprintf(stderr, "Total runtime: %.3fms\n", total_time_ms);
-
-#if PROFILER
-	if (profiler_slots_count > 1)
-	{
-		uint64_t *sorted_slot_indices = malloc(sizeof(uint64_t)*profiler_slots_count);
-		for (size_t i = 1; i < profiler_slots_count; i += 1)
-		{
-			sorted_slot_indices[i - 1] = i;
-		}
-
-		qsort(sorted_slot_indices, profiler_slots_count - 1, sizeof(uint64_t), compare_profile_slot_descending);
-
-		double total_pct = 0.0;
-
-		printf("Profiler region timings:\n");
-		for (size_t j = 0; j < profiler_slots_count - 1; j += 1)
-		{
-			size_t i = sorted_slot_indices[j];
-
-			profiler_slot_t *slot = &profiler_slots[i];
-			double exclusive_ms  = tsc_to_ms(slot->exclusive_tsc, cpu_freq);
-			double inclusive_ms  = tsc_to_ms(slot->inclusive_tsc, cpu_freq);
-			double exclusive_pct = 100.0*(exclusive_ms / total_time_ms);
-			double inclusive_pct = 100.0*(inclusive_ms / total_time_ms);
-			printf("  %-24s %.2f/%.2fms (%.2f/%.2f%%, %zu hits", slot->tag, exclusive_ms, inclusive_ms, exclusive_pct, inclusive_pct, slot->hit_count);
-
-			if (slot->bytes_processed > 0)
-			{
-				double megabytes_processed  = (double)slot->bytes_processed / (1024.0*1024.0);
-				double gigabytes_per_second = (megabytes_processed / 1024.0) / tsc_to_s(slot->exclusive_tsc, cpu_freq);
-				printf(", %.2fMiB at %.2fGiB/s", megabytes_processed, gigabytes_per_second);
-			}
-
-			printf(")\n");
-
-			total_pct += exclusive_pct;
-		}
-		printf("Sum of percentages: %.2f%%\n", total_pct);
-	}
-#endif
+	zero_array(profiler_slots, profiler_slots_count);
 }
-#endif

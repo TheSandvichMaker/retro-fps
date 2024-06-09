@@ -166,7 +166,9 @@ float4 MainPS(VSOut IN) : SV_Target
 	}
 
 	color.a += shadow;
+	color.rgb = sqrt(color.rgb);
     color += RemapTriPDF(QuasirandomDither(IN.pos.xy)) / 255.0f;
+	color.rgb *= color.rgb;
 
 	return color;
 }

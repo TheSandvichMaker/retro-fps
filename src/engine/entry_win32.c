@@ -655,6 +655,8 @@ int wWinMain(HINSTANCE instance,
     {
 		rhi_wait_on_swap_chain(rhi_window);
 
+		profiler_begin_frame();
+
 		hires_time_t new_time = os_hires_time();
 
 		double frame_time = os_seconds_elapsed(current_time, new_time);

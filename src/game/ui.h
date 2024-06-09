@@ -151,6 +151,7 @@ fn bool        ui_key_held       (keycode_t key, bool consume);
 fn bool        ui_button_pressed (ui_buttons_t button, bool consume);
 fn bool        ui_button_released(ui_buttons_t button, bool consume);
 fn bool        ui_button_held    (ui_buttons_t button, bool consume);
+fn float       ui_mouse_wheel    (bool consume);
 
 /* external use */
 fn void ui_push_input_event(const ui_event_t *event);
@@ -194,9 +195,11 @@ fn void     ui_set_next_rect       (rect2_t rect);
 fn float    ui_divide_space        (float item_count);
 
 // layout helpers
-fn float    ui_widget_padding      (void);
-fn bool     ui_override_rect       (rect2_t *rect);
-fn rect2_t  ui_default_label_rect  (font_t *font, string_t label);
+fn float   ui_widget_padding    (void);
+fn bool    ui_override_rect     (rect2_t *rect);
+fn rect2_t ui_default_label_rect(font_t *font, string_t label);
+fn float   ui_default_row_height(void);
+
 
 typedef uint32_t ui_rect_edge_t;
 typedef enum ui_rect_edge_enum_t
@@ -206,47 +209,6 @@ typedef enum ui_rect_edge_enum_t
 	UI_RECT_EDGE_S = (1 << 2),
 	UI_RECT_EDGE_W = (1 << 3),
 } ui_rect_edge_enum_t;
-
-//
-// Windows
-//
-
-typedef struct ui_window_t ui_window_t;
-typedef void (*ui_window_proc_t)(ui_window_t *window);
-
-struct ui_window_t
-{
-	struct ui_window_t *next;
-	struct ui_window_t *prev;
-
-	string_storage_t(256) title;
-	rect2_t rect;
-
-	bool open;
-	bool hovered;
-	bool focused;
-
-	void            *user_data;
-	ui_window_proc_t draw_proc;
-};
-
-typedef struct ui_windows_t
-{
-	ui_window_t *first_window;
-	ui_window_t *last_window;
-	ui_window_t *focus_window;
-} ui_windows_t;
-
-fn void ui_add_window            (ui_window_t *window);
-fn void ui_remove_window         (ui_window_t *window);
-fn void ui_bring_window_to_front (ui_window_t *window);
-fn void ui_send_window_to_back   (ui_window_t *window);
-fn void ui_focus_window          (ui_window_t *window);
-fn void ui_open_window           (ui_window_t *window);
-fn void ui_close_window          (ui_window_t *window);
-fn void ui_toggle_window_openness(ui_window_t *window);
-
-fn void ui_process_windows(void);
 
 //
 // Style
@@ -270,6 +232,7 @@ typedef struct ui_anim_t
 
 typedef struct ui_anim_sleepy_t
 {
+	uint32_t last_touched_frame_index;
 	// we only need to remember t_current so we know if we need to wake up
 	v4_t t_current;
 } ui_anim_sleepy_t; 
@@ -303,6 +266,7 @@ typedef enum ui_style_scalar_t
 
     UI_SCALAR_WINDOW_MARGIN,
     UI_SCALAR_WIDGET_MARGIN,
+    UI_SCALAR_ROW_MARGIN,
     UI_SCALAR_TEXT_MARGIN,
 
 	UI_SCALAR_ROUNDEDNESS,
@@ -310,7 +274,12 @@ typedef enum ui_style_scalar_t
     UI_SCALAR_TEXT_ALIGN_X,
     UI_SCALAR_TEXT_ALIGN_Y,
 
-    UI_SCALAR_SCROLLBAR_WIDTH,
+    UI_SCALAR_LABEL_ALIGN_X,
+    UI_SCALAR_LABEL_ALIGN_Y,
+
+	UI_SCALAR_SCROLL_TRAY_WIDTH,
+	UI_SCALAR_MIN_SCROLL_BAR_SIZE,
+
     UI_SCALAR_SLIDER_HANDLE_RATIO,
 
     UI_SCALAR_COUNT,
@@ -379,6 +348,7 @@ fn v4_t  ui_interpolate_v4 (ui_id_t id, v4_t  target);
 fn v4_t  ui_set_v4         (ui_id_t id, v4_t  target);
 
 fn float ui_scalar            (ui_style_scalar_t scalar);
+fn r_rect2_fixed_t ui_get_clip_rect(void);
 fn void  ui_push_scalar       (ui_style_scalar_t scalar, float value);
 fn float ui_pop_scalar        (ui_style_scalar_t scalar);
 
@@ -392,6 +362,11 @@ fn void  ui_push_color        (ui_style_color_t color, v4_t value);
 fn v4_t  ui_pop_color         (ui_style_color_t color);
 
 #define UI_COLOR(color, value) DEFER_LOOP(ui_push_color(color, value), ui_pop_color(color))
+
+#define UI_ColorConditional(color, value, condition)   \
+	DEFER_LOOP(                                        \
+		(condition ? (ui_push_color(color, value), 1) : 0), \
+		(condition ? (ui_pop_color (color),        1) : 0))
 
 fn void    ui_push_font(ui_style_font_t font_id, font_t *font);
 fn font_t *ui_pop_font (ui_style_font_t font_id);
@@ -421,6 +396,8 @@ fn void    ui_pop_clip_rect                (void);
 
 fn rect2_t ui_draw_text                    (font_t *font, v2_t p, string_t text);
 fn rect2_t ui_draw_text_aligned            (font_t *font, rect2_t rect, string_t text, v2_t align);
+fn rect2_t ui_draw_text_default_alignment  (font_t *font, rect2_t rect, string_t text);
+fn rect2_t ui_draw_text_label_alignment    (font_t *font, rect2_t rect, string_t text);
 fn rect2_t ui_text_bounds                  (font_t *font, v2_t p, string_t text);
 fn float   ui_text_width                   (font_t *font, string_t text);
 fn float   ui_text_height                  (font_t *font, string_t text);
@@ -511,6 +488,7 @@ fn bool ui_checkbox      (string_t text, bool *value);
 fn bool ui_option_buttons(string_t text, int *value, int count, string_t *names);
 fn bool ui_combo_box     (string_t text, size_t *selected_index, size_t count, string_t *names);
 fn bool ui_slider        (string_t text, float *value, float min, float max);
+fn bool ui_slider_ex     (string_t label, float *v, float min, float max, float granularity);
 fn bool ui_slider_int    (string_t text, int *value, int min, int max);
 fn bool ui_slider_int_ex (string_t text, int *value, int min, int max, ui_slider_flags_t flags);
 fn void ui_text_edit     (string_t label, dynamic_string_t *buffer);
@@ -647,6 +625,9 @@ typedef struct ui_t
 	ui_id_t next_hovered_panel;
 	ui_id_t hovered_panel;
 
+	ui_id_t next_hovered_scroll_region;
+	ui_id_t hovered_scroll_region;
+
 	ui_id_t next_hovered_widget;
 	ui_id_t hovered_widget;
 
@@ -680,9 +661,7 @@ typedef struct ui_t
 	ui_event_queue_t queued_input;
 	ui_input_t       input;
 
-	// ui_input_t   input;
 	ui_panels_t  panels;
-	ui_windows_t windows;
 	ui_style_t   style;
 
 	debug_notif_t *first_debug_notif;

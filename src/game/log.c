@@ -36,6 +36,11 @@ void logs_(const log_loc_t *loc, log_category_t cat, log_level_t level, string_t
 {
 	// for the time being, this is not a good / smart logging system
 
+	if (level == LogLevel_Error)
+	{
+		__debugbreak();
+	}
+
 	(void)loc;
 
 	string_t cat_string   = log_category_to_string[cat];

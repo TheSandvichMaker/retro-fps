@@ -385,6 +385,11 @@ fn_local v2_t make_v2(float x, float y)
     return (v2_t){x,y};
 }
 
+fn_local v2_t v2s(float x)
+{
+    return (v2_t){x, x};
+}
+
 fn_local v2_t v2_add3(v2_t a, v2_t b, v2_t c)
 {
     v2_t result = {

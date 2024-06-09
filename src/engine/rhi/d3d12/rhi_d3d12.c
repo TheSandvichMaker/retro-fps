@@ -1864,7 +1864,7 @@ void rhi_end_frame(void)
 		d3d12_window_t *window = it.data;
 
 		DXGI_PRESENT_PARAMETERS present_parameters = { 0 };
-		IDXGISwapChain1_Present1(window->swap_chain, window->fullscreen ? 1 : 0, 0, &present_parameters);
+		IDXGISwapChain1_Present1(window->swap_chain, 1, 0, &present_parameters);
 	}
 
 	frame->fence_value = ++g_rhi.fence_value;

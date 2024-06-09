@@ -289,6 +289,7 @@ typedef union v4_t
 {
     struct { float x, y, z, w; };
     struct { v3_t xyz; float w0; };
+    struct { v2_t xy; v2_t zw; };
     float e[4];
 } v4_t;
 

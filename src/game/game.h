@@ -14,7 +14,6 @@
 #include "font.h"
 #include "freeverb.h"
 #include "globals.h"
-#include "in_game_editor.h"
 #include "input.h"
 #include "intersect.h"
 #include "job_queues.h"
@@ -28,10 +27,15 @@
 #include "render_helpers.h"
 #include "ui.h"
 #include "ui_layout.h"
-#include "convex_hull_debugger.h" // @IncludeOrder
-#include "editor_console.h"
+#include "ui_widgets.h"
+#include "ui_row_builder.h"
+//#include "in_game_editor.h"
 
 #include "render/r1.h" // @IncludeOrder
+
+// editor stuff gets included after
+#include "editor.h"
+#include "editor_console.h"
 
 typedef enum player_move_mode_t
 {

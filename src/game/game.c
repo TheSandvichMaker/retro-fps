@@ -20,9 +20,10 @@
 #include "camera.c"
 #include "collision_geometry.c"
 #include "convex_hull_debugger.c"
+#include "editor.c"
+#include "editor_console.c"
 #include "font.c"
 #include "freeverb.c"
-#include "in_game_editor.c"
 #include "input.c"
 #include "intersect.c"
 #include "job_queues.c"
@@ -36,7 +37,9 @@
 #include "render_helpers.c"
 #include "ui.c"
 #include "ui_layout.c"
-#include "editor_console.c"
+#include "ui_widgets.c"
+#include "ui_row_builder.c"
+//#include "in_game_editor.c"
 
 #include "render/r1.c"
 
@@ -48,6 +51,7 @@ typedef struct app_state_t
 
 	gamestate_t     *game;
 	action_system_t *action_system;
+	editor_t        *editor;
 	console_t       *console;
 	ui_t            *ui;
 
@@ -398,6 +402,9 @@ void app_init(platform_init_io_t *io)
 	// @UiFonts - this is stupid
 	app->console->font = app->ui->style.font;
 
+	app->editor = m_alloc_struct(&app->arena, editor_t);
+	editor_init(app->editor);
+
 	bind_key_action(Action_left,           Key_a);
 	bind_key_action(Action_right,          Key_d);
 	bind_key_action(Action_forward,        Key_w);
@@ -611,9 +618,9 @@ fn_local platform_cursor_t tick_ui(app_state_t *app, input_t *input, v2_t client
 
 	ui_begin(dt);
 	{
-		update_and_render_in_game_editor();
-		(void)client_size;
-		//update_and_draw_console(app->console, client_size, dt);
+		//update_and_render_in_game_editor();
+		editor_update_and_render(app->editor);
+		update_and_draw_console(app->console, client_size, dt);
 	}
     ui_end();
 

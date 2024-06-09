@@ -23,6 +23,7 @@ typedef void (*ui_widget_func_t)(ui_widget_context_t *context, ui_widget_mode_t 
 typedef enum ui_layout_flow_t
 {
 	Flow_none,
+	Flow_justify,
 	Flow_north,
 	Flow_east,
 	Flow_south,
@@ -37,11 +38,34 @@ typedef enum ui_axis_t
 	Axis_COUNT,
 } ui_axis_t;
 
+fn ui_axis_t ui_flow_axis(ui_layout_flow_t flow)
+{
+	switch (flow)
+	{
+		case Flow_east:
+		case Flow_west:
+		{
+			return Axis_x;
+		} break;
+
+		case Flow_north:
+		case Flow_south:
+		{
+			return Axis_y;
+		} break;
+	}
+
+	log(UI, Error, "Invalid flow (0x%X) passed to ui_flow_axis", flow);
+
+	return Axis_x;
+}
+
 typedef enum ui_size_kind_t
 {
 	UiSize_none,
-	UiSize_pct,
-	UiSize_pix,
+	UiSize_pct,    // w = pct*r_w,    h = pct*r_h
+	UiSize_pix,    // w = pix,        h = pix
+	UiSize_aspect, // w = aspect*r_h, h = aspect*r_w
 	UiSize_COUNT,
 } ui_size_kind_t;
 
@@ -59,7 +83,7 @@ fn_local ui_size_t ui_sz_none()
 fn_local ui_size_t ui_sz_pct(float pct)
 {
 	return (ui_size_t){
-		.kind = UiSize_pct,
+		.kind  = UiSize_pct,
 		.value = pct,
 	};
 }
@@ -67,8 +91,16 @@ fn_local ui_size_t ui_sz_pct(float pct)
 fn_local ui_size_t ui_sz_pix(float pix)
 {
 	return (ui_size_t){
-		.kind = UiSize_pix,
+		.kind  = UiSize_pix,
 		.value = pix,
+	};
+}
+
+fn_local ui_size_t ui_sz_aspect(float aspect)
+{
+	return (ui_size_t){
+		.kind  = UiSize_aspect,
+		.value = aspect,
 	};
 }
 
@@ -79,13 +111,11 @@ typedef struct ui_layout_t
 	rect2_t rect;
 
 	ui_layout_flow_t flow;
-	ui_axis_t        flow_axis;
 
 	size_t prepared_rect_count;
 	ui_prepared_rect_t *first_prepared_rect;
 	ui_prepared_rect_t * last_prepared_rect;
 
-	bool  wants_justify;
 	float justify_x;
 	float justify_y;
 } ui_layout_t;
@@ -104,63 +134,49 @@ fn rect2_t layout_place_widget(v2_t widget_size);
 
 fn rect2_t layout_make_justified_rect(v2_t bounds);
 
-typedef struct ui_layout_justify_t
-{
-	float x;
-	float y;
-} ui_layout_justify_t;
-
-fn void layout_begin_justify(const ui_layout_justify_t *justify);
-fn void layout_end_justify  (void);
-
-#define Layout_Justify(...)                          \
-	DEFER_LOOP(                                      \
-		layout_begin_justify(&(ui_layout_justify_t){ \
-			.x = 0.0f,                               \
-			.y = 0.0f,                               \
-		}),                                          \
-		layout_end_justify()                         \
-	)
-
 fn ui_layout_flow_t layout_begin_flow(ui_layout_flow_t flow);
 fn void             layout_end_flow  (ui_layout_flow_t old_flow);
 
-#define Layout_Flow(flow)                                      \
-	for (ui_layout_flow_t _old_flow = layout_begin_flow(flow); \
-		 _old_flow != Flow_COUNT;                              \
-		 layout_end_flow(_old_flow), _old_flow = Flow_COUNT)
+#define Layout_Flow(flow)                                                        \
+	for (ui_layout_flow_t PASTE(_old_flow_, __LINE__) = layout_begin_flow(flow); \
+		 PASTE(_old_flow_, __LINE__) != Flow_COUNT;                              \
+		 layout_end_flow(PASTE(_old_flow_, __LINE__)), PASTE(_old_flow_, __LINE__) = Flow_COUNT)
 
 typedef struct ui_layout_cut_t
 {
-	ui_size_t        size;
-	bool             push_clip_rect;
-	ui_layout_flow_t flow;
-	ui_size_t        margin_x;
-	ui_size_t        margin_y;
+	ui_size_t         size;
+	bool              push_clip_rect;
+	ui_layout_flow_t  flow;
+	ui_size_t         margin_x;
+	ui_size_t         margin_y;
+	float             justify_x;
+	float             justify_y;
 } ui_layout_cut_t;
 
 typedef struct ui_layout_cut_restore_t
 {
-	bool             exit;
-	rect2_t          rect;
-	bool             pushed_clip_rect;
-	ui_layout_flow_t flow;
+	bool              exit;
+	rect2_t           rect;
+	bool              pushed_clip_rect;
+	ui_layout_flow_t  flow;
 } ui_layout_cut_restore_t;
 
 fn ui_layout_cut_restore_t layout_begin_cut_internal(const ui_layout_cut_t *cut);
 fn void                    layout_end_cut_internal  (ui_layout_cut_restore_t *restore);
 
-#define Layout_Cut(...)                                                                       \
-	for (ui_layout_cut_restore_t _cut_restore = layout_begin_cut_internal(&(ui_layout_cut_t){ \
-			 .size           = ui_sz_none(),                                                  \
-			 .push_clip_rect = false,                                                         \
-			 .flow           = Flow_none,                                                     \
-			 .margin_x       = ui_sz_pix(0.0f),                                               \
-			 .margin_y       = ui_sz_pix(0.0f),                                               \
-			 ##__VA_ARGS__                                                                    \
-		 });                                                                                  \
-		 !_cut_restore.exit;                                                                  \
-		 layout_end_cut_internal(&_cut_restore))
+#define Layout_Cut(...)                                                                                         \
+	for (ui_layout_cut_restore_t PASTE(_cut_restore_, __LINE__) = layout_begin_cut_internal(&(ui_layout_cut_t){ \
+			 .size           = ui_sz_none(),                                                                    \
+			 .push_clip_rect = false,                                                                           \
+			 .flow           = Flow_none,                                                                       \
+			 .margin_x       = ui_sz_pix(0.0f),                                                                 \
+			 .margin_y       = ui_sz_pix(0.0f),                                                                 \
+			 .justify_x      = 0.5f,                                                                            \
+			 .justify_y      = 0.5f,                                                                            \
+			 ##__VA_ARGS__                                                                                      \
+		 });                                                                                                    \
+		 !PASTE(_cut_restore_, __LINE__).exit;                                                                  \
+		 layout_end_cut_internal(&PASTE(_cut_restore_, __LINE__)))
 
 
 //
@@ -173,9 +189,10 @@ fn_local float ui_size_to_width(rect2_t rect, ui_size_t size)
 
 	switch (size.kind)
 	{
-		case UiSize_none: /* all good! don't do anything! */ break;
-		case UiSize_pct: x = size.value*rect2_width(rect);   break;
-		case UiSize_pix: x = size.value;                     break;
+		case UiSize_none: /* all good! don't do anything! */   break;
+		case UiSize_pct:    x = size.value*rect2_width(rect);  break;
+		case UiSize_pix:    x = size.value;                    break;
+		case UiSize_aspect: x = size.value*rect2_height(rect); break;
 
 		default:
 	    {
@@ -193,9 +210,10 @@ fn_local float ui_size_to_height(rect2_t rect, ui_size_t size)
 
 	switch (size.kind)
 	{
-		case UiSize_none: /* all good! don't do anything! */ break;
-		case UiSize_pct: y = size.value*rect2_height(rect);  break;
-		case UiSize_pix: y = size.value;                     break;
+		case UiSize_none: /* all good! don't do anything! */   break;
+		case UiSize_pct:    y = size.value*rect2_height(rect); break;
+		case UiSize_pix:    y = size.value;                    break;
+		case UiSize_aspect: y = size.value*rect2_width(rect);  break;
 
 		default:
 	    {
@@ -342,5 +360,13 @@ fn_local rect2_t rect2_cut_margins_vertically(rect2_t rect, ui_size_t size)
 	rect2_cut_from_top   (result, size, NULL, &result);
 	rect2_cut_from_bottom(result, size, NULL, &result);
 
+	return result;
+}
+
+fn_local rect2_t rect2_cut_margins(rect2_t rect, ui_size_t size)
+{
+	rect2_t result = rect;
+	result = rect2_cut_margins_horizontally(result, size);
+	result = rect2_cut_margins_vertically  (result, size);
 	return result;
 }

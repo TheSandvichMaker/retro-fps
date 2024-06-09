@@ -2,11 +2,11 @@ void update_and_draw_console(console_t *console, v2_t resolution, float dt)
 {
 	(void)dt;
 
-	float line_spacing = console->font->y_advance;
+	float line_spacing = ui_default_row_height();
 
-	float console_height = 17.0*line_spacing;
+	float console_height = 17.0f*line_spacing;
 
-	rect2_t console_area = rect2_from_min_dim(make_v2(0, resolution.y - console_height - 1.0),
+	rect2_t console_area = rect2_from_min_dim(make_v2(0, resolution.y - console_height - 1.0f),
 											  make_v2(resolution.x, console_height));
 
 	ui->render_layer = UI_LAYER_BACKGROUND;
@@ -33,6 +33,9 @@ void update_and_draw_console(console_t *console, v2_t resolution, float dt)
 
 				Layout_Cut(
 					.size           = ui_sz_pix(line_spacing),
+					.flow           = Flow_justify,
+					.justify_x      = 0.0f,
+					.justify_y      = 0.5f,
 					.push_clip_rect = true)
 				{
 					if (!(iter.index & 1))
@@ -40,28 +43,24 @@ void update_and_draw_console(console_t *console, v2_t resolution, float dt)
 						ui_draw_rect(layout_rect(), make_v4(0, 0, 0, 0.25f));
 					}
 
-					Layout_Cut(
-						.size     = ui_sz_pct(1.0f),
-						.margin_x = ui_sz_pix(4.0f))
-					{
-						ui_draw_text_aligned(console->font, layout_rect(), cvar->key, make_v2(0.0f, 0.5f));
-					}
+					ui_draw_text_label_alignment(ui_font(UiFont_default), layout_rect(), cvar->key);
+					// layout_label(cvar->key);
 				}
 			}
 		}
-		/*
+		Layout_Flow(Flow_north)
 		Layout_Cut(
-			.size = ui_sz_pct(1.0f),
-			.flow = Flow_north)
+			.size = ui_sz_pct(1.0f))
 		{
 			Layout_Cut(
-				.size = ui_sz_pix(line_height))
+				.size = ui_sz_pix(line_spacing))
 			{
-				bool submit = false;
+				// bool submit = false;
 
-				Layout_Flow(Flow_west)
-				submit = layout_button(S("Submit"));
+				// Layout_Flow(Flow_west)
+				// submit = layout_button(S("Submit"));
 
+				/*
 				ui_text_edit_result_t result = ui_text_edit_ex(ui_id(S("console_input_box")), 
 															   layout_rect(), 
 															   &console->input, 
@@ -86,10 +85,12 @@ void update_and_draw_console(console_t *console, v2_t resolution, float dt)
 
 					}
 				}
+				*/
 			}
 			Layout_Cut(
 				.size = ui_sz_pct(1.0f))
 			{
+				/*
 				log_filter_t filter = console->log_filter;
 
 				uint32_t line_count = log_get_filtered_line_count(filter);
@@ -119,9 +120,9 @@ void update_and_draw_console(console_t *console, v2_t resolution, float dt)
 
 					line_index += 1;
 				}
+				*/
 			}
 		}
-		*/
 	}
 
 	ui_unequip_layout();

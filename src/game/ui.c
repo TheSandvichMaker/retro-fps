@@ -320,6 +320,18 @@ bool ui_button_held(ui_buttons_t button, bool consume)
 	return result;
 }
 
+float ui_mouse_wheel(bool consume)
+{
+	float result = ui->input.mouse_wheel;
+
+	if (consume)
+	{
+		ui->input.mouse_wheel = 0.0f;
+	}
+
+	return result;
+}
+
 //
 // Panel
 //
@@ -472,6 +484,13 @@ rect2_t ui_default_label_rect(font_t *font, string_t label)
 	return rect;
 }
 
+float ui_default_row_height(void)
+{
+	float margin     = 2.0f*(ui_scalar(UI_SCALAR_TEXT_MARGIN) + ui_scalar(UI_SCALAR_WIDGET_MARGIN));
+	float row_height = ui_font(UiFont_default)->height + margin;
+	return row_height;
+}
+
 void ui_open_popup(ui_id_t id)
 {
 	bool popup_exists = false;
@@ -523,253 +542,13 @@ bool ui_popup_is_open(ui_id_t id)
 }
 
 //
-// Windows
-//
-
-void ui_add_window(ui_window_t *window)
-{
-	dll_push_back(ui->windows.first_window, ui->windows.last_window, window);
-}
-
-void ui_remove_window(ui_window_t *window)
-{
-	dll_remove(ui->windows.first_window, ui->windows.last_window, window);
-}
-
-void ui_bring_window_to_front(ui_window_t *window)
-{
-	dll_remove   (ui->windows.first_window, ui->windows.last_window, window);
-	dll_push_back(ui->windows.first_window, ui->windows.last_window, window);
-}
-
-void ui_send_window_to_back(ui_window_t *window)
-{
-	dll_remove    (ui->windows.first_window, ui->windows.last_window, window);
-	dll_push_front(ui->windows.first_window, ui->windows.last_window, window);
-}
-
-void ui_focus_window(ui_window_t *window)
-{
-	ui->windows.focus_window = window;
-	ui->has_focus            = true;
-}
-
-void ui_open_window(ui_window_t *window)
-{
-	window->open = true;
-	ui_bring_window_to_front(window);
-	ui_focus_window         (window);
-}
-
-void ui_close_window(ui_window_t *window)
-{
-	window->open = false;
-	ui_send_window_to_back(window);
-	if (ui->windows.focus_window == window && ui->windows.last_window != window)
-	{
-		ui_focus_window(ui->windows.last_window);
-	}
-}
-
-void ui_toggle_window_openness(ui_window_t *window)
-{
-	if (window->open)
-	{
-		ui_close_window(window);
-	}
-	else
-	{
-		ui_open_window(window);
-	}
-}
-
-void ui_process_windows(void)
-{
-	ui_window_t *hovered_window = NULL;
-
-	for (ui_window_t *window = ui->windows.first_window;
-		 window;
-		 window = window->next)
-	{
-		if (!window->open)
-			continue;
-
-		ui_id_t id = ui_id_pointer(window);
-
-		ui_push_id(id);
-		{
-			// handle dragging and resizing first to remove frame delay
-
-			if (ui_is_active(id))
-			{
-				v2_t new_p = add(ui->input.mouse_p, ui->drag_offset);
-				window->rect = rect2_reposition_min(window->rect, new_p); 
-			}
-
-			ui_id_t id_n  = ui_id(S("tray_id_n"));
-			ui_id_t id_e  = ui_id(S("tray_id_e"));
-			ui_id_t id_s  = ui_id(S("tray_id_s"));
-			ui_id_t id_w  = ui_id(S("tray_id_w"));
-			ui_id_t id_ne = ui_id(S("tray_id_ne"));
-			ui_id_t id_nw = ui_id(S("tray_id_nw"));
-			ui_id_t id_se = ui_id(S("tray_id_se"));
-			ui_id_t id_sw = ui_id(S("tray_id_sw"));
-
-			if (ui_is_hot(id_n))  { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_ns; };
-			if (ui_is_hot(id_e))  { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_ew; };
-			if (ui_is_hot(id_s))  { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_ns; };
-			if (ui_is_hot(id_w))  { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_ew; };
-			if (ui_is_hot(id_ne)) { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_nesw; };
-			if (ui_is_hot(id_nw)) { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_nwse; };
-			if (ui_is_hot(id_se)) { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_nwse; };
-			if (ui_is_hot(id_sw)) { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_nesw; };
-
-			ui_rect_edge_t tray_region = 0;
-
-			if (ui_is_active(id_n))  tray_region = UI_RECT_EDGE_N;
-			if (ui_is_active(id_e))  tray_region = UI_RECT_EDGE_E;
-			if (ui_is_active(id_s))  tray_region = UI_RECT_EDGE_S;
-			if (ui_is_active(id_w))  tray_region = UI_RECT_EDGE_W;
-			if (ui_is_active(id_ne)) tray_region = UI_RECT_EDGE_N|UI_RECT_EDGE_E;
-			if (ui_is_active(id_nw)) tray_region = UI_RECT_EDGE_N|UI_RECT_EDGE_W;
-			if (ui_is_active(id_se)) tray_region = UI_RECT_EDGE_S|UI_RECT_EDGE_E;
-			if (ui_is_active(id_sw)) tray_region = UI_RECT_EDGE_S|UI_RECT_EDGE_W;
-
-			if (tray_region)
-			{
-				v2_t delta = sub(ui->input.mouse_p, ui->input.mouse_p_on_lmb);
-
-				window->rect = ui->resize_original_rect;
-				if (tray_region & UI_RECT_EDGE_E) window->rect = rect2_extend_right(window->rect,  delta.x);
-				if (tray_region & UI_RECT_EDGE_W) window->rect = rect2_extend_left (window->rect, -delta.x);
-				if (tray_region & UI_RECT_EDGE_N) window->rect = rect2_extend_up   (window->rect,  delta.y);
-				if (tray_region & UI_RECT_EDGE_S) window->rect = rect2_extend_down (window->rect, -delta.y);
-
-				rect2_t min_rect = rect2_from_min_dim(window->rect.min, make_v2(64, 64));
-				window->rect = rect2_union(window->rect, min_rect);
-			}
-
-			// ---
-
-			rect2_t rect = window->rect;
-
-			float   title_bar_height = ui_font(UiFont_header)->height + ui_widget_padding();
-			rect2_t title_bar = rect2_add_top(rect, title_bar_height);
-
-			rect2_t total = rect2_union(title_bar, rect);
-
-			// drag and resize behaviour
-
-			float tray_width = 8.0f;
-
-			rect2_t interact_total = rect2_extend(total, 0.5f*tray_width);
-			ui_interaction_t interaction = ui_default_widget_behaviour(id, interact_total);
-
-			if (ui_mouse_in_rect(interact_total))
-			{
-				hovered_window = window;
-			}
-
-			if (interaction & UI_PRESSED)
-			{
-				ui->drag_offset = sub(window->rect.min, ui->input.mouse_p);
-			}
-
-			rect2_t tray_init = interact_total;
-			rect2_t tray_e  = rect2_cut_right (&tray_init, tray_width);
-			rect2_t tray_w  = rect2_cut_left  (&tray_init, tray_width);
-			rect2_t tray_n  = rect2_cut_top   (&tray_init, tray_width);
-			rect2_t tray_s  = rect2_cut_bottom(&tray_init, tray_width);
-			rect2_t tray_ne = rect2_cut_top   (&tray_e,    tray_width);
-			rect2_t tray_nw = rect2_cut_top   (&tray_w,    tray_width);
-			rect2_t tray_se = rect2_cut_bottom(&tray_e,    tray_width);
-			rect2_t tray_sw = rect2_cut_bottom(&tray_w,    tray_width);
-
-			ui_interaction_t tray_interaction = 0;
-			tray_interaction |= ui_default_widget_behaviour(id_n,  tray_n);
-			tray_interaction |= ui_default_widget_behaviour(id_e,  tray_e);
-			tray_interaction |= ui_default_widget_behaviour(id_s,  tray_s);
-			tray_interaction |= ui_default_widget_behaviour(id_w,  tray_w);
-			tray_interaction |= ui_default_widget_behaviour(id_ne, tray_ne);
-			tray_interaction |= ui_default_widget_behaviour(id_nw, tray_nw);
-			tray_interaction |= ui_default_widget_behaviour(id_se, tray_se);
-			tray_interaction |= ui_default_widget_behaviour(id_sw, tray_sw);
-
-			if (tray_interaction & UI_PRESSED)
-			{
-				ui->resize_original_rect = window->rect;
-			}
-
-			// draw window
-
-			rect2_t title_bar_minus_outline = title_bar;
-			title_bar_minus_outline.max.y -= 2.0f;
-
-			string_t title = string_from_storage(window->title);
-
-			bool has_focus = ui_has_focus() && (window == ui->windows.focus_window);
-
-			float focus_t = ui_interpolate_f32(ui_id(S("focus")), has_focus);
-			float shadow_amount = lerp(0.15f, 0.25f, focus_t);
-
-			v4_t  title_bar_color           = ui_color(UI_COLOR_WINDOW_TITLE_BAR);
-			float title_bar_luma            = luminance(title_bar_color.xyz);
-			v4_t  title_bar_color_greyscale = make_v4(title_bar_luma, title_bar_luma, title_bar_luma, 1.0f);
-
-			v4_t  interpolated_title_bar_color = v4_lerps(title_bar_color_greyscale, title_bar_color, focus_t);
-
-			ui_draw_rect_roundedness_shadow(rect2_shrink(total, 1.0f), make_v4(0, 0, 0, 0), make_v4(5, 5, 5, 5), shadow_amount, 32.0f);
-			ui_draw_rect_roundedness(title_bar, interpolated_title_bar_color, make_v4(2, 0, 2, 0));
-			ui_draw_rect_roundedness(rect, ui_color(UI_COLOR_WINDOW_BACKGROUND), make_v4(0, 2, 0, 2));
-			ui_draw_text(ui->style.header_font, ui_text_center_p(ui->style.header_font, title_bar_minus_outline, title), title);
-			ui_draw_rect_roundedness_outline(total, ui_color(UI_COLOR_WINDOW_OUTLINE), make_v4(2, 2, 2, 2), 2.0f);
-
-			// handle window contents
-
-			float margin = max(ui_scalar(UI_SCALAR_WIDGET_MARGIN), 0.5f*ui_scalar(UI_SCALAR_ROUNDEDNESS));
-			rect = rect2_shrink(rect, margin);
-			rect = rect2_pillarbox(rect, ui_scalar(UI_SCALAR_WINDOW_MARGIN));
-
-			// TODO: Custom scrollbar rendering for windows?
-			ui_panel_begin_ex(ui_id(S("panel")), rect, UI_PANEL_SCROLLABLE_VERT);
-
-			ui_push_clip_rect(rect);
-
-			window->focused = (window == ui->windows.last_window);
-			window->draw_proc(window);
-
-			ui_pop_clip_rect();
-
-			ui_panel_end();
-
-			window->hovered = false;
-		}
-		ui_pop_id();
-	}
-
-	if (hovered_window)
-	{
-		ui->hovered = true;
-		hovered_window->hovered = true;
-	}
-
-	if (ui_button_pressed(UiButton_any, false))
-	{
-		if (hovered_window)
-		{
-			ui_bring_window_to_front(hovered_window);
-		}
-
-		ui->windows.focus_window = hovered_window;
-	}
-}
-
-//
 // Style
 //
 
 ui_anim_t *ui_get_anim(ui_id_t id, v4_t target)
 {
+	PROFILE_BEGIN_FUNC;
+
 	ui_anim_list_t *list = &ui->anim_list;
 
 	ui_id_t          *restrict active_ids   = list->active_ids;
@@ -797,6 +576,7 @@ ui_anim_t *ui_get_anim(ui_id_t id, v4_t target)
 			if (ui_id_equal(sleepy_ids[sleepy_index], id))
 			{
 				ui_anim_sleepy_t *sleepy = &sleepy_anims[sleepy_index];
+				sleepy->last_touched_frame_index = ui->frame_index;
 				
 				if (vlen(sub(target, sleepy->t_current)) >= ui->dt*UI_ANIM_SLEEPY_THRESHOLD)
 				{
@@ -857,6 +637,8 @@ ui_anim_t *ui_get_anim(ui_id_t id, v4_t target)
 	result->c_t                      = ui_scalar(UI_SCALAR_ANIMATION_STIFFNESS);
 	result->c_v                      = ui_scalar(UI_SCALAR_ANIMATION_DAMPEN);
 	result->t_target                 = target;
+
+	PROFILE_END_FUNC;
 
 	return result;
 }
@@ -973,8 +755,9 @@ void ui_push_clip_rect(rect2_t rect)
 {
 	if (ALWAYS(!stack_full(ui->clip_rect_stack)))
 	{
-		r_rect2_fixed_t fixed = rect2_to_fixed(rect);
-		stack_push(ui->clip_rect_stack, fixed);
+		r_rect2_fixed_t fixed   = rect2_to_fixed(rect);
+		r_rect2_fixed_t clipped = rect2_fixed_intersect(fixed, ui_get_clip_rect());
+		stack_push(ui->clip_rect_stack, clipped);
 	}
 }
 
@@ -986,7 +769,7 @@ void ui_pop_clip_rect(void)
 	}
 }
 
-fn_local r_rect2_fixed_t ui_get_clip_rect(void)
+r_rect2_fixed_t ui_get_clip_rect(void)
 {
 	r_rect2_fixed_t clip_rect = {
 		0, 0, UINT16_MAX, UINT16_MAX,
@@ -1126,6 +909,24 @@ rect2_t ui_draw_text_aligned(font_t *font, rect2_t rect, string_t text, v2_t ali
 	rect2_t result = ui_text_op(font, p, text, text_color, UI_TEXT_OP_DRAW);
 
 	return result;
+}
+
+rect2_t ui_draw_text_default_alignment(font_t *font, rect2_t rect, string_t text)
+{
+	v2_t align = {
+		.x = ui_scalar(UI_SCALAR_TEXT_ALIGN_X),
+		.y = ui_scalar(UI_SCALAR_TEXT_ALIGN_Y),
+	};
+	return ui_draw_text_aligned(font, rect, text, align);
+}
+
+rect2_t ui_draw_text_label_alignment(font_t *font, rect2_t rect, string_t text)
+{
+	v2_t align = {
+		.x = ui_scalar(UI_SCALAR_LABEL_ALIGN_X),
+		.y = ui_scalar(UI_SCALAR_LABEL_ALIGN_Y),
+	};
+	return ui_draw_text_aligned(font, rect, text, align);
 }
 
 void ui_reset_render_commands(void)
@@ -1994,6 +1795,7 @@ typedef struct ui_slider__params_t
 	{
 		struct
 		{
+			float granularity;
 			float *v;
 			float min;
 			float max;
@@ -2032,8 +1834,7 @@ fn_local void ui_slider__impl(ui_id_t id, rect2_t rect, ui_slider__params_t *p)
 			case UI_SLIDER__F32:
 			{
 				float value       = p->f32.min + t_slider*(p->f32.max - p->f32.min);
-				float granularity = 0.01f;
-				*p->f32.v = granularity*roundf(value / granularity);
+				*p->f32.v = p->f32.granularity*roundf(value / p->f32.granularity);
 			} break;
 
 			case UI_SLIDER__I32:
@@ -2108,7 +1909,7 @@ fn_local void ui_slider__impl(ui_id_t id, rect2_t rect, ui_slider__params_t *p)
 	ui_draw_text_aligned(ui->style.font, body, value_text, make_v2(0.5f, 0.5f));
 }
 
-bool ui_slider(string_t label, float *v, float min, float max)
+bool ui_slider_ex(string_t label, float *v, float min, float max, float granularity)
 {
 	if (NEVER(!ui->initialized)) 
 		return false;
@@ -2134,15 +1935,21 @@ bool ui_slider(string_t label, float *v, float min, float max)
 	ui_slider__params_t p = {
 		.type = UI_SLIDER__F32,
 		.f32 = {
-			.v   = v,
-			.min = min,
-			.max = max,
+			.granularity = granularity,
+			.v           = v,
+			.min         = min,
+			.max         = max,
 		},
 	};
 
 	ui_slider__impl(id, rect, &p);
-
+	
 	return *v != init_v;
+}
+
+bool ui_slider(string_t label, float *v, float min, float max)
+{
+	return ui_slider_ex(label, v, min, max, 0.01f);
 }
 
 bool ui_slider_int_ex(string_t label, int *v, int min, int max, ui_slider_flags_t flags)
@@ -2693,14 +2500,18 @@ static void ui_initialize(void)
 	ui->style.base_scalars[UI_SCALAR_ANIMATION_STIFFNESS   ] = 512.0f;
 	ui->style.base_scalars[UI_SCALAR_ANIMATION_DAMPEN      ] = 32.0f;
 	ui->style.base_scalars[UI_SCALAR_ANIMATION_LENGTH_LIMIT] = FLT_MAX;
-	ui->style.base_scalars[UI_SCALAR_HOVER_LIFT            ] = 1.5f;
+	ui->style.base_scalars[UI_SCALAR_HOVER_LIFT            ] = 1.0f;
 	ui->style.base_scalars[UI_SCALAR_WINDOW_MARGIN         ] = 0.0f;
-	ui->style.base_scalars[UI_SCALAR_WIDGET_MARGIN         ] = 1.0f;
-	ui->style.base_scalars[UI_SCALAR_TEXT_MARGIN           ] = 2.2f;
-	ui->style.base_scalars[UI_SCALAR_ROUNDEDNESS           ] = 2.5f;
+	ui->style.base_scalars[UI_SCALAR_WIDGET_MARGIN         ] = 2.0f;
+	ui->style.base_scalars[UI_SCALAR_ROW_MARGIN            ] = 2.0f;
+	ui->style.base_scalars[UI_SCALAR_TEXT_MARGIN           ] = 2.0f;
+	ui->style.base_scalars[UI_SCALAR_ROUNDEDNESS           ] = 2.0f;
 	ui->style.base_scalars[UI_SCALAR_TEXT_ALIGN_X          ] = 0.5f;
 	ui->style.base_scalars[UI_SCALAR_TEXT_ALIGN_Y          ] = 0.5f;
-	ui->style.base_scalars[UI_SCALAR_SCROLLBAR_WIDTH       ] = 12.0f;
+	ui->style.base_scalars[UI_SCALAR_LABEL_ALIGN_X         ] = 0.0f;
+	ui->style.base_scalars[UI_SCALAR_LABEL_ALIGN_Y         ] = 0.5f;
+	ui->style.base_scalars[UI_SCALAR_SCROLL_TRAY_WIDTH     ] = 16.0f;
+	ui->style.base_scalars[UI_SCALAR_MIN_SCROLL_BAR_SIZE   ] = 32.0f;
 	ui->style.base_scalars[UI_SCALAR_SLIDER_HANDLE_RATIO   ] = 1.0f / 4.0f;
 	ui->style.base_colors [UI_COLOR_TEXT                   ] = make_v4(0.95f, 0.90f, 0.85f, 1.0f);
 	ui->style.base_colors [UI_COLOR_TEXT_SHADOW            ] = make_v4(0.00f, 0.00f, 0.00f, 0.50f);
@@ -2733,6 +2544,8 @@ static void ui_initialize(void)
 
 fn_local void ui_tick_ui_animations(ui_anim_list_t *list, float dt)
 {
+	PROFILE_BEGIN_FUNC;
+
 	ui_id_t          *restrict active_ids = list->active_ids;
 	ui_id_t          *restrict sleepy_ids = list->sleepy_ids;
 	ui_anim_t        *restrict active_anims = list->active;
@@ -2741,7 +2554,23 @@ fn_local void ui_tick_ui_animations(ui_anim_list_t *list, float dt)
 	int32_t active_count = list->active_count;
 	int32_t sleepy_count = list->sleepy_count;
 
-	for (size_t active_index = 0; active_index < active_count;)
+	for (int32_t sleepy_index = 0; sleepy_index < sleepy_count;)
+	{
+		ui_anim_sleepy_t *anim = &sleepy_anims[sleepy_index];
+
+		if (anim->last_touched_frame_index < ui->frame_index)
+		{
+			int32_t swap_index = --sleepy_count;
+			sleepy_ids  [sleepy_index] = sleepy_ids  [swap_index];
+			sleepy_anims[sleepy_index] = sleepy_anims[swap_index];
+		}
+		else
+		{
+			sleepy_index++;
+		}
+	}
+
+	for (int32_t active_index = 0; active_index < active_count;)
 	{
 		ui_anim_t *anim = &active_anims[active_index];
 
@@ -2806,6 +2635,8 @@ fn_local void ui_tick_ui_animations(ui_anim_list_t *list, float dt)
 
 	list->active_count = active_count;
 	list->sleepy_count = sleepy_count;
+
+	PROFILE_END_FUNC;
 }
 
 bool ui_begin(float dt)
@@ -2850,9 +2681,10 @@ bool ui_begin(float dt)
 			ui->hover_time = ui->current_time;
 		}
 
-		ui->hot            = ui->next_hot;
-		ui->hovered_panel  = ui->next_hovered_panel;
-		ui->hovered_widget = ui->next_hovered_widget;
+		ui->hot                   = ui->next_hot;
+		ui->hovered_panel         = ui->next_hovered_panel;
+		ui->hovered_widget        = ui->next_hovered_widget;
+		ui->hovered_scroll_region = ui->next_hovered_scroll_region;
 	}
 
 	ui->hover_time_seconds = 0.0f;
@@ -2862,10 +2694,11 @@ bool ui_begin(float dt)
 		ui->hover_time_seconds = (float)os_seconds_elapsed(ui->hover_time, ui->current_time);
 	}
 
-	ui->next_hot            = UI_ID_NULL;
-	ui->next_hot_priority   = UI_PRIORITY_DEFAULT;
-	ui->next_hovered_panel  = UI_ID_NULL;
-	ui->next_hovered_widget = UI_ID_NULL;
+	ui->next_hot                   = UI_ID_NULL;
+	ui->next_hot_priority          = UI_PRIORITY_DEFAULT;
+	ui->next_hovered_panel         = UI_ID_NULL;
+	ui->next_hovered_widget        = UI_ID_NULL;
+	ui->next_hovered_scroll_region = UI_ID_NULL;
 
 	ui->hovered = false;
 	
