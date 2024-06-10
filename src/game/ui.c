@@ -370,58 +370,8 @@ float ui_default_row_height(void)
 	return row_height;
 }
 
-void ui_open_popup(ui_id_t id)
-{
-	bool popup_exists = false;
-
-	for (size_t i = 0; i < ui->popup_stack.at; i++)
-	{
-		if (ui->popup_stack.values[i].id.value == id.value)
-		{
-			popup_exists = true;
-		}
-	}
-
-	if (!popup_exists)
-	{
-		ui_popup_t popup = {
-			.id = id, 
-		};
-
-		stack_push(ui->popup_stack, popup);
-	}
-}
-
-void ui_close_popup(ui_id_t id)
-{
-	for (size_t i = 0; i < ui->popup_stack.at; i++)
-	{
-		if (ui->popup_stack.values[i].id.value == id.value)
-		{
-			stack_remove(ui->popup_stack, i);
-			continue;
-		}
-	}
-}
-
-bool ui_popup_is_open(ui_id_t id)
-{
-	bool result = false;
-
-	for (size_t i = 0; i < ui->popup_stack.at; i++)
-	{
-		if (ui->popup_stack.values[i].id.value == id.value)
-		{
-			result = true;
-			break;
-		}
-	}
-
-	return result;
-}
-
 //
-// Style
+// Animations
 //
 
 ui_anim_t *ui_get_anim(ui_id_t id, v4_t target)
@@ -509,7 +459,8 @@ ui_anim_t *ui_get_anim(ui_id_t id, v4_t target)
 				log(UI, Warning, "Ran out of space for UI anims for ID %.*s", Sx(UI_ID_GET_NAME(id)));
 			}
 
-			result->t_current = target;
+			result->t_current  = target;
+			result->t_velocity = make_v4(0, 0, 0, 0);
 		}
 
 		list->active_count = active_count;
@@ -566,6 +517,116 @@ v4_t ui_set_v4(ui_id_t id, v4_t target)
 	return anim->t_current;
 }
 
+fn_local void ui_tick_animations(ui_anim_list_t *list, float dt)
+{
+	PROFILE_BEGIN_FUNC;
+
+	ui_id_t          *restrict active_ids = list->active_ids;
+	ui_id_t          *restrict sleepy_ids = list->sleepy_ids;
+	ui_anim_t        *restrict active_anims = list->active;
+	ui_anim_sleepy_t *restrict sleepy_anims = list->sleepy;
+
+	int32_t active_count = list->active_count;
+	int32_t sleepy_count = list->sleepy_count;
+
+	//
+	// Delete stale sleepy anims
+	//
+
+	for (int32_t sleepy_index = 0; sleepy_index < sleepy_count;)
+	{
+		ui_anim_sleepy_t *anim = &sleepy_anims[sleepy_index];
+
+		if (anim->last_touched_frame_index < ui->frame_index)
+		{
+			int32_t swap_index = --sleepy_count;
+			sleepy_ids  [sleepy_index] = sleepy_ids  [swap_index];
+			sleepy_anims[sleepy_index] = sleepy_anims[swap_index];
+		}
+		else
+		{
+			sleepy_index++;
+		}
+	}
+
+	//
+	// Process active anims
+	//
+
+	for (int32_t active_index = 0; active_index < active_count;)
+	{
+		ui_anim_t *anim = &active_anims[active_index];
+
+		if (anim->last_touched_frame_index >= ui->frame_index)
+		{
+			float length_limit = anim->length_limit;
+			float c_t = anim->c_t;
+			float c_v = anim->c_v;
+
+			v4_t target   = anim->t_target;
+			v4_t current  = anim->t_current;
+			v4_t velocity = anim->t_velocity;
+
+			if (length_limit != FLT_MAX)
+			{
+				v4_t min = sub(target, length_limit);
+				v4_t max = add(target, length_limit);
+				current = v4_min(current, max);
+				current = v4_max(current, min);
+			}
+
+			v4_t delta   = sub(target, current);
+			v4_t accel_t = mul( c_t, delta);
+			v4_t accel_v = mul(-c_v, velocity);
+			v4_t accel = add(accel_t, accel_v);
+
+			velocity = add(velocity, mul(dt, accel));
+			current  = add(current,  mul(dt, velocity));
+
+			anim->t_current  = current;
+			anim->t_velocity = velocity;
+
+			if (vlen(velocity) < dt*UI_ANIM_SLEEPY_THRESHOLD)
+			{
+				ui_anim_sleepy_t as_sleepy = {
+					.last_touched_frame_index = ui->frame_index,
+					.t_current                = target,
+				};
+
+				// add to sleepy array
+				int32_t sleepy_index = sleepy_count++;
+				sleepy_ids  [sleepy_index] = active_ids[active_index];
+				sleepy_anims[sleepy_index] = as_sleepy;
+
+				// remove from active array
+				int32_t swap_index = --active_count;
+				active_ids  [active_index] = active_ids  [swap_index];
+				active_anims[active_index] = active_anims[swap_index];
+			}
+			else
+			{
+				active_index++;
+			}
+		}
+		else
+		{
+			// remove from active array
+			int32_t swap_index = --active_count;
+			active_ids  [active_index] = active_ids  [swap_index];
+			active_anims[active_index] = active_anims[swap_index];
+		}
+	}
+
+	list->active_count = active_count;
+	list->sleepy_count = sleepy_count;
+
+	PROFILE_END_FUNC;
+}
+
+//
+// Style Stacks
+//
+
 float ui_scalar(ui_style_scalar_t scalar)
 {
 	if (stack_empty(ui->style.scalars[scalar])) return ui->style.base_scalars[scalar];
@@ -614,6 +675,10 @@ font_t *ui_font(ui_style_font_t font_id)
 	else                                       return stack_top(ui->style.fonts[font_id]);
 }
 
+//
+// Draw
+//
+
 void ui_set_font_height(float size)
 {
 	if (ui->style.font)
@@ -636,16 +701,12 @@ void ui_set_font_height(float size)
 	ui->style.header_font = make_font_from_memory(S("UI Header Font"), ui->style.header_font_data, ARRAY_COUNT(ranges), ranges, 1.5f*size);
 }
 
-//
-// Draw
-//
-
 void ui_push_clip_rect(rect2_t rect)
 {
 	if (ALWAYS(!stack_full(ui->clip_rect_stack)))
 	{
 		r_rect2_fixed_t fixed   = rect2_to_fixed(rect);
-		r_rect2_fixed_t clipped = rect2_fixed_intersect(fixed, ui_get_clip_rect());
+		r_rect2_fixed_t clipped = rect2_fixed_intersect(fixed, ui_get_clip_rect_fixed());
 		stack_push(ui->clip_rect_stack, clipped);
 	}
 }
@@ -658,7 +719,7 @@ void ui_pop_clip_rect(void)
 	}
 }
 
-r_rect2_fixed_t ui_get_clip_rect(void)
+r_rect2_fixed_t ui_get_clip_rect_fixed(void)
 {
 	r_rect2_fixed_t clip_rect = {
 		0, 0, UINT16_MAX, UINT16_MAX,
@@ -670,6 +731,11 @@ r_rect2_fixed_t ui_get_clip_rect(void)
 	}
 
 	return clip_rect;
+}
+
+rect2_t ui_get_clip_rect(void)
+{
+	return rect2_from_fixed(ui_get_clip_rect_fixed());
 }
 
 rect2_t ui_text_op(font_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op)
@@ -712,7 +778,7 @@ rect2_t ui_text_op(font_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t
 							.color_11   = color_packed,
 							.color_01   = color_packed,
 							.flags      = R_UI_RECT_BLEND_TEXT,
-							.clip_rect  = ui_get_clip_rect(),
+							.clip_rect  = ui_get_clip_rect_fixed(),
 							.texture    = rhi_get_texture_srv(font->texture),
 						},
 					}
@@ -848,7 +914,7 @@ void ui_sort_render_commands(void)
 // TODO: remove... silly function
 fn_local void ui_do_rect(r_ui_rect_t rect)
 {
-	rect.clip_rect = ui_get_clip_rect();
+	rect.clip_rect = ui_get_clip_rect_fixed();
 
 	rect2_t clip_rect = rect2_from_fixed(rect.clip_rect);
 	if (rect2_area(rect2_intersect(rect.rect, clip_rect)) > 0.0f)
@@ -985,8 +1051,8 @@ void ui_draw_circle(v2_t p, float radius, v4_t color)
 
 bool ui_mouse_in_rect(rect2_t rect)
 {
-	// TODO: Intersect with clip rect here
-	return rect2_contains_point(rect, ui->input.mouse_p);
+	rect2_t clip_rect = ui_get_clip_rect();
+	return rect2_contains_point(rect2_intersect(rect, clip_rect), ui->input.mouse_p);
 }
 
 ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, ui_priority_t priority)
@@ -1336,103 +1402,6 @@ static void ui_initialize(void)
 	ui->initialized = true;
 }
 
-fn_local void ui_tick_ui_animations(ui_anim_list_t *list, float dt)
-{
-	PROFILE_BEGIN_FUNC;
-
-	ui_id_t          *restrict active_ids = list->active_ids;
-	ui_id_t          *restrict sleepy_ids = list->sleepy_ids;
-	ui_anim_t        *restrict active_anims = list->active;
-	ui_anim_sleepy_t *restrict sleepy_anims = list->sleepy;
-
-	int32_t active_count = list->active_count;
-	int32_t sleepy_count = list->sleepy_count;
-
-	for (int32_t sleepy_index = 0; sleepy_index < sleepy_count;)
-	{
-		ui_anim_sleepy_t *anim = &sleepy_anims[sleepy_index];
-
-		if (anim->last_touched_frame_index < ui->frame_index)
-		{
-			int32_t swap_index = --sleepy_count;
-			sleepy_ids  [sleepy_index] = sleepy_ids  [swap_index];
-			sleepy_anims[sleepy_index] = sleepy_anims[swap_index];
-		}
-		else
-		{
-			sleepy_index++;
-		}
-	}
-
-	for (int32_t active_index = 0; active_index < active_count;)
-	{
-		ui_anim_t *anim = &active_anims[active_index];
-
-		if (anim->last_touched_frame_index >= ui->frame_index)
-		{
-			float length_limit = anim->length_limit;
-			float c_t = anim->c_t;
-			float c_v = anim->c_v;
-
-			v4_t target   = anim->t_target;
-			v4_t current  = anim->t_current;
-			v4_t velocity = anim->t_velocity;
-
-			if (length_limit != FLT_MAX)
-			{
-				v4_t min = sub(target, length_limit);
-				v4_t max = add(target, length_limit);
-				current = v4_min(current, max);
-				current = v4_max(current, min);
-			}
-
-			v4_t delta   = sub(target, current);
-			v4_t accel_t = mul( c_t, delta);
-			v4_t accel_v = mul(-c_v, velocity);
-			v4_t accel = add(accel_t, accel_v);
-
-			velocity = add(velocity, mul(dt, accel));
-			current  = add(current,  mul(dt, velocity));
-
-			anim->t_current  = current;
-			anim->t_velocity = velocity;
-
-			if (vlen(velocity) < dt*UI_ANIM_SLEEPY_THRESHOLD)
-			{
-				ui_anim_sleepy_t as_sleepy = {
-					.t_current = target,
-				};
-
-				// add to sleepy array
-				int32_t sleepy_index = sleepy_count++;
-				sleepy_ids  [sleepy_index] = active_ids[active_index];
-				sleepy_anims[sleepy_index] = as_sleepy;
-
-				// remove from active array
-				int32_t swap_index = --active_count;
-				active_ids  [active_index] = active_ids  [swap_index];
-				active_anims[active_index] = active_anims[swap_index];
-			}
-			else
-			{
-				active_index++;
-			}
-		}
-		else
-		{
-			// remove from active array
-			int32_t swap_index = --active_count;
-			active_ids  [active_index] = active_ids  [swap_index];
-			active_anims[active_index] = active_anims[swap_index];
-		}
-	}
-
-	list->active_count = active_count;
-	list->sleepy_count = sleepy_count;
-
-	PROFILE_END_FUNC;
-}
-
 bool ui_begin(float dt)
 {
 	ASSERT(ui);
@@ -1457,7 +1426,7 @@ bool ui_begin(float dt)
 		}
 	}
 
-	ui_tick_ui_animations(&ui->anim_list, dt);
+	ui_tick_animations(&ui->anim_list, dt);
 
 	ui->frame_index += 1;
 	

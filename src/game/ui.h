@@ -322,7 +322,6 @@ fn v4_t  ui_interpolate_v4 (ui_id_t id, v4_t  target);
 fn v4_t  ui_set_v4         (ui_id_t id, v4_t  target);
 
 fn float ui_scalar            (ui_style_scalar_t scalar);
-fn r_rect2_fixed_t ui_get_clip_rect(void);
 fn void  ui_push_scalar       (ui_style_scalar_t scalar, float value);
 fn float ui_pop_scalar        (ui_style_scalar_t scalar);
 
@@ -367,8 +366,10 @@ fn rect2_t ui_text_op                      (font_t *font, v2_t p, string_t text,
 fn v2_t    ui_text_align_p                 (font_t *font, rect2_t rect, string_t text, v2_t align);
 fn v2_t    ui_text_center_p                (font_t *font, rect2_t rect, string_t text);
 
-fn void    ui_push_clip_rect               (rect2_t rect);
-fn void    ui_pop_clip_rect                (void);
+fn r_rect2_fixed_t ui_get_clip_rect_fixed  (void);
+fn rect2_t         ui_get_clip_rect        (void);
+fn void            ui_push_clip_rect       (rect2_t rect);
+fn void            ui_pop_clip_rect        (void);
 
 fn rect2_t ui_draw_text                    (font_t *font, v2_t p, string_t text);
 fn rect2_t ui_draw_text_aligned            (font_t *font, rect2_t rect, string_t text, v2_t align);
@@ -426,9 +427,6 @@ fn ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect);
 
 fn void ui_tooltip(string_t text);
 fn void ui_hover_tooltip(string_t text);
-fn bool ui_popup_is_open(ui_id_t id);
-fn void ui_open_popup(ui_id_t id);
-fn void ui_close_popup(ui_id_t id);
 
 //
 //
@@ -497,15 +495,7 @@ fn void ui_push_command(ui_render_command_key_t key, const ui_render_command_t *
 fn void ui_reset_render_commands(void);
 fn void ui_sort_render_commands(void);
 
-PAD(4);
 #define UI_ID_STACK_COUNT (32)
-
-typedef struct ui_popup_t
-{
-	ui_id_t id;
-} ui_popup_t;
-
-#define UI_POPUP_STACK_COUNT (32)
 
 typedef struct debug_notif_t
 {
@@ -577,7 +567,6 @@ typedef struct ui_t
 
 	stack_t(ui_id_t, UI_ID_STACK_COUNT) id_stack;
 	stack_t(ui_tooltip_t, UI_TOOLTIP_STACK_COUNT) tooltip_stack;
-	stack_t(ui_popup_t, UI_POPUP_STACK_COUNT) popup_stack;
 
 	table_t       state_index;
 	simple_heap_t state_allocator;
