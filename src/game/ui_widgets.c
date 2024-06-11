@@ -405,6 +405,9 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 				*p->i32.v = p->i32.min + (int32_t)roundf(t_slider*(float)(p->i32.max - p->i32.min));
 			} break;
 		}
+
+		ui->cursor             = Cursor_none;
+		ui->cursor_reset_delay = 1;
 	}
 	else
 	{
@@ -919,6 +922,11 @@ void ui_sat_val_picker(rect2_t rect, float hue, float *sat, float *val)
 		if (ui_button_released(UiButton_left, true))
 		{
 			ui_clear_active();
+		}
+		else
+		{
+			ui->cursor             = Cursor_none;
+			ui->cursor_reset_delay = 1;
 		}
 	}
 
