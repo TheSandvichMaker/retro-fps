@@ -195,8 +195,32 @@ void ui_row_text_edit(ui_row_builder_t *builder, string_t label, dynamic_string_
 
 void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 {
-	(void)label;
-	(void)color;
+	// TODO: Add alpha control
+
+	if (!color)
+	{
+		log(UI, Warning, "Called ui_row_color_picker without a color");
+		// TODO: Don't return, draw a disabled color picker!!!!!!!!!!!!!!!!
+		return;
+	}
+
+	ui_id_t id = ui_id(label);
+	ui_validate_widget(id);
+
+	bool first_use;
+	ui_color_picker_state_t *state = ui_get_state(id, &first_use, ui_color_picker_state_t);
+
+	if (first_use ||
+		color->x != state->cached_color.x ||
+		color->y != state->cached_color.y ||
+		color->z != state->cached_color.z ||
+		color->w != state->cached_color.w)
+	{
+		v3_t hsv = hsv_from_rgb(color->xyz).hsv;
+		state->hue = hsv.x;
+		state->sat = hsv.y;
+		state->val = hsv.z;
+	}
 
 	float height = 6.0f*ui_font(UiFont_header)->height;
 	rect2_t row = ui_row_ex(builder, height, true);
@@ -214,9 +238,10 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 
 	ui_label(label_rect, label);
 
-	static float hue = 0.0f, sat = 1.0f, val = 1.0f;
-	ui_hue_picker    (hue_picker_rect,     &hue);
-	ui_sat_val_picker(sat_val_picker_rect, hue, &sat, &val);
+	ui_hue_picker    (hue_picker_rect,     &state->hue);
+	ui_sat_val_picker(sat_val_picker_rect,  state->hue, &state->sat, &state->val);
+
+	v3_t rgb = rgb_from_hsv((v3_t){state->hue, state->sat, state->val});
 
 	float font_height = ui_font(UiFont_default)->height;
 
@@ -224,6 +249,9 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 	rect2_cut_from_top(widget_rect, ui_sz_pix(font_height), &hsv_rect, &widget_rect);
 	rect2_cut_from_top(widget_rect, ui_sz_pix(font_height), &rgb_rect, &widget_rect);
 
-	ui_label(hsv_rect, Sf("HSV: (%.02f, %.02f, %.02f)", hue, sat, val));
-	ui_label(rgb_rect, Sf("RGB: (%.02f, %.02f, %.02f)", 1.0f, 1.0f, 1.0f));
+	ui_label(hsv_rect, Sf("HSV: (%.02f, %.02f, %.02f)", state->hue, state->sat, state->val));
+	ui_label(rgb_rect, Sf("RGB: (%.02f, %.02f, %.02f)", rgb.x, rgb.y, rgb.z));
+
+	color->xyz = rgb;
+	state->cached_color = *color;
 }

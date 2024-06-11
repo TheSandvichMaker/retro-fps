@@ -15,6 +15,7 @@ typedef struct simple_heap_t
 	simple_heap_block_header_t free_block_lists[12];
 } simple_heap_t;
 
+fn bool  simple_heap_is_init     (simple_heap_t *heap);
 fn void  simple_heap_init        (simple_heap_t *heap, arena_t *arena);
 fn void *simple_heap_alloc_nozero(simple_heap_t *heap, uint16_t size);
 fn void *simple_heap_alloc       (simple_heap_t *heap, uint16_t size);

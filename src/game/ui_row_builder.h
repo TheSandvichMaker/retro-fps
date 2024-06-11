@@ -25,4 +25,18 @@ fn bool ui_row_slider_int_ex(ui_row_builder_t *builder, string_t label, int   *v
 fn bool ui_row_slider       (ui_row_builder_t *builder, string_t label, float *f, float min, float max);
 fn bool ui_row_slider_ex    (ui_row_builder_t *builder, string_t label, float *f, float min, float max, float granularity);
 fn void ui_row_text_edit    (ui_row_builder_t *builder, string_t label, dynamic_string_t *buffer);
-fn void ui_row_color_picker (ui_row_builder_t *builder, string_t label, v4_t *color);
+
+// TODO: Pull out as generic widget not tied to row builder
+
+typedef struct ui_color_picker_state_t
+{
+	// want to preserve this rather than reconstruct it from the color
+	// because if you put the value to 0, then all hue and saturation
+	// info is destroyed (also just seems gnarly precision wise)
+	float hue, sat, val;
+	// but we also want to know if the color changed externally, so we
+	// aren't holding stale hue/sat/val values!
+	v4_t  cached_color;
+} ui_color_picker_state_t;
+
+fn void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color);

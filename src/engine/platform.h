@@ -285,6 +285,8 @@ typedef struct platform_tick_io_t
 	platform_cursor_t cursor;
 
 	// out
+	v2_t    set_mouse_p;
+	rect2_t restrict_mouse_rect;
 	bool request_exit;
 } platform_tick_io_t;
 

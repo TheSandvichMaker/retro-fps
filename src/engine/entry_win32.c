@@ -62,6 +62,29 @@ typedef struct win32_input_context_t
 	input_t *input;
 } win32_input_context_t;
 
+fn_local RECT win32_client_rect_to_screen(HWND window, RECT rect)
+{
+	POINT screen_rect_lt;
+	screen_rect_lt.x = rect.left;
+	screen_rect_lt.y = rect.top;
+
+	ClientToScreen(window, &screen_rect_lt);
+
+	POINT screen_rect_rb;
+	screen_rect_rb.x = rect.right;
+	screen_rect_rb.y = rect.bottom;
+
+	ClientToScreen(window, &screen_rect_rb);
+
+	RECT screen_rect;
+	screen_rect.left   = screen_rect_lt.x;
+	screen_rect.top    = screen_rect_lt.y;
+	screen_rect.right  = screen_rect_rb.x;
+	screen_rect.bottom = screen_rect_rb.y;
+
+	return screen_rect;
+}
+
 fn_local void win32_lock_cursor(win32_input_context_t *context, HWND window, bool lock)
 {
     if (context->cursor_locked != lock)
@@ -75,29 +98,11 @@ fn_local void win32_lock_cursor(win32_input_context_t *context, HWND window, boo
             // SetCapture(window);
             ShowCursor(FALSE);
 
-            // good API, windows...
 
             RECT rect;
             GetClientRect(window, &rect);
 
-            POINT screen_rect_lr;
-            screen_rect_lr.x = rect.left;
-            screen_rect_lr.y = rect.right;
-
-            ClientToScreen(window, &screen_rect_lr);
-
-            POINT screen_rect_tb;
-            screen_rect_tb.x = rect.top;
-            screen_rect_tb.y = rect.bottom;
-
-            ClientToScreen(window, &screen_rect_tb);
-
-            RECT screen_rect;
-            screen_rect.left   = screen_rect_lr.x;
-            screen_rect.right  = screen_rect_lr.y;
-            screen_rect.top    = screen_rect_tb.x;
-            screen_rect.bottom = screen_rect_tb.y;
-
+			RECT screen_rect = win32_client_rect_to_screen(window, rect);
             ClipCursor(&screen_rect);
         }
         else
@@ -717,6 +722,7 @@ int wWinMain(HINSTANCE instance,
 			.input         = input,
 			.rhi_window    = rhi_window,
 			.cursor_locked = input_context.cursor_locked,
+			.set_mouse_p   = { -1, -1 },
 		};
 
 		hooks.tick(&tick_io);
@@ -732,6 +738,41 @@ int wWinMain(HINSTANCE instance,
 		if (tick_io.cursor_locked != input_context.cursor_locked)
 		{
 			win32_lock_cursor(&input_context, window, tick_io.cursor_locked);
+		}
+
+		rect2_t restrict_mouse_rect = tick_io.restrict_mouse_rect;
+
+		RECT client_rect;
+		GetClientRect(window, &client_rect);
+
+		int height = client_rect.bottom - client_rect.top;
+
+		if (rect2_is_inside_out(restrict_mouse_rect))
+		{
+			ClipCursor(NULL);
+		}
+		else
+		{
+			RECT restrict_rect_client = {
+				.left   = (int)restrict_mouse_rect.min.x,
+				.right  = (int)restrict_mouse_rect.max.x + 1,
+				.bottom = (int)(height - restrict_mouse_rect.min.y - 1) + 1,
+				.top    = (int)(height - restrict_mouse_rect.max.y - 1),
+			};
+
+			RECT restrict_rect_screen = win32_client_rect_to_screen(window, restrict_rect_client);
+            ClipCursor(&restrict_rect_screen);
+		}
+
+		if (tick_io.set_mouse_p.x >= 0.0f &&
+			tick_io.set_mouse_p.y >= 0.0f)
+		{
+			POINT desired_cursor = {
+				.x = (int)tick_io.set_mouse_p.x,
+				.y = height - (int)tick_io.set_mouse_p.y - 1,
+			};
+			ClientToScreen(window, &desired_cursor);
+			SetCursorPos(desired_cursor.x, desired_cursor.y);
 		}
 
 		//if (cursor != last_cursor)

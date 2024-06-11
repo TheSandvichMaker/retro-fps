@@ -12,6 +12,7 @@ string_t log_level_to_string[] = {
 string_t log_category_to_string[] = {
 
 	[LogCat_None]          = Sc("None"),
+	[LogCat_Misc]          = Sc("Misc"),
 	[LogCat_ActionSystem]  = Sc("ActionSystem"),
 	[LogCat_Asset]         = Sc("Asset"),
 	[LogCat_Mixer]         = Sc("Mixer"),

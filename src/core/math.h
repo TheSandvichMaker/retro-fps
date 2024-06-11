@@ -296,6 +296,92 @@ fn_local v4_t unpack_color(uint32_t color)
     return result;
 }
 
+typedef struct hsv_conv_t
+{
+	v3_t hsv;
+	bool hue_is_well_defined;
+} hsv_conv_t;
+
+fn_local hsv_conv_t hsv_from_rgb(v3_t rgb)
+{ 
+	float r = rgb.x;
+	float g = rgb.y;
+	float b = rgb.z;
+
+	float min = r < g ? r : g < b ? g : b;
+	float max = r > g ? r : g > b ? g : b;
+	float delta = max - min;
+
+	float h, s, v;
+	bool  hue_is_well_defined = false;
+
+	v = max;
+	if (delta < 0.00001f)
+	{
+		s = 0.0f;
+		h = 0.0f;
+	}
+	else if (max <= 0.0f)
+	{
+		s = 0.0f;
+		h = 0.0f;
+	}
+	else
+	{
+		s = delta / max;
+
+		if      (r >= max) h =        (g - b) / delta;
+		else if (g >= max) h = 2.0f + (b - r) / delta;
+		else               h = 4.0f + (r - g) / delta;
+
+		h *= (1.0f / 6.0f);
+		
+		if (h < 0.0f)
+		{
+			h += 1.0f;
+		}
+
+		hue_is_well_defined = true;
+	}
+
+	hsv_conv_t result = {
+		.hsv                 = { h, s, v },
+		.hue_is_well_defined = true,
+	};
+
+	return result;
+}
+
+fn_local v3_t rgb_from_hsv(v3_t hsv)
+{
+	float h = hsv.x;
+	float s = hsv.y;
+	float v = hsv.z;
+
+	float unused;
+	h = abs_ss(modff(h, &unused));
+
+	int i = (int)(h * 6.0f);
+	float f = h * 6.0f - (float)i;
+	float p = v * (1.0f - s);
+	float q = v * (1.0f - f * s);
+	float t = v * (1.0f - (1.0f - f) * s);
+
+	float r = 0.0f, g = 0.0f, b = 0.0f;
+
+	switch (i)
+	{
+		case 0: r = v, g = t, b = p; break;
+		case 1: r = q, g = v, b = p; break;
+		case 2: r = p, g = v, b = t; break;
+		case 3: r = p, g = q, b = v; break;
+		case 4: r = t, g = p, b = v; break;
+		case 5: r = v, g = p, b = q; break;
+	}
+
+	return (v3_t){r, g, b};
+}
+
 // https://registry.khronos.org/OpenGL/extensions/EXT/EXT_packed_float.txt
 
 fn_local unsigned pack_float11(float value)
@@ -1517,6 +1603,11 @@ fn_local float rect2_area(rect2_t rect)
 	float w = rect2_width(rect);
 	float h = rect2_height(rect);
 	return w*h;
+}
+
+fn_local bool rect2_is_inside_out(rect2_t rect)
+{
+	return rect2_width(rect) < 0.0f || rect2_height(rect) < 0.0f;
 }
 
 fn_local rect2_t rect2_reposition_min(rect2_t rect, v2_t p)

@@ -1,3 +1,8 @@
+bool simple_heap_is_init(simple_heap_t *heap)
+{
+	return heap->free_block_lists[0].next != NULL;
+}
+
 void simple_heap_init(simple_heap_t *heap, arena_t *arena)
 {
 	heap->arena = arena;
@@ -12,7 +17,7 @@ void simple_heap_init(simple_heap_t *heap, arena_t *arena)
 
 void *simple_heap_alloc_nozero(simple_heap_t *heap, uint16_t size)
 {
-	ASSERT_MSG(heap->arena, "Please initialize the heap first");
+	ASSERT_MSG(simple_heap_is_init(heap), "Please initialize the heap first");
 
 	void *result = NULL;
 
@@ -25,22 +30,25 @@ void *simple_heap_alloc_nozero(simple_heap_t *heap, uint16_t size)
 	uint64_t block_size       = next_pow2(MAX(16, size));
 	uint64_t block_list_index = count_trailing_zeros_u64(block_size) - 5;
 
-	if (ALWAYS(block_list_index < ARRAY_COUNT(heap->free_block_lists)))
+	ASSERT_MSG(block_list_index < ARRAY_COUNT(heap->free_block_lists),
+			   "Size too big to fit in the biggest block the simple heap allocator supports, "
+			   "this should never happen because the size is restricted to a uint16, and it can "
+			   "fit any size a uint16 can be, so there's some kind of programming bug.");
+
+	simple_heap_block_header_t *list = &heap->free_block_lists[block_list_index];
+
+	if (list->next != list)
 	{
-		simple_heap_block_header_t *list = &heap->free_block_lists[block_list_index];
+		simple_heap_block_header_t *block = list->next;
+		block->next->prev = block->prev;
+		block->prev->next = block->next;
 
-		if (list->next != list)
-		{
-			simple_heap_block_header_t *block = list->next;
-			block->next->prev = block->prev;
-			block->prev->next = block->next;
-
-			result = block;
-		}
-		else
-		{
-			result = m_alloc_nozero(heap->arena, block_size, 16);
-		}
+		result = block;
+	}
+	else
+	{
+		ASSERT_MSG(heap->arena, "If you want the heap to dynamically allocate blocks, it has to have an arena!");
+		result = m_alloc_nozero(heap->arena, block_size, 16);
 	}
 
 	return result;
@@ -48,7 +56,7 @@ void *simple_heap_alloc_nozero(simple_heap_t *heap, uint16_t size)
 
 void *simple_heap_alloc(simple_heap_t *heap, uint16_t size)
 {
-	ASSERT_MSG(heap->arena, "Please initialize the heap first");
+	ASSERT_MSG(simple_heap_is_init(heap), "Please initialize the heap first");
 
 	void *result = simple_heap_alloc_nozero(heap, size);
 	zero_memory(result, size);
@@ -58,7 +66,7 @@ void *simple_heap_alloc(simple_heap_t *heap, uint16_t size)
 
 void simple_heap_free(simple_heap_t *heap, void *pointer, uint16_t size)
 {
-	ASSERT_MSG(heap->arena, "Please initialize the heap first");
+	ASSERT_MSG(simple_heap_is_init(heap), "Please initialize the heap first");
 
 	if (pointer == NULL || size == 0)
 	{

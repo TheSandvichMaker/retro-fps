@@ -18,6 +18,17 @@ ui_id_t ui_id(string_t string)
 	return ui_child_id(parent, string);
 }
 
+ui_id_t ui_combine_ids(ui_id_t a, ui_id_t b)
+{
+	ui_id_t result = {
+		a.value ^ b.value,
+	};
+	UI_ID_APPEND_NAME(result, string_from_storage(a._name));
+	UI_ID_APPEND_NAME(result, S("^"));
+	UI_ID_APPEND_NAME(result, string_from_storage(b._name));
+	return result;
+}
+
 ui_id_t ui_child_id(ui_id_t parent, string_t string)
 {
 	ui_id_t result = {0};
@@ -1409,7 +1420,6 @@ bool ui_begin(float dt)
 
 	ui__trickle_input(&ui->input, &ui->queued_input);
 
-	//ui->input = input;
 	ui->dt = dt;
 
 	ui->last_frame_ui_rect_count = ui->render_commands.count;
@@ -1473,6 +1483,9 @@ bool ui_begin(float dt)
 	{
 		ui->cursor = Cursor_arrow;
 	}
+
+	ui->set_mouse_p = make_v2(-1, -1);
+	ui->restrict_mouse_rect = rect2_inverted_infinity();
 
 	return ui->has_focus;
 }

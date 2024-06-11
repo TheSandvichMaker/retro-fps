@@ -18,6 +18,7 @@ typedef enum log_category_t
 {
 	LogCat_None          = 0,
 
+	LogCat_Misc,
 	LogCat_ActionSystem,
 	LogCat_Asset,
 	LogCat_Mixer,

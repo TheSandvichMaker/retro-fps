@@ -406,8 +406,13 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 			} break;
 		}
 
-		ui->cursor             = Cursor_none;
-		ui->cursor_reset_delay = 1;
+		float handle_range_min = rect.min.x + 0.5f*handle_w;
+
+		ui->cursor              = Cursor_none;
+		ui->cursor_reset_delay  = 1;
+		ui->restrict_mouse_rect = rect2_from_min_dim(
+			make_v2(ui->drag_anchor.x + handle_range_min, ui->input.mouse_p_on_lmb.y),
+			make_v2(slider_effective_w, 0));
 	}
 	else
 	{
@@ -452,6 +457,11 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 								   ui_color(UiColor_slider_hot),
 								   ui_color(UiColor_slider_active),
 								   ui_color(UiColor_slider_active));
+
+	if (interaction & UI_RELEASED)
+	{
+		ui->set_mouse_p = add(rect2_center(handle), ui->drag_anchor);
+	}
 
 	float hover_lift = ui_hover_lift(id);
 
@@ -876,6 +886,12 @@ void ui_hue_picker(rect2_t rect, float *hue)
 		{
 			ui_clear_active();
 		}
+		else
+		{
+			ui->cursor              = Cursor_none;
+			ui->cursor_reset_delay  = 1;
+			ui->restrict_mouse_rect = rect;
+		}
 	}
 
 	uint32_t color_packed = 0xFFFFFFFF;
@@ -897,7 +913,7 @@ void ui_hue_picker(rect2_t rect, float *hue)
 
 void ui_sat_val_picker(rect2_t rect, float hue, float *sat, float *val)
 {
-	ui_id_t id = ui_id_pointer(sat);
+	ui_id_t id = ui_combine_ids(ui_id_pointer(sat), ui_id_pointer(val));
 	ui_validate_widget(id);
 
 	if (ui_mouse_in_rect(rect))
@@ -927,6 +943,7 @@ void ui_sat_val_picker(rect2_t rect, float hue, float *sat, float *val)
 		{
 			ui->cursor             = Cursor_none;
 			ui->cursor_reset_delay = 1;
+			ui->restrict_mouse_rect = rect;
 		}
 	}
 

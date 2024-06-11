@@ -125,7 +125,7 @@ typedef struct dynamic_string_t
 } dynamic_string_t;
 
 #define string_storage_t(size) struct { size_t count; char data[size]; }
-#define string_from_storage(storage) (string_t) { (storage).data, (storage.count) }
+#define string_from_storage(storage) ((string_t) { (storage).data, (storage.count) })
 #define string_into_storage(storage, string) (copy_memory((storage).data, (string).data, MIN(ARRAY_COUNT((storage).data), (string).count)), (storage).count = (string).count)
 #define string_storage_size(storage) ARRAY_COUNT((storage).data)
 

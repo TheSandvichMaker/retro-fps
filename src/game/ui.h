@@ -556,6 +556,8 @@ typedef struct ui_t
 
 	table_t widget_validation_table;
 
+	v2_t    set_mouse_p;
+	rect2_t restrict_mouse_rect;
 	v2_t    drag_anchor;
 	v2_t    drag_offset;
 	rect2_t resize_original_rect;

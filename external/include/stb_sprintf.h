@@ -290,6 +290,9 @@ STBSP__PUBLICDEF void STB_SPRINTF_DECORATE(set_separators)(char pcomma, char ppe
 #define STBSP__METRIC_NOSPACE 1024
 #define STBSP__METRIC_1024 2048
 #define STBSP__METRIC_JEDEC 4096
+// DF_EDIT_BEGIN: slice-style-strings
+#define STBSP__DF_COUNTED_STRING 8192
+// DF_EDIT_END
 
 static void stbsp__lead_sign(stbsp__uint32 fl, char *sign)
 {
@@ -539,6 +542,12 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
             ++f;
          }
          break;
+// DF_EDIT_BEGIN: slice-style-strings
+	  case 'c': // c for "counted" string
+	     fl |= STBSP__DF_COUNTED_STRING;
+		 ++f;
+		 break;
+// DF_EDIT_END
       // are we 64-bit on intmax? (c99)
       case 'j':
          fl |= (sizeof(size_t) == 8) ? STBSP__INTMAX : 0;
@@ -586,12 +595,26 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
 
       case 's':
          // get the string
-         s = va_arg(va, char *);
-         if (s == 0)
-            s = (char *)"null";
-         // get the length, limited to desired precision
-         // always limit to ~0u chars since our counts are 32b
-         l = stbsp__strlen_limited(s, (pr >= 0) ? pr : ~0u);
+		 // DF_EDIT_BEGIN: slice-style-strings
+		 if (fl & STBSP__DF_COUNTED_STRING)
+		 {
+		    struct stbsp__slice { char *data; stbsp__uint64 count; };
+		    struct stbsp__slice slice = va_arg(va, struct stbsp__slice);
+		    s = slice.data;
+		    if (s == 0)
+		        s = (char *)"null";
+		    l = (pr >= 0 ? pr : (stbsp__uint32)(slice.count < ~0u ? slice.count : ~0u));
+		 }
+		 else
+		 {
+            s = va_arg(va, char *);
+            if (s == 0)
+               s = (char *)"null";
+            // get the length, limited to desired precision
+            // always limit to ~0u chars since our counts are 32b
+            l = stbsp__strlen_limited(s, (pr >= 0) ? pr : ~0u);
+		 }
+		 // DF_EDIT_END
          lead[0] = 0;
          tail[0] = 0;
          pr = 0;
