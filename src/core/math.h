@@ -655,6 +655,15 @@ fn_local v3_t v3_max(v3_t l, v3_t r)
     };
 }
 
+fn_local v3_t v3_saturate(v3_t x)
+{
+	return (v3_t){
+		.x = flt_saturate(x.x),
+		.y = flt_saturate(x.y),
+		.z = flt_saturate(x.z),
+	};
+};
+
 fn_local v3_t v3_smax(float l, v3_t r)
 {
     return (v3_t){
@@ -1672,6 +1681,20 @@ fn_local rect2_t rect2_do_cut(rect2_cut_t cut, float a)
 	return (rect2_t){ 0 };
 }
 
+fn_local v2_t bary_from_rect2(rect2_t rect, v2_t p)
+{
+	v2_t dim    = rect2_dim(rect);
+	v2_t result = div(sub(p, rect.min), dim);
+	return result;
+}
+
+fn_local v2_t rect2_point_from_bary(rect2_t rect, v2_t bary)
+{
+	v2_t dim    = rect2_dim(rect);
+	v2_t result = add(rect.min, mul(bary, dim));
+	return result;
+}
+
 //
 // rect3
 //
@@ -1823,6 +1846,87 @@ fn_local float tetrahedron_signed_volume(v3_t a, v3_t b, v3_t c, v3_t d)
 
 	float volume = (1.0f / 6.0f)*dot(ad, cross(ab, ac));
 	return volume;
+}
+
+typedef struct lab_t 
+{
+	float L; 
+	float a; 
+	float b;
+} lab_t;
+
+fn_local lab_t oklab_from_linear_srgb(v3_t c) 
+{
+    float l = 0.4122214708f * c.x + 0.5363325363f * c.y + 0.0514459929f * c.z;
+	float m = 0.2119034982f * c.x + 0.6806995451f * c.y + 0.1073969566f * c.z;
+	float s = 0.0883024619f * c.x + 0.2817188376f * c.y + 0.6299787005f * c.z;
+
+    float l_ = cbrtf(l);
+    float m_ = cbrtf(m);
+    float s_ = cbrtf(s);
+
+    return (lab_t){
+        0.2104542553f*l_ + 0.7936177850f*m_ - 0.0040720468f*s_,
+        1.9779984951f*l_ - 2.4285922050f*m_ + 0.4505937099f*s_,
+        0.0259040371f*l_ + 0.7827717662f*m_ - 0.8086757660f*s_,
+    };
+}
+
+v3_t linear_srgb_from_oklab(lab_t c) 
+{
+    float l_ = c.L + 0.3963377774f * c.a + 0.2158037573f * c.b;
+    float m_ = c.L - 0.1055613458f * c.a - 0.0638541728f * c.b;
+    float s_ = c.L - 0.0894841775f * c.a - 1.2914855480f * c.b;
+
+    float l = l_*l_*l_;
+    float m = m_*m_*m_;
+    float s = s_*s_*s_;
+
+    return (v3_t){
+		+4.0767416621f * l - 3.3077115913f * m + 0.2309699292f * s,
+		-1.2684380046f * l + 2.6097574011f * m - 0.3413193965f * s,
+		-0.0041960863f * l - 0.7034186147f * m + 1.7076147010f * s,
+    };
+}
+
+typedef struct lch_t
+{
+	float L;
+	float C;
+	float h;
+} lch_t;
+
+lch_t oklch_from_oklab(lab_t c)
+{
+	lch_t result = {
+		.L = c.L,
+		.C = sqrtf(c.a*c.a + c.b*c.b),
+		.h = atan2f(c.b, c.a),
+	};
+	return result;
+}
+
+lab_t oklab_from_oklch(lch_t c)
+{
+	float cos_h, sin_h;
+	sincos_ss(c.h, &cos_h, &sin_h);
+
+	lab_t result = {
+		.L = c.L,
+		.a = c.C*cos_h,
+		.b = c.C*sin_h,
+	};
+	return result;
+}
+
+lch_t oklch_from_linear_srgb(v3_t c)
+{
+	return oklch_from_oklab(oklab_from_linear_srgb(c));
+}
+
+v3_t linear_srgb_from_oklch(lch_t c)
+{
+	return linear_srgb_from_oklab(oklab_from_oklch(c));
 }
 
 #include "geometric_algebra.h"

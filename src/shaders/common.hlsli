@@ -47,6 +47,11 @@ float4 Unpack(ColorRGBA8 rgba8)
 	return result;
 }
 
+float LinearToSRGB(float lin)
+{
+	return lin <= 0.0031308 ? 12.92*lin : 1.055*pow(lin, 1.0 / 2.4) - 0.055;
+}
+
 float3 LinearToSRGB(float3 lin)
 {
 	return select(lin <= 0.0031308, 12.92*lin, 1.055*pow(lin, 1.0 / 2.4) - 0.055);
@@ -102,4 +107,79 @@ float SampleShadowPCF3x3(Texture2D<float> shadowmap, float2 shadowmap_dim, float
 float2 SvPositionToClip(float2 sv_position)
 { 
 	return 2.0f*(sv_position / view.view_size) - 1.0f;
+}
+
+float3 oklab_from_linear_srgb(float3 c) 
+{
+    float l = 0.4122214708f * c.x + 0.5363325363f * c.y + 0.0514459929f * c.z;
+	float m = 0.2119034982f * c.x + 0.6806995451f * c.y + 0.1073969566f * c.z;
+	float s = 0.0883024619f * c.x + 0.2817188376f * c.y + 0.6299787005f * c.z;
+
+    float l_ = pow(l, 1.0 / 3.0);
+    float m_ = pow(m, 1.0 / 3.0);
+    float s_ = pow(s, 1.0 / 3.0);
+
+    float3 result = {
+        0.2104542553f*l_ + 0.7936177850f*m_ - 0.0040720468f*s_,
+        1.9779984951f*l_ - 2.4285922050f*m_ + 0.4505937099f*s_,
+        0.0259040371f*l_ + 0.7827717662f*m_ - 0.8086757660f*s_,
+    };
+
+	return result;
+}
+
+float3 linear_srgb_from_oklab(float3 c) 
+{
+    float l_ = c.x + 0.3963377774f * c.y + 0.2158037573f * c.z;
+    float m_ = c.x - 0.1055613458f * c.y - 0.0638541728f * c.z;
+    float s_ = c.x - 0.0894841775f * c.y - 1.2914855480f * c.z;
+
+    float l = l_*l_*l_;
+    float m = m_*m_*m_;
+    float s = s_*s_*s_;
+
+    float3 result = {
+		+4.0767416621f * l - 3.3077115913f * m + 0.2309699292f * s,
+		-1.2684380046f * l + 2.6097574011f * m - 0.3413193965f * s,
+		-0.0041960863f * l - 0.7034186147f * m + 1.7076147010f * s,
+    };
+
+	return result;
+}
+
+float3 oklch_from_oklab(float3 c)
+{
+	float3 result = {
+		c.x,
+		sqrt(c.y*c.y + c.z*c.z),
+		atan2(c.z, c.y),
+	};
+	return result;
+}
+
+float3 oklab_from_oklch(float3 c)
+{
+	float3 result = {
+		c.x,
+		c.y*cos(c.z),
+		c.y*sin(c.z),
+	};
+	return result;
+}
+
+float3 oklch_from_linear_srgb(float3 c)
+{
+	return oklch_from_oklab(oklab_from_linear_srgb(c));
+}
+
+float3 linear_srgb_from_oklch(float3 c)
+{
+	return linear_srgb_from_oklab(oklab_from_oklch(c));
+}
+
+float3 rgb_from_hsv(float3 c)
+{
+    float4 K = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    float3 p = abs(frac(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * lerp(K.xxx, saturate(p - K.xxx), c.y);
 }

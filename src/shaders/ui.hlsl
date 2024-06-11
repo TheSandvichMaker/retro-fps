@@ -1,6 +1,8 @@
 #include "common.hlsli"
 
-#define R_UI_RECT_BLEND_TEXT (1 << 0)
+#define R_UI_RECT_BLEND_TEXT     (1 << 0)
+#define R_UI_RECT_HUE_PICKER     (1 << 1)
+#define R_UI_RECT_SAT_VAL_PICKER (1 << 2)
 
 struct Rect2
 {
@@ -138,13 +140,27 @@ float4 MainPS(VSOut IN) : SV_Target
 	float shadow = min(1.0, exp(-5.0f*d / shadow_radius)); // 1.0f - saturate(d / shadow_radius);
 	shadow *= rect.shadow_amount;
 
-	float4 color = IN.color;
-
 	// guard against inverted rects
 	float2 uv_min = min(rect.uv_min, rect.uv_max);
 	float2 uv_max = max(rect.uv_min, rect.uv_max);
 
 	float2 uv = IN.uv;
+
+	float4 color = IN.color;
+
+	if (rect.flags & R_UI_RECT_HUE_PICKER)
+	{
+		float h = uv.y;
+		color.rgb = rgb_from_hsv(float3(h, 1.0f, 1.0f));
+		color.rgb = SRGBToLinear(color.rgb);
+	}
+	else if (rect.flags & R_UI_RECT_SAT_VAL_PICKER)
+	{
+		float s = uv.x;
+		float v = uv.y;
+		color.rgb = rgb_from_hsv(float3(LinearToSRGB(color.r), s, v));
+		color.rgb = SRGBToLinear(color.rgb);
+	}
 
 	if (all(uv >= uv_min) && all(uv <= uv_max))
 	{
@@ -165,9 +181,9 @@ float4 MainPS(VSOut IN) : SV_Target
 	}
 
 	color.a += shadow;
-	color.rgb = sqrt(color.rgb);
+	color.rgb = LinearToSRGB(color.rgb);
     color += RemapTriPDF(QuasirandomDither(IN.pos.xy)) / 255.0f;
-	color.rgb *= color.rgb;
+	color.rgb = SRGBToLinear(color.rgb);
 
 	return color;
 }

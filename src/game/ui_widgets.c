@@ -841,3 +841,141 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 	m_scope_end(temp);
 }
 
+
+//
+// Color Picker
+//
+
+void ui_hue_picker(rect2_t rect, float *hue)
+{
+	ui_id_t id = ui_id_pointer(hue);
+	ui_validate_widget(id);
+
+	if (ui_mouse_in_rect(rect))
+	{
+		ui_set_next_hot(id, UI_PRIORITY_DEFAULT);
+	}
+
+	if (ui_is_hot(id))
+	{
+		if (ui_button_pressed(UiButton_left, true))
+		{
+			ui_set_active(id);
+		}
+	}
+
+	if (ui_is_active(id))
+	{
+		v2_t bary = bary_from_rect2(rect, ui->input.mouse_p);
+		*hue = flt_saturate(bary.y);
+
+		if (ui_button_released(UiButton_left, true))
+		{
+			ui_clear_active();
+		}
+	}
+
+	uint32_t color_packed = 0xFFFFFFFF;
+
+	ui_do_rect((r_ui_rect_t){
+		.rect        = rect, 
+		.tex_coords  = {
+			.min = { 0, 0 },
+			.max = { 1, 1 },
+		},
+		.roundedness = add(v4_from_scalar(ui_scalar(UiScalar_roundedness)), ui_color(UiColor_roundedness)),
+		.color_00    = color_packed,
+		.color_10    = color_packed,
+		.color_11    = color_packed,
+		.color_01    = color_packed,
+		.flags       = R_UI_RECT_HUE_PICKER,
+	});
+}
+
+void ui_sat_val_picker(rect2_t rect, float hue, float *sat, float *val)
+{
+	ui_id_t id = ui_id_pointer(sat);
+	ui_validate_widget(id);
+
+	if (ui_mouse_in_rect(rect))
+	{
+		ui_set_next_hot(id, UI_PRIORITY_DEFAULT);
+	}
+
+	if (ui_is_hot(id))
+	{
+		if (ui_button_pressed(UiButton_left, true))
+		{
+			ui_set_active(id);
+		}
+	}
+
+	if (ui_is_active(id))
+	{
+		v2_t bary = bary_from_rect2(rect, ui->input.mouse_p);
+		*sat = flt_saturate(bary.x);
+		*val = flt_saturate(bary.y);
+
+		if (ui_button_released(UiButton_left, true))
+		{
+			ui_clear_active();
+		}
+	}
+
+	uint32_t color_packed = pack_color(make_v4(hue, 0, 0, 1));
+
+	ui_do_rect((r_ui_rect_t){
+		.rect        = rect, 
+		.tex_coords  = {
+			.min = { 0, 0 },
+			.max = { 1, 1 },
+		},
+		.roundedness = add(v4_from_scalar(ui_scalar(UiScalar_roundedness)), ui_color(UiColor_roundedness)),
+		.color_00    = color_packed,
+		.color_10    = color_packed,
+		.color_11    = color_packed,
+		.color_01    = color_packed,
+		.flags       = R_UI_RECT_SAT_VAL_PICKER,
+	});
+
+	float indicator_size = 8.0f;
+
+	if (ui_is_active(id))
+	{
+		indicator_size = 12.0f;
+	}
+
+	indicator_size = ui_interpolate_f32(id, indicator_size);
+
+	v2_t    indicator_p = rect2_point_from_bary(rect, make_v2(*sat, *val));
+	rect2_t indicator   = rect2_center_dim(indicator_p, make_v2(indicator_size, indicator_size));
+
+	UI_Scalar(UiScalar_roundedness, 0.5f*indicator_size)
+	{
+		ui_draw_rect_outline(rect2_add_radius(indicator, make_v2(1, 1)), ui_color(UiColor_widget_shadow), 2.5f);
+		ui_draw_rect_outline(indicator, make_v4(1, 1, 1, 1), 1.5f);
+	}
+}
+
+void ui_color_picker(rect2_t rect, v4_t *color)
+{
+	(void)rect;
+	(void)color;
+/*
+	uint32_t color_packed = 0xFFFFFFFF;
+
+	ui_do_rect((r_ui_rect_t){
+		.rect        = rect, 
+		.tex_coords  = {
+			.min = { 0, 0 },
+			.max = { 1, 1 },
+		},
+		.roundedness = add(v4_from_scalar(ui_scalar(UiScalar_roundedness)), ui_color(UiColor_roundedness)),
+		.color_00    = color_packed,
+		.color_10    = color_packed,
+		.color_11    = color_packed,
+		.color_01    = color_packed,
+		.flags       = R_UI_RECT_HUE_PICKER,
+	});
+*/
+}

@@ -192,3 +192,38 @@ void ui_row_text_edit(ui_row_builder_t *builder, string_t label, dynamic_string_
 	ui_label(label_rect, label);
 	ui_text_edit(widget_rect, buffer);
 }
+
+void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
+{
+	(void)label;
+	(void)color;
+
+	float height = 6.0f*ui_font(UiFont_header)->height;
+	rect2_t row = ui_row_ex(builder, height, true);
+
+	rect2_t label_rect, widget_rect;
+	rect2_cut_from_left(row, ui_sz_pct(0.5f), &label_rect, &widget_rect);
+
+	rect2_t sat_val_picker_rect;
+	rect2_cut_from_left(widget_rect, ui_sz_aspect(1.0f), &sat_val_picker_rect, &widget_rect);
+	rect2_cut_from_left(widget_rect, ui_sz_pix(ui_scalar(UiScalar_widget_margin)), NULL, &widget_rect);
+
+	rect2_t hue_picker_rect;
+	rect2_cut_from_left(widget_rect, ui_sz_aspect(0.2f), &hue_picker_rect, &widget_rect);
+	rect2_cut_from_left(widget_rect, ui_sz_pix(ui_scalar(UiScalar_widget_margin)), NULL, &widget_rect);
+
+	ui_label(label_rect, label);
+
+	static float hue = 0.0f, sat = 1.0f, val = 1.0f;
+	ui_hue_picker    (hue_picker_rect,     &hue);
+	ui_sat_val_picker(sat_val_picker_rect, hue, &sat, &val);
+
+	float font_height = ui_font(UiFont_default)->height;
+
+	rect2_t hsv_rect, rgb_rect;
+	rect2_cut_from_top(widget_rect, ui_sz_pix(font_height), &hsv_rect, &widget_rect);
+	rect2_cut_from_top(widget_rect, ui_sz_pix(font_height), &rgb_rect, &widget_rect);
+
+	ui_label(hsv_rect, Sf("HSV: (%.02f, %.02f, %.02f)", hue, sat, val));
+	ui_label(rgb_rect, Sf("RGB: (%.02f, %.02f, %.02f)", 1.0f, 1.0f, 1.0f));
+}

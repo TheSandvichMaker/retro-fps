@@ -119,3 +119,11 @@ typedef struct ui_text_edit_state_t
 } ui_text_edit_state_t;
 
 fn void ui_text_edit(rect2_t rect, dynamic_string_t *buffer);
+
+//
+// Color Picker
+//
+
+fn void ui_hue_picker    (rect2_t rect, float *hue);
+fn void ui_sat_val_picker(rect2_t rect, float hue, float *sat, float *val);
+fn void ui_color_picker  (rect2_t rect, v4_t *color);
