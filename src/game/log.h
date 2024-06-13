@@ -6,10 +6,13 @@
 
 typedef enum log_level_t
 {
-	LogLevel_Spam    = 1,
-	LogLevel_Info    = 2,
-	LogLevel_Warning = 7,
-	LogLevel_Error   = 10,
+	LogLevel_None,
+	LogLevel_SuperSpam,
+	LogLevel_Spam,
+	LogLevel_Info,
+	LogLevel_Warning,
+	LogLevel_Error,
+	LogLevel_COUNT,
 } log_level_t;
 
 extern string_t log_level_to_string[];
@@ -42,6 +45,8 @@ typedef struct log_loc_t
 } log_loc_t;
 
 #define MAKE_LOG_LOCATION &(log_loc_t){ .file = __FILE__, .line = __LINE__ }
+
+fn void set_log_filter_for_thread(log_level_t level, bool enabled);
 
 #define logs(cat, level, message)     logs_  (MAKE_LOG_LOCATION, LogCat_##cat, LogLevel_##level, message)
 #define log(cat, level, fmt, ...)     log_   (MAKE_LOG_LOCATION, LogCat_##cat, LogLevel_##level, fmt, ##__VA_ARGS__)

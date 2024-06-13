@@ -1,4 +1,38 @@
 //
+// Fallback "Error" Widget
+//
+
+void ui_error_widget(rect2_t rect, string_t widget_name, string_t error_message)
+{
+	// TODO: This id is not very unique. May cause issues.
+	ui_id_t id = ui_child_id(ui_id(widget_name), error_message);
+
+	ui_draw_rect(rect, ui_color(UiColor_widget_error_background));
+
+	ui_hover_tooltip(Sf("%cs: %cs (click to break into the debugger)", widget_name, error_message));
+	ui_hoverable    (id, rect);
+
+	// TODO: make it easier to quickly lay out multiple lines consecutively 
+	rect2_t line0, line1;
+	rect2_cut_from_top(rect, ui_sz_pix(ui_font(UiFont_default)->height), &line0, &rect);
+	rect2_cut_from_top(rect, ui_sz_pix(ui_font(UiFont_default)->height), &line1, &rect);
+
+	UI_Scalar(UiScalar_label_align_x, 0.5f)
+	UI_Color (UiColor_text, make_v4(1, 0.15, 0.15, 1))
+	{
+		ui_label(line0, Sf("!! error: %cs !!", widget_name));
+		ui_label(line1, error_message);
+	}
+
+	// Click on the error widget to pop into the debugger so you can figure out the callstack
+	if (ui_mouse_in_rect(rect) &&
+		ui_button_pressed(UiButton_left, false))
+	{
+		DEBUG_BREAK();
+	}
+}
+
+//
 // Scrollable Region
 //
 
@@ -619,6 +653,12 @@ fn_local float ui_text_edit__get_caret_x(prepared_glyphs_t *prep, size_t index)
 
 void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 {
+	if (buffer->count > INT32_MAX)
+	{
+		ui_error_widget(rect, S("ui_text_edit"), S("Way too huge buffer passed to ui_text_edit!"));
+		return;
+	}
+
 	arena_t *temp = m_get_temp(NULL, 0);
 	m_scope_begin(temp);
 
@@ -685,10 +725,10 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 							{
 								if (selection_active && !event->shift)
 								{
-									size_t start = state->selection_start;
-									size_t end   = state->cursor;
+									int start = state->selection_start;
+									int end   = state->cursor;
 
-									if (start > end) SWAP(size_t, start, end);
+									if (start > end) SWAP(int, start, end);
 
 									state->cursor = state->selection_start = start;
 								}
@@ -703,6 +743,11 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 									{
 										state->selection_start = state->cursor;
 									}
+
+									if (event->ctrl)
+									{
+
+									}
 								}
 
 								ui_consume_event(event);
@@ -713,10 +758,10 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 							{
 								if (selection_active && !event->shift)
 								{
-									size_t start = state->selection_start;
-									size_t end   = state->cursor;
+									int start = state->selection_start;
+									int end   = state->cursor;
 
-									if (start > end) SWAP(size_t, start, end);
+									if (start > end) SWAP(int, start, end);
 
 									state->cursor = state->selection_start = end;
 								}
@@ -742,8 +787,8 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 								bool delete    = event->keycode == Key_delete;
 								bool backspace = event->keycode == Key_backspace;
 
-								size_t start = (size_t)state->selection_start;
-								size_t end   = (size_t)state->cursor;
+								int start = (int)state->selection_start;
+								int end   = (int)state->cursor;
 
 								if (start == end)
 								{
@@ -751,9 +796,9 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 									if (delete                ) end   += 1;
 								}
 
-								if (start > end) SWAP(size_t, start, end);
+								if (start > end) SWAP(int, start, end);
 
-								size_t remove_count = end - start;
+								int remove_count = end - start;
 
 								dyn_string_remove_range(buffer, start, remove_count);
 
@@ -774,7 +819,7 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 								if (event->ctrl)
 								{
 									state->selection_start = 0;
-									state->cursor          = buffer->count;
+									state->cursor          = (int)buffer->count;
 									ui_consume_event(event);
 								}
 							} break;
@@ -861,6 +906,12 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 
 void ui_hue_picker(rect2_t rect, float *hue)
 {
+	if (!hue)
+	{
+		ui_error_widget(rect, S("ui_hue_picker"), S("no hue passed"));
+		return;
+	}
+
 	ui_id_t id = ui_id_pointer(hue);
 	ui_validate_widget(id);
 
@@ -913,6 +964,12 @@ void ui_hue_picker(rect2_t rect, float *hue)
 
 void ui_sat_val_picker(rect2_t rect, float hue, float *sat, float *val)
 {
+	if (!sat || !val)
+	{
+		ui_error_widget(rect, S("ui_sat_val_picker"), S("Missing saturation and/or value"));
+		return;
+	}
+
 	ui_id_t id = ui_combine_ids(ui_id_pointer(sat), ui_id_pointer(val));
 	ui_validate_widget(id);
 

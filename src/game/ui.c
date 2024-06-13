@@ -1387,6 +1387,7 @@ static void ui_initialize(void)
 	ui->style.base_colors [UiColor_text                   ] = make_v4(0.95f, 0.90f, 0.85f, 1.0f);
 	ui->style.base_colors [UiColor_text_shadow            ] = make_v4(0.00f, 0.00f, 0.00f, 0.50f);
 	ui->style.base_colors [UiColor_widget_shadow          ] = make_v4(0.00f, 0.00f, 0.00f, 0.20f);
+	ui->style.base_colors [UiColor_widget_error_background] = make_v4(0.50f, 0.20f, 0.20f, 0.50f);
 	ui->style.base_colors [UiColor_window_background      ] = background;
 	ui->style.base_colors [UiColor_window_title_bar       ] = make_v4(0.25f, 0.35f, 0.30f, 1.0f);
 	ui->style.base_colors [UiColor_window_title_bar_hot   ] = make_v4(0.45f, 0.22f, 0.22f, 1.0f);

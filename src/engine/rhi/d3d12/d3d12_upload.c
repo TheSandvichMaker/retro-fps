@@ -73,7 +73,7 @@ d3d12_upload_context_t d3d12_upload_begin(size_t size, size_t align)
 
 	uint32_t try_count = 0;
 
-	log(RHI_D3D12, Spam, "Starting ring buffer upload (size: %zu, align: %zu)", size, align);
+	log(RHI_D3D12, SuperSpam, "Starting ring buffer upload (size: %zu, align: %zu)", size, align);
 
 	mutex_lock(&ring_buffer->mutex);
 	{
@@ -106,7 +106,7 @@ d3d12_upload_context_t d3d12_upload_begin(size_t size, size_t align)
 						ring_buffer->submission_head += 1;
 						ring_buffer->head             = submission->offset + submission->size;
 
-						log(RHI_D3D12, Spam, "Acquired ring buffer upload submission %zu (offset: %zu, size: %zu)", 
+						log(RHI_D3D12, SuperSpam, "Acquired ring buffer upload submission %zu (offset: %zu, size: %zu)", 
 							submission_index, 
 							allocation_offset_start,
 							size);
@@ -120,7 +120,7 @@ d3d12_upload_context_t d3d12_upload_begin(size_t size, size_t align)
 
 				// TODO: Don't necessarily need to retire ring buffer submissions in order... But it's simpler that way.
 
-				log(RHI_D3D12, Spam, "Could not get a free ring buffer submission, attempting to retire");
+				log(RHI_D3D12, SuperSpam, "Could not get a free ring buffer submission, attempting to retire");
 
 				size_t retired_submission_index = ring_buffer->submission_tail % ARRAY_COUNT(ring_buffer->submissions);
 				d3d12_upload_submission_t *retired_submission = &ring_buffer->submissions[retired_submission_index];
@@ -129,11 +129,11 @@ d3d12_upload_context_t d3d12_upload_begin(size_t size, size_t align)
 
 				if (fence_value < retired_submission->fence_value)
 				{
-					log(RHI_D3D12, Spam, "Waiting for ring buffer submission %zu to finish", retired_submission_index);
+					log(RHI_D3D12, SuperSpam, "Waiting for ring buffer submission %zu to finish", retired_submission_index);
 					ID3D12Fence_SetEventOnCompletion(ring_buffer->fence, retired_submission->fence_value, NULL);
 				}
 
-				log(RHI_D3D12, Spam, "Retired ring buffer submission %zu", retired_submission_index);
+				log(RHI_D3D12, SuperSpam, "Retired ring buffer submission %zu", retired_submission_index);
 
 				ring_buffer->submission_tail += 1;
 				ring_buffer->tail             = retired_submission->offset + retired_submission->size;
@@ -179,7 +179,7 @@ uint64_t d3d12_upload_end(const d3d12_upload_context_t *ctx)
 
 		submission->fence_value = fence_value;
 
-		log(RHI_D3D12, Spam, "Finished recording ring buffer upload, submitting with fence value %u", fence_value);
+		log(RHI_D3D12, SuperSpam, "Finished recording ring buffer upload, submitting with fence value %u", fence_value);
 
 		ID3D12GraphicsCommandList *command_list = submission->command_list;
 		ID3D12GraphicsCommandList_Close(command_list);

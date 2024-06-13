@@ -104,7 +104,7 @@ void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *wi
 	ui_row_slider(&builder, S("Filter Test"), &mixer.filter_test, -1.0f, 1.0f);
 
 	static v4_t color = { 1, 0, 0, 1 };
-	ui_row_color_picker(&builder, S("Test Color"), &color);
+	ui_row_color_picker(&builder, S("Test Color"), NULL);
 
 	ui_scrollable_region_end(scroll_region_id, builder.rect);
 }

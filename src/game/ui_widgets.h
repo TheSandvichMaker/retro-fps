@@ -1,6 +1,12 @@
 #pragma once
 
 //
+// Fallback "Error" Widget
+//
+
+fn void ui_error_widget(rect2_t rect, string_t widget_name, string_t error_message);
+
+//
 // Scrollable Region
 //
 
@@ -114,8 +120,8 @@ fn bool ui_slider_int   (rect2_t rect, int32_t *v, int32_t min, int32_t max);
 
 typedef struct ui_text_edit_state_t
 {
-	size_t selection_start;
-	size_t cursor;
+	int selection_start;
+	int cursor;
 } ui_text_edit_state_t;
 
 fn void ui_text_edit(rect2_t rect, dynamic_string_t *buffer);

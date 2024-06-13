@@ -3,10 +3,12 @@
 // ============================================================
 
 string_t log_level_to_string[] = {
-	[LogLevel_Spam]    = Sc("Spam"),
-	[LogLevel_Info]    = Sc("Info"),
-	[LogLevel_Warning] = Sc("Warning"),
-	[LogLevel_Error]   = Sc("Error"),
+	[LogLevel_None]      = Sc("Spam"),
+	[LogLevel_SuperSpam] = Sc("SuperSpam"),
+	[LogLevel_Spam]      = Sc("Spam"),
+	[LogLevel_Info]      = Sc("Info"),
+	[LogLevel_Warning]   = Sc("Warning"),
+	[LogLevel_Error]     = Sc("Error"),
 };
 
 string_t log_category_to_string[] = {
@@ -28,14 +30,34 @@ string_t log_category_to_string[] = {
 
 typedef struct log_context_t
 {
-	int dummy;
+	bool log_level_disabled[LogLevel_COUNT];
 } log_context_t;
 
-global thread_local log_context_t log_ctx;
+global thread_local log_context_t log_ctx = {
+	.log_level_disabled[LogLevel_SuperSpam] = true,
+};
+
+void set_log_filter_for_thread(log_level_t level, bool enabled)
+{
+	if (ALWAYS(level < LogLevel_COUNT))
+	{
+		log_ctx.log_level_disabled[level] = !enabled;
+	}
+}
 
 void logs_(const log_loc_t *loc, log_category_t cat, log_level_t level, string_t message)
 {
 	// for the time being, this is not a good / smart logging system
+
+	if (NEVER(level >= LogLevel_COUNT))
+	{
+		return;
+	}
+
+	if (log_ctx.log_level_disabled[level])
+	{
+		return;
+	}
 
 	(void)loc;
 

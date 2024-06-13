@@ -262,6 +262,7 @@ typedef enum ui_style_color_t
     UiColor_text_shadow,
 
 	UiColor_widget_shadow,
+	UiColor_widget_error_background,
 
     UiColor_window_background,
     UiColor_window_title_bar,

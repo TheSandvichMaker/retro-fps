@@ -197,10 +197,12 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 {
 	// TODO: Add alpha control
 
+	float height = 6.0f*ui_font(UiFont_header)->height;
+	rect2_t row = ui_row_ex(builder, height, true);
+
 	if (!color)
 	{
-		log(UI, Warning, "Called ui_row_color_picker without a color");
-		// TODO: Don't return, draw a disabled color picker!!!!!!!!!!!!!!!!
+		ui_error_widget(row, S("ui_row_color_picker"), S("no color passed"));
 		return;
 	}
 
@@ -221,9 +223,6 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 		state->sat = hsv.y;
 		state->val = hsv.z;
 	}
-
-	float height = 6.0f*ui_font(UiFont_header)->height;
-	rect2_t row = ui_row_ex(builder, height, true);
 
 	rect2_t label_rect, widget_rect;
 	rect2_cut_from_left(row, ui_sz_pct(0.5f), &label_rect, &widget_rect);

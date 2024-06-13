@@ -112,14 +112,14 @@ void ingest_action_system_input(input_t *input)
 						action_state_t *action_state = &actions->action_states[action_index];
 						if (event->key.pressed)
 						{
-							log(ActionSystem, Spam, "Action '%s' triggered by key '%s'", 
+							log(ActionSystem, SuperSpam, "Action '%s' triggered by key '%s'", 
 								get_action_name(action_index).data, keycode_to_string(keycode).data);
 
 							action_state->pressed  |= true;
 						}
 						else
 						{
-							log(ActionSystem, Spam, "Action '%s' untriggered by key '%s'", 
+							log(ActionSystem, SuperSpam, "Action '%s' untriggered by key '%s'", 
 								get_action_name(action_index).data, keycode_to_string(keycode).data);
 
 							action_state->released |= true;
@@ -143,14 +143,14 @@ void ingest_action_system_input(input_t *input)
 						action_state_t *action_state = &actions->action_states[action_index];
 						if (event->mouse_button.pressed)
 						{
-							log(ActionSystem, Spam, "Action '%s' triggered by %s mouse button", 
+							log(ActionSystem, SuperSpam, "Action '%s' triggered by %s mouse button", 
 								get_action_name(action_index).data, mouse_button_to_string(button).data);
 
 							action_state->pressed  |= true;
 						}
 						else
 						{
-							log(ActionSystem, Spam, "Action '%s' untriggered by %s mouse button", 
+							log(ActionSystem, SuperSpam, "Action '%s' untriggered by %s mouse button", 
 								get_action_name(action_index).data, mouse_button_to_string(button).data);
 
 							action_state->released |= true;
