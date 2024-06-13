@@ -21,7 +21,6 @@ shader = {
 		rasterizer = {
 			cull_mode     = "back",
 			front_winding = "ccw",
-			multisample   = true,
 		},
 
 		depth_stencil = {
@@ -31,17 +30,6 @@ shader = {
 		},
 
 		topology = "triangle",
-
-		render_targets = {
-			[1] = {
-				format            = "r16g16b16a16_float",
-				multisample_count = 4,
-			},
-		},
-
-		depth_target = {
-			format = "d24_unorm_s8_uint",
-		},
 	},
 
 	source = [[

@@ -1,3 +1,5 @@
+#pragma once
+
 typedef struct brush_draw_parameters_t
 {
 	alignas(16) v2_t albedo_dim;

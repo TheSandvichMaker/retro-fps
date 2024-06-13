@@ -17,5 +17,6 @@ shaders = {
 brush = require "draft_shader"
 
 io.output("shader_brush.h")
+io.write("#pragma once\n\n")
 emit.c_parameter_struct(brush.name .. "_draw_parameters_t", brush.draw_parameters)
 emit.c_parameter_struct(brush.name .. "_pass_parameters_t", brush.pass_parameters)
