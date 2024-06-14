@@ -10,6 +10,7 @@ df_shader_info_t df_shaders[DfShader_COUNT] = {
 		.path_hlsl   = Sc("src/shaders/gen/brush.hlsl"),
 		.path_dfs    = Sc("src/shaders/brush.dfs"),
 	},
+
 	[DfShader_brush_vs] = {
 		.name        = Sc("brush_vs"),
 		.entry_point = Sc("MainVS"),

@@ -617,7 +617,7 @@ void r1_render_map(rhi_command_list_t *list, rhi_texture_t rt, map_t *map)
 			.sun_shadowmap = rhi_get_texture_srv(r1->shadow_map),
 			.shadowmap_dim = { (float)r1->shadow_map_resolution, (float)r1->shadow_map_resolution },
 		};
-		rhi_set_parameters(list, R1ParameterSlot_pass, &pass_parameters, sizeof(pass_parameters));
+		shader_brush_set_pass_params(list, &pass_parameters);
 
 		const rhi_texture_desc_t *rt_desc = rhi_get_texture_desc(rt);
 
@@ -679,7 +679,7 @@ void r1_render_map(rhi_command_list_t *list, rhi_texture_t rt, map_t *map)
 					.lightmap_dim  = lightmap_dim,
 					.normal        = poly->normal,
 				};
-				rhi_set_parameters(list, R1ParameterSlot_draw, &draw_parameters, sizeof(draw_parameters));
+				shader_brush_set_draw_params(list, &draw_parameters);
 
 				rhi_draw_indexed(list, r1->map.indices, poly->index_count, poly->first_index, 0);
 			}
