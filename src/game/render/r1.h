@@ -1,6 +1,15 @@
 #pragma once
 
+#include "shaders/gen/shaders.h"
+
 // #include "r1_ui.h"
+
+typedef enum r_parameter_slot_t
+{
+	R1ParameterSlot_draw = 0,
+	R1ParameterSlot_pass = 1,
+	R1ParameterSlot_view = 2,
+} r_parameter_slot;
 
 enum { R1MaxUiRects = 4096 }; // TODO: Transient GPU allocator with CreatePlacedResource
 enum { R1MaxRegions = 512  };

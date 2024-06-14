@@ -19,11 +19,11 @@ ConstantBuffer< brush_pass_parameters_t > pass : register(b1);
 
 struct brush_draw_parameters_t
 {
-	float3 normal;
 	df::Resource< Texture2D< float3 > > albedo;
 	float2 albedo_dim;
-	float2 lightmap_dim;
 	df::Resource< Texture2D< float3 > > lightmap;
+	float2 lightmap_dim;
+	float3 normal;
 };
 
 ConstantBuffer< brush_draw_parameters_t > draw : register(b0);

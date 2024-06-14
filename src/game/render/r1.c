@@ -1,14 +1,8 @@
 #include "r1.h"
-#include "shaders/gen/shaders.h"
+
+#include "shaders/gen/shaders.c"
 
 // #include "r1_ui.c"
-
-typedef enum r_parameter_slot_t
-{
-	R1ParameterSlot_draw = 0,
-	R1ParameterSlot_pass = 1,
-	R1ParameterSlot_view = 2,
-} r_parameter_slot;
 
 typedef struct view_parameters_t
 {
@@ -160,12 +154,16 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 
 	m_scoped_temp
 	{
-		shader_info_t *info = &df_shaders[DfShader_brush];
+		df_shader_info_t *vs = &df_shaders[DfShader_brush_vs];
+		ASSERT(vs->loaded);
+
+		df_shader_info_t *ps = &df_shaders[DfShader_brush_ps];
+		ASSERT(ps->loaded);
 
 		r1->psos.map = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
 			.debug_name = S("Map PSO"),
-			.vs = info->vs_bytecode,
-			.ps = info->ps_bytecode,
+			.vs = vs->bytecode,
+			.ps = ps->bytecode,
 			.blend = {
 				.render_target[0].write_mask = RhiColorWriteEnable_all,
 				.sample_mask                 = 0xFFFFFFFF,
@@ -306,12 +304,16 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 	}
 }
 
+fn_local void r1_load_all_shaders(void);
+
 void r1_init(void)
 {
 	ASSERT(!r1);
 
 	r1 = m_bootstrap(r1_state_t, arena);
 	r1->debug_drawing_enabled = true;
+
+	r1_load_all_shaders();
 
 	const uint32_t max_timestamps = 2*R1MaxRegions; // one for region start, one for region end
 
@@ -391,6 +393,32 @@ void r1_init(void)
 	});
 
 	r1_create_psos(r1->multisample_count);
+}
+
+void r1_load_all_shaders(void)
+{
+	for (size_t i = 1; i < DfShader_COUNT; i++)
+	{
+		df_shader_info_t *info = &df_shaders[i];
+
+		if (ALWAYS(!info->loaded))
+		{
+			m_scoped_temp
+			{
+				// TODO: Handle the paths in some logical, consistent way
+				string_t source_path = Sf("../%cs", info->path_hlsl);
+				// TODO: Don't read the same file multiple times
+				string_t source      = fs_read_entire_file(temp, source_path);
+
+				info->bytecode = rhi_compile_shader(&r1->arena, source, info->name, info->entry_point, info->target);
+
+				if (info->bytecode.bytes != NULL)
+				{
+					info->loaded = true;
+				}
+			}
+		}
+	}
 }
 
 void r1_init_map_resources(map_t *map)

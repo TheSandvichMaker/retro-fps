@@ -1,3 +1,4 @@
+Gathered shader source: brush
 Emitting shader parameters for 'brush'
 Packing pass parameters
 	packed 'lm_uvs' (type = 'buffer', size = 1)
@@ -12,11 +13,34 @@ Packing pass parameters
 	packed 'uvs' (type = 'buffer', size = 1)
 	inserting padding (trailing) for 3 row slots
 Packing draw parameters
-	packed 'normal' (type = 'primitive', size = 3)
 	packed 'albedo' (type = 'texture', size = 1)
 	packed 'albedo_dim' (type = 'primitive', size = 2)
-	packed 'lightmap_dim' (type = 'primitive', size = 2)
 	packed 'lightmap' (type = 'texture', size = 1)
+	packed 'lightmap_dim' (type = 'primitive', size = 2)
+	packed 'normal' (type = 'primitive', size = 3)
+Emitting parameter struct for C: brush_pass_parameters_t
+Emitting parameter struct for C: brush_draw_parameters_t
+Emitting parameter struct for HLSL: brush_pass_parameters_t
+Emitting parameter struct for HLSL: brush_draw_parameters_t
+Emitting shader parameters for 'brush'
+Packing pass parameters
+	packed 'lm_uvs' (type = 'buffer', size = 1)
+	packed 'shadowmap_dim' (type = 'primitive', size = 2)
+	inserting padding for 1 row slots
+	packed 'normals' (type = 'buffer', size = 1)
+	inserting padding for 3 row slots
+	packed 'positions' (type = 'buffer', size = 1)
+	inserting padding for 3 row slots
+	packed 'sun_shadowmap' (type = 'texture', size = 1)
+	inserting padding for 3 row slots
+	packed 'uvs' (type = 'buffer', size = 1)
+	inserting padding (trailing) for 3 row slots
+Packing draw parameters
+	packed 'albedo' (type = 'texture', size = 1)
+	packed 'albedo_dim' (type = 'primitive', size = 2)
+	packed 'lightmap' (type = 'texture', size = 1)
+	packed 'lightmap_dim' (type = 'primitive', size = 2)
+	packed 'normal' (type = 'primitive', size = 3)
 Emitting parameter struct for C: brush_pass_parameters_t
 Emitting parameter struct for C: brush_draw_parameters_t
 Emitting parameter struct for HLSL: brush_pass_parameters_t
