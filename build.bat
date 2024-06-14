@@ -14,7 +14,7 @@ rem copy binaries
 
 robocopy external\bin run *.exe *.dll *.pdb /S > NUL
 
-tools\luajit metagen.lua
+tools\luajit metagen\metagen.lua > metagen_log.txt
 
 pushd build
 
