@@ -1282,6 +1282,23 @@ void rhi_end_buffer_upload(rhi_buffer_t handle)
 	buffer->upload.pending = false;
 }
 
+void rhi_wait_on_buffer_upload(rhi_buffer_t handle)
+{
+	if (RESOURCE_HANDLE_VALID(handle))
+	{
+		d3d12_buffer_t *buffer = pool_get(&g_rhi.buffers, handle);
+
+		if (buffer)
+		{
+			ID3D12Fence_SetEventOnCompletion(g_rhi.upload_ring_buffer.fence, buffer->upload_fence_value, NULL);
+		}
+		else
+		{
+			log(RHI_D3D12, Error, "Passed invalid buffer to rhi_wait_on_buffer_upload");
+		}
+	}
+}
+
 rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 {
 	ASSERT_MSG(params, "Called rhi_create_buffer without any parameters!");

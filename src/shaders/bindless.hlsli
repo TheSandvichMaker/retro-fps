@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DF_BINDLESS_HLSLI
+#define DF_BINDLESS_HLSLI
 
 namespace df
 {
@@ -40,3 +41,5 @@ sampler s_linear_wrap    : register(s2, space100);
 sampler s_linear_clamped : register(s3, space100);
 
 }
+
+#endif

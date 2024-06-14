@@ -1,4 +1,5 @@
 #include "r1.h"
+#include "shaders/gen/shaders.h"
 
 // #include "r1_ui.c"
 
@@ -18,6 +19,7 @@ typedef struct view_parameters_t
 	alignas(16) v2_t view_size;
 } view_parameters_t;
 
+/*
 typedef struct map_pass_parameters_t
 {
 	alignas(16) rhi_buffer_srv_t  positions;
@@ -39,6 +41,7 @@ typedef struct map_draw_parameters_t
 	alignas(16)
 	v3_t normal;
 } map_draw_parameters_t;
+*/
 
 typedef struct shadow_draw_parameters_t
 {
@@ -157,15 +160,12 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 
 	m_scoped_temp
 	{
-		string_t source = fs_read_entire_file(temp, S("../src/shaders/brush.hlsl"));
-
-		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("brush.hlsl"), S("MainVS"), S("vs_6_6"));
-		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("brush.hlsl"), S("MainPS"), S("ps_6_6"));
+		shader_info_t *info = &df_shaders[DfShader_brush];
 
 		r1->psos.map = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
 			.debug_name = S("Map PSO"),
-			.vs = vs,
-			.ps = ps,
+			.vs = info->vs_bytecode,
+			.ps = info->ps_bytecode,
 			.blend = {
 				.render_target[0].write_mask = RhiColorWriteEnable_all,
 				.sample_mask                 = 0xFFFFFFFF,
@@ -582,10 +582,10 @@ void r1_render_map(rhi_command_list_t *list, rhi_texture_t rt, map_t *map)
 {
 	R1_TIMED_REGION(list, S("Map"))
 	{
-		map_pass_parameters_t pass_parameters = {
+		brush_pass_parameters_t pass_parameters = {
 			.positions     = rhi_get_buffer_srv (r1->map.positions),
 			.uvs           = rhi_get_buffer_srv (r1->map.uvs),
-			.lightmap_uvs  = rhi_get_buffer_srv (r1->map.lightmap_uvs),
+			.lm_uvs        = rhi_get_buffer_srv (r1->map.lightmap_uvs),
 			.sun_shadowmap = rhi_get_texture_srv(r1->shadow_map),
 			.shadowmap_dim = { (float)r1->shadow_map_resolution, (float)r1->shadow_map_resolution },
 		};
@@ -644,7 +644,7 @@ void r1_render_map(rhi_command_list_t *list, rhi_texture_t rt, map_t *map)
 					lightmap_dim = make_v2((float)desc->width, (float)desc->height);
 				}
 
-				map_draw_parameters_t draw_parameters = {
+				brush_draw_parameters_t draw_parameters = {
 					.albedo        = albedo_srv,
 					.albedo_dim    = { (float)albedo->w, (float)albedo->h },
 					.lightmap      = lightmap_srv,

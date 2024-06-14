@@ -270,6 +270,24 @@ typedef union v3i_t
     int e[3];
 } v3i_t;
 
+typedef union v2u_t
+{
+	struct { uint32_t x, y; };
+	uint32_t e[2];
+} v2u_t;
+
+typedef union v3u_t
+{
+	struct { uint32_t x, y, z; };
+	uint32_t e[3];
+} v3u_t;
+
+typedef union v4u_t
+{
+	struct { uint32_t x, y, z; };
+	uint32_t e[3];
+} v4u_t;
+
 typedef union v2_t
 {
     struct { float x, y; };

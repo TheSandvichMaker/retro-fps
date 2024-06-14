@@ -15,24 +15,17 @@ shader = {
 		albedo_dim   = float2,
 		lightmap     = Texture2D(float3),
 		lightmap_dim = float2,
+		normal       = float3,
 	},
 
-	pipeline = {
-		rasterizer = {
-			cull_mode     = "back",
-			front_winding = "ccw",
-		},
-
-		depth_stencil = {
-			depth_test  = true,
-			depth_write = true,
-			depth_func  = "greater",
-		},
-
-		topology = "triangle",
+	shaders = {
+		vs = { target = "vs_6_6", entry = "MainVS" },
+		ps = { target = "ps_6_6", entry = "MainPS" },
 	},
 
 	source = [[
+
+	#include "common.hlsli"
 
 	struct VS_OUT
 	{
@@ -40,35 +33,32 @@ shader = {
 		float4 shadowmap_position : SHADOWMAP_POSITION;
 		float2 uv                 : TEXCOORD;
 		float2 lightmap_uv        : LIGHTMAP_TEXCOORD;
-		float3 normal             : NORMAL;
 	};
 
 	VS_OUT MainVS(uint vertex_index : SV_VertexID)
 	{
-		float3 position    = pass.positions   .Get().Load(vertex_index);
-		float2 uv          = pass.uvs         .Get().Load(vertex_index);
-		float2 lightmap_uv = pass.lightmap_uvs.Get().Load(vertex_index);
-		float3 normal      = pass.normals     .Get().Load(vertex_index);
+		float3 position    = pass.positions.Get().Load(vertex_index);
+		float2 uv          = pass.uvs      .Get().Load(vertex_index);
+		float2 lightmap_uv = pass.lm_uvs   .Get().Load(vertex_index);
 
 		VS_OUT OUT;
 		OUT.position           = mul(view.world_to_clip, float4(position, 1));
 		OUT.shadowmap_position = mul(view.sun_matrix,    float4(position, 1));
 		OUT.uv                 = uv;
 		OUT.lightmap_uv        = lightmap_uv;
-		OUT.normal             = normal;
 		return OUT;
 	}
 
 	float4 MainPS(VS_OUT IN) : SV_Target
 	{
-		Texture2D albedo = draw.albedo.Get();
+		Texture2D<float3> albedo = draw.albedo.Get();
 
 		float2 albedo_dim;
 		albedo.GetDimensions(albedo_dim.x, albedo_dim.y);
 
 		float3 color = albedo.Sample(df::s_aniso_wrap, FatPixel(albedo_dim, IN.uv)).rgb;
 
-		Texture2D lightmap = draw.lightmap.Get();
+		Texture2D<float3> lightmap = draw.lightmap.Get();
 
 		float2 lightmap_dim;
 		lightmap.GetDimensions(lightmap_dim.x, lightmap_dim.y);
@@ -83,7 +73,7 @@ shader = {
 
 		if (shadow_test_depth >= 0.0 && shadow_test_depth <= 1.0)
 		{
-			const float bias = max(0.025*(1.0 - max(0, dot(IN.normal, view.sun_direction))), 0.010);
+			const float bias = max(0.025*(1.0 - max(0, dot(draw.normal, view.sun_direction))), 0.010);
 			const float biased_depth = shadow_test_depth + bias;
 
 			float2 shadowmap_dim;
@@ -92,7 +82,7 @@ shader = {
 			shadow_factor = SampleShadowPCF3x3(pass.sun_shadowmap.Get(), shadowmap_dim, shadow_test_uv, biased_depth);
 		}
 
-		light += shadow_factor*(view.sun_color*saturate(dot(IN.normal, view.sun_direction)));
+		light += shadow_factor*(view.sun_color*saturate(dot(draw.normal, view.sun_direction)));
 
 		return float4(color*light, 1);
 	}

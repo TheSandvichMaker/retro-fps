@@ -164,8 +164,9 @@ fn rhi_buffer_t     rhi_create_buffer(const rhi_create_buffer_params_t *params);
 fn void             rhi_upload_buffer_data(rhi_buffer_t buffer, size_t dst_offset, const void *src, size_t src_size, rhi_upload_frequency_t frequency);
 fn rhi_buffer_srv_t rhi_get_buffer_srv(rhi_buffer_t buffer);
 
-fn void *rhi_begin_buffer_upload(rhi_buffer_t buffer, size_t offset, size_t size, rhi_upload_frequency_t frequency);
-fn void  rhi_end_buffer_upload  (rhi_buffer_t buffer);
+fn void *rhi_begin_buffer_upload  (rhi_buffer_t buffer, size_t offset, size_t size, rhi_upload_frequency_t frequency);
+fn void  rhi_end_buffer_upload    (rhi_buffer_t buffer);
+fn void  rhi_wait_on_buffer_upload(rhi_buffer_t buffer);
 
 fn rhi_buffer_t rhi_create_structured_buffer(string_t debug_name, 
 											 uint32_t first_element, 
