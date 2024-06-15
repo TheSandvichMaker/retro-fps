@@ -28,11 +28,7 @@ typedef struct map_draw_parameters_t
 } map_draw_parameters_t;
 */
 
-typedef struct shadow_draw_parameters_t
-{
-	rhi_buffer_srv_t positions;
-} shadow_draw_parameters_t; 
-
+/*
 typedef struct post_process_draw_parameters_t
 {
 	rhi_texture_srv_t hdr_color;
@@ -48,8 +44,7 @@ typedef struct debug_line_draw_parameters_t
 {
 	rhi_buffer_srv_t lines;
 } debug_line_draw_parameters_t; 
-
-#define set_draw_parameters(list, parameters) rhi_set_parameters(list, R1ParameterSlot_draw, parameters, sizeof(*(parameters)))
+*/
 
 fn_local uint32_t r1_begin_timed_region(rhi_command_list_t *list, string_t identifier)
 {
@@ -120,14 +115,11 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 
 	const bool multisample_enabled = multisample_count > 1;
 
-	m_scoped_temp
 	{
-		string_t source = fs_read_entire_file(temp, S("../src/shaders/shadow.hlsl"));
-
-		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("shadow.hlsl"), S("MainVS"), S("vs_6_6"));
+		df_shader_info_t *vs = &df_shaders[DfShader_shadow_vs];
 
 		r1->psos.sun_shadows = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
-			.vs = vs,
+			.vs = vs->bytecode,
 			.blend.sample_mask = 0xFFFFFFFF,
 			.rasterizer = {
 				.cull_mode     = RhiCullMode_back,
@@ -143,13 +135,9 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 		});
 	}
 
-	m_scoped_temp
 	{
 		df_shader_info_t *vs = &df_shaders[DfShader_brush_vs];
-		ASSERT(vs->loaded);
-
 		df_shader_info_t *ps = &df_shaders[DfShader_brush_ps];
-		ASSERT(ps->loaded);
 
 		r1->psos.map = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
 			.debug_name = S("Map PSO"),
@@ -177,17 +165,14 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 		});
 	}
 
-	m_scoped_temp
 	{
-		string_t source = fs_read_entire_file(temp, S("../src/shaders/debug_lines.hlsl"));
-
-		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("debug_lines.hlsl"), S("MainVS"), S("vs_6_6"));
-		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("debug_lines.hlsl"), S("MainPS"), S("ps_6_6"));
+		df_shader_info_t *vs = &df_shaders[DfShader_debug_lines_vs];
+		df_shader_info_t *ps = &df_shaders[DfShader_debug_lines_ps];
 
 		r1->psos.debug_lines = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
 			.debug_name = S("Debug Lines PSO"),
-			.vs = vs,
-			.ps = ps,
+			.vs = vs->bytecode,
+			.ps = ps->bytecode,
 			.blend = {
 				.render_target[0].write_mask = RhiColorWriteEnable_all,
 				.sample_mask                 = 0xFFFFFFFF,
@@ -209,17 +194,14 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 		});
 	}
 
-	m_scoped_temp
 	{
-		string_t source = fs_read_entire_file(temp, S("../src/shaders/post.hlsl"));
-
-		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("post.hlsl"), S("MainVS"), S("vs_6_6"));
-		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("post.hlsl"), S("MainPS"), S("ps_6_6"));
+		df_shader_info_t *vs = &df_shaders[DfShader_post_vs];
+		df_shader_info_t *ps = &df_shaders[DfShader_post_ps];
 
 		r1->psos.post_process = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
 			.debug_name = S("Post Process PSO"),
-			.vs = vs,
-			.ps = ps,
+			.vs = vs->bytecode,
+			.ps = ps->bytecode,
 			.blend = {
 				.render_target[0].write_mask = RhiColorWriteEnable_all,
 				.sample_mask                 = 0xFFFFFFFF,
@@ -234,47 +216,14 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 		});
 	}
 
-	m_scoped_temp
 	{
-		string_t source = fs_read_entire_file(temp, S("../src/shaders/ui.hlsl"));
-
-		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("ui.hlsl"), S("MainVS"), S("vs_6_6"));
-		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("ui.hlsl"), S("MainPS"), S("ps_6_6"));
+		df_shader_info_t *vs = &df_shaders[DfShader_ui_vs];
+		df_shader_info_t *ps = &df_shaders[DfShader_ui_ps];
 
 		r1->psos.ui = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
 			.debug_name = S("UI PSO"),
-			.vs = vs,
-			.ps = ps,
-			.blend = {
-				.render_target[0] = {
-					.blend_enable    = true,
-					.src_blend       = RhiBlend_src_alpha,
-					.dst_blend       = RhiBlend_inv_src_alpha,
-					.blend_op        = RhiBlendOp_add,
-					.src_blend_alpha = RhiBlend_inv_dest_alpha,
-					.dst_blend_alpha = RhiBlend_one,
-					.blend_op_alpha  = RhiBlendOp_add,
-					.write_mask      = RhiColorWriteEnable_all,
-				},
-				.sample_mask = 0xFFFFFFFF,
-			},
-			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
-			.render_target_count     = 1,
-			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm_srgb,
-		});
-	}
-
-	m_scoped_temp
-	{
-		string_t source = fs_read_entire_file(temp, S("../src/shaders/ui.hlsl"));
-
-		rhi_shader_bytecode_t vs = rhi_compile_shader(temp, source, S("ui.hlsl"), S("MainVS"), S("vs_6_6"));
-		rhi_shader_bytecode_t ps = rhi_compile_shader(temp, source, S("ui.hlsl"), S("MainPS"), S("ps_6_6"));
-
-		r1->psos.ui = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
-			.debug_name = S("UI PSO"),
-			.vs = vs,
-			.ps = ps,
+			.vs = vs->bytecode,
+			.ps = ps->bytecode,
 			.blend = {
 				.render_target[0] = {
 					.blend_enable    = true,
@@ -702,10 +651,10 @@ void r1_render_debug_lines(rhi_command_list_t *list, rhi_texture_t rt)
 
 			rhi_set_pso(list, r1->psos.debug_lines);
 
-			debug_line_draw_parameters_t draw_parameters = {
+			debug_lines_draw_parameters_t draw_parameters = {
 				.lines = rhi_get_buffer_srv(r1->debug_lines),
 			};
-			set_draw_parameters(list, &draw_parameters);
+			shader_debug_lines_set_draw_params(list, &draw_parameters);
 
 			rhi_draw(list, 2*debug_line_count, 0);
 
@@ -724,11 +673,11 @@ void r1_post_process(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_text
 		{
 			rhi_set_pso(list, r1->psos.post_process);
 
-			post_process_draw_parameters_t draw_parameters = {
+			post_draw_parameters_t draw_parameters = {
 				.hdr_color    = rhi_get_texture_srv(hdr_color),
 				.sample_count = r1->multisample_count,
 			};
-			rhi_set_parameters(list, R1ParameterSlot_draw, &draw_parameters, sizeof(draw_parameters));
+			shader_post_set_draw_params(list, &draw_parameters);
 
 			rhi_draw(list, 3, 0);
 		}
@@ -771,7 +720,7 @@ void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, ui_render_command_
 			ui_draw_parameters_t draw_parameters = {
 				.rects = rhi_get_buffer_srv(r1->ui_rects),
 			};
-			rhi_set_parameters(list, R1ParameterSlot_draw, &draw_parameters, sizeof(draw_parameters));
+			shader_ui_set_draw_params(list, &draw_parameters);
 
 			rhi_draw_instanced(list, 4, 0, (uint32_t)ui_list->count, 0);
 		}

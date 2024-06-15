@@ -27,6 +27,8 @@ local shaders = {}
 for _, name in ipairs(shader_sources) do
 	local shader_path = shader_directory .. name .. ".dfs"
 	local bundle = dofile(shader_path)
+	
+	assert(bundle, name .. ".dfs did not return a bundle")
 
 	table.insert(shaders, {
 		name   = name,

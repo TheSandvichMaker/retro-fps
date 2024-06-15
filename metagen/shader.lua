@@ -1,28 +1,51 @@
+-- error on access of undefined globals, to avoid stupid silent bugs
+
+setmetatable(_G, {
+	__index = function(table, key)
+		error("Unknown global value: " .. key)
+	end
+})
+
 -- shader type definitions
 
-uint     = { resource_type = "primitive", size = 1, align  = 1, align_legacy = 1, c_name = "uint32_t",   hlsl_name = "uint"     }
-uint2    = { resource_type = "primitive", size = 2, align  = 1, align_legacy = 2, c_name = "v2u_t",      hlsl_name = "uint2"    }
-uint3    = { resource_type = "primitive", size = 3, align  = 1, align_legacy = 3, c_name = "v3u_t",      hlsl_name = "uint3"    }
-uint4    = { resource_type = "primitive", size = 4, align  = 1, align_legacy = 4, c_name = "v4u_t",      hlsl_name = "uint4"    }
-float    = { resource_type = "primitive", size = 1, align  = 1, align_legacy = 1, c_name = "float",      hlsl_name = "float"    }
-float2   = { resource_type = "primitive", size = 2, align  = 1, align_legacy = 2, c_name = "v2_t",       hlsl_name = "float2"   }
-float3   = { resource_type = "primitive", size = 3, align  = 1, align_legacy = 3, c_name = "v3_t",       hlsl_name = "float3"   }
-float4   = { resource_type = "primitive", size = 4, align  = 1, align_legacy = 4, c_name = "v4_t",       hlsl_name = "float4"   }
-float4x4 = { resource_type = "primitive", size = 16, align = 1, align_legacy = 4, c_name = "m4x4_t",     hlsl_name = "float4x4" }
+uint     = { resource_type = "primitive", size = 1,  align = 1, align_legacy = 1, c_name = "uint32_t", hlsl_name = "uint"     }
+uint2    = { resource_type = "primitive", size = 2,  align = 1, align_legacy = 2, c_name = "v2u_t",    hlsl_name = "uint2"    }
+uint3    = { resource_type = "primitive", size = 3,  align = 1, align_legacy = 3, c_name = "v3u_t",    hlsl_name = "uint3"    }
+uint4    = { resource_type = "primitive", size = 4,  align = 1, align_legacy = 4, c_name = "v4u_t",    hlsl_name = "uint4"    }
+float    = { resource_type = "primitive", size = 1,  align = 1, align_legacy = 1, c_name = "float",    hlsl_name = "float"    }
+float2   = { resource_type = "primitive", size = 2,  align = 1, align_legacy = 2, c_name = "v2_t",     hlsl_name = "float2"   }
+float3   = { resource_type = "primitive", size = 3,  align = 1, align_legacy = 3, c_name = "v3_t",     hlsl_name = "float3"   }
+float4   = { resource_type = "primitive", size = 4,  align = 1, align_legacy = 4, c_name = "v4_t",     hlsl_name = "float4"   }
+float4x4 = { resource_type = "primitive", size = 16, align = 1, align_legacy = 4, c_name = "m4x4_t",   hlsl_name = "float4x4" }
 
 function StructuredBuffer(format)
+	assert(format, "You need to pass a type to StructuredBuffer")
+
+	local format_hlsl = nil
+
+	if type(format) == "string" then
+		format_hlsl = format
+	else
+		format_hlsl = format.hlsl_name
+	end
+
 	return {
 		resource_type = "buffer",
 		size          = 1,
 		align_legacy  = 4, -- NOTE: my resources are 16 byte aligned with legacy cb packing because they're structs, even though they should be able to be packed tightly because they're just indices...
 		align         = 1,
-		hlsl_name     = "df::Resource< StructuredBuffer< " .. format.hlsl_name .. " > >",
+		hlsl_name     = "df::Resource< StructuredBuffer< " .. format_hlsl .. " > >",
 		c_name        = "rhi_buffer_srv_t",
 	}
 end
 
 function Texture2D(format)
-	format = format or "float4"
+	local format_hlsl = "float4"
+
+	if format then 
+		assert(format.hlsl_name, "Invalid type passed to Texture2DMS")
+		format_hlsl = format.hlsl_name
+	end
 
 	return {
 		resource_type = "texture",
@@ -34,37 +57,26 @@ function Texture2D(format)
 	}
 end
 
+function Texture2DMS(format)
+	local format_hlsl = "float4"
+
+	if format then 
+		assert(format.hlsl_name, "Invalid type passed to Texture2DMS")
+		format_hlsl = format.hlsl_name
+	end
+
+	return {
+		resource_type = "texture",
+		size          = 1,
+		align_legacy  = 4, -- NOTE: my resources are 16 byte aligned with legacy cb packing because they're structs, even though they should be able to be packed tightly because they're just indices...
+		align         = 1,
+		hlsl_name     = "df::Resource< Texture2DMS< " .. format_hlsl .. " > >",
+		c_name        = "rhi_texture_srv_t",
+	}
+end
 -- codegen
 
 emit = {}
-
-local current_source_file = ""
-
-function emit.set_struct_file(file)
-	current_source_file = file
-end
-
-emit.registered_structs  = {}
-
-function emit.compute_struct_align_and_size(members)
-	for i, v in ipairs(members) do
-		
-	end
-end
-
-function struct(name, members)
-	local align, size = emit.compute_struct_align_and_size(members)
-
-	table.insert(emit.registered_structs[current_source_file], {
-		resource_type = "struct",
-		align_legacy  = 4,
-		align         = align,
-		size          = size,
-		c_name        = name,
-		hlsl_name     = name,
-		members       = members,
-	})
-end
 
 function emit.sort_parameters(in_parameters, cbuffer_kind)
 	if cbuffer_kind == nil or (cbuffer_kind ~= "structured" and cbuffer_kind ~= "legacy") then 
@@ -75,6 +87,9 @@ function emit.sort_parameters(in_parameters, cbuffer_kind)
 
 	for k, v in pairs(in_parameters) do
 		table.insert(out_parameters, { name = k, definition = v })
+		if v == nil then
+			error("Parameter defined with unknown type: " .. name)
+		end
 	end
 	
 	if cbuffer_kind == "structured" then
@@ -92,7 +107,7 @@ function emit.sort_parameters(in_parameters, cbuffer_kind)
 			end
 
 			return a.definition.align_legacy > b.definition.align_legacy
-end)
+		end)
 	end
 
 	return out_parameters
@@ -202,10 +217,18 @@ function emit.c_emit_parameter_set_function(function_name, params_name, slot)
 	io.write("}\n\n")
 end
 
-function emit.emit_bundle(bundle, output_directory_c, output_directory_hlsl)
+function emit.emit_bundle(bundle_info, output_directory_c, output_directory_hlsl)
+	local bundle           = bundle_info.bundle
+	local bundle_file_name = bundle_info.name
+
 	local pass = nil
 	local draw = nil
 
+	if not bundle.name then
+		error(bundle_file_name .. ".dfs did not provide a 'name' field")
+	end
+
+	assert(bundle.name, "You have to supply a bundle name")
 	print("Emitting shader parameters for '" .. bundle.name .. "'")
 
 	-- gather and pack parameter structs
@@ -255,12 +278,19 @@ function emit.emit_bundle(bundle, output_directory_c, output_directory_hlsl)
 	io.write("// Generated by metagen.lua\n\n")
 	io.write("#include \"bindless.hlsli\"\n\n")
 
+	if bundle.prelude then
+		io.write(bundle.prelude)
+	end
+
 	for i, v in ipairs(parameter_structs) do
 		if v.cbuffer then
 			emit.hlsl_emit_parameter_struct(v.type_name, v.cbuffer)
 			io.write("ConstantBuffer< " .. v.type_name .. " > " .. v.name .. " : register(b" .. v.slot .. ");\n\n")
 		end
 	end
+
+	-- later, this may not be an error
+	assert(bundle.source, bundle.name .. ".dfs did not provide any shader source code. Make sure to define the 'source' field in your bundle.")
 
 	if bundle.source then 
 		io.write(bundle.source)
@@ -276,8 +306,7 @@ function emit.process_shaders(p)
 	-- emit shaders
 
 	for _, bundle_info in ipairs(bundles) do
-		local bundle = bundle_info.bundle
-		emit.emit_bundle(bundle, output_directory_c, output_directory_hlsl)
+		emit.emit_bundle(bundle_info, output_directory_c, output_directory_hlsl)
 	end
 
 	-- emit view buffer
@@ -323,6 +352,9 @@ function emit.process_shaders(p)
 		local bundle      = bundle_info.bundle
 		local bundle_name = bundle_info.name
 		local bundle_path = bundle_info.path
+
+		-- maybe shouldn't be an error, but for now it is
+		assert(bundle.shaders, bundle_name .. ".dfs did not export any shaders")
 
 		if bundle.shaders then
 			for shader_name, shader in pairs(bundle.shaders) do
