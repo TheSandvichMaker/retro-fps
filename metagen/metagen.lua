@@ -26,13 +26,27 @@ local shaders = {}
 
 for _, name in ipairs(shader_sources) do
 	local shader_path = shader_directory .. name .. ".dfs"
-	local shader = dofile(shader_path)
+	local bundle = dofile(shader_path)
 
 	table.insert(shaders, {
 		name   = name,
 		path   = shader_path,
-		shader = shader,
+		bundle = bundle,
 	})
 end
 
-emit.process_shaders(shaders, output_directory_c, output_directory_hlsl)
+-- TODO: Put this somewhere better
+local view_parameters = {
+	world_to_clip = float4x4,
+	sun_matrix    = float4x4,
+	sun_direction = float3,
+	sun_color     = float3,
+	view_size     = float2,
+}
+
+emit.process_shaders({
+	bundles               = shaders, 
+	view_parameters       = view_parameters,
+	output_directory_c    = output_directory_c, 
+	output_directory_hlsl = output_directory_hlsl,
+})

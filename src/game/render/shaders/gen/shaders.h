@@ -2,14 +2,15 @@
 
 #pragma once
 
+#include "view.h"
 #include "brush.h"
 
 typedef enum df_shader_ident_t
 {
 	DfShader_none,
 
-	DfShader_brush_ps, // src/shaders/brush.dfs
 	DfShader_brush_vs, // src/shaders/brush.dfs
+	DfShader_brush_ps, // src/shaders/brush.dfs
 
 	DfShader_COUNT,
 } df_shader_ident_t;

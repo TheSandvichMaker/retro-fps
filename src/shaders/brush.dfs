@@ -1,4 +1,4 @@
-shader = {
+bundle = {
 	name = "brush",
 
 	pass_parameters = {
@@ -90,4 +90,4 @@ shader = {
 	]]
 }
 
-return shader
+return bundle

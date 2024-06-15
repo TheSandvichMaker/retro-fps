@@ -4,15 +4,6 @@
 
 // #include "r1_ui.c"
 
-typedef struct view_parameters_t
-{
-	m4x4_t world_to_clip;
-	m4x4_t sun_matrix;
-	alignas(16) v3_t sun_direction;
-	alignas(16) v3_t sun_color;
-	alignas(16) v2_t view_size;
-} view_parameters_t;
-
 /*
 typedef struct map_pass_parameters_t
 {
@@ -545,17 +536,13 @@ void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t backbuffer, r_v
 
 		const rhi_texture_desc_t *backbuffer_desc = rhi_get_texture_desc(backbuffer);
 
-		{
-			view_parameters_t view_parameters = {
-				.world_to_clip = world_to_clip,
-				.sun_matrix    = sun_matrix,
-				.sun_direction = sun_direction,
-				.sun_color     = view->scene.sun_color,
-				.view_size     = make_v2((float)backbuffer_desc->width, (float)backbuffer_desc->height),
-			};
-
-			rhi_set_parameters(list, R1ParameterSlot_view, &view_parameters, sizeof(view_parameters));
-		}
+		set_view_parameters(list, &(view_parameters_t) {
+			.world_to_clip = world_to_clip,
+			.sun_matrix    = sun_matrix,
+			.sun_direction = sun_direction,
+			.sun_color     = view->scene.sun_color,
+			.view_size     = make_v2((float)backbuffer_desc->width, (float)backbuffer_desc->height),
+		});
 
 		rhi_texture_t rt_hdr = r1->window.rt_hdr;
 

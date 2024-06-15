@@ -1,17 +1,7 @@
 #pragma once
 
 #include "bindless.hlsli"
-
-struct ViewParameters
-{
-	float4x4 world_to_clip;
-	float4x4 sun_matrix;
-	float3   sun_direction;
-	float3   sun_color;
-	float2   view_size;
-};
-
-ConstantBuffer<ViewParameters> view : register(b2);
+#include "gen/view.hlsli"
 
 float Max3(float3 v)
 {

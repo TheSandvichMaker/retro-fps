@@ -1,13 +1,14 @@
 -- shader type definitions
 
-uint   = { resource_type = "primitive", size = 1, align = 1, align_legacy = 1, c_name = "uint32_t", hlsl_name = "uint"   }
-uint2  = { resource_type = "primitive", size = 2, align = 1, align_legacy = 2, c_name = "v2u_t",    hlsl_name = "uint2"  }
-uint3  = { resource_type = "primitive", size = 3, align = 1, align_legacy = 3, c_name = "v3u_t",    hlsl_name = "uint3"  }
-uint4  = { resource_type = "primitive", size = 4, align = 1, align_legacy = 4, c_name = "v4u_t",    hlsl_name = "uint4"  }
-float  = { resource_type = "primitive", size = 1, align = 1, align_legacy = 1, c_name = "float",    hlsl_name = "float"  }
-float2 = { resource_type = "primitive", size = 2, align = 1, align_legacy = 2, c_name = "v2_t",     hlsl_name = "float2" }
-float3 = { resource_type = "primitive", size = 3, align = 1, align_legacy = 3, c_name = "v3_t",     hlsl_name = "float3" }
-float4 = { resource_type = "primitive", size = 4, align = 1, align_legacy = 4, c_name = "v4_t",     hlsl_name = "float4" }
+uint     = { resource_type = "primitive", size = 1, align  = 1, align_legacy = 1, c_name = "uint32_t",   hlsl_name = "uint"     }
+uint2    = { resource_type = "primitive", size = 2, align  = 1, align_legacy = 2, c_name = "v2u_t",      hlsl_name = "uint2"    }
+uint3    = { resource_type = "primitive", size = 3, align  = 1, align_legacy = 3, c_name = "v3u_t",      hlsl_name = "uint3"    }
+uint4    = { resource_type = "primitive", size = 4, align  = 1, align_legacy = 4, c_name = "v4u_t",      hlsl_name = "uint4"    }
+float    = { resource_type = "primitive", size = 1, align  = 1, align_legacy = 1, c_name = "float",      hlsl_name = "float"    }
+float2   = { resource_type = "primitive", size = 2, align  = 1, align_legacy = 2, c_name = "v2_t",       hlsl_name = "float2"   }
+float3   = { resource_type = "primitive", size = 3, align  = 1, align_legacy = 3, c_name = "v3_t",       hlsl_name = "float3"   }
+float4   = { resource_type = "primitive", size = 4, align  = 1, align_legacy = 4, c_name = "v4_t",       hlsl_name = "float4"   }
+float4x4 = { resource_type = "primitive", size = 16, align = 1, align_legacy = 4, c_name = "m4x4_t",     hlsl_name = "float4x4" }
 
 function StructuredBuffer(format)
 	return {
@@ -36,6 +37,34 @@ end
 -- codegen
 
 emit = {}
+
+local current_source_file = ""
+
+function emit.set_struct_file(file)
+	current_source_file = file
+end
+
+emit.registered_structs  = {}
+
+function emit.compute_struct_align_and_size(members)
+	for i, v in ipairs(members) do
+		
+	end
+end
+
+function struct(name, members)
+	local align, size = emit.compute_struct_align_and_size(members)
+
+	table.insert(emit.registered_structs[current_source_file], {
+		resource_type = "struct",
+		align_legacy  = 4,
+		align         = align,
+		size          = size,
+		c_name        = name,
+		hlsl_name     = name,
+		members       = members,
+	})
+end
 
 function emit.sort_parameters(in_parameters, cbuffer_kind)
 	if cbuffer_kind == nil or (cbuffer_kind ~= "structured" and cbuffer_kind ~= "legacy") then 
@@ -129,19 +158,6 @@ function emit.create_packed_cbuffer(parameters, cbuffer_kind)
 				pad_index = pad_index + 1
 			end
 		end
-
-		if cbuffer_kind == "legacy" then
-			if row_slots > 0 then
-				local padding_type = nil
-				if row_slots == 4 then padding_type = uint3 end
-				if row_slots == 3 then padding_type = uint3 end
-				if row_slots == 2 then padding_type = uint2 end
-				if row_slots == 1 then padding_type = uint  end
-				print("\tinserting padding (trailing) for " .. row_slots .. " row slots")
-
-				table.insert(result, { name = "pad" .. pad_index, definition = padding_type })
-			end
-		end
 	end
 
 	return result
@@ -155,16 +171,6 @@ function emit.c_emit_parameter_struct(struct_name, packed_parameters)
 	for _, v in ipairs(packed_parameters) do
 		local name       = v.name
 		local definition = v.definition
-
-		if name == nil then
-			error("parameter does not have a name")
-		end
-
-		if definition == nil then
-			error("parameter '" .. name .. "' does not have a definition")
-		end
-
-		if definition.resource_type == nil then error("Invalid resource type for " .. name) end
 
 		io.write("\t", definition.c_name, " ", name, ";\n")
 	end
@@ -184,114 +190,117 @@ function emit.hlsl_emit_parameter_struct(struct_name, packed_parameters)
 		local name       = v.name
 		local definition = v.definition
 
-		if name == nil then
-			error("parameter does not have a name")
-		end
-
-		if definition == nil then
-			error("parameter '" .. name .. "' does not have a definition")
-		end
-
-		if definition.resource_type == nil then error("Invalid resource type for " .. name) end
-
 		io.write("\t", definition.hlsl_name, " ", name, ";\n")
 	end
 
 	io.write("};\n\n")
 end
 
-function emit.c_emit_parameter_set_function(shader_name, params_name, params, slot)
-	io.write("void shader_" .. shader_name .. "_set_" .. slot .. "_params(rhi_command_list_t *list, " .. params_name .. " *params)\n{\n")
-	io.write("\trhi_set_parameters(list, R1ParameterSlot_" .. slot .. ", params, sizeof(*params));\n")
+function emit.c_emit_parameter_set_function(function_name, params_name, slot)
+	io.write("void " .. function_name .. "(rhi_command_list_t *list, " .. params_name .. " *params)\n{\n")
+	io.write("\trhi_set_parameters(list, " .. slot .. ", params, sizeof(*params));\n")
 	io.write("}\n\n")
 end
 
-function emit.emit_shader(shader, output_directory_c, output_directory_hlsl)
+function emit.emit_bundle(bundle, output_directory_c, output_directory_hlsl)
 	local pass = nil
 	local draw = nil
 
-	print("Emitting shader parameters for '" .. shader.name .. "'")
+	print("Emitting shader parameters for '" .. bundle.name .. "'")
 
-	if shader.pass_parameters ~= nil then
-		print("Packing pass parameters")
-		pass = emit.create_packed_cbuffer(shader.pass_parameters, "legacy")
-		if pass == nil then error("Failed to pack cbuffer") end
+	-- gather and pack parameter structs
+
+	local parameter_structs = {
+		{ name = "draw", slot = 0, params = nil, cbuffer = nil, type_name = nil },
+		{ name = "pass", slot = 1, params = nil, cbuffer = nil, type_name = nil },
+	}
+
+	for i, v in ipairs(parameter_structs) do
+		if bundle[v.name .. "_parameters"] then
+			v.params    = bundle[v.name .. "_parameters"]
+			v.cbuffer   = emit.create_packed_cbuffer(v.params, "legacy")
+			v.type_name = bundle.name .. "_" .. v.name .. "_parameters_t"
+			assert(v.cbuffer)
+		end
 	end
-
-	if shader.draw_parameters ~= nil then
-		print("Packing draw parameters")
-		draw = emit.create_packed_cbuffer(shader.draw_parameters, "structured")
-		if draw == nil then error("Failed to pack cbuffer") end
-	end
-
-	local pass_struct_name = shader.name .. "_pass_parameters_t";
-	local draw_struct_name = shader.name .. "_draw_parameters_t";
 
 	-- emit c header
 
-	io.output(output_directory_c .. shader.name .. ".h")
+	io.output(output_directory_c .. bundle.name .. ".h")
 	io.write("// Generated by metagen.lua\n\n")
 	io.write("#pragma once\n\n")
 
-	if pass ~= nil then
-		emit.c_emit_parameter_struct(pass_struct_name, pass)
-	end
-
-	if draw ~= nil then
-		emit.c_emit_parameter_struct(draw_struct_name, draw)
-	end
-
-	if pass ~= nil then
-		io.write("fn void shader_" .. shader.name .. "_set_pass_params(rhi_command_list_t *list, " .. pass_struct_name .. " *params);\n")
-	end
-
-	if draw ~= nil then
-		io.write("fn void shader_" .. shader.name .. "_set_draw_params(rhi_command_list_t *list, " .. draw_struct_name .. " *params);\n")
+	for i, v in ipairs(parameter_structs) do
+		if v.cbuffer then
+			emit.c_emit_parameter_struct(v.type_name, v.cbuffer)
+			io.write("fn void shader_" .. bundle.name .. "_set_" .. v.name .. "_params(rhi_command_list_t *list, " .. v.type_name .. " *params);\n")
+		end
 	end
 
 	-- emit c source
 
-	io.output(output_directory_c .. shader.name .. ".c")
+	io.output(output_directory_c .. bundle.name .. ".c")
 	io.write("// Generated by metagen.lua\n\n")
 
-	if pass ~= nil then
-		emit.c_emit_parameter_set_function(shader.name, pass_struct_name, shader.pass_parameters, "pass")
-	end
-
-	if draw ~= nil then
-		emit.c_emit_parameter_set_function(shader.name, draw_struct_name, shader.draw_parameters, "draw")
+	for i, v in ipairs(parameter_structs) do
+		if v.cbuffer then
+			local function_name = "shader_" .. bundle.name .. "_set_" .. v.name .. "_params"
+			emit.c_emit_parameter_set_function(function_name, v.type_name, v.slot)
+		end
 	end
 
 	-- emit hlsl
 
-	io.output(output_directory_hlsl .. shader.name .. ".hlsl")
+	io.output(output_directory_hlsl .. bundle.name .. ".hlsl")
 	io.write("// Generated by metagen.lua\n\n")
 	io.write("#include \"bindless.hlsli\"\n\n")
 
-	if pass ~= nil then
-		emit.hlsl_emit_parameter_struct(pass_struct_name, pass)
-		io.write("ConstantBuffer< " .. pass_struct_name .. " > pass : register(b1);\n\n")
+	for i, v in ipairs(parameter_structs) do
+		if v.cbuffer then
+			emit.hlsl_emit_parameter_struct(v.type_name, v.cbuffer)
+			io.write("ConstantBuffer< " .. v.type_name .. " > " .. v.name .. " : register(b" .. v.slot .. ");\n\n")
+		end
 	end
 
-	if draw ~= nil then
-		emit.hlsl_emit_parameter_struct(draw_struct_name, draw)
-		io.write("ConstantBuffer< " .. draw_struct_name .. " > draw : register(b0);\n\n")
-	end
-
-	if shader.source then 
-		io.write(shader.source)
+	if bundle.source then 
+		io.write(bundle.source)
 	end
 end
 
-function emit.process_shaders(shaders, output_directory_c, output_directory_hlsl)
+function emit.process_shaders(p)
+	local bundles               = p.bundles
+	local view_parameters       = p.view_parameters
+	local output_directory_c    = p.output_directory_c
+	local output_directory_hlsl = p.output_directory_hlsl
+
 	-- emit shaders
 
-	for _, shader_info in ipairs(shaders) do
-		local shader_name = shader_info.name
-		local shader      = shader_info.shader
-
-		emit.emit_shader(shader, output_directory_c, output_directory_hlsl)
+	for _, bundle_info in ipairs(bundles) do
+		local bundle = bundle_info.bundle
+		emit.emit_bundle(bundle, output_directory_c, output_directory_hlsl)
 	end
+
+	-- emit view buffer
+
+	local view_cbuffer = emit.create_packed_cbuffer(view_parameters, "legacy")
+
+	io.output(output_directory_c .. "view.h")
+	io.write("// Generated by metagen.lua\n\n")
+	io.write("#pragma once\n\n")
+
+	emit.c_emit_parameter_struct("view_parameters_t", view_cbuffer)
+	io.write("fn void set_view_parameters(rhi_command_list_t *list, view_parameters_t *params);\n")
+
+	io.output(output_directory_c .. "view.c")
+	io.write("// Generated by metagen.lua\n\n")
+
+	emit.c_emit_parameter_set_function("set_view_parameters", "view_parameters_t", 2)
+
+	io.output(output_directory_hlsl .. "view.hlsli")
+	io.write("// Generated by metagen.lua\n\n")
+
+	emit.hlsl_emit_parameter_struct("view_parameters_t", view_cbuffer)
+	io.write("ConstantBuffer< view_parameters_t > view : register(b2);\n")
 
 	-- emit shaders.h
 
@@ -301,20 +310,24 @@ function emit.process_shaders(shaders, output_directory_c, output_directory_hlsl
 	header:write("// Generated by metagen.lua\n\n")
 	header:write("#pragma once\n\n")
 
-	for _, shader_info in ipairs(shaders) do
-		header:write("#include \"" .. shader_info.name .. ".h\"\n")
+	header:write("#include \"view.h\"\n")
+
+	for _, bundle_info in ipairs(bundles) do
+		header:write("#include \"" .. bundle_info.name .. ".h\"\n")
 	end
 
 	header:write("\ntypedef enum df_shader_ident_t\n{\n")
 	header:write("\tDfShader_none,\n\n")
 
-	for _, shader_info in ipairs(shaders) do
-		local shader = shader_info.shader
-		local name   = shader_info.name
-		local path   = shader_info.path
+	for _, bundle_info in ipairs(bundles) do
+		local bundle      = bundle_info.bundle
+		local bundle_name = bundle_info.name
+		local bundle_path = bundle_info.path
 
-		for sub_name, sub_shader in pairs(shader.shaders) do
-			header:write("\tDfShader_" .. name .. "_" .. sub_name .. ", // " .. path .. "\n")
+		if bundle.shaders then
+			for shader_name, shader in pairs(bundle.shaders) do
+				header:write("\tDfShader_" .. bundle_name .. "_" .. shader_name .. ", // " .. bundle_path .. "\n")
+			end
 		end
 
 		header:write("\n")
@@ -334,35 +347,35 @@ function emit.process_shaders(shaders, output_directory_c, output_directory_hlsl
 
 	source:write("// Generated by metagen.lua\n\n")
 
-	for _, shader_info in ipairs(shaders) do
-		local shader_name = shader_info.name
-		local shader      = shader_info.shader
+	source:write("#include \"view.c\"\n")
 
-		emit.emit_shader(shader, output_directory_c, output_directory_hlsl)
-
-		source:write("#include \"" .. shader_name .. ".c\"\n")
+	for _, bundle_info in ipairs(bundles) do
+		local bundle_name = bundle_info.name
+		source:write("#include \"" .. bundle_name .. ".c\"\n")
 	end
 
 	source:write("\n")
 
 	source:write("df_shader_info_t df_shaders[DfShader_COUNT] = {\n")
 
-	for _, shader_info in ipairs(shaders) do
-		local shader = shader_info.shader
-		local name   = shader_info.name
-		local path   = shader_info.path
+	for _, bundle_info in ipairs(bundles) do
+		local bundle      = bundle_info.bundle
+		local bundle_name = bundle_info.name
+		local bundle_path = bundle_info.path
 
-		for sub_name, sub_shader in pairs(shader.shaders) do
-			source:write("\t[DfShader_" .. name .. "_" .. sub_name .. "] = {\n")
-			source:write("\t\t.name        = Sc(\"" .. name .. "_" .. sub_name .. "\"),\n")
-			source:write("\t\t.entry_point = Sc(\"" .. sub_shader.entry .. "\"),\n")
-			source:write("\t\t.target      = Sc(\"" .. sub_shader.target .. "\"),\n")
-			source:write("\t\t.path_hlsl   = Sc(\"" .. output_directory_hlsl .. shader.name .. ".hlsl" .. "\"),\n")
-			source:write("\t\t.path_dfs    = Sc(\"" .. path .. "\"),\n")
-			source:write("\t},\n")
+		if bundle.shaders then
+			for shader_name, shader in pairs(bundle.shaders) do
+				source:write("\t[DfShader_" .. bundle_name .. "_" .. shader_name .. "] = {\n")
+				source:write("\t\t.name        = Sc(\"" .. bundle_name .. "_" .. shader_name .. "\"),\n")
+				source:write("\t\t.entry_point = Sc(\"" .. shader.entry .. "\"),\n")
+				source:write("\t\t.target      = Sc(\"" .. shader.target .. "\"),\n")
+				source:write("\t\t.path_hlsl   = Sc(\"" .. output_directory_hlsl .. bundle.name .. ".hlsl" .. "\"),\n")
+				source:write("\t\t.path_dfs    = Sc(\"" .. bundle_path .. "\"),\n")
+				source:write("\t},\n")
 
-			if next(shader.shaders, sub_name) ~= nil then
-				source:write("\n")
+				if next(bundle.shaders, shader_name) ~= nil then
+					source:write("\n")
+				end
 			end
 		end
 	end

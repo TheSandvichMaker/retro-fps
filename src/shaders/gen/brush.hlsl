@@ -2,6 +2,18 @@
 
 #include "bindless.hlsli"
 
+struct brush_draw_parameters_t
+{
+	df::Resource< Texture2D< float3 > > albedo;
+	float3 normal;
+	df::Resource< Texture2D< float3 > > lightmap;
+	float2 albedo_dim;
+	uint pad0;
+	float2 lightmap_dim;
+};
+
+ConstantBuffer< brush_draw_parameters_t > draw : register(b0);
+
 struct brush_pass_parameters_t
 {
 	df::Resource< StructuredBuffer< float2 > > lm_uvs;
@@ -14,21 +26,9 @@ struct brush_pass_parameters_t
 	df::Resource< Texture2D< float > > sun_shadowmap;
 	uint3 pad3;
 	df::Resource< StructuredBuffer< float2 > > uvs;
-	uint3 pad4;
 };
 
 ConstantBuffer< brush_pass_parameters_t > pass : register(b1);
-
-struct brush_draw_parameters_t
-{
-	df::Resource< Texture2D< float3 > > albedo;
-	float2 albedo_dim;
-	df::Resource< Texture2D< float3 > > lightmap;
-	float2 lightmap_dim;
-	float3 normal;
-};
-
-ConstantBuffer< brush_draw_parameters_t > draw : register(b0);
 
 
 	#include "common.hlsli"
