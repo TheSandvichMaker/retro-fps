@@ -14,7 +14,7 @@ rem copy binaries
 
 robocopy external\bin run *.exe *.dll *.pdb /S > NUL
 
-tools\luajit metagen\metagen.lua > metagen_log.txt
+tools\luajit metagen\metagen.lua > metagen.log
 if %ERRORLEVEL% neq 0 goto bail
 
 pushd build
