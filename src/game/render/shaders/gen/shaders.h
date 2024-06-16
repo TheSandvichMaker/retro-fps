@@ -4,6 +4,7 @@
 
 #include "view.h"
 #include "brush.h"
+#include "compute_test.h"
 #include "debug_lines.h"
 #include "post.h"
 #include "shadow.h"
@@ -13,19 +14,21 @@ typedef enum df_shader_ident_t
 {
 	DfShader_none,
 
-	DfShader_brush_ps, // src/shaders/brush.dfs
 	DfShader_brush_vs, // src/shaders/brush.dfs
+	DfShader_brush_ps, // src/shaders/brush.dfs
 
-	DfShader_debug_lines_ps, // src/shaders/debug_lines.dfs
+	DfShader_compute_test_cs, // src/shaders/compute_test.dfs
+
 	DfShader_debug_lines_vs, // src/shaders/debug_lines.dfs
+	DfShader_debug_lines_ps, // src/shaders/debug_lines.dfs
 
-	DfShader_post_ps, // src/shaders/post.dfs
 	DfShader_post_vs, // src/shaders/post.dfs
+	DfShader_post_ps, // src/shaders/post.dfs
 
 	DfShader_shadow_vs, // src/shaders/shadow.dfs
 
-	DfShader_ui_ps, // src/shaders/ui.dfs
 	DfShader_ui_vs, // src/shaders/ui.dfs
+	DfShader_ui_ps, // src/shaders/ui.dfs
 
 	DfShader_COUNT,
 } df_shader_ident_t;

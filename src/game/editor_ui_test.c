@@ -62,8 +62,8 @@ void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *wi
 
 	state->edit_buffer.data     = state->edit_buffer_storage;
 	state->edit_buffer.capacity = ARRAY_COUNT(state->edit_buffer_storage);
-	//ui_hover_tooltip(S("Text edit state box"));
-	//ui_text_edit(S("Text Edit"), &state->edit_buffer);
+
+	ui_row_text_edit(&builder, S("Text Edit"), &state->edit_buffer);
 
 	ui_row_checkbox(&builder, S("Debug Drawing"), &r1->debug_drawing_enabled);
 
@@ -104,7 +104,7 @@ void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *wi
 	ui_row_slider(&builder, S("Filter Test"), &mixer.filter_test, -1.0f, 1.0f);
 
 	static v4_t color = { 1, 0, 0, 1 };
-	ui_row_color_picker(&builder, S("Test Color"), NULL);
+	ui_row_color_picker(&builder, S("Test Color"), &color);
 
 	ui_scrollable_region_end(scroll_region_id, builder.rect);
 }

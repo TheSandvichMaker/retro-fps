@@ -7,24 +7,21 @@ typedef struct brush_draw_parameters_t
 	rhi_texture_srv_t albedo;
 	v3_t normal;
 	rhi_texture_srv_t lightmap;
-	v2_t albedo_dim;
-	uint32_t pad0;
-	v2_t lightmap_dim;
 } brush_draw_parameters_t;
 
 fn void shader_brush_set_draw_params(rhi_command_list_t *list, brush_draw_parameters_t *params);
+
 typedef struct brush_pass_parameters_t
 {
 	rhi_buffer_srv_t lm_uvs;
-	v2_t shadowmap_dim;
-	uint32_t pad0;
-	rhi_buffer_srv_t normals;
-	v3u_t pad1;
+	v3u_t pad0;
 	rhi_buffer_srv_t positions;
-	v3u_t pad2;
+	v3u_t pad1;
 	rhi_texture_srv_t sun_shadowmap;
-	v3u_t pad3;
+	v3u_t pad2;
 	rhi_buffer_srv_t uvs;
 } brush_pass_parameters_t;
 
 fn void shader_brush_set_pass_params(rhi_command_list_t *list, brush_pass_parameters_t *params);
+
+global string_t brush_source_code;

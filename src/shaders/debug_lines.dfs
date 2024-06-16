@@ -1,10 +1,8 @@
-local LineVertex = { hlsl_name = "LineVertex" }
-
 bundle = {
 	name = "debug_lines",
 
 	draw_parameters = {
-		lines = StructuredBuffer(LineVertex),
+		lines = StructuredBuffer [[LineVertex]],
 	},
 
 	shaders = {

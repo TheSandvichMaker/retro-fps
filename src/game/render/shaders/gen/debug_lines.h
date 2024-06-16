@@ -8,3 +8,5 @@ typedef struct debug_lines_draw_parameters_t
 } debug_lines_draw_parameters_t;
 
 fn void shader_debug_lines_set_draw_params(rhi_command_list_t *list, debug_lines_draw_parameters_t *params);
+
+global string_t debug_lines_source_code;

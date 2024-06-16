@@ -34,11 +34,23 @@ typedef struct rhi_command_list_t
 {
 	ID3D12GraphicsCommandList *d3d;
 
+	rhi_pso_t    current_pso;
 	rhi_buffer_t index_buffer;
+
+	// TODO: use this
+	bool began_graphics_pass;
 
 	uint32_t render_target_count;
 	rhi_texture_t render_targets[8];
 	rhi_texture_t ds;
+
+	bool began_compute_pass;
+	struct {
+		uint32_t       buffer_uavs_count;
+		rhi_buffer_t  *buffer_uavs;
+		uint32_t       texture_uavs_count;
+		rhi_texture_t *texture_uavs;
+	} compute;
 } rhi_command_list_t;
 
 typedef struct d3d12_frame_state_t
@@ -170,8 +182,15 @@ typedef struct d3d12_texture_t
 	rhi_texture_desc_t desc;
 } d3d12_texture_t;
 
+typedef enum d3d12_pso_kind_t
+{
+	D3d12PsoKind_graphics,
+	D3d12PsoKind_compute,
+} d3d12_pso_kind_t;
+
 typedef struct d3d12_pso_t
 {
+	d3d12_pso_kind_t     kind;
 	ID3D12PipelineState *d3d;
 } d3d12_pso_t;
 

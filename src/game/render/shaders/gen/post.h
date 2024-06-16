@@ -9,3 +9,5 @@ typedef struct post_draw_parameters_t
 } post_draw_parameters_t;
 
 fn void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_t *params);
+
+global string_t post_source_code;

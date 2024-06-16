@@ -134,60 +134,84 @@ fn void              rhi_upload_texture_data    (rhi_texture_t texture, const rh
 fn bool              rhi_texture_upload_complete(rhi_texture_t texture);
 fn void              rhi_wait_on_texture_upload (rhi_texture_t texture);
 fn rhi_texture_srv_t rhi_get_texture_srv        (rhi_texture_t texture);
+fn void              rhi_validate_texture_srv   (rhi_texture_srv_t srv, string_t context); // tries to verify that this srv is valid
+
+typedef enum rhi_heap_kind_t
+{
+	RhiHeapKind_default,
+	// RhiHeapKind_upload, not sure I care to expose this
+	RhiHeapKind_readback,
+
+	RhiHeapKind_COUNT,
+} rhi_heap_kind_t;
 
 typedef struct rhi_buffer_data_t
 {
-	void     *ptr;
+	void     *src;
+	uint64_t  dst_offset;
 	uint64_t  size;
 } rhi_buffer_data_t;
 
-typedef struct rhi_create_buffer_srv_params_t
+typedef uint32_t rhi_buffer_flags_t;
+typedef enum rhi_buffer_flags_enum_t
 {
-	uint32_t first_element;
-	uint32_t element_count;
-	uint32_t element_stride;
-	bool     raw;
-} rhi_create_buffer_srv_params_t;
+	RhiBufferFlag_raw = 0x1,
+} rhi_buffer_flags_enum_t;
+
+typedef uint32_t rhi_buffer_usage_t;
+typedef enum rhi_buffer_usage_enum_t
+{
+	RhiBufferUsage_uav           = 0x4,
+	RhiBufferUsage_deny_srv      = 0x8, // srv is allowed by default :)
+} rhi_buffer_usage_enum_t;
+
+typedef struct rhi_buffer_desc_t
+{
+	uint64_t           first_element;
+	uint64_t           element_count;
+	uint64_t           element_stride;
+	uint64_t           counter_offset_in_bytes;
+	rhi_buffer_flags_t flags;
+} rhi_buffer_desc_t;
 
 typedef struct rhi_create_buffer_params_t
 {
-	string_t           debug_name;
-	size_t             size;
-	rhi_buffer_data_t  initial_data;
-
+	string_t             debug_name;
+	rhi_buffer_desc_t    desc;
+	rhi_heap_kind_t      heap;
+	rhi_buffer_usage_t   usage;
 	rhi_resource_flags_t flags;
-
-	rhi_create_buffer_srv_params_t *srv;
+	rhi_buffer_data_t    initial_data;
 } rhi_create_buffer_params_t;
 
 fn rhi_buffer_t     rhi_create_buffer(const rhi_create_buffer_params_t *params);
 fn void             rhi_upload_buffer_data(rhi_buffer_t buffer, size_t dst_offset, const void *src, size_t src_size, rhi_upload_frequency_t frequency);
 fn rhi_buffer_srv_t rhi_get_buffer_srv(rhi_buffer_t buffer);
+fn rhi_buffer_uav_t rhi_get_buffer_uav(rhi_buffer_t handle);
+fn void             rhi_validate_buffer_srv(rhi_buffer_srv_t srv, string_t context); // tries to verify that this srv is valid
 
 fn void *rhi_begin_buffer_upload  (rhi_buffer_t buffer, size_t offset, size_t size, rhi_upload_frequency_t frequency);
 fn void  rhi_end_buffer_upload    (rhi_buffer_t buffer);
 fn void  rhi_wait_on_buffer_upload(rhi_buffer_t buffer);
 
-fn rhi_buffer_t rhi_create_structured_buffer(string_t debug_name, 
-											 uint32_t first_element, 
-											 uint32_t element_count, 
-											 uint32_t element_stride, 
-											 void *initial_data)
-{
-	size_t size = element_count*element_stride;
+fn void *rhi_map  (rhi_buffer_t buffer);
+fn void  rhi_unmap(rhi_buffer_t buffer);
 
+fn rhi_buffer_t rhi_create_structured_buffer(
+	string_t           debug_name, 
+	uint32_t           first_element, 
+	uint32_t           element_count, 
+	uint32_t           element_stride, 
+	rhi_buffer_usage_t usage)
+{
 	rhi_buffer_t result = rhi_create_buffer(&(rhi_create_buffer_params_t){
 		.debug_name = debug_name,
-		.size       = size,
-		.initial_data = {
-			.ptr  = initial_data,
-			.size = size,
-		},
-		.srv = &(rhi_create_buffer_srv_params_t){
+		.desc = {
 			.first_element  = first_element,
 			.element_count  = element_count,
 			.element_stride = element_stride,
 		},
+		.usage = usage,
 	});
 
 	return result;
@@ -431,7 +455,16 @@ typedef struct rhi_create_graphics_pso_params_t
 } rhi_create_graphics_pso_params_t;
 
 fn rhi_pso_t rhi_create_graphics_pso(const rhi_create_graphics_pso_params_t *params);
-fn void      rhi_destroy_pso(rhi_pso_t pso);
+
+typedef struct rhi_compute_pso_params_t
+{
+	string_t debug_name;
+	rhi_shader_bytecode_t cs;
+} rhi_compute_pso_params_t;
+
+fn rhi_pso_t rhi_create_compute_pso(const rhi_compute_pso_params_t *params);
+
+fn void rhi_destroy_pso(rhi_pso_t pso);
 
 typedef enum rhi_pass_op_t
 {
@@ -474,6 +507,15 @@ typedef struct rhi_graphics_pass_params_t
 	rect2i_t                 scissor_rect;
 } rhi_graphics_pass_params_t;
 
+typedef struct rhi_compute_pass_params_t
+{
+	uint32_t       buffer_uavs_count;
+	rhi_buffer_t  *buffer_uavs;
+
+	uint32_t       texture_uavs_count;
+	rhi_texture_t *texture_uavs;
+} rhi_compute_pass_params_t;
+
 fn void rhi_set_parameters(rhi_command_list_t *list, uint32_t slot, void *parameters, uint32_t size);
 
 fn void                rhi_begin_frame        (void);
@@ -484,6 +526,9 @@ fn void                rhi_draw               (rhi_command_list_t *list, uint32_
 fn void                rhi_draw_indexed       (rhi_command_list_t *list, rhi_buffer_t index_buffer_handle, uint32_t index_count, uint32_t start_index, uint32_t start_vertex);
 fn void                rhi_draw_instanced     (rhi_command_list_t *list, uint32_t vertex_count, uint32_t start_vertex, uint32_t instance_count, uint32_t start_instance);
 fn void                rhi_graphics_pass_end  (rhi_command_list_t *list);
+fn void                rhi_compute_pass_begin (rhi_command_list_t *list, const rhi_compute_pass_params_t *params);
+fn void                rhi_dispatch           (rhi_command_list_t *list, int dispatch_x, int dispatch_y, int dispatch_z);
+fn void                rhi_compute_pass_end   (rhi_command_list_t *list);
 fn void                rhi_end_frame          (void);
 
 fn void rhi_flush_everything(void);

@@ -8,3 +8,5 @@ typedef struct ui_draw_parameters_t
 } ui_draw_parameters_t;
 
 fn void shader_ui_set_draw_params(rhi_command_list_t *list, ui_draw_parameters_t *params);
+
+global string_t ui_source_code;

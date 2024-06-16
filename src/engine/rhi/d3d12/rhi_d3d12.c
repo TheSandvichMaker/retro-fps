@@ -66,6 +66,21 @@ fn_local bool d3d12_transition_state(ID3D12Resource *resource,
 	return result;
 }
 
+fn_local void d3d12_uav_barrier(
+	ID3D12Resource         *resource, 
+	D3D12_RESOURCE_BARRIER *barrier
+) {
+	ASSERT(resource);
+	ASSERT(barrier);
+
+	*barrier = (D3D12_RESOURCE_BARRIER){
+		.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV,
+		.UAV = {
+			.pResource = resource,
+		},
+	};
+}
+
 bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 {
 	// Register cvars (optional - but prevents lazy initialization which is preferable)
@@ -622,6 +637,8 @@ rhi_window_t rhi_init_window_d3d12(const rhi_init_window_d3d12_params_t *params)
 			d3d12_texture_t *frame_buffer = pool_add(&g_rhi.textures);
 			frame_buffer->state = D3D12_RESOURCE_STATE_COMMON|D3D12_RESOURCE_STATE_PRESENT;
 
+			rhi_texture_t frame_buffer_handle = CAST_HANDLE(rhi_texture_t, pool_get_handle(&g_rhi.textures, frame_buffer));
+
 			hr = IDXGISwapChain1_GetBuffer(swap_chain, (uint32_t)i, &IID_ID3D12Resource, &frame_buffer->resource);
 			D3D12_CHECK_HR(hr, goto bail);
 
@@ -632,7 +649,7 @@ rhi_window_t rhi_init_window_d3d12(const rhi_init_window_d3d12_params_t *params)
 
 			frame_buffer->desc = rhi_texture_desc_from_d3d12_resource_desc(&rt_desc);
 
-			frame_buffer->rtv = d3d12_allocate_descriptor_persistent(&g_rhi.rtv);
+			frame_buffer->rtv = d3d12_allocate_descriptor_persistent_for_texture(&g_rhi.rtv, frame_buffer_handle);
 
 			D3D12_RENDER_TARGET_VIEW_DESC rtv_desc = {
 				.Format        = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
@@ -641,7 +658,7 @@ rhi_window_t rhi_init_window_d3d12(const rhi_init_window_d3d12_params_t *params)
 
 			ID3D12Device_CreateRenderTargetView(g_rhi.device, frame_buffer->resource, &rtv_desc, frame_buffer->rtv.cpu);
 
-			window->frame_buffers[i] = CAST_HANDLE(rhi_texture_t, pool_get_handle(&g_rhi.textures, frame_buffer));
+			window->frame_buffers[i] = frame_buffer_handle;
 		}
 	}
 
@@ -1033,8 +1050,7 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 			texture->state    = initial_state;
 			texture->resource = resource;
 
-			DEBUG_ASSERT(params->debug_name.count);
-			d3d12_set_debug_name((ID3D12Object *)texture->resource, params->debug_name);
+			result = CAST_HANDLE(rhi_texture_t, pool_get_handle(&g_rhi.textures, texture));
 
 			D3D12_RESOURCE_DESC desc;
 			ID3D12Resource_GetDesc(texture->resource, &desc);
@@ -1043,7 +1059,7 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 
 			if (texture->desc.usage_flags & RhiTextureUsage_render_target)
 			{
-				texture->rtv = d3d12_allocate_descriptor_persistent(&g_rhi.rtv);
+				texture->rtv = d3d12_allocate_descriptor_persistent_for_texture(&g_rhi.rtv, result);
 				ID3D12Device_CreateRenderTargetView(g_rhi.device, texture->resource, NULL, texture->rtv.cpu);
 			}
 
@@ -1051,7 +1067,7 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 
 			if (texture->desc.usage_flags & RhiTextureUsage_depth_stencil)
 			{
-				texture->dsv = d3d12_allocate_descriptor_persistent(&g_rhi.dsv);
+				texture->dsv = d3d12_allocate_descriptor_persistent_for_texture(&g_rhi.dsv, result);
 
 				DXGI_FORMAT dsv_format = DXGI_FORMAT_UNKNOWN;
 				switch (format)
@@ -1073,13 +1089,13 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 
 			if (texture->desc.usage_flags & RhiTextureUsage_uav)
 			{
-				texture->uav = d3d12_allocate_descriptor_persistent(&g_rhi.cbv_srv_uav);
+				texture->uav = d3d12_allocate_descriptor_persistent_for_texture(&g_rhi.cbv_srv_uav, result);
 				ID3D12Device_CreateUnorderedAccessView(g_rhi.device, texture->resource, NULL, NULL, texture->uav.cpu);
 			}
 
 			if (!(texture->desc.usage_flags & RhiTextureUsage_deny_srv))
 			{
-				texture->srv = d3d12_allocate_descriptor_persistent(&g_rhi.cbv_srv_uav);
+				texture->srv = d3d12_allocate_descriptor_persistent_for_texture(&g_rhi.cbv_srv_uav, result);
 
 				DXGI_FORMAT srv_format = format;
 				switch (format)
@@ -1103,14 +1119,28 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 				ID3D12Device_CreateShaderResourceView(g_rhi.device, texture->resource, &srv_desc, texture->srv.cpu);
 			}
 
+			uint32_t rtv_index = texture->rtv.index;
+			uint32_t dsv_index = texture->dsv.index;
+			uint32_t uav_index = texture->uav.index;
+			uint32_t srv_index = texture->srv.index;
+
+			DEBUG_ASSERT(params->debug_name.count);
+
+			d3d12_set_debug_name((ID3D12Object *)texture->resource, 
+				Sf("%cs (rtv: %u, dsv: %u, uav: %u, srv: %u)",
+					params->debug_name,
+					rtv_index,
+					dsv_index,
+					uav_index,
+					srv_index));
+
+
 			rhi_texture_data_t *initial_data = params->initial_data;
 
 			if (initial_data)
 			{
 				d3d12_upload_texture_data(texture, initial_data);
 			}
-
-			result = CAST_HANDLE(rhi_texture_t, pool_get_handle(&g_rhi.textures, texture));
 
 			log(RHI_D3D12, Spam, "Added new texture '%.*s' (index: %u, generation: %u)", Sx(params->debug_name), result.index, result.generation);
 		}
@@ -1147,6 +1177,51 @@ rhi_texture_srv_t rhi_get_texture_srv(rhi_texture_t handle)
 	};
 
 	return result;
+}
+
+void rhi_validate_texture_srv(rhi_texture_srv_t srv, string_t context)
+{
+	(void)srv;
+	(void)context;
+
+#if DREAM_SLOW
+	d3d12_descriptor_heap_t *heap = &g_rhi.cbv_srv_uav;
+
+	if (srv.index < heap->capacity)
+	{
+		rhi_texture_t handle = heap->debug_texture_map[srv.index];
+
+		if (RESOURCE_HANDLE_VALID(handle))
+		{
+			d3d12_texture_t *texture = pool_get(&g_rhi.textures, handle);
+
+			if (texture)
+			{
+				if (texture->srv.index != srv.index)
+				{
+					log(RHI_D3D12, ValidationFailure, "SRV is associated with a texture, yet that texture's SRV does not match. (%cs)", context);
+				}
+
+				if (!texture->resource)
+				{
+					log(RHI_D3D12, ValidationFailure, "SRV is associated with a texture, but that texture does not have an associated resource. (%cs)", context);
+				}
+			}
+			else
+			{
+				log(RHI_D3D12, ValidationFailure, "SRV is associated with a non-existent texture. (%cs)", context);
+			}
+		}
+		else
+		{
+			log(RHI_D3D12, ValidationFailure, "SRV is not associated with any texture. (%cs)", context);
+		}
+	}
+	else
+	{
+		log(RHI_D3D12, ValidationFailure, "SRV is out of range of the CBV/SRV/UAV heap! (%cs)", context);
+	}
+#endif
 }
 
 fn_local void d3d12_upload_buffer_data(d3d12_buffer_t *buffer, uint32_t resource_index, uint64_t dst_offset, const void *src, size_t src_size)
@@ -1305,21 +1380,55 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 
 	rhi_buffer_t result = {0};
 
+	size_t size = 0;
+
+	bool is_raw = !!(params->desc.flags & RhiBufferFlag_raw);
+
+	if (is_raw)
+	{
+		size = params->desc.element_count;
+	}
+	else
+	{
+		size = params->desc.element_count*params->desc.element_stride;
+	}
+
 	m_scoped_temp
 	{
+		D3D12_HEAP_TYPE heap_type = D3D12_HEAP_TYPE_DEFAULT;
+
+		switch (params->heap)
+		{
+			case RhiHeapKind_default:  heap_type = D3D12_HEAP_TYPE_DEFAULT;  break;
+			case RhiHeapKind_readback: heap_type = D3D12_HEAP_TYPE_READBACK; break;
+
+			default:
+			{
+				log(RHI_D3D12, Error, "Invalid heap kind passed to rhi_create_buffer: 0x%X", params->heap);
+			} break;
+		}
+
+		UINT flags = 0;
+
+		if (params->usage & RhiBufferUsage_uav)
+		{
+			flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+		}
+
 		D3D12_HEAP_PROPERTIES heap_properties = {
-			.Type = D3D12_HEAP_TYPE_DEFAULT,
+			.Type = heap_type,
 		};
 
 		D3D12_RESOURCE_DESC desc = {
 			.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER,
-			.Width            = params->size,
+			.Width            = size,
 			.Height           = 1,
 			.DepthOrArraySize = 1,
 			.MipLevels        = 1,
 			.SampleDesc       = { .Count = 1, .Quality = 0 },
 			.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
 			.Format           = DXGI_FORMAT_UNKNOWN,
+			.Flags            = flags,
 		};
 
 		uint32_t count = (params->flags & RhiResourceFlag_dynamic) ? g_rhi.frame_latency : 1;
@@ -1356,17 +1465,15 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 			{
 				buffer->resources  [i] = resources[i];
 				buffer->gpu_address[i] = ID3D12Resource_GetGPUVirtualAddress(resources[i]);
-
-				d3d12_set_debug_name((ID3D12Object *)buffer->resources[i], params->debug_name);
 			}
 
-			buffer->size = params->size;
+			buffer->size = size;
 
-			if (params->srv)
+			if (!(params->usage & RhiBufferUsage_deny_srv))
 			{
 				for (size_t i = 0; i < count; i++)
 				{
-					d3d12_descriptor_t descriptor = d3d12_allocate_descriptor_persistent(&g_rhi.cbv_srv_uav);
+					d3d12_descriptor_t descriptor = d3d12_allocate_descriptor_persistent_for_buffer(&g_rhi.cbv_srv_uav, result);
 					buffer->srvs[i] = descriptor;
 
 					{
@@ -1374,10 +1481,10 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 							.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 							.ViewDimension           = D3D12_SRV_DIMENSION_BUFFER,
 							.Buffer = {
-								.FirstElement        = params->srv->first_element,
-								.NumElements         = params->srv->element_count,
-								.StructureByteStride = params->srv->element_stride,
-								.Flags = params->srv->raw ? D3D12_BUFFER_SRV_FLAG_RAW : D3D12_BUFFER_SRV_FLAG_NONE,
+								.FirstElement        = params->desc.first_element,
+								.NumElements         = params->desc.element_count,
+								.StructureByteStride = params->desc.element_stride,
+								.Flags = is_raw ? D3D12_BUFFER_SRV_FLAG_RAW : D3D12_BUFFER_SRV_FLAG_NONE,
 							},
 						};
 
@@ -1386,9 +1493,55 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 				}
 			}
 
+			if (params->usage & RhiBufferUsage_uav)
+			{
+				for (size_t i = 0; i < count; i++)
+				{
+					d3d12_descriptor_t descriptor = d3d12_allocate_descriptor_persistent_for_buffer(&g_rhi.cbv_srv_uav, result);
+					buffer->uavs[i] = descriptor;
+
+					{
+						D3D12_UNORDERED_ACCESS_VIEW_DESC desc = {
+							.Format = DXGI_FORMAT_UNKNOWN,
+							.ViewDimension = D3D12_UAV_DIMENSION_BUFFER,
+							.Buffer = {
+								.FirstElement         = params->desc.first_element,
+								.NumElements          = params->desc.element_count,
+								.StructureByteStride  = params->desc.element_stride,
+								.CounterOffsetInBytes = 0,
+								.Flags = is_raw ? D3D12_BUFFER_UAV_FLAG_RAW : D3D12_BUFFER_UAV_FLAG_NONE,
+							},
+						};
+
+						ID3D12Device_CreateUnorderedAccessView(g_rhi.device, buffer->resources[i], NULL, &desc, descriptor.cpu);
+					}
+				}
+			}
+
+			if (count == 1)
+			{
+				d3d12_set_debug_name((ID3D12Object *)buffer->resources[0], 
+					Sf("%cs (uav: %u, srv: %u)",
+						params->debug_name,
+						buffer->uavs[0].index,
+						buffer->srvs[0].index));
+			}
+			else
+			{
+				for (size_t i = 0; i < count; i++)
+				{
+					d3d12_set_debug_name((ID3D12Object *)buffer->resources[i], 
+						Sf("%cs[%zu] (uav: %u, srv: %u)",
+							params->debug_name,
+							i,
+							buffer->uavs[i].index,
+							buffer->srvs[i].index));
+				}
+			}
+
 			const rhi_buffer_data_t *data = &params->initial_data;
 
-			if (data->ptr && ALWAYS(data->size <= params->size))
+			if (data->src && ALWAYS(data->size <= size))
 			{
 				// Lying about the initial state because I can't set the initial state on the buffer without triggering a
 				// debug layer warning about the initial state being ignored because it's assumed on first use... Ok... That
@@ -1398,7 +1551,7 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 
 				for (uint32_t i = 0; i < count; i++)
 				{
-					d3d12_upload_buffer_data(buffer, i, 0, params->initial_data.ptr, params->initial_data.size);
+					d3d12_upload_buffer_data(buffer, i, 0, params->initial_data.src, params->initial_data.size);
 				}
 			}
 		}
@@ -1424,6 +1577,68 @@ rhi_buffer_srv_t rhi_get_buffer_srv(rhi_buffer_t handle)
 	ASSERT_MSG(result.index != 0, "Buffer does not have an SRV!");
 
 	return result;
+}
+
+rhi_buffer_uav_t rhi_get_buffer_uav(rhi_buffer_t handle)
+{
+	rhi_buffer_uav_t result = {0};
+
+	d3d12_buffer_t *buffer = pool_get(&g_rhi.buffers, handle);
+	ASSERT_MSG(buffer, "Buffer does not exist!");
+
+	uint32_t resource_index = d3d12_resource_index(buffer->flags);
+
+	result.index = buffer->uavs[resource_index].index;
+	ASSERT_MSG(result.index != 0, "Buffer does not have a UAV!");
+
+	return result;
+}
+
+void rhi_validate_buffer_srv(rhi_buffer_srv_t srv, string_t context)
+{
+	(void)srv;
+	(void)context;
+
+#if DREAM_SLOW
+	d3d12_descriptor_heap_t *heap = &g_rhi.cbv_srv_uav;
+
+	if (srv.index < heap->capacity)
+	{
+		rhi_buffer_t handle = heap->debug_buffer_map[srv.index];
+
+		if (RESOURCE_HANDLE_VALID(handle))
+		{
+			d3d12_buffer_t *buffer = pool_get(&g_rhi.buffers, handle);
+
+			if (buffer)
+			{
+				uint32_t resource_index = d3d12_resource_index(buffer->flags);
+
+				if (buffer->srvs[resource_index].index != srv.index)
+				{
+					log(RHI_D3D12, ValidationFailure, "SRV is associated with a buffer, yet that buffer's SRV does not match. (%cs)", context);
+				}
+
+				if (!buffer->resources[resource_index])
+				{
+					log(RHI_D3D12, ValidationFailure, "SRV is associated with a buffer, but that buffer does not have an associated resource. (%cs)", context);
+				}
+			}
+			else
+			{
+				log(RHI_D3D12, ValidationFailure, "SRV is associated with a non-existent buffer. (%cs)", context);
+			}
+		}
+		else
+		{
+			log(RHI_D3D12, ValidationFailure, "SRV is not associated with any buffer. (%cs)", context);
+		}
+	}
+	else
+	{
+		log(RHI_D3D12, ValidationFailure, "SRV is out of range of the CBV/SRV/UAV heap! (%cs)", context);
+	}
+#endif
 }
 
 fn_local void d3d12_resolve_timestamp_queries(ID3D12GraphicsCommandList *list);
@@ -1459,9 +1674,11 @@ void rhi_begin_frame(void)
 
 	ID3D12GraphicsCommandList_SetDescriptorHeaps(list, 1, &g_rhi.cbv_srv_uav.heap);
 	ID3D12GraphicsCommandList_SetGraphicsRootSignature(list, g_rhi.rs_bindless);
+	ID3D12GraphicsCommandList_SetComputeRootSignature (list, g_rhi.rs_bindless);
 
-	frame->direct_command_list.index_buffer = (rhi_buffer_t){0};
+	frame->direct_command_list.index_buffer        = (rhi_buffer_t){0};
 	frame->direct_command_list.render_target_count = 0;
+	frame->direct_command_list.current_pso         = (rhi_pso_t){0};
 }
 
 fn_local D3D12_RENDER_TARGET_BLEND_DESC to_d3d12_rt_blend_desc(const rhi_render_target_blend_t *desc)
@@ -1563,8 +1780,10 @@ rhi_pso_t rhi_create_graphics_pso(const rhi_create_graphics_pso_params_t *params
 	if (SUCCEEDED(hr))
 	{
 		d3d12_pso_t *pso = pool_add(&g_rhi.psos);
-		pso->d3d = d3d_pso;
+		pso->kind = D3d12PsoKind_graphics;
+		pso->d3d  = d3d_pso;
 
+		DEBUG_ASSERT_MSG(params->debug_name.count, "Please assign a debug name to your PSO");
 		d3d12_set_debug_name((ID3D12Object *)pso->d3d, params->debug_name);
 
 		result = CAST_HANDLE(rhi_pso_t, pool_get_handle(&g_rhi.psos, pso));
@@ -1577,8 +1796,44 @@ rhi_pso_t rhi_create_graphics_pso(const rhi_create_graphics_pso_params_t *params
 	return result;
 }
 
+rhi_pso_t rhi_create_compute_pso(const rhi_compute_pso_params_t *params)
+{
+	D3D12_COMPUTE_PIPELINE_STATE_DESC pso_desc = {
+		.pRootSignature = g_rhi.rs_bindless,
+		.CS = {
+			.pShaderBytecode = params->cs.bytes,
+			.BytecodeLength  = (uint32_t)params->cs.count,
+		},
+	};
+
+	ID3D12PipelineState *d3d_pso;
+	HRESULT hr = ID3D12Device_CreateComputePipelineState(
+		g_rhi.device,
+		&pso_desc,
+		&IID_ID3D12PipelineState,
+		&d3d_pso);
+
+	rhi_pso_t result = {0};
+
+	if (SUCCEEDED(hr))
+	{
+		d3d12_pso_t *pso = pool_add(&g_rhi.psos);
+		pso->kind = D3d12PsoKind_compute;
+		pso->d3d  = d3d_pso;
+
+		DEBUG_ASSERT_MSG(params->debug_name.count, "Please assign a debug name to your PSO");
+		d3d12_set_debug_name((ID3D12Object *)pso->d3d, params->debug_name);
+
+		result = CAST_HANDLE(rhi_pso_t, pool_get_handle(&g_rhi.psos, pso));
+	}
+
+	return result;
+}
+
 void rhi_destroy_pso(rhi_pso_t handle)
 {
+	// TODO: deferred release (or validation on not destroying in-use PSOs, probably if you're doing that you wanted to flush the frame)
+
 	if (RESOURCE_HANDLE_VALID(handle))
 	{
 		d3d12_pso_t *pso = pool_get(&g_rhi.psos, handle);
@@ -1599,6 +1854,9 @@ rhi_command_list_t *rhi_get_command_list(void)
 
 void rhi_graphics_pass_begin(rhi_command_list_t *list, const rhi_graphics_pass_params_t *params)
 {
+	ASSERT(!list->began_graphics_pass);
+	list->began_graphics_pass = true;
+
 	const rhi_graphics_pass_color_attachment_t *attachments[8];
 
 	list->render_target_count = 0;
@@ -1692,6 +1950,9 @@ void rhi_graphics_pass_begin(rhi_command_list_t *list, const rhi_graphics_pass_p
 
 void rhi_graphics_pass_end(rhi_command_list_t *list)
 {
+	ASSERT(list->began_graphics_pass);
+	list->began_graphics_pass = false;
+
 	uint32_t barrier_count = 0;
 	D3D12_RESOURCE_BARRIER barriers[8];
 
@@ -1729,16 +1990,135 @@ void rhi_graphics_pass_end(rhi_command_list_t *list)
 
 void rhi_set_pso(rhi_command_list_t *list, rhi_pso_t pso_handle)
 {
-	d3d12_pso_t *pso = pool_get(&g_rhi.psos, pso_handle);
+	if (!RESOURCE_HANDLES_EQUAL(list->current_pso, pso_handle))
+	{
+		d3d12_pso_t *pso = pool_get(&g_rhi.psos, pso_handle);
 
-	if (ALWAYS(pso))
-	{
-		ID3D12GraphicsCommandList_SetPipelineState(list->d3d, pso->d3d);
+		if (pso)
+		{
+			ID3D12GraphicsCommandList_SetPipelineState(list->d3d, pso->d3d);
+		}
+		else
+		{
+			log(RHI_D3D12, Error, "Tried to assign invalid PSO");
+		}
+
+		list->current_pso = pso_handle;
 	}
-	else
+}
+
+void rhi_compute_pass_begin(rhi_command_list_t *list, const rhi_compute_pass_params_t *params)
+{
+	// TODO: This is not a very efficient use of barriers
+
+	if (list->began_compute_pass)
 	{
-		log(RHI_D3D12, Error, "Tried to assign invalid PSO");
+		log(RHI_D3D12, Error, "Began a compute pass without ending the previous one.");
+
+		rhi_compute_pass_end(list);
 	}
+
+	m_scoped_temp
+	{
+		uint32_t barrier_count = 0;
+
+		D3D12_RESOURCE_BARRIER *barriers = m_alloc_array_nozero(
+			temp, 
+			params->buffer_uavs_count + params->texture_uavs_count,
+			D3D12_RESOURCE_BARRIER);
+
+		// Hate this duplication
+		for (size_t i = 0; i < params->buffer_uavs_count; i++)
+		{
+			d3d12_buffer_t *buffer = pool_get(&g_rhi.buffers, params->buffer_uavs[i]);
+
+			uint32_t resource_index = d3d12_resource_index(buffer->flags);
+
+			barrier_count += d3d12_transition_state(
+				buffer->resources[resource_index],
+				&buffer->state,
+				D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+				&barriers[barrier_count]);
+		}
+
+		// Hate this duplication
+		for (size_t i = 0; i < params->texture_uavs_count; i++)
+		{
+			d3d12_texture_t *texture = pool_get(&g_rhi.textures, params->texture_uavs[i]);
+
+			barrier_count += d3d12_transition_state(
+				texture->resource,
+				&texture->state,
+				D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+				&barriers[barrier_count]);
+		}
+
+		if (barrier_count > 0)
+		{
+			ID3D12GraphicsCommandList_ResourceBarrier(list->d3d, barrier_count, barriers);
+		}
+	}
+
+	list->began_compute_pass = true;
+	list->compute.buffer_uavs_count  = params->buffer_uavs_count;
+	list->compute.buffer_uavs        = params->buffer_uavs;  // @RhiLifetimes
+	list->compute.texture_uavs_count = params->texture_uavs_count;
+	list->compute.texture_uavs       = params->texture_uavs; // @RhiLifetimes
+}
+
+fn void rhi_compute_pass_end(rhi_command_list_t *list)
+{
+	// TODO: This is not a very efficient use of barriers
+
+	if (!list->began_compute_pass)
+	{
+		log(RHI_D3D12, Error, "Tried to end a compute pass without starting one the previous one.");
+		return;
+	}
+
+	m_scoped_temp
+	{
+		uint32_t barrier_count = 0;
+
+		D3D12_RESOURCE_BARRIER *barriers = m_alloc_array_nozero(
+			temp, 
+			2 * (list->compute.buffer_uavs_count + list->compute.texture_uavs_count),
+			D3D12_RESOURCE_BARRIER);
+
+		// Hate this duplication
+		for (size_t i = 0; i < list->compute.buffer_uavs_count; i++)
+		{
+			d3d12_buffer_t *buffer = pool_get(&g_rhi.buffers, list->compute.buffer_uavs[i]);
+
+			uint32_t resource_index = d3d12_resource_index(buffer->flags);
+
+			barrier_count += d3d12_transition_state(
+				buffer->resources[resource_index],
+				&buffer->state,
+				D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
+				&barriers[barrier_count]);
+		}
+
+		// Hate this duplication
+		for (size_t i = 0; i < list->compute.texture_uavs_count; i++)
+		{
+			d3d12_texture_t *texture = pool_get(&g_rhi.textures, list->compute.texture_uavs[i]);
+
+			barrier_count += d3d12_transition_state(
+				texture->resource,
+				&texture->state,
+				D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
+				&barriers[barrier_count]);
+		}
+
+		if (barrier_count > 0)
+		{
+			ID3D12GraphicsCommandList_ResourceBarrier(list->d3d, barrier_count, barriers);
+		}
+	}
+
+	list->began_compute_pass = false;
+	zero_struct(&list->compute);
 }
 
 void rhi_set_parameters(rhi_command_list_t *list, uint32_t slot, void *parameters, uint32_t size)
@@ -1755,11 +2135,20 @@ void rhi_set_parameters(rhi_command_list_t *list, uint32_t slot, void *parameter
 
 		const uint32_t constants_count = size / sizeof(uint32_t);
 
-		ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstants(list->d3d, 
-																D3d12BindlessRootParameter_32bitconstants, 
-																constants_count, 
-																parameters, 
-																0);
+		// TODO: it's silly to always do both but right now I don't want to bifurcate the calls
+		ID3D12GraphicsCommandList_SetComputeRoot32BitConstants(
+			list->d3d, 
+			D3d12BindlessRootParameter_32bitconstants, 
+			constants_count, 
+			parameters, 
+			0);
+
+		ID3D12GraphicsCommandList_SetGraphicsRoot32BitConstants(
+			list->d3d, 
+			D3d12BindlessRootParameter_32bitconstants, 
+			constants_count, 
+			parameters, 
+			0);
 	}
 	else
 	{
@@ -1768,6 +2157,8 @@ void rhi_set_parameters(rhi_command_list_t *list, uint32_t slot, void *parameter
 		d3d12_buffer_allocation_t alloc = d3d12_arena_alloc(&frame->upload_arena, size, 256);
 		memcpy(alloc.cpu, parameters, size);
 
+		// TODO: it's silly to always do both but right now I don't want to bifurcate the calls
+		ID3D12GraphicsCommandList_SetComputeRootConstantBufferView(list->d3d, slot, alloc.gpu);
 		ID3D12GraphicsCommandList_SetGraphicsRootConstantBufferView(list->d3d, slot, alloc.gpu);
 	}
 }
@@ -1776,12 +2167,24 @@ void rhi_draw(rhi_command_list_t *list, uint32_t vertex_count, uint32_t start_ve
 {
 	DEBUG_ASSERT(list);
 
+#if DREAM_SLOW
+	d3d12_pso_t *pso = pool_get(&g_rhi.psos, list->current_pso);
+	ASSERT_MSG(pso, "Called rhi_dispatch without setting a PSO");
+	ASSERT_MSG(pso->kind == D3d12PsoKind_graphics, "called rhi_dispatch, but the current PSO is a compute PSO!");
+#endif
+
 	ID3D12GraphicsCommandList_DrawInstanced(list->d3d, vertex_count, 1, start_vertex, 0);
 }
 
 void rhi_draw_indexed(rhi_command_list_t *list, rhi_buffer_t index_buffer_handle, uint32_t index_count, uint32_t start_index, uint32_t start_vertex)
 {
 	DEBUG_ASSERT(list);
+
+#if DREAM_SLOW
+	d3d12_pso_t *pso = pool_get(&g_rhi.psos, list->current_pso);
+	ASSERT_MSG(pso, "Called rhi_dispatch without setting a PSO");
+	ASSERT_MSG(pso->kind == D3d12PsoKind_graphics, "called rhi_dispatch, but the current PSO is a compute PSO!");
+#endif
 
 	if (!RESOURCE_HANDLES_EQUAL(list->index_buffer, index_buffer_handle))
 	{
@@ -1816,6 +2219,52 @@ void rhi_draw_instanced(rhi_command_list_t *list, uint32_t vertex_count, uint32_
 	DEBUG_ASSERT(list);
 
 	ID3D12GraphicsCommandList_DrawInstanced(list->d3d, vertex_count, instance_count, start_vertex, start_instance);
+}
+
+void rhi_dispatch(rhi_command_list_t *list, int dispatch_x, int dispatch_y, int dispatch_z)
+{
+	ASSERT_MSG(list->began_compute_pass, "You need to begin a comput pass before calling rhi_dispatch");
+
+#if DREAM_SLOW
+	d3d12_pso_t *pso = pool_get(&g_rhi.psos, list->current_pso);
+	ASSERT_MSG(pso, "Called rhi_dispatch without setting a PSO");
+	ASSERT_MSG(pso->kind == D3d12PsoKind_compute, "called rhi_dispatch, but the current PSO is a graphics PSO!");
+#endif
+
+	ID3D12GraphicsCommandList_Dispatch(list->d3d, dispatch_x, dispatch_y, dispatch_z);
+
+	// sketchy idea:
+
+	m_scoped_temp
+	{
+		uint32_t barrier_count = 0;
+
+		D3D12_RESOURCE_BARRIER *barriers = m_alloc_array_nozero(
+			temp, 
+			list->compute.buffer_uavs_count + list->compute.texture_uavs_count,
+			D3D12_RESOURCE_BARRIER);
+
+		// Hate this duplication
+		for (size_t i = 0; i < list->compute.buffer_uavs_count; i++)
+		{
+			d3d12_buffer_t *buffer = pool_get(&g_rhi.buffers, list->compute.buffer_uavs[i]);
+
+			uint32_t resource_index = d3d12_resource_index(buffer->flags);
+			d3d12_uav_barrier(buffer->resources[resource_index], &barriers[barrier_count++]);
+		}
+
+		// Hate this duplication
+		for (size_t i = 0; i < list->compute.texture_uavs_count; i++)
+		{
+			d3d12_texture_t *texture = pool_get(&g_rhi.textures, list->compute.texture_uavs[i]);
+			d3d12_uav_barrier(texture->resource, &barriers[barrier_count++]);
+		}
+
+		if (barrier_count > 0)
+		{
+			ID3D12GraphicsCommandList_ResourceBarrier(list->d3d, barrier_count, barriers);
+		}
+	}
 }
 
 void rhi_end_frame(void)

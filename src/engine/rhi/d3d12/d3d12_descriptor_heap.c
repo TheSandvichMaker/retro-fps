@@ -127,6 +127,11 @@ void d3d12_descriptor_heap_init(ID3D12Device *device,
 	heap->pending_free_tail    = 0;
 	heap->pending_free_head    = 0;
 	heap->pending_free_indices = m_alloc_array_nozero(rhi_arena, heap->capacity, d3d12_pending_free_t);
+
+#if DREAM_SLOW
+	heap->debug_buffer_map  = m_alloc_array(rhi_arena, heap->capacity, rhi_buffer_t);
+	heap->debug_texture_map = m_alloc_array(rhi_arena, heap->capacity, rhi_texture_t);
+#endif
 }
 
 void d3d12_descriptor_heap_release(d3d12_descriptor_heap_t *heap)
@@ -182,6 +187,42 @@ d3d12_descriptor_t d3d12_allocate_descriptor_persistent(d3d12_descriptor_heap_t 
 	return result;
 }
 
+d3d12_descriptor_t d3d12_allocate_descriptor_persistent_for_buffer(d3d12_descriptor_heap_t *heap, rhi_buffer_t buffer)
+{
+	(void)buffer;
+
+	d3d12_descriptor_t result = d3d12_allocate_descriptor_persistent(heap);
+#if DREAM_SLOW
+	mutex_scoped_lock(&heap->mutex)
+	{
+		// Nobody should be using this!!!!
+		ASSERT(!RESOURCE_HANDLE_VALID(heap->debug_buffer_map [result.index]));
+		ASSERT(!RESOURCE_HANDLE_VALID(heap->debug_texture_map[result.index]));
+
+		heap->debug_buffer_map[result.index] = buffer;
+	}
+#endif
+	return result;
+}
+
+d3d12_descriptor_t d3d12_allocate_descriptor_persistent_for_texture(d3d12_descriptor_heap_t *heap, rhi_texture_t texture)
+{
+	(void)texture;
+
+	d3d12_descriptor_t result = d3d12_allocate_descriptor_persistent(heap);
+#if DREAM_SLOW
+	mutex_scoped_lock(&heap->mutex)
+	{
+		// Nobody should be using this!!!!
+		ASSERT(!RESOURCE_HANDLE_VALID(heap->debug_buffer_map [result.index]));
+		ASSERT(!RESOURCE_HANDLE_VALID(heap->debug_texture_map[result.index]));
+
+		heap->debug_texture_map[result.index] = texture;
+	}
+#endif
+	return result;
+}
+
 void d3d12_free_descriptor_persistent(d3d12_descriptor_heap_t *heap, uint32_t index)
 {
 	if (index > 0 && ALWAYS(index < heap->capacity))
@@ -194,6 +235,11 @@ void d3d12_free_descriptor_persistent(d3d12_descriptor_heap_t *heap, uint32_t in
 			.index       = index,
 			.frame_index = g_rhi.fence_value,
 		};
+
+#if DREAM_SLOW
+		NULLIFY_HANDLE(&heap->debug_buffer_map [index]);
+		NULLIFY_HANDLE(&heap->debug_texture_map[index]);
+#endif
 
 		mutex_unlock(&heap->mutex);
 	}

@@ -8,6 +8,8 @@ typedef struct df_shader_info_t
 	string_t entry_point;
 	string_t target;
 
+	string_t hlsl_source;
+
 	string_t path_hlsl;
 	string_t path_dfs;
 

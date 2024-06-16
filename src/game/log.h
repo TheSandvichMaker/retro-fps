@@ -11,6 +11,7 @@ typedef enum log_level_t
 	LogLevel_Spam,
 	LogLevel_Info,
 	LogLevel_Warning,
+	LogLevel_ValidationFailure,
 	LogLevel_Error,
 	LogLevel_COUNT,
 } log_level_t;

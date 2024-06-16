@@ -2,7 +2,7 @@ bundle = {
 	name = "ui",
 
 	draw_parameters = {
-		rects = StructuredBuffer("UIRect"),
+		rects = StructuredBuffer [[UIRect]],
 	},
 
 	shaders = {

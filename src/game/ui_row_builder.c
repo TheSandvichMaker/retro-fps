@@ -57,7 +57,7 @@ void ui_row_label(ui_row_builder_t *builder, string_t label)
 	ui_label(rect, label);
 }
 
-fn void ui_row_progress_bar(ui_row_builder_t *builder, string_t label, float progress)
+void ui_row_progress_bar(ui_row_builder_t *builder, string_t label, float progress)
 {
 	float height = 0.75f*ui_default_row_height();
 

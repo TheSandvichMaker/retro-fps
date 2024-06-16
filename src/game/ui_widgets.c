@@ -7,6 +7,15 @@ void ui_error_widget(rect2_t rect, string_t widget_name, string_t error_message)
 	// TODO: This id is not very unique. May cause issues.
 	ui_id_t id = ui_child_id(ui_id(widget_name), error_message);
 
+	// Click on the error widget to pop into the debugger so you can figure out the callstack
+	if (ui_button_pressed(UiButton_left, false))
+	{
+		if (ui_mouse_in_rect(rect))
+		{
+			DEBUG_BREAK();
+		}
+	}
+
 	ui_draw_rect(rect, ui_color(UiColor_widget_error_background));
 
 	ui_hover_tooltip(Sf("%cs: %cs (click to break into the debugger)", widget_name, error_message));
@@ -22,13 +31,6 @@ void ui_error_widget(rect2_t rect, string_t widget_name, string_t error_message)
 	{
 		ui_label(line0, Sf("!! error: %cs !!", widget_name));
 		ui_label(line1, error_message);
-	}
-
-	// Click on the error widget to pop into the debugger so you can figure out the callstack
-	if (ui_mouse_in_rect(rect) &&
-		ui_button_pressed(UiButton_left, false))
-	{
-		DEBUG_BREAK();
 	}
 }
 

@@ -3,12 +3,13 @@
 // ============================================================
 
 string_t log_level_to_string[] = {
-	[LogLevel_None]      = Sc("Spam"),
-	[LogLevel_SuperSpam] = Sc("SuperSpam"),
-	[LogLevel_Spam]      = Sc("Spam"),
-	[LogLevel_Info]      = Sc("Info"),
-	[LogLevel_Warning]   = Sc("Warning"),
-	[LogLevel_Error]     = Sc("Error"),
+	[LogLevel_None]              = Sc("Spam"),
+	[LogLevel_SuperSpam]         = Sc("SuperSpam"),
+	[LogLevel_Spam]              = Sc("Spam"),
+	[LogLevel_Info]              = Sc("Info"),
+	[LogLevel_Warning]           = Sc("Warning"),
+	[LogLevel_ValidationFailure] = Sc("Validation Failure"),
+	[LogLevel_Error]             = Sc("Error"),
 };
 
 string_t log_category_to_string[] = {
@@ -66,7 +67,8 @@ void logs_(const log_loc_t *loc, log_category_t cat, log_level_t level, string_t
 
 	debug_print("[%.*s|%.*s] %.*s\n", Sx(cat_string), Sx(level_string), Sx(message));
 
-	if (level == LogLevel_Error)
+	if (level == LogLevel_ValidationFailure ||
+		level == LogLevel_Error)
 	{
 		DEBUG_BREAK();
 	}

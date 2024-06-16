@@ -115,10 +115,12 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 
 	const bool multisample_enabled = multisample_count > 1;
 
+	// shadow
 	{
 		df_shader_info_t *vs = &df_shaders[DfShader_shadow_vs];
 
 		r1->psos.sun_shadows = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
+			.debug_name = S("pso_shadow_map"),
 			.vs = vs->bytecode,
 			.blend.sample_mask = 0xFFFFFFFF,
 			.rasterizer = {
@@ -135,12 +137,13 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 		});
 	}
 
+	// brush
 	{
 		df_shader_info_t *vs = &df_shaders[DfShader_brush_vs];
 		df_shader_info_t *ps = &df_shaders[DfShader_brush_ps];
 
 		r1->psos.map = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
-			.debug_name = S("Map PSO"),
+			.debug_name = S("pso_brush"),
 			.vs = vs->bytecode,
 			.ps = ps->bytecode,
 			.blend = {
@@ -165,12 +168,13 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 		});
 	}
 
+	// debug lines
 	{
 		df_shader_info_t *vs = &df_shaders[DfShader_debug_lines_vs];
 		df_shader_info_t *ps = &df_shaders[DfShader_debug_lines_ps];
 
 		r1->psos.debug_lines = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
-			.debug_name = S("Debug Lines PSO"),
+			.debug_name = S("pso_debug_lines"),
 			.vs = vs->bytecode,
 			.ps = ps->bytecode,
 			.blend = {
@@ -194,12 +198,13 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 		});
 	}
 
+	// post process
 	{
 		df_shader_info_t *vs = &df_shaders[DfShader_post_vs];
 		df_shader_info_t *ps = &df_shaders[DfShader_post_ps];
 
 		r1->psos.post_process = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
-			.debug_name = S("Post Process PSO"),
+			.debug_name = S("pso_post_process"),
 			.vs = vs->bytecode,
 			.ps = ps->bytecode,
 			.blend = {
@@ -216,12 +221,13 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 		});
 	}
 
+	// ui
 	{
 		df_shader_info_t *vs = &df_shaders[DfShader_ui_vs];
 		df_shader_info_t *ps = &df_shaders[DfShader_ui_ps];
 
 		r1->psos.ui = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
-			.debug_name = S("UI PSO"),
+			.debug_name = S("pso_ui"),
 			.vs = vs->bytecode,
 			.ps = ps->bytecode,
 			.blend = {
@@ -246,6 +252,9 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 
 fn_local void r1_load_all_shaders(void);
 
+fn void simple_compute_init(arena_t *arena);
+fn void simple_compute_dispatch(rhi_command_list_t *list);
+
 void r1_init(void)
 {
 	ASSERT(!r1);
@@ -254,6 +263,8 @@ void r1_init(void)
 	r1->debug_drawing_enabled = true;
 
 	r1_load_all_shaders();
+
+	simple_compute_init(&r1->arena);
 
 	const uint32_t max_timestamps = 2*R1MaxRegions; // one for region start, one for region end
 
@@ -313,19 +324,17 @@ void r1_init(void)
 
 	r1->ui_rects = rhi_create_buffer(&(rhi_create_buffer_params_t){
 		.debug_name = S("ui_rects"),
-		.size       = sizeof(r_ui_rect_t) * R1MaxUiRects,
-		.flags      = RhiResourceFlag_dynamic,
-		.srv = &(rhi_create_buffer_srv_params_t){
+		.desc = {
 			.first_element  = 0,
 			.element_count  = R1MaxUiRects,
 			.element_stride = sizeof(r_ui_rect_t),
 		},
+		.flags = RhiResourceFlag_dynamic,
 	});
 
 	r1->debug_lines = rhi_create_buffer(&(rhi_create_buffer_params_t){
 		.debug_name = S("debug_lines"),
-		.size       = sizeof(debug_line_t)*ARRAY_COUNT(debug_lines),
-		.srv = &(rhi_create_buffer_srv_params_t){
+		.desc = {
 			.first_element  = 0,
 			.element_count  = (uint32_t)ARRAY_COUNT(debug_lines),
 			.element_stride = sizeof(debug_line_t),
@@ -343,19 +352,12 @@ void r1_load_all_shaders(void)
 
 		if (ALWAYS(!info->loaded))
 		{
-			m_scoped_temp
+			string_t source = info->hlsl_source;
+			info->bytecode = rhi_compile_shader(&r1->arena, source, info->name, info->entry_point, info->target);
+
+			if (info->bytecode.bytes != NULL)
 			{
-				// TODO: Handle the paths in some logical, consistent way
-				string_t source_path = Sf("../%cs", info->path_hlsl);
-				// TODO: Don't read the same file multiple times
-				string_t source      = fs_read_entire_file(temp, source_path);
-
-				info->bytecode = rhi_compile_shader(&r1->arena, source, info->name, info->entry_point, info->target);
-
-				if (info->bytecode.bytes != NULL)
-				{
-					info->loaded = true;
-				}
+				info->loaded = true;
 			}
 		}
 	}
@@ -369,57 +371,53 @@ void r1_init_map_resources(map_t *map)
 
 	r1->map.positions = rhi_create_buffer(&(rhi_create_buffer_params_t){
 		.debug_name = S("map_positions"),
-		.size       = positions_size,
-		.initial_data = {
-			.ptr  = map->vertex.positions,
-			.size = positions_size,
-		},
-		.srv = &(rhi_create_buffer_srv_params_t){
+		.desc = {
 			.first_element  = 0,
 			.element_count  = map->vertex_count,
 			.element_stride = sizeof(map->vertex.positions[0]),
+		},
+		.initial_data = {
+			.src  = map->vertex.positions,
+			.size = positions_size,
 		},
 	});
 
 	r1->map.uvs = rhi_create_buffer(&(rhi_create_buffer_params_t){
 		.debug_name = S("map_uvs"),
-		.size       = uvs_size,
-		.initial_data = {
-			.ptr  = map->vertex.texcoords,
-			.size = uvs_size,
-		},
-		.srv = &(rhi_create_buffer_srv_params_t){
+		.desc = {
 			.first_element  = 0,
 			.element_count  = map->vertex_count,
 			.element_stride = sizeof(map->vertex.texcoords[0]),
+		},
+		.initial_data = {
+			.src  = map->vertex.texcoords,
+			.size = uvs_size,
 		},
 	});
 
 	r1->map.lightmap_uvs = rhi_create_buffer(&(rhi_create_buffer_params_t){
 		.debug_name = S("map_lightmap_uvs"),
-		.size       = uvs_size,
-		.initial_data = {
-			.ptr  = map->vertex.lightmap_texcoords,
-			.size = uvs_size,
-		},
-		.srv = &(rhi_create_buffer_srv_params_t){
+		.desc = {
 			.first_element  = 0,
 			.element_count  = map->vertex_count,
 			.element_stride = sizeof(map->vertex.lightmap_texcoords[0]),
+		},
+		.initial_data = {
+			.src  = map->vertex.lightmap_texcoords,
+			.size = uvs_size,
 		},
 	});
 
 	r1->map.indices = rhi_create_buffer(&(rhi_create_buffer_params_t){
 		.debug_name = S("map_indices"),
-		.size       = indices_size,
-		.initial_data = {
-			.ptr  = map->indices,
-			.size = indices_size,
-		},
-		.srv = &(rhi_create_buffer_srv_params_t){
+		.desc = {
 			.first_element  = 0,
 			.element_count  = map->index_count,
 			.element_stride = sizeof(map->indices[0]),
+		},
+		.initial_data = {
+			.src  = map->indices,
+			.size = indices_size,
 		},
 	});
 }
@@ -465,7 +463,7 @@ void r1_update_window_resources(rhi_window_t window)
 fn_local void r1_render_sun_shadows(rhi_command_list_t *list, map_t *map);
 fn_local void r1_render_map        (rhi_command_list_t *list, rhi_texture_t rt, map_t *map);
 fn_local void r1_post_process      (rhi_command_list_t *list, rhi_texture_t color_hdr, rhi_texture_t rt_result);
-fn_local void r1_render_debug_lines(rhi_command_list_t *list, rhi_texture_t rt);
+fn_local void r1_render_debug_lines(rhi_command_list_t *list, rhi_texture_t rt, rhi_texture_t rt_depth);
 
 void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t backbuffer, r_view_t *view, map_t *map)
 {
@@ -502,12 +500,14 @@ void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t backbuffer, r_v
 
 			if (r1->debug_drawing_enabled)
 			{
-				r1_render_debug_lines(list, rt_hdr);
+				r1_render_debug_lines(list, rt_hdr, r1->window.depth_stencil);
 			}
 		}
 
 		r1_post_process(list, rt_hdr, backbuffer);
 	}
+
+	simple_compute_dispatch(list);
 }
 
 void r1_render_sun_shadows(rhi_command_list_t *list, map_t *map)
@@ -546,16 +546,9 @@ void r1_render_map(rhi_command_list_t *list, rhi_texture_t rt, map_t *map)
 {
 	R1_TIMED_REGION(list, S("Map"))
 	{
-		brush_pass_parameters_t pass_parameters = {
-			.positions     = rhi_get_buffer_srv (r1->map.positions),
-			.uvs           = rhi_get_buffer_srv (r1->map.uvs),
-			.lm_uvs        = rhi_get_buffer_srv (r1->map.lightmap_uvs),
-			.sun_shadowmap = rhi_get_texture_srv(r1->shadow_map),
-			.shadowmap_dim = { (float)r1->shadow_map_resolution, (float)r1->shadow_map_resolution },
-		};
-		shader_brush_set_pass_params(list, &pass_parameters);
-
 		const rhi_texture_desc_t *rt_desc = rhi_get_texture_desc(rt);
+		const float w = (float)rt_desc->width;
+		const float h = (float)rt_desc->height;
 
 		rhi_graphics_pass_begin(list, &(rhi_graphics_pass_params_t){
 			.render_targets[0] = {
@@ -569,63 +562,62 @@ void r1_render_map(rhi_command_list_t *list, rhi_texture_t rt, map_t *map)
 				.clear_value = 0.0f,
 			},
 			.topology = RhiPrimitiveTopology_trianglelist,
-			.viewport = {
-				.width  = (float)rt_desc->width,
-				.height = (float)rt_desc->height,
-				.min_depth = 0.0f,
-				.max_depth = 1.0f,
-			},
+			.viewport = { 0, 0, w, h, 0, 1 },
 			.scissor_rect = r1->unbounded_scissor_rect,
 		});
 
+		rhi_set_pso(list, r1->psos.map);
+
+		brush_pass_parameters_t pass_parameters = {
+			.positions     = rhi_get_buffer_srv (r1->map.positions),
+			.uvs           = rhi_get_buffer_srv (r1->map.uvs),
+			.lm_uvs        = rhi_get_buffer_srv (r1->map.lightmap_uvs),
+			.sun_shadowmap = rhi_get_texture_srv(r1->shadow_map),
+		};
+		shader_brush_set_pass_params(list, &pass_parameters);
+
+		for (size_t i = 0; i < map->poly_count; i++)
 		{
-			rhi_set_pso(list, r1->psos.map);
+			map_poly_t *poly = &map->polys[i];
 
-			for (size_t i = 0; i < map->poly_count; i++)
+			rhi_texture_srv_t albedo_srv = r1->white_texture_srv;
+
+			asset_image_t *albedo = get_image(poly->texture);
+
+			if (albedo != &missing_image)
 			{
-				map_poly_t *poly = &map->polys[i];
-
-				rhi_texture_srv_t albedo_srv = r1->white_texture_srv;
-
-				asset_image_t *albedo = get_image(poly->texture);
-
-				if (albedo != &missing_image)
+				if (rhi_texture_upload_complete(albedo->rhi_texture))
 				{
-					if (rhi_texture_upload_complete(albedo->rhi_texture))
-					{
-						albedo_srv = rhi_get_texture_srv(albedo->rhi_texture);
-					}
+					albedo_srv = rhi_get_texture_srv(albedo->rhi_texture);
 				}
-
-				rhi_texture_srv_t lightmap_srv = r1->white_texture_srv;
-				v2_t lightmap_dim = { 1.0f, 1.0f };
-
-				if (RESOURCE_HANDLE_VALID(poly->lightmap_rhi))
-				{
-					lightmap_srv = rhi_get_texture_srv(poly->lightmap_rhi);
-
-					const rhi_texture_desc_t *desc = rhi_get_texture_desc(poly->lightmap_rhi);
-					lightmap_dim = make_v2((float)desc->width, (float)desc->height);
-				}
-
-				brush_draw_parameters_t draw_parameters = {
-					.albedo        = albedo_srv,
-					.albedo_dim    = { (float)albedo->w, (float)albedo->h },
-					.lightmap      = lightmap_srv,
-					.lightmap_dim  = lightmap_dim,
-					.normal        = poly->normal,
-				};
-				shader_brush_set_draw_params(list, &draw_parameters);
-
-				rhi_draw_indexed(list, r1->map.indices, poly->index_count, poly->first_index, 0);
 			}
+
+			rhi_texture_srv_t lightmap_srv = r1->white_texture_srv;
+			v2_t lightmap_dim = { 1.0f, 1.0f };
+
+			if (RESOURCE_HANDLE_VALID(poly->lightmap_rhi))
+			{
+				lightmap_srv = rhi_get_texture_srv(poly->lightmap_rhi);
+
+				const rhi_texture_desc_t *desc = rhi_get_texture_desc(poly->lightmap_rhi);
+				lightmap_dim = make_v2((float)desc->width, (float)desc->height);
+			}
+
+			brush_draw_parameters_t draw_parameters = {
+				.albedo        = albedo_srv,
+				.lightmap      = lightmap_srv,
+				.normal        = poly->normal,
+			};
+			shader_brush_set_draw_params(list, &draw_parameters);
+
+			rhi_draw_indexed(list, r1->map.indices, poly->index_count, poly->first_index, 0);
 		}
 
 		rhi_graphics_pass_end(list);
 	}
 }
 
-void r1_render_debug_lines(rhi_command_list_t *list, rhi_texture_t rt)
+void r1_render_debug_lines(rhi_command_list_t *list, rhi_texture_t rt, rhi_texture_t rt_depth)
 {
 	if (debug_line_count > 0)
 	{
@@ -634,30 +626,17 @@ void r1_render_debug_lines(rhi_command_list_t *list, rhi_texture_t rt)
 
 		R1_TIMED_REGION(list, S("Draw Debug Lines"))
 		{
-			const rhi_texture_desc_t *rt_desc = rhi_get_texture_desc(rt);
+			rhi_simple_graphics_pass_begin(list, rt, rt_depth, RhiPrimitiveTopology_linelist);
+			{
+				rhi_set_pso(list, r1->psos.debug_lines);
 
-			rhi_graphics_pass_begin(list, &(rhi_graphics_pass_params_t){
-				.render_targets[0].texture = rt,
-				.depth_stencil.texture     = r1->window.depth_stencil,
-				.topology = RhiPrimitiveTopology_linelist,
-				.viewport = {
-					.width  = (float)rt_desc->width,
-					.height = (float)rt_desc->height,
-					.min_depth = 0.0f,
-					.max_depth = 1.0f,
-				},
-				.scissor_rect = r1->unbounded_scissor_rect,
-			});
+				debug_lines_draw_parameters_t draw_parameters = {
+					.lines = rhi_get_buffer_srv(r1->debug_lines),
+				};
+				shader_debug_lines_set_draw_params(list, &draw_parameters);
 
-			rhi_set_pso(list, r1->psos.debug_lines);
-
-			debug_lines_draw_parameters_t draw_parameters = {
-				.lines = rhi_get_buffer_srv(r1->debug_lines),
-			};
-			shader_debug_lines_set_draw_params(list, &draw_parameters);
-
-			rhi_draw(list, 2*debug_line_count, 0);
-
+				rhi_draw(list, 2*debug_line_count, 0);
+			}
 			rhi_graphics_pass_end(list);
 		}
 	}
@@ -769,4 +748,67 @@ void draw_debug_cube(rect3_t bounds, v4_t color)
     draw_debug_line(v100, v101, color, color);
     draw_debug_line(v010, v011, color, color);
     draw_debug_line(v110, v111, color, color);
+}
+
+global rhi_buffer_t input_buffer;
+global rhi_buffer_t output_buffer;
+global rhi_pso_t    compute_pso;
+
+void simple_compute_init(arena_t *arena)
+{
+	size_t float_count = 4096;
+
+	float *input = m_alloc_array_nozero(arena, float_count, float);
+
+	for (size_t i = 0; i < float_count; i++)
+	{
+		input[i] = (float)(i + 1);
+	}
+
+	rhi_buffer_desc_t desc = {
+		.element_count  = float_count,
+		.element_stride = sizeof(float),
+	};
+
+	input_buffer = rhi_create_buffer(&(rhi_create_buffer_params_t){
+		.debug_name = S("compute_input_buffer"),
+		.desc = desc,
+		.initial_data = {
+			.src  = input,
+			.size = sizeof(float)*float_count,
+		},
+	});
+
+	output_buffer = rhi_create_buffer(&(rhi_create_buffer_params_t){
+		.debug_name = S("compute_output_buffer"),
+		.desc       = desc,
+		.usage      = RhiBufferUsage_uav,
+	});
+
+	df_shader_info_t *cs = &df_shaders[DfShader_compute_test_cs];
+
+	compute_pso = rhi_create_compute_pso(&(rhi_compute_pso_params_t) {
+		.debug_name = S("pso_compute_test"),
+		.cs         = cs->bytecode,
+	});
+}
+
+void simple_compute_dispatch(rhi_command_list_t *list)
+{
+	rhi_compute_pass_begin(list, &(rhi_compute_pass_params_t){
+		.buffer_uavs_count = 1,
+		.buffer_uavs       = (rhi_buffer_t[]) { output_buffer },
+	});
+
+	rhi_set_pso(list, compute_pso);
+
+	compute_test_draw_parameters_t params = {
+		.input_buffer  = rhi_get_buffer_srv(input_buffer),
+		.output_buffer = rhi_get_buffer_uav(output_buffer),
+	};
+	shader_compute_test_set_draw_params(list, &params);
+
+	rhi_dispatch(list, 4096 / 128, 1, 1);
+
+	rhi_compute_pass_end(list);
 }

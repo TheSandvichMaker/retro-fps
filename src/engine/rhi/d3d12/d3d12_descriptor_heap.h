@@ -57,6 +57,11 @@ typedef struct d3d12_descriptor_heap_t
 
 	ID3D12DescriptorHeap *heap;
 
+#if DREAM_SLOW
+	rhi_buffer_t  *debug_buffer_map;
+	rhi_texture_t *debug_texture_map;
+#endif
+
 	D3D12_CPU_DESCRIPTOR_HANDLE cpu_base;
 	D3D12_GPU_DESCRIPTOR_HANDLE gpu_base;
 
@@ -85,6 +90,8 @@ fn void d3d12_descriptor_heap_release(d3d12_descriptor_heap_t *heap);
 fn void d3d12_descriptor_heap_flush_pending_frees(d3d12_descriptor_heap_t *heap, uint32_t frame_index);
 
 fn d3d12_descriptor_t d3d12_allocate_descriptor_persistent(d3d12_descriptor_heap_t *heap);
+fn d3d12_descriptor_t d3d12_allocate_descriptor_persistent_for_buffer (d3d12_descriptor_heap_t *heap, rhi_buffer_t  buffer);
+fn d3d12_descriptor_t d3d12_allocate_descriptor_persistent_for_texture(d3d12_descriptor_heap_t *heap, rhi_texture_t texture);
 fn void               d3d12_free_descriptor_persistent    (d3d12_descriptor_heap_t *heap, uint32_t index);
 
 // TODO: Implement
