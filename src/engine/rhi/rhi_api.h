@@ -139,7 +139,7 @@ fn void              rhi_validate_texture_srv   (rhi_texture_srv_t srv, string_t
 typedef enum rhi_heap_kind_t
 {
 	RhiHeapKind_default,
-	// RhiHeapKind_upload, not sure I care to expose this
+	RhiHeapKind_upload,
 	RhiHeapKind_readback,
 
 	RhiHeapKind_COUNT,
@@ -196,26 +196,6 @@ fn void  rhi_wait_on_buffer_upload(rhi_buffer_t buffer);
 
 fn void *rhi_map  (rhi_buffer_t buffer);
 fn void  rhi_unmap(rhi_buffer_t buffer);
-
-fn rhi_buffer_t rhi_create_structured_buffer(
-	string_t           debug_name, 
-	uint32_t           first_element, 
-	uint32_t           element_count, 
-	uint32_t           element_stride, 
-	rhi_buffer_usage_t usage)
-{
-	rhi_buffer_t result = rhi_create_buffer(&(rhi_create_buffer_params_t){
-		.debug_name = debug_name,
-		.desc = {
-			.first_element  = first_element,
-			.element_count  = element_count,
-			.element_stride = element_stride,
-		},
-		.usage = usage,
-	});
-
-	return result;
-}
 
 typedef struct rhi_shader_bytecode_t
 {
@@ -518,6 +498,17 @@ typedef struct rhi_compute_pass_params_t
 
 fn void rhi_set_parameters(rhi_command_list_t *list, uint32_t slot, void *parameters, uint32_t size);
 
+// temporary!
+
+typedef struct rhi_parameters_t
+{
+	void *host;
+	uint32_t offset;
+	uint32_t size;
+} rhi_parameters_t;
+
+fn rhi_parameters_t rhi_alloc_parameters(uint32_t size);
+
 fn void                rhi_begin_frame        (void);
 fn rhi_command_list_t *rhi_get_command_list   (void);
 fn void                rhi_graphics_pass_begin(rhi_command_list_t *list, const rhi_graphics_pass_params_t *params);
@@ -543,25 +534,56 @@ fn uint64_t  rhi_get_timestamp_frequency(void);
 fn uint64_t *rhi_begin_read_timestamps  (void);
 fn void      rhi_end_read_timestamps    (void);
 
-fn_local void rhi_simple_graphics_pass_begin(rhi_command_list_t *list, 
-											 rhi_texture_t render_target,
-											 rhi_texture_t depth_stencil,
-											 rhi_primitive_topology_t topology)
-{
-	const rhi_texture_desc_t *rt_desc = rhi_get_texture_desc(render_target);
+//
+// draw packet API
+//
 
-	rhi_graphics_pass_begin(list, &(rhi_graphics_pass_params_t){
-		.render_targets[0] = { .texture = render_target, },
-		.depth_stencil     = depth_stencil,
-		.topology          = topology,
-		.viewport = {
-			.width  = (float)rt_desc->width,
-			.height = (float)rt_desc->height,
-			.min_depth = 0.0f,
-			.max_depth = 1.0f,
-		},
-		.scissor_rect = {
-			.max = { (int32_t)rt_desc->width, (int32_t)rt_desc->height },
-		},
-	});
-}
+typedef struct rhi_indirect_draw_t
+{
+	uint32_t vertex_count;
+	uint32_t instance_count;
+	 int32_t vertex_offset;
+	uint32_t instance_offset;
+} rhi_indirect_draw_t;
+
+typedef struct rhi_indirect_draw_indexed_t
+{
+	uint32_t index_count;
+	uint32_t instance_count;
+	uint32_t index_offset;
+	 int32_t vertex_offset;
+	uint32_t instance_offset;
+} rhi_indirect_draw_indexed_t;
+
+typedef struct rhi_draw_packet_t
+{
+								 // 32 bit handles - 64 bit handles
+	rhi_pso_t    pso;            // 4                8
+	rhi_buffer_t args_buffer;    // 8                16
+	uint32_t     args_offset;    // 12               20
+	rhi_buffer_t index_buffer;   // 16               24
+	uint32_t     push_constants; // 20               28
+	uint32_t     params[3];      // 32               48
+} rhi_draw_packet_t;
+
+typedef struct rhi_draw_stream_t
+{
+	uint32_t           count;
+	rhi_draw_packet_t *packets;
+} rhi_draw_stream_t;
+
+typedef struct rhi_draw_stream_params_t
+{
+	rhi_graphics_pass_color_attachment_t         render_targets[RhiMaxRenderTargetCount];
+	rhi_graphics_pass_depth_stencil_attachment_t depth_stencil;
+
+	rhi_primitive_topology_t topology;
+	rhi_viewport_t           viewport;
+	rect2i_t                 scissor_rect;
+
+	void *push_constants_buffer;
+} rhi_draw_stream_params_t;
+
+fn void rhi_draw_stream(const rhi_draw_stream_t *stream, const rhi_draw_stream_params_t *params);
+
+fn void rhi_do_test_stuff(rhi_command_list_t *list, rhi_texture_t color_hdr, rhi_texture_t rt, rhi_pso_t pso);

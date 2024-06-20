@@ -19,7 +19,7 @@ rect2_t ui_row_ex(ui_row_builder_t *builder, float height, bool draw_background)
 	if (draw_background)
 	{
 		UI_Scalar(UiScalar_roundedness, 0.0f)
-		ui_draw_rect(row, make_v4(0, 0, 0, 0.25f));
+		ui_draw_rect_shadow(row, make_v4(0, 0, 0, 0.25f), 0.2f, 2.0f);
 	}
 
 	builder->row_index += 1;
@@ -47,8 +47,12 @@ void ui_row_header(ui_row_builder_t *builder, string_t label)
 {
 	float height = ui_font(UiFont_header)->height;
 
+	rect2_cut_from_top(builder->rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)), NULL, &builder->rect);
+
 	rect2_t row = ui_row_ex(builder, height, true);
 	ui_header(row, label);
+
+	rect2_cut_from_top(builder->rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)), NULL, &builder->rect);
 }
 
 void ui_row_label(ui_row_builder_t *builder, string_t label)
@@ -209,6 +213,8 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 	ui_id_t id = ui_id(label);
 	ui_validate_widget(id);
 
+	ui_push_id(id);
+
 	bool first_use;
 	ui_color_picker_state_t *state = ui_get_state(id, &first_use, ui_color_picker_state_t);
 
@@ -253,4 +259,6 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 
 	color->xyz = rgb;
 	state->cached_color = *color;
+
+	ui_pop_id();
 }

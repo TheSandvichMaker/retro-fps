@@ -16,6 +16,7 @@ extern __declspec(dllexport) const char    *D3D12SDKPath    = u8".\\D3D12\\";
 #include "d3d12_upload.c"
 
 CVAR_BOOL(cvar_d3d12_force_heavy_synchronization, "rhi.d3d12.force_heavy_synchronization", false);
+CVAR_BOOL(cvar_d3d12_timestamp_queries_enabled,   "rhi.d3d12.timestamp_queries_enabled",   true);
 
 fn_local d3d12_frame_state_t *d3d12_get_frame_state(uint32_t frame_index)
 {
@@ -86,6 +87,7 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 	// Register cvars (optional - but prevents lazy initialization which is preferable)
 
 	cvar_register(&cvar_d3d12_force_heavy_synchronization);
+	cvar_register(&cvar_d3d12_timestamp_queries_enabled);
 
 	// initialize pools
 
@@ -299,6 +301,7 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 
 		d3d12_set_debug_name((ID3D12Object *)copy_queue, S("copy_queue"));
 	}
+
 	//
 	// Create per-frame state
 	//
@@ -499,7 +502,6 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 		D3D12_CHECK_HR(hr, goto bail);
 	}
 
-
 	//
 	//
 	//
@@ -525,8 +527,32 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 		goto bail;
 	}
 
-    D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12 = {0};
-    ID3D12Device_CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS12, &options12, sizeof(options12));
+	//------------------------------------------------------------------------
+	// Make command signatures
+
+	{
+		D3D12_COMMAND_SIGNATURE_DESC desc = {
+			.ByteStride = sizeof(rhi_indirect_draw_t),
+			.NumArgumentDescs = 1,
+			.pArgumentDescs = (D3D12_INDIRECT_ARGUMENT_DESC[]) {
+				{ .Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW },
+			},
+		};
+		hr = ID3D12Device_CreateCommandSignature(device, &desc, NULL, &IID_ID3D12CommandSignature, &g_rhi.draw_command_signature);
+		D3D12_CHECK_HR(hr, goto bail);
+	}
+
+	{
+		D3D12_COMMAND_SIGNATURE_DESC desc = {
+			.ByteStride = sizeof(rhi_indirect_draw_indexed_t),
+			.NumArgumentDescs = 1,
+			.pArgumentDescs = (D3D12_INDIRECT_ARGUMENT_DESC[]) {
+				{ .Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED },
+			},
+		};
+		hr = ID3D12Device_CreateCommandSignature(device, &desc, NULL, &IID_ID3D12CommandSignature, &g_rhi.draw_indexed_command_signature);
+		D3D12_CHECK_HR(hr, goto bail);
+	}
 
 	//
 	// Successfully Initialized D3D12
@@ -1241,7 +1267,7 @@ fn_local void d3d12_upload_buffer_data(d3d12_buffer_t *buffer, uint32_t resource
 	{
 		D3D12_RESOURCE_BARRIER barrier;
 
-		if (d3d12_transition_state(resource, &buffer->state, D3D12_RESOURCE_STATE_COPY_DEST, &barrier))
+		if (d3d12_transition_state(resource, &buffer->state[resource_index], D3D12_RESOURCE_STATE_COPY_DEST, &barrier))
 		{
 			ID3D12GraphicsCommandList_ResourceBarrier(ctx.command_list, 1, &barrier);
 		}
@@ -1259,7 +1285,7 @@ fn_local void d3d12_upload_buffer_data(d3d12_buffer_t *buffer, uint32_t resource
 	{
 		D3D12_RESOURCE_BARRIER barrier;
 
-		ASSERT(d3d12_transition_state(resource, &buffer->state, D3D12_RESOURCE_STATE_COMMON, &barrier));
+		ASSERT(d3d12_transition_state(resource, &buffer->state[resource_index], D3D12_RESOURCE_STATE_COMMON, &barrier));
 		ID3D12GraphicsCommandList_ResourceBarrier(ctx.command_list, 1, &barrier);
 	}
 
@@ -1338,7 +1364,7 @@ void rhi_end_buffer_upload(rhi_buffer_t handle)
 	{
 		D3D12_RESOURCE_BARRIER barrier;
 
-		if (d3d12_transition_state(resource, &buffer->state, D3D12_RESOURCE_STATE_COPY_DEST, &barrier))
+		if (d3d12_transition_state(resource, &buffer->state[resource_index], D3D12_RESOURCE_STATE_COPY_DEST, &barrier))
 		{
 			ID3D12GraphicsCommandList_ResourceBarrier(copy_list, 1, &barrier);
 		}
@@ -1350,7 +1376,7 @@ void rhi_end_buffer_upload(rhi_buffer_t handle)
 	{
 		D3D12_RESOURCE_BARRIER barrier;
 
-		ASSERT(d3d12_transition_state(resource, &buffer->state, D3D12_RESOURCE_STATE_COMMON, &barrier));
+		ASSERT(d3d12_transition_state(resource, &buffer->state[resource_index], D3D12_RESOURCE_STATE_COMMON, &barrier));
 		ID3D12GraphicsCommandList_ResourceBarrier(copy_list, 1, &barrier);
 	}
 
@@ -1400,6 +1426,7 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 		switch (params->heap)
 		{
 			case RhiHeapKind_default:  heap_type = D3D12_HEAP_TYPE_DEFAULT;  break;
+			case RhiHeapKind_upload:   heap_type = D3D12_HEAP_TYPE_UPLOAD;   break;
 			case RhiHeapKind_readback: heap_type = D3D12_HEAP_TYPE_READBACK; break;
 
 			default:
@@ -1543,14 +1570,17 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 
 			if (data->src && ALWAYS(data->size <= size))
 			{
-				// Lying about the initial state because I can't set the initial state on the buffer without triggering a
-				// debug layer warning about the initial state being ignored because it's assumed on first use... Ok... That
-				// really makes it easier to do the manual state tracking as the user, for the state to just be ~whatever~ based
-				// on what you do with the resource!
-				buffer->state = D3D12_RESOURCE_STATE_COPY_DEST;
-
 				for (uint32_t i = 0; i < count; i++)
 				{
+					//------------------------------------------------------------------------
+					// Lying about the initial state because I can't set the initial state on
+					// the buffer without triggering a debug layer warning about the initial 
+					// state being ignored because it's assumed on first use... Ok... That
+					// really makes it easier to do the manual state tracking as the user, 
+					// for the state to just be ~whatever~ based on what you do with the 
+					// resource!
+					buffer->state[i] = D3D12_RESOURCE_STATE_COPY_DEST;
+
 					d3d12_upload_buffer_data(buffer, i, 0, params->initial_data.src, params->initial_data.size);
 				}
 			}
@@ -2036,7 +2066,7 @@ void rhi_compute_pass_begin(rhi_command_list_t *list, const rhi_compute_pass_par
 
 			barrier_count += d3d12_transition_state(
 				buffer->resources[resource_index],
-				&buffer->state,
+				&buffer->state[resource_index],
 				D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
 				&barriers[barrier_count]);
 		}
@@ -2094,7 +2124,7 @@ fn void rhi_compute_pass_end(rhi_command_list_t *list)
 
 			barrier_count += d3d12_transition_state(
 				buffer->resources[resource_index],
-				&buffer->state,
+				&buffer->state[resource_index],
 				D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
 				&barriers[barrier_count]);
 		}
@@ -2161,6 +2191,20 @@ void rhi_set_parameters(rhi_command_list_t *list, uint32_t slot, void *parameter
 		ID3D12GraphicsCommandList_SetComputeRootConstantBufferView(list->d3d, slot, alloc.gpu);
 		ID3D12GraphicsCommandList_SetGraphicsRootConstantBufferView(list->d3d, slot, alloc.gpu);
 	}
+}
+
+rhi_parameters_t rhi_alloc_parameters(uint32_t size)
+{
+	d3d12_frame_state_t *frame = d3d12_get_frame_state(g_rhi.frame_index);
+	d3d12_buffer_allocation_t alloc = d3d12_arena_alloc(&frame->upload_arena, size, 256);
+
+	rhi_parameters_t result = {
+		.host   = alloc.cpu,
+		.offset = (uint32_t)alloc.offset,
+		.size   = size,
+	};
+
+	return result;
 }
 
 void rhi_draw(rhi_command_list_t *list, uint32_t vertex_count, uint32_t start_vertex)
@@ -2306,7 +2350,7 @@ void rhi_end_frame(void)
 		}
 	}
 
-	if (g_rhi.timestamps_readback)
+	if (g_rhi.timestamps_readback && cvar_read_bool(&cvar_d3d12_timestamp_queries_enabled))
 	{
 		d3d12_resolve_timestamp_queries(list);
 	}
@@ -2462,6 +2506,11 @@ void rhi_init_timestamps(uint32_t max_timestamps_per_frame_count)
 
 void rhi_record_timestamp(rhi_command_list_t *list, uint32_t index)
 {
+	if (!cvar_read_bool(&cvar_d3d12_timestamp_queries_enabled))
+	{
+		return;
+	}
+
 	ASSERT_MSG(index < g_rhi.max_timestamps_per_frame, 
 			   "Timestamp index out of bounds! max: %u, index: %u", g_rhi.max_timestamps_per_frame, index);
 
@@ -2544,4 +2593,62 @@ void rhi_flush_everything(void)
 {
 	d3d12_flush_direct_command_queue();
 	d3d12_flush_ring_buffer_uploads();
+}
+
+global bool initialized_test_stuff;
+global rhi_buffer_t args_buffer;
+
+void rhi_do_test_stuff(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_texture_t rt, rhi_pso_t pso)
+{
+	if (!initialized_test_stuff)
+	{
+		args_buffer = rhi_create_buffer(&(rhi_create_buffer_params_t){
+			.debug_name = S("test_indirect_args"),
+			.desc = {
+				.first_element  = 0,
+				.element_count  = 4096,
+				.element_stride = sizeof(rhi_indirect_draw_t),
+			},
+			.heap  = RhiHeapKind_upload,
+			.flags = RhiResourceFlag_dynamic,
+		});
+
+		d3d12_buffer_t *args = pool_get(&g_rhi.buffers, args_buffer);
+		for (size_t i = 0; i < g_rhi.frame_latency; i++)
+		{
+			HRESULT hr = ID3D12Resource_Map(args->resources[i], 0, &(D3D12_RANGE){ 0 }, &args->mapped[i]);
+			ASSERT(SUCCEEDED(hr));
+		}
+
+		initialized_test_stuff = true;
+	}
+
+	d3d12_buffer_t *buffer_d3d = pool_get(&g_rhi.buffers, args_buffer);
+	uint32_t resource_index = d3d12_resource_index(buffer_d3d->flags);
+
+	rhi_indirect_draw_t *args = buffer_d3d->mapped[resource_index];
+
+	args->vertex_count   = 3;
+	args->instance_count = 1;
+
+	rhi_simple_graphics_pass_begin(list, rt, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
+	{
+		rhi_set_pso(list, pso);
+
+		post_draw_parameters_t draw_parameters = {
+			.hdr_color    = rhi_get_texture_srv(hdr_color),
+			.sample_count = r1->multisample_count,
+		};
+		shader_post_set_draw_params(list, &draw_parameters);
+
+		ID3D12GraphicsCommandList_ExecuteIndirect(
+			list->d3d,
+			g_rhi.draw_command_signature,
+			1,
+			buffer_d3d->resources[resource_index],
+			0,
+			NULL,
+			0);
+	}
+	rhi_graphics_pass_end(list);
 }

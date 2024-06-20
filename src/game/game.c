@@ -70,7 +70,7 @@ v3_t player_view_direction(player_t *player)
 
     if (!camera)
         return make_v3(1, 0, 0);
-    
+
     rotor3_t r_pitch = rotor3_from_plane_angle(PLANE_ZX, DEG_TO_RAD*camera->pitch);
     rotor3_t r_yaw   = rotor3_from_plane_angle(PLANE_YZ, DEG_TO_RAD*camera->yaw);
 
@@ -211,7 +211,7 @@ void player_movement(map_t *map, player_t *player, float dt)
     move_delta = mul(move_delta, move_speed);
 
     // physics
-    
+
     if (player->support && action_pressed(Action_jump))
     {
         float jump_force = 300.0f;
@@ -403,17 +403,17 @@ void app_init(platform_init_io_t *io)
 	app->editor = m_alloc_struct(&app->arena, editor_t);
 	editor_init(app->editor);
 
-	bind_key_action(Action_left,           Key_a);
-	bind_key_action(Action_right,          Key_d);
-	bind_key_action(Action_forward,        Key_w);
-	bind_key_action(Action_back,           Key_s);
-	bind_key_action(Action_jump,           Key_space);
-	bind_key_action(Action_run,            Key_shift);
-	bind_key_action(Action_crouch,         Key_control);
+	bind_key_action         (Action_left,           Key_a);
+	bind_key_action         (Action_right,          Key_d);
+	bind_key_action         (Action_forward,        Key_w);
+	bind_key_action         (Action_back,           Key_s);
+	bind_key_action         (Action_jump,           Key_space);
+	bind_key_action         (Action_run,            Key_shift);
+	bind_key_action         (Action_crouch,         Key_control);
 	bind_mouse_button_action(Action_fire1, Button_left);
 	bind_mouse_button_action(Action_fire2, Button_right);
-	bind_key_action(Action_escape,         Key_escape);
-	bind_key_action(Action_toggle_noclip,  Key_v);
+	bind_key_action         (Action_escape,         Key_escape);
+	bind_key_action         (Action_toggle_noclip,  Key_v);
 
 	init_game_job_queues();
 
@@ -599,7 +599,7 @@ fn_local void tick_ui(platform_tick_io_t *io, app_state_t *app, input_t *input, 
 
 			case Event_text:
 			{
-				ui_event_t ui_event = { 
+				ui_event_t ui_event = {
 					.kind    = UiEvent_text,
 					.ctrl    = event->ctrl,
 					.alt     = event->alt,
@@ -734,6 +734,7 @@ fn_local void app_tick(platform_tick_io_t *io)
 
 	rhi_begin_frame();
 
+	r1_begin_frame();
 	render_game(game, window);
 	r1_render_ui(rhi_get_command_list(), rhi_get_current_backbuffer(window), &the_ui->render_commands);
 
@@ -758,7 +759,7 @@ typedef struct render_entity_t
 
 	transform_t transform;
 
-	// I don't care what's in here right now 
+	// I don't care what's in here right now
 	int dummy;
 } render_entity_t;
 

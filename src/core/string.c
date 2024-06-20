@@ -596,6 +596,12 @@ uint64_t string_hash(string_t string)
     return XXH3_64bits(string.data, string.count);
 }
 
+uint64_t hash_combine(uint64_t a, uint64_t b)
+{
+	uint64_t x[2] = { a, b };
+	return XXH3_64bits(x, sizeof(x));
+}
+
 void string_storage_append_impl(string_storage_overlay_t *storage, size_t capacity, string_t string)
 {
 	size_t size_left = capacity - storage->count;

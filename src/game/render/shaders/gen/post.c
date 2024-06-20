@@ -22,21 +22,7 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"\n" \
 	"	#include \"common.hlsli\"\n" \
 	"\n" \
-	"	struct VS_OUT\n" \
-	"	{\n" \
-	"		float4 pos : SV_POSITION;\n" \
-	"		float2 uv  : TEXCOORD;\n" \
-	"	};\n" \
-	"\n" \
-	"	VS_OUT MainVS(uint id : SV_VertexID)\n" \
-	"	{\n" \
-	"		VS_OUT OUT;\n" \
-	"		OUT.uv  = uint2(id, id << 1) & 2;\n" \
-	"		OUT.pos = float4(lerp(float2(-1, 1), float2(1, -1), OUT.uv), 0, 1);\n" \
-	"		return OUT;\n" \
-	"	}\n" \
-	"\n" \
-	"	float4 MainPS(VS_OUT IN) : SV_Target\n" \
+	"	float4 MainPS(FullscreenTriangleOutVS IN) : SV_Target\n" \
 	"	{\n" \
 	"		uint2 co = uint2(IN.pos.xy);\n" \
 	"\n" \

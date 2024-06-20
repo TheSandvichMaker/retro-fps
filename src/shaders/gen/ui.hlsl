@@ -68,8 +68,9 @@ ConstantBuffer< ui_draw_parameters_t > draw : register(b0);
 		float2 uv    : UV;
 	};
 
-	VSOut MainVS(uint vertex_id       : SV_VertexID, 
-				uint instance_id     : SV_InstanceID)
+	VSOut MainVS(
+		uint vertex_id   : SV_VertexID, 
+		uint instance_id : SV_InstanceID)
 	{
 		const UIRect rect = draw.rects.Get()[instance_id];
 
@@ -192,6 +193,23 @@ ConstantBuffer< ui_draw_parameters_t > draw : register(b0);
 		color.rgb = SRGBToLinear(color.rgb);
 
 		return color;
+	}
+
+	float4 UIHeatMapPS(VSOut IN) : SV_Target
+	{
+		UIRect rect = draw.rects.Get()[IN.id];
+
+		Rect2 clip_rect = Decode(rect.clip_rect);
+
+		float2 pos = IN.pos.xy;
+		pos.y = view.view_size.y - pos.y - 1;
+
+		if (!PointInRect(clip_rect, pos))
+		{
+			discard;
+		}
+
+		return float4(1.0 / 255.0f, 0.0f, 0.0f, 1.0f);
 	}
 
 	

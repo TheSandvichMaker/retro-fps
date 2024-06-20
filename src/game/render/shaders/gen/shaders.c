@@ -4,9 +4,11 @@
 #include "brush.c"
 #include "compute_test.c"
 #include "debug_lines.c"
+#include "fullscreen_triangle.c"
 #include "post.c"
 #include "shadow.c"
 #include "ui.c"
+#include "ui_visualize_heatmap.c"
 
 df_shader_info_t df_shaders[DfShader_COUNT] = {
 	[DfShader_brush_vs] = {
@@ -52,14 +54,15 @@ df_shader_info_t df_shaders[DfShader_COUNT] = {
 		.path_dfs    = Sc("src/shaders/debug_lines.dfs"),
 	},
 
-	[DfShader_post_vs] = {
-		.name        = Sc("post_vs"),
+	[DfShader_fullscreen_triangle_vs] = {
+		.name        = Sc("fullscreen_triangle_vs"),
 		.entry_point = Sc("MainVS"),
 		.target      = Sc("vs_6_6"),
-		.hlsl_source = Sc(DF_SHADER_POST_SOURCE_CODE),
-		.path_hlsl   = Sc("src/shaders/gen/post.hlsl"),
-		.path_dfs    = Sc("src/shaders/post.dfs"),
+		.hlsl_source = Sc(DF_SHADER_FULLSCREEN_TRIANGLE_SOURCE_CODE),
+		.path_hlsl   = Sc("src/shaders/gen/fullscreen_triangle.hlsl"),
+		.path_dfs    = Sc("src/shaders/fullscreen_triangle.dfs"),
 	},
+
 	[DfShader_post_ps] = {
 		.name        = Sc("post_ps"),
 		.entry_point = Sc("MainPS"),
@@ -86,6 +89,14 @@ df_shader_info_t df_shaders[DfShader_COUNT] = {
 		.path_hlsl   = Sc("src/shaders/gen/ui.hlsl"),
 		.path_dfs    = Sc("src/shaders/ui.dfs"),
 	},
+	[DfShader_ui_heatmap_ps] = {
+		.name        = Sc("ui_heatmap_ps"),
+		.entry_point = Sc("UIHeatMapPS"),
+		.target      = Sc("ps_6_6"),
+		.hlsl_source = Sc(DF_SHADER_UI_SOURCE_CODE),
+		.path_hlsl   = Sc("src/shaders/gen/ui.hlsl"),
+		.path_dfs    = Sc("src/shaders/ui.dfs"),
+	},
 	[DfShader_ui_ps] = {
 		.name        = Sc("ui_ps"),
 		.entry_point = Sc("MainPS"),
@@ -93,5 +104,14 @@ df_shader_info_t df_shaders[DfShader_COUNT] = {
 		.hlsl_source = Sc(DF_SHADER_UI_SOURCE_CODE),
 		.path_hlsl   = Sc("src/shaders/gen/ui.hlsl"),
 		.path_dfs    = Sc("src/shaders/ui.dfs"),
+	},
+
+	[DfShader_ui_visualize_heatmap_ps] = {
+		.name        = Sc("ui_visualize_heatmap_ps"),
+		.entry_point = Sc("MainPS"),
+		.target      = Sc("ps_6_6"),
+		.hlsl_source = Sc(DF_SHADER_UI_VISUALIZE_HEATMAP_SOURCE_CODE),
+		.path_hlsl   = Sc("src/shaders/gen/ui_visualize_heatmap.hlsl"),
+		.path_dfs    = Sc("src/shaders/ui_visualize_heatmap.dfs"),
 	},
 };

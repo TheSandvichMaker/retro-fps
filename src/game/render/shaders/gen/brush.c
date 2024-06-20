@@ -9,7 +9,10 @@ void shader_brush_set_draw_params(rhi_command_list_t *list, brush_draw_parameter
 
 void shader_brush_set_pass_params(rhi_command_list_t *list, brush_pass_parameters_t *params)
 {
+	rhi_validate_buffer_srv(params->lm_uvs, S("shader_brush_set_pass_params"));
+	rhi_validate_buffer_srv(params->positions, S("shader_brush_set_pass_params"));
 	rhi_validate_texture_srv(params->sun_shadowmap, S("shader_brush_set_pass_params"));
+	rhi_validate_buffer_srv(params->uvs, S("shader_brush_set_pass_params"));
 	rhi_set_parameters(list, 1, params, sizeof(*params));
 }
 

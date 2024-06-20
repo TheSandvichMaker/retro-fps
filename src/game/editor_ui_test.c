@@ -10,13 +10,13 @@ void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *wi
 	ui_id_t scroll_region_id = ui_child_id(ui_id_pointer(state), S("scroll_region"));
 	rect2_t content_rect = ui_scrollable_region_begin_ex(scroll_region_id, rect, scroll_flags);
 
-	content_rect = rect2_shrink(content_rect, 1.0f);
-
 	ui_row_builder_t builder = ui_make_row_builder(content_rect);
 
 	if (window->hovered)
 	{
 		ui_tooltip(S("Window for testing out various UI features."));
+		ui_tooltip(Sf("UI Draw Command Count: %zu", ui->last_frame_ui_rect_count));
+		ui_tooltip(Sf("UI Culled Draw Command Count: %zu", ui->last_frame_culled_rect_count));
 	}
 
 	local_persist bool check_me = false;
@@ -47,6 +47,8 @@ void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *wi
 	ui_row_slider_ex(&builder, S("UI Text Margin"), &ui->style.base_scalars[UiScalar_text_margin], 0.0f, 8.0f, 1.0f);
 
 	ui_row_slider_ex(&builder, S("UI Row Margin"), &ui->style.base_scalars[UiScalar_row_margin], 0.0f, 8.0f, 1.0f);
+	ui_row_slider_ex(&builder, S("UI Outer Window Margin"), &ui->style.base_scalars[UiScalar_outer_window_margin], 0.0f, 48.0f, 1.0f);
+	ui_row_slider_ex(&builder, S("UI Scroll Tray Width"), &ui->style.base_scalars[UiScalar_scroll_tray_width], 0.0f, 48.0f, 1.0f);
 
 	ui_hover_tooltip(S("Roundedness of UI elements in pixel radius"));
 	ui_row_slider_ex(&builder, S("UI Roundedness"), &ui->style.base_scalars[UiScalar_roundedness], 0.0f, 12.0f, 1.0f);
@@ -105,6 +107,26 @@ void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *wi
 
 	static v4_t color = { 1, 0, 0, 1 };
 	ui_row_color_picker(&builder, S("Test Color"), &color);
+
+	ui_row_color_picker(&builder, S("UiColor_text"), &ui->style.base_colors[UiColor_text]);
+	ui_row_color_picker(&builder, S("UiColor_text_shadow"), &ui->style.base_colors[UiColor_text_shadow]);
+	ui_row_color_picker(&builder, S("UiColor_widget_shadow"), &ui->style.base_colors[UiColor_widget_shadow]);
+	ui_row_color_picker(&builder, S("UiColor_widget_error_background"), &ui->style.base_colors[UiColor_widget_error_background]);
+	ui_row_color_picker(&builder, S("UiColor_window_background"), &ui->style.base_colors[UiColor_window_background]);
+	ui_row_color_picker(&builder, S("UiColor_window_title_bar"), &ui->style.base_colors[UiColor_window_title_bar]);
+	ui_row_color_picker(&builder, S("UiColor_window_title_bar_hot"), &ui->style.base_colors[UiColor_window_title_bar_hot]);
+	ui_row_color_picker(&builder, S("UiColor_window_close_button"), &ui->style.base_colors[UiColor_window_close_button]);
+	ui_row_color_picker(&builder, S("UiColor_window_outline"), &ui->style.base_colors[UiColor_window_outline]);
+	ui_row_color_picker(&builder, S("UiColor_progress_bar_empty"), &ui->style.base_colors[UiColor_progress_bar_empty]);
+	ui_row_color_picker(&builder, S("UiColor_progress_bar_filled"), &ui->style.base_colors[UiColor_progress_bar_filled]);
+	ui_row_color_picker(&builder, S("UiColor_button_idle"), &ui->style.base_colors[UiColor_button_idle]);
+	ui_row_color_picker(&builder, S("UiColor_button_hot"), &ui->style.base_colors[UiColor_button_hot]);
+	ui_row_color_picker(&builder, S("UiColor_button_active"), &ui->style.base_colors[UiColor_button_active]);
+	ui_row_color_picker(&builder, S("UiColor_button_fired"), &ui->style.base_colors[UiColor_button_fired]);
+	ui_row_color_picker(&builder, S("UiColor_slider_background"), &ui->style.base_colors[UiColor_slider_background]);
+	ui_row_color_picker(&builder, S("UiColor_slider_foreground"), &ui->style.base_colors[UiColor_slider_foreground]);
+	ui_row_color_picker(&builder, S("UiColor_slider_hot"), &ui->style.base_colors[UiColor_slider_hot]);
+	ui_row_color_picker(&builder, S("UiColor_slider_active"), &ui->style.base_colors[UiColor_slider_active]);
 
 	ui_scrollable_region_end(scroll_region_id, builder.rect);
 }

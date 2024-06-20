@@ -6,9 +6,11 @@
 #include "brush.h"
 #include "compute_test.h"
 #include "debug_lines.h"
+#include "fullscreen_triangle.h"
 #include "post.h"
 #include "shadow.h"
 #include "ui.h"
+#include "ui_visualize_heatmap.h"
 
 typedef enum df_shader_ident_t
 {
@@ -22,13 +24,17 @@ typedef enum df_shader_ident_t
 	DfShader_debug_lines_vs, // src/shaders/debug_lines.dfs
 	DfShader_debug_lines_ps, // src/shaders/debug_lines.dfs
 
-	DfShader_post_vs, // src/shaders/post.dfs
+	DfShader_fullscreen_triangle_vs, // src/shaders/fullscreen_triangle.dfs
+
 	DfShader_post_ps, // src/shaders/post.dfs
 
 	DfShader_shadow_vs, // src/shaders/shadow.dfs
 
 	DfShader_ui_vs, // src/shaders/ui.dfs
+	DfShader_ui_heatmap_ps, // src/shaders/ui.dfs
 	DfShader_ui_ps, // src/shaders/ui.dfs
+
+	DfShader_ui_visualize_heatmap_ps, // src/shaders/ui_visualize_heatmap.dfs
 
 	DfShader_COUNT,
 } df_shader_ident_t;

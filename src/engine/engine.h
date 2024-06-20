@@ -14,4 +14,5 @@
 #include "profiler.h"
 
 #include "rhi/rhi_api.h"
+#include "rhi/rhi_helpers.h"
 #include "shader/shader_info.h"

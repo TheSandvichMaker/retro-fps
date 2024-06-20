@@ -11,12 +11,13 @@ typedef enum r_parameter_slot_t
 	R1ParameterSlot_view = 2,
 } r_parameter_slot;
 
-enum { R1MaxUiRects = 4096 }; // TODO: Transient GPU allocator with CreatePlacedResource
+enum { R1MaxUiRects = 16 << 10 }; // TODO: Transient GPU allocator with CreatePlacedResource
 enum { R1MaxRegions = 512  };
 
 typedef struct r1_state_t
 {
 	arena_t arena;
+	arena_t *push_constants_arena;
 
 	bool debug_drawing_enabled;
 
@@ -36,6 +37,12 @@ typedef struct r1_state_t
 	rhi_buffer_t      ui_rects;
 	rhi_buffer_t      debug_lines;
 
+	uint32_t indirect_args_capacity;
+	uint32_t indirect_args_count;
+
+	rhi_buffer_t args;
+	rhi_indirect_draw_t *args_at;
+
 	uint64_t timestamp_frequency;
 	uint32_t next_region_index;
 	string_storage_t(256) region_identifiers[R1MaxRegions];
@@ -49,6 +56,8 @@ typedef struct r1_state_t
 		rhi_pso_t debug_lines;
 		rhi_pso_t post_process;
 		rhi_pso_t ui;
+		rhi_pso_t ui_heatmap;
+		rhi_pso_t ui_visualize_heatmap;
 	} psos;
 
 	struct
@@ -57,6 +66,7 @@ typedef struct r1_state_t
 		uint32_t      height;
 		rhi_texture_t depth_stencil;
 		rhi_texture_t rt_hdr;
+		rhi_texture_t ui_heatmap_rt;
 	} window;
 
 	struct
@@ -71,6 +81,9 @@ typedef struct r1_state_t
 global r1_state_t *r1;
 
 fn void r1_init(void);
+
+fn void r1_begin_frame(void);
+fn void r1_finish_recording_draw_streams(void);
 fn void r1_update_window_resources(rhi_window_t window);
 fn void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t rt, r_view_t *view, struct map_t *map);
 fn void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, struct ui_render_command_list_t *ui_list);
@@ -103,3 +116,18 @@ global debug_line_t debug_lines[8192];
 
 fn void draw_debug_line(v3_t start, v3_t end, v4_t start_color, v4_t end_color);
 fn void draw_debug_cube(rect3_t bounds, v4_t color);
+
+typedef enum r1_render_bucket_t
+{
+	R1RenderBucket_opaque,
+	R1RenderBucket_translucent,
+
+	R1RenderBucket_COUNT,
+} r1_render_bucket_t;
+
+typedef struct r1_push_constants_t
+{
+	void    *host;
+	uint32_t offset;
+	uint32_t size;
+} r1_push_constants_t;

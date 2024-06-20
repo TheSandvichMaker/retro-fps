@@ -4,14 +4,36 @@
 
 void m_init_with_memory(arena_t *arena, void *memory, size_t size)
 {
-    ASSERT(arena->buffer == NULL);
-    
     arena->buffer    = (char *)memory;
     arena->at        = arena->buffer;
     arena->end       = arena->buffer + size;
     arena->committed = arena->end;
 
     arena->owns_memory = false;
+}
+
+arena_t *m_child_arena(arena_t *parent, size_t size)
+{
+	arena_t *result = m_alloc_nozero(parent, size, 64);
+	
+	char *base = align_address((char *)result, 64);
+	m_init_with_memory(result, base, size - 64);
+
+	return result;
+}
+
+int64_t m_get_alloc_offset(arena_t *arena, void *in_allocation)
+{
+	int64_t result = -1;
+
+	char *allocation = in_allocation;
+
+	if (allocation >= arena->buffer && allocation < arena->end)
+	{
+		result = allocation - arena->buffer;
+	}
+
+	return result;
 }
 
 void *m_alloc_nozero(arena_t *arena, size_t size, size_t align)

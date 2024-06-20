@@ -76,7 +76,7 @@ function Texture2D(format)
 		size          = 1,
 		align_legacy  = 4, -- NOTE: my resources are 16 byte aligned with legacy cb packing because they're structs, even though they should be able to be packed tightly because they're just indices...
 		align         = 1,
-		hlsl_name     = "df::Resource< Texture2D< " .. format.hlsl_name .. " > >",
+		hlsl_name     = "df::Resource< Texture2D< " .. format_hlsl .. " > >",
 		c_name        = "rhi_texture_srv_t",
 	}
 end
@@ -250,7 +250,7 @@ function emit.c_emit_parameter_set_function(function_name, params_name, slot, cb
 		local definition = v.definition
 
 		if definition.resource_type == "buffer" then
-			if definition.resource_type.access == "read" then
+			if definition.access == "read" then
 				io.write("\trhi_validate_buffer_srv(params->" .. name .. ", S(\"" .. function_name .. "\"));\n")
 			end
 		elseif definition.resource_type == "texture" then
@@ -264,7 +264,7 @@ end
 
 function emit.emit_bundle(bundle_info, output_directory_c, output_directory_hlsl)
 	local bundle           = bundle_info.bundle
-	local bundle_file_name = bundle_info.name
+	local bundle_file_name = bundle_info.file_name
 
 	local pass = nil
 	local draw = nil
@@ -397,7 +397,7 @@ function emit.process_shaders(p)
 	header:write("#include \"view.h\"\n")
 
 	for _, bundle_info in ipairs(bundles) do
-		header:write("#include \"" .. bundle_info.name .. ".h\"\n")
+		header:write("#include \"" .. bundle_info.bundle.name .. ".h\"\n")
 	end
 
 	header:write("\ntypedef enum df_shader_ident_t\n{\n")
@@ -405,7 +405,7 @@ function emit.process_shaders(p)
 
 	for _, bundle_info in ipairs(bundles) do
 		local bundle      = bundle_info.bundle
-		local bundle_name = bundle_info.name
+		local bundle_name = bundle.name
 		local bundle_path = bundle_info.path
 
 		-- maybe shouldn't be an error, but for now it is
@@ -437,7 +437,7 @@ function emit.process_shaders(p)
 	source:write("#include \"view.c\"\n")
 
 	for _, bundle_info in ipairs(bundles) do
-		local bundle_name = bundle_info.name
+		local bundle_name = bundle_info.bundle.name
 		source:write("#include \"" .. bundle_name .. ".c\"\n")
 	end
 
@@ -447,7 +447,7 @@ function emit.process_shaders(p)
 
 	for _, bundle_info in ipairs(bundles) do
 		local bundle      = bundle_info.bundle
-		local bundle_name = bundle_info.name
+		local bundle_name = bundle_info.bundle.name
 		local bundle_path = bundle_info.path
 
 		if bundle.shaders then

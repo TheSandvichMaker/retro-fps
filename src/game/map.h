@@ -12,6 +12,14 @@
 
 typedef struct collision_geometry_t collision_geometry_t;
 
+typedef uint32_t map_surface_flags_t;
+
+typedef uint32_t map_content_flags_t;
+typedef enum map_content_flags_enum_t
+{
+	MapContentFlag_water,
+} map_content_flags_enum_t;
+
 typedef struct map_plane_t
 {
     v3_t a, b, c;
@@ -24,6 +32,9 @@ typedef struct map_plane_t
 
     float lm_scale_x, lm_scale_y;
     int   lm_tex_w,   lm_tex_h;
+
+	map_content_flags_t content_flags;
+	map_surface_flags_t surface_flags;
 } map_plane_t;
 
 typedef struct map_coplanar_surface_t

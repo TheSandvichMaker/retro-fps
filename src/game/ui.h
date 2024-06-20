@@ -246,6 +246,7 @@ typedef enum ui_style_scalar_t
     UiScalar_label_align_y,
 
 	UiScalar_scroll_tray_width,
+	UiScalar_outer_window_margin,
 	UiScalar_min_scroll_bar_size,
 
     UiScalar_slider_handle_ratio,
@@ -595,6 +596,9 @@ typedef struct ui_t
 	ui_render_layer_t render_layer;
     ui_render_command_list_t render_commands;
 
+    size_t culled_rect_count;
+
+    size_t last_frame_culled_rect_count;
     size_t last_frame_ui_rect_count;
 } ui_t;
 

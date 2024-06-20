@@ -27,14 +27,18 @@ local shaders = {}
 for _, name in ipairs(shader_sources) do
 	local shader_path = shader_directory .. name .. ".dfs"
 	local bundle = dofile(shader_path)
-	
-	assert(bundle, name .. ".dfs did not return a bundle")
 
-	table.insert(shaders, {
-		name   = name,
-		path   = shader_path,
-		bundle = bundle,
-	})
+	if not bundle.disabled then
+		assert(bundle, name .. ".dfs did not return a bundle")
+
+		table.insert(shaders, {
+			file_name = name,
+			path      = shader_path,
+			bundle    = bundle,
+		})
+	else
+		io.stderr:write("Warning: Shader bundle '" .. bundle.name .. "' is disabled")
+	end
 end
 
 -- TODO: Put this somewhere better

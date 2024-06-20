@@ -2,6 +2,7 @@
 
 void shader_ui_set_draw_params(rhi_command_list_t *list, ui_draw_parameters_t *params)
 {
+	rhi_validate_buffer_srv(params->rects, S("shader_ui_set_draw_params"));
 	rhi_set_parameters(list, 0, params, sizeof(*params));
 }
 
@@ -76,8 +77,9 @@ void shader_ui_set_draw_params(rhi_command_list_t *list, ui_draw_parameters_t *p
 	"		float2 uv    : UV;\n" \
 	"	};\n" \
 	"\n" \
-	"	VSOut MainVS(uint vertex_id       : SV_VertexID, \n" \
-	"				uint instance_id     : SV_InstanceID)\n" \
+	"	VSOut MainVS(\n" \
+	"		uint vertex_id   : SV_VertexID, \n" \
+	"		uint instance_id : SV_InstanceID)\n" \
 	"	{\n" \
 	"		const UIRect rect = draw.rects.Get()[instance_id];\n" \
 	"\n" \
@@ -200,6 +202,23 @@ void shader_ui_set_draw_params(rhi_command_list_t *list, ui_draw_parameters_t *p
 	"		color.rgb = SRGBToLinear(color.rgb);\n" \
 	"\n" \
 	"		return color;\n" \
+	"	}\n" \
+	"\n" \
+	"	float4 UIHeatMapPS(VSOut IN) : SV_Target\n" \
+	"	{\n" \
+	"		UIRect rect = draw.rects.Get()[IN.id];\n" \
+	"\n" \
+	"		Rect2 clip_rect = Decode(rect.clip_rect);\n" \
+	"\n" \
+	"		float2 pos = IN.pos.xy;\n" \
+	"		pos.y = view.view_size.y - pos.y - 1;\n" \
+	"\n" \
+	"		if (!PointInRect(clip_rect, pos))\n" \
+	"		{\n" \
+	"			discard;\n" \
+	"		}\n" \
+	"\n" \
+	"		return float4(1.0 / 255.0f, 0.0f, 0.0f, 1.0f);\n" \
 	"	}\n" \
 	"\n" \
 	"	\n" \

@@ -6,6 +6,8 @@
 
 // initializes arena with pre-allocated memory. this is optional, if you default-initialize an arena it will be backed by 16 GiB of virtual memory
 fn void m_init_with_memory(arena_t *arena, void *memory, size_t size);
+fn arena_t *m_child_arena(arena_t *arena, size_t size);
+fn int64_t m_get_alloc_offset(arena_t *arena, void *allocation);
 
 #define ARENA_CAPACITY (16ull << 30)
 #define ARENA_COMMIT_CHUNK_SIZE (32ull << 10)

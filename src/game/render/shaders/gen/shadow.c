@@ -2,6 +2,7 @@
 
 void shader_shadow_set_draw_params(rhi_command_list_t *list, shadow_draw_parameters_t *params)
 {
+	rhi_validate_buffer_srv(params->positions, S("shader_shadow_set_draw_params"));
 	rhi_set_parameters(list, 0, params, sizeof(*params));
 }
 

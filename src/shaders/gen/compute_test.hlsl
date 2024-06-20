@@ -15,7 +15,7 @@ ConstantBuffer< compute_test_draw_parameters_t > draw : register(b0);
 		[numthreads(128, 1, 1)]
 		void MainCS(int id : SV_DispatchThreadID)
 		{
-			StructuredBuffer  <float> input_buffer  = draw.input_buffer .Get();
+			StructuredBuffer<float>   input_buffer  = draw.input_buffer .Get();
 			RWStructuredBuffer<float> output_buffer = draw.output_buffer.Get();
 
 			float input = input_buffer[id];

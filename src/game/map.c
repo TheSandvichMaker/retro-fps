@@ -456,6 +456,28 @@ static bool parse_map(arena_t *arena, string_t path, map_parse_result_t *result)
                         map_parse_number(&parser, &plane->rot);
                         map_parse_number(&parser, &plane->scale_x);
                         map_parse_number(&parser, &plane->scale_y);
+
+						// Should be surface/content flags then
+						if (map_peek_token(&parser, MTOK_NUMBER))
+						{
+							float content_flags_f, surface_flags_f, mystery_flags;
+							map_parse_number(&parser, &content_flags_f);
+							map_parse_number(&parser, &surface_flags_f);
+							map_parse_number(&parser, &mystery_flags);
+
+							if ((float)(map_content_flags_t)(content_flags_f) != content_flags_f)
+							{
+								map_parse_error(&parser, S("The content flags have to be an integer"));
+							}
+
+							if ((float)(map_content_flags_t)(surface_flags_f) != surface_flags_f)
+							{
+								map_parse_error(&parser, S("The surface flags have to be an integer"));
+							}
+
+							plane->content_flags = (map_content_flags_t)content_flags_f;
+							plane->surface_flags = (map_surface_flags_t)surface_flags_f;
+						}
                     }
 
                     brush->plane_poly_count = result->plane_count - brush->first_plane_poly;

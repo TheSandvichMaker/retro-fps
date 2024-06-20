@@ -20,8 +20,9 @@ ui_id_t ui_id(string_t string)
 
 ui_id_t ui_combine_ids(ui_id_t a, ui_id_t b)
 {
+
 	ui_id_t result = {
-		a.value ^ b.value,
+		hash_combine(a.value, b.value),
 	};
 	UI_ID_APPEND_NAME(result, string_from_storage(a._name));
 	UI_ID_APPEND_NAME(result, S("^"));
@@ -40,12 +41,12 @@ ui_id_t ui_child_id(ui_id_t parent, string_t string)
 	}
 	else
 	{
-		uint64_t hash = string_hash_with_seed(string, parent.value);
+		uint64_t hash = string_hash(string);
 
 		if (hash == 0)
 			hash = ~(uint64_t)0;
 
-		result.value = hash;
+		result = ui_combine_ids(parent, (ui_id_t){hash});
 
 		UI_ID_APPEND_NAME(result, string);
 	}
@@ -68,7 +69,14 @@ ui_id_t ui_id_pointer_(void *pointer UI_ID_NAME_PARAM)
 		UI_ID_SET_NAME(result, name);
 	}
 
-	return result;
+	ui_id_t parent = UI_ID_NULL;
+
+	if (!stack_empty(ui->id_stack))
+	{
+		parent = stack_top(ui->id_stack);
+	}
+
+	return ui_combine_ids(parent, result);
 }
 
 ui_id_t ui_id_u64_(uint64_t u64 UI_ID_NAME_PARAM)
@@ -86,7 +94,14 @@ ui_id_t ui_id_u64_(uint64_t u64 UI_ID_NAME_PARAM)
 		UI_ID_SET_NAME(result, name);
 	}
 
-	return result;
+	ui_id_t parent = UI_ID_NULL;
+
+	if (!stack_empty(ui->id_stack))
+	{
+		parent = stack_top(ui->id_stack);
+	}
+
+	return ui_combine_ids(parent, result);
 }
 
 void ui_set_next_id(ui_id_t id)
@@ -927,8 +942,9 @@ fn_local void ui_do_rect(r_ui_rect_t rect)
 {
 	rect.clip_rect = ui_get_clip_rect_fixed();
 
-	rect2_t clip_rect = rect2_from_fixed(rect.clip_rect);
-	if (rect2_area(rect2_intersect(rect.rect, clip_rect)) > 0.0f)
+	rect2_t clip_rect    = rect2_from_fixed(rect.clip_rect);
+	rect2_t clipped_rect = rect2_intersect(rect.rect, clip_rect);
+	if (!rect2_is_inside_out(clipped_rect) && rect2_area(clipped_rect) > 0.0f)
 	{
 		v2_t  dim             = rect2_dim(rect.rect);
 		float max_roundedness = mul(0.5f, min(dim.x, dim.y));
@@ -947,6 +963,10 @@ fn_local void ui_do_rect(r_ui_rect_t rect)
 				.rect = rect,
 			}
 		);
+	}
+	else
+	{
+		ui->culled_rect_count += 1;
 	}
 }
 
@@ -1296,7 +1316,7 @@ void *ui_get_state_raw(ui_id_t id, bool *first_touch, uint16_t size)
 	{
 		uint16_t real_size = checked_add_u16(sizeof(ui_state_header_t), size);
 
-		state = simple_heap_alloc_nozero(&ui->state_allocator, real_size);
+		state = simple_heap_alloc(&ui->state_allocator, real_size);
 		state->id                  = id;
 		state->size                = real_size;
 		state->created_frame_index = ui->frame_index;
@@ -1382,6 +1402,7 @@ static void ui_initialize(void)
 	ui->style.base_scalars[UiScalar_label_align_x         ] = 0.0f;
 	ui->style.base_scalars[UiScalar_label_align_y         ] = 0.5f;
 	ui->style.base_scalars[UiScalar_scroll_tray_width     ] = 16.0f;
+	ui->style.base_scalars[UiScalar_outer_window_margin   ] = 4.0f;
 	ui->style.base_scalars[UiScalar_min_scroll_bar_size   ] = 32.0f;
 	ui->style.base_scalars[UiScalar_slider_handle_ratio   ] = 1.0f / 4.0f;
 	ui->style.base_colors [UiColor_text                   ] = make_v4(0.95f, 0.90f, 0.85f, 1.0f);
@@ -1423,6 +1444,8 @@ bool ui_begin(float dt)
 
 	ui->dt = dt;
 
+	ui->last_frame_culled_rect_count = ui->culled_rect_count;
+	ui->culled_rect_count = 0;
 	ui->last_frame_ui_rect_count = ui->render_commands.count;
     ui_reset_render_commands();
 

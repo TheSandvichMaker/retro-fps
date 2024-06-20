@@ -2,6 +2,7 @@
 
 void shader_compute_test_set_draw_params(rhi_command_list_t *list, compute_test_draw_parameters_t *params)
 {
+	rhi_validate_buffer_srv(params->input_buffer, S("shader_compute_test_set_draw_params"));
 	rhi_set_parameters(list, 0, params, sizeof(*params));
 }
 
@@ -23,7 +24,7 @@ void shader_compute_test_set_draw_params(rhi_command_list_t *list, compute_test_
 	"		[numthreads(128, 1, 1)]\n" \
 	"		void MainCS(int id : SV_DispatchThreadID)\n" \
 	"		{\n" \
-	"			StructuredBuffer  <float> input_buffer  = draw.input_buffer .Get();\n" \
+	"			StructuredBuffer<float>   input_buffer  = draw.input_buffer .Get();\n" \
 	"			RWStructuredBuffer<float> output_buffer = draw.output_buffer.Get();\n" \
 	"\n" \
 	"			float input = input_buffer[id];\n" \

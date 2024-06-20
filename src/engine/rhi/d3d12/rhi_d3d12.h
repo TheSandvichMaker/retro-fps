@@ -98,6 +98,9 @@ typedef struct rhi_state_d3d12_t
 
 	ID3D12RootSignature *rs_bindless;
 
+	ID3D12CommandSignature *draw_command_signature;
+	ID3D12CommandSignature *draw_indexed_command_signature;
+
 	bool             timestamps_readback_is_mapped;
 	uint32_t         max_timestamps_per_frame;
 	uint32_t         timestamps_watermark; // TODO: This solution doesn't work
@@ -143,7 +146,7 @@ typedef struct d3d12_window_t
 
 typedef struct d3d12_buffer_t
 {
-	D3D12_RESOURCE_STATES state;
+	D3D12_RESOURCE_STATES state[RhiMaxFrameLatency];
 
 	rhi_resource_flags_t flags;
 
@@ -152,6 +155,8 @@ typedef struct d3d12_buffer_t
 	d3d12_descriptor_t uavs[RhiMaxFrameLatency];
 
 	D3D12_GPU_VIRTUAL_ADDRESS gpu_address[RhiMaxFrameLatency];
+
+	void *mapped[RhiMaxFrameLatency];
 
 	uint64_t size;
 

@@ -60,6 +60,8 @@ rect2_t ui_scrollable_region_begin_ex(ui_id_t id, rect2_t start_rect, ui_scrolla
 		rect2_cut_from_right(result_rect, ui_sz_pix(ui_scalar(UiScalar_scroll_tray_width)), NULL, &result_rect);
 	}
 
+	result_rect = rect2_cut_margins(result_rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)));
+
 	return result_rect;
 }
 
@@ -161,6 +163,8 @@ void ui_header(rect2_t rect, string_t label)
 void ui_label(rect2_t rect, string_t label)
 {
 	ui_push_clip_rect(rect);
+
+	rect = rect2_cut_margins(rect, ui_sz_pix(ui_scalar(UiScalar_text_margin)));
 
 	font_t *font = ui_font(UiFont_default);
 	ui_draw_text_label_alignment(font, rect, label);

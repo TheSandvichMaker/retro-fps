@@ -3,6 +3,12 @@
 #include "bindless.hlsli"
 #include "gen/view.hlsli"
 
+struct FullscreenTriangleOutVS
+{
+	float4 pos : SV_POSITION;
+	float2 uv  : TEXCOORD;
+};
+
 float Max3(float3 v)
 {
 	return max(v.x, max(v.y, v.z));
