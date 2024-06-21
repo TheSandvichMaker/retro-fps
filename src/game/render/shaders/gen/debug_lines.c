@@ -11,43 +11,41 @@ void shader_debug_lines_set_draw_params(rhi_command_list_t *list, debug_lines_dr
 	"\n" \
 	"#include \"bindless.hlsli\"\n" \
 	"\n" \
+	"#include \"common.hlsli\"\n" \
 	"\n" \
-	"	#include \"common.hlsli\"\n" \
+	"struct LineVertex\n" \
+	"{\n" \
+	"	float3 pos;\n" \
+	"	ColorRGBA8 color;\n" \
+	"};\n" \
 	"\n" \
-	"	struct LineVertex\n" \
-	"	{\n" \
-	"		float3 pos;\n" \
-	"		ColorRGBA8 color;\n" \
-	"	};\n" \
-	"	\n" \
-	"	struct debug_lines_draw_parameters_t\n" \
+	"struct debug_lines_draw_parameters_t\n" \
 	"{\n" \
 	"	df::Resource< StructuredBuffer< LineVertex > > lines;\n" \
 	"};\n" \
 	"\n" \
 	"ConstantBuffer< debug_lines_draw_parameters_t > draw : register(b0);\n" \
 	"\n" \
-	"	\n" \
-	"	struct VS_OUT\n" \
-	"	{\n" \
-	"		float4 position : SV_Position;\n" \
-	"		float4 color    : COLOR;\n" \
-	"	};\n" \
 	"\n" \
-	"	VS_OUT MainVS(uint vertex_index : SV_VertexID)\n" \
-	"	{\n" \
-	"		LineVertex vertex = draw.lines.Get().Load(vertex_index);\n" \
 	"\n" \
-	"		VS_OUT OUT;\n" \
-	"		OUT.position = mul(view.world_to_clip, float4(vertex.pos, 1));\n" \
-	"		OUT.color    = SRGBToLinear(Unpack(vertex.color));\n" \
-	"		return OUT;\n" \
-	"	}\n" \
+	"struct VS_OUT\n" \
+	"{\n" \
+	"	float4 position : SV_Position;\n" \
+	"	float4 color    : COLOR;\n" \
+	"};\n" \
 	"\n" \
-	"	float4 MainPS(VS_OUT IN) : SV_Target\n" \
-	"	{\n" \
-	"		return IN.color;\n" \
-	"	}\n" \
+	"VS_OUT MainVS(uint vertex_index : SV_VertexID)\n" \
+	"{\n" \
+	"	LineVertex vertex = draw.lines.Get().Load(vertex_index);\n" \
 	"\n" \
-	"	\n" \
+	"	VS_OUT OUT;\n" \
+	"	OUT.position = mul(view.world_to_clip, float4(vertex.pos, 1));\n" \
+	"	OUT.color    = SRGBToLinear(Unpack(vertex.color));\n" \
+	"	return OUT;\n" \
+	"}\n" \
+	"\n" \
+	"float4 MainPS(VS_OUT IN) : SV_Target\n" \
+	"{\n" \
+	"	return IN.color;\n" \
+	"}\n" \
 	"\n" \

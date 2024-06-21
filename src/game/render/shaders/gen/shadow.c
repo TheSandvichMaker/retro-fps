@@ -19,21 +19,20 @@ void shader_shadow_set_draw_params(rhi_command_list_t *list, shadow_draw_paramet
 	"ConstantBuffer< shadow_draw_parameters_t > draw : register(b0);\n" \
 	"\n" \
 	"\n" \
-	"	#include \"common.hlsli\"\n" \
 	"\n" \
-	"	struct VS_OUT\n" \
-	"	{\n" \
-	"		float4 position : SV_Position;\n" \
-	"	};\n" \
+	"#include \"common.hlsli\"\n" \
 	"\n" \
-	"	VS_OUT MainVS(uint vertex_index : SV_VertexID)\n" \
-	"	{\n" \
-	"		float3 position = draw.positions.Get().Load(vertex_index);\n" \
+	"struct VS_OUT\n" \
+	"{\n" \
+	"	float4 position : SV_Position;\n" \
+	"};\n" \
 	"\n" \
-	"		VS_OUT OUT;\n" \
-	"		OUT.position = mul(view.sun_matrix, float4(position, 1));\n" \
-	"		return OUT;\n" \
-	"	}\n" \
+	"VS_OUT MainVS(uint vertex_index : SV_VertexID)\n" \
+	"{\n" \
+	"	float3 position = draw.positions.Get().Load(vertex_index);\n" \
 	"\n" \
-	"	\n" \
+	"	VS_OUT OUT;\n" \
+	"	OUT.position = mul(view.sun_matrix, float4(position, 1));\n" \
+	"	return OUT;\n" \
+	"}\n" \
 	"\n" \

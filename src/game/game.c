@@ -648,6 +648,14 @@ fn_local void render_game(/*r1_t *r1, */gamestate_t *game, rhi_window_t window)
 		player_t *player = game->player;
 		camera_t *camera = player->attached_camera;
 
+		for (size_t light_index = 0; light_index < map->light_count; light_index++)
+		{
+			map_point_light_t *light = &map->lights[light_index];
+
+			rect3_t rect = rect3_center_radius(light->p, v3_from_scalar(4.0f));
+			draw_debug_cube(rect, COLORF_YELLOW);
+		}
+
 		const rhi_texture_desc_t *desc = rhi_get_texture_desc(backbuffer);
 
 		rect2_t viewport = {

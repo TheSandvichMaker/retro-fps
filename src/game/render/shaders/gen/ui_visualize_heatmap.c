@@ -20,19 +20,20 @@ void shader_ui_visualize_heatmap_set_draw_params(rhi_command_list_t *list, ui_vi
 	"ConstantBuffer< ui_visualize_heatmap_draw_parameters_t > draw : register(b0);\n" \
 	"\n" \
 	"\n" \
-	"	#include \"common.hlsli\"\n" \
 	"\n" \
-	"	float4 MainPS(FullscreenTriangleOutVS IN) : SV_Target\n" \
-	"	{\n" \
-	"		uint2 co = uint2(IN.pos.xy);\n" \
+	"#include \"common.hlsli\"\n" \
 	"\n" \
-	"		Texture2D heatmap = draw.heatmap.Get();\n" \
+	"float4 MainPS(FullscreenTriangleOutVS IN) : SV_Target\n" \
+	"{\n" \
+	"	uint2 co = uint2(IN.pos.xy);\n" \
 	"\n" \
-	"		float  heatmap_value = draw.scale * heatmap.SampleLevel(df::s_linear_clamped, IN.uv, 0).r;\n" \
-	"		float3 result = rgb_from_hsv(float3(heatmap_value, 1.0, 1.0));\n" \
+	"	Texture2D heatmap = draw.heatmap.Get();\n" \
 	"\n" \
-	"		return float4(result, 0.5);\n" \
-	"	}\n" \
+	"	float  heatmap_value = \n" \
+	"		draw.scale * heatmap.SampleLevel(df::s_linear_clamped, IN.uv, 0).r;\n" \
 	"\n" \
-	"	\n" \
+	"	float3 result = rgb_from_hsv(float3(heatmap_value, 1.0, 1.0));\n" \
+	"\n" \
+	"	return float4(result, 0.5);\n" \
+	"}\n" \
 	"\n" \

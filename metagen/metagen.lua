@@ -1,6 +1,7 @@
 require "io"
 require "os"
-require "metagen/shader"
+require "metagen/metashader"
+require "metagen/emit"
 
 shader_directory      = "src/shaders/"
 output_directory_hlsl = "src/shaders/gen/"
@@ -10,35 +11,26 @@ output_directory_c    = "src/game/render/shaders/gen/"
 os.execute("if not exist \"" .. output_directory_hlsl .. "\" mkdir \"" .. output_directory_hlsl .. "\"")
 os.execute("if not exist \"" .. output_directory_c    .. "\" mkdir \"" .. output_directory_c    .. "\"")
 
-local shader_sources = {}
+local metashaders = {}
 
 -- @PlatformSpecific
-local dir = io.popen("dir \"" .. string.gsub(shader_directory, "/", "\\") .. "*.dfs\" /B")
+local metashader_dir = io.popen("dir \"" .. string.gsub(shader_directory, "/", "\\") .. "*.metashader\" /B")
 
-for source in dir:lines() do
-	local name = string.gsub(source, ".dfs", "")
-	print("Gathered shader source: " .. name)
+for source in metashader_dir:lines() do
+	local shader_path = shader_directory .. source
 
-	table.insert(shader_sources, name)
-end
+	local f        = io.open(shader_path, "r")
+	local contents = f:read("*all")
 
-local shaders = {}
+	local result = parse_metashader_block(source, contents)
 
-for _, name in ipairs(shader_sources) do
-	local shader_path = shader_directory .. name .. ".dfs"
-	local bundle = dofile(shader_path)
+	table.insert(metashaders, {
+		file_name = string.gsub(source, ".metashader", ""),
+		path      = shader_path,
+		bundle    = result,
+	})
 
-	if not bundle.disabled then
-		assert(bundle, name .. ".dfs did not return a bundle")
-
-		table.insert(shaders, {
-			file_name = name,
-			path      = shader_path,
-			bundle    = bundle,
-		})
-	else
-		io.stderr:write("Warning: Shader bundle '" .. bundle.name .. "' is disabled")
-	end
+	f:close()
 end
 
 -- TODO: Put this somewhere better
@@ -50,8 +42,8 @@ local view_parameters = {
 	view_size     = float2,
 }
 
-emit.process_shaders({
-	bundles               = shaders, 
+process_shaders({
+	bundles               = metashaders, 
 	view_parameters       = view_parameters,
 	output_directory_c    = output_directory_c, 
 	output_directory_hlsl = output_directory_hlsl,

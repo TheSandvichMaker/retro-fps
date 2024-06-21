@@ -20,35 +20,34 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"ConstantBuffer< post_draw_parameters_t > draw : register(b0);\n" \
 	"\n" \
 	"\n" \
-	"	#include \"common.hlsli\"\n" \
 	"\n" \
-	"	float4 MainPS(FullscreenTriangleOutVS IN) : SV_Target\n" \
+	"#include \"common.hlsli\"\n" \
+	"\n" \
+	"float4 MainPS(FullscreenTriangleOutVS IN) : SV_Target\n" \
+	"{\n" \
+	"	uint2 co = uint2(IN.pos.xy);\n" \
+	"\n" \
+	"	Texture2DMS<float4> tex_color = draw.hdr_color.Get();\n" \
+	"\n" \
+	"	float4 sum = 0.0;\n" \
+	"	for (uint i = 0; i < draw.sample_count; i++)\n" \
 	"	{\n" \
-	"		uint2 co = uint2(IN.pos.xy);\n" \
+	"		float4 color = tex_color.Load(co, i);\n" \
 	"\n" \
-	"		Texture2DMS<float4> tex_color = draw.hdr_color.Get();\n" \
+	"		float2 sample_position = tex_color.GetSamplePosition(i);\n" \
 	"\n" \
-	"		float4 sum = 0.0;\n" \
-	"		for (uint i = 0; i < draw.sample_count; i++)\n" \
-	"		{\n" \
-	"			float4 color = tex_color.Load(co, i);\n" \
+	"		float weight = 1.0 ; //smoothstep(8, 0, sample_position.x)*smoothstep(8, 0, sample_position.y);\n" \
 	"\n" \
-	"			float2 sample_position = tex_color.GetSamplePosition(i);\n" \
+	"		// tonemap\n" \
+	"		color.rgb = 1.0 - exp(-color.rgb);\n" \
+	"		color.rgb *= weight;\n" \
 	"\n" \
-	"			float weight = 1.0 ; //smoothstep(8, 0, sample_position.x)*smoothstep(8, 0, sample_position.y);\n" \
-	"\n" \
-	"			// tonemap\n" \
-	"			color.rgb = 1.0 - exp(-color.rgb);\n" \
-	"			color.rgb *= weight;\n" \
-	"\n" \
-	"			sum.rgb += color.rgb;\n" \
-	"			sum.a   += weight;\n" \
-	"		}\n" \
-	"\n" \
-	"		sum.rgb *= rcp(sum.a);\n" \
-	"\n" \
-	"		return float4(sum.rgb, 1.0);\n" \
+	"		sum.rgb += color.rgb;\n" \
+	"		sum.a   += weight;\n" \
 	"	}\n" \
 	"\n" \
-	"	\n" \
+	"	sum.rgb *= rcp(sum.a);\n" \
+	"\n" \
+	"	return float4(sum.rgb, 1.0);\n" \
+	"}\n" \
 	"\n" \

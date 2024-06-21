@@ -4,27 +4,27 @@
 
 #include "common.hlsli"
 
-struct brush_draw_parameters_t
+struct brush_metashader_draw_parameters_t
 {
 	df::Resource< Texture2D< float3 > > albedo;
 	float3 normal;
 	df::Resource< Texture2D< float3 > > lightmap;
 };
 
-ConstantBuffer< brush_draw_parameters_t > draw : register(b0);
+ConstantBuffer< brush_metashader_draw_parameters_t > draw : register(b0);
 
-struct brush_pass_parameters_t
+struct brush_metashader_pass_parameters_t
 {
 	df::Resource< StructuredBuffer< float2 > > lm_uvs;
 	uint3 pad0;
-	df::Resource< StructuredBuffer< float3 > > positions;
+	df::Resource< StructuredBuffer< float3 > > position;
 	uint3 pad1;
 	df::Resource< Texture2D< float > > sun_shadowmap;
 	uint3 pad2;
 	df::Resource< StructuredBuffer< float2 > > uvs;
 };
 
-ConstantBuffer< brush_pass_parameters_t > pass : register(b1);
+ConstantBuffer< brush_metashader_pass_parameters_t > pass : register(b1);
 
 
 

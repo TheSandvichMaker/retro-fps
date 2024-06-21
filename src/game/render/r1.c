@@ -2,7 +2,7 @@
 
 #include "shaders/gen/shaders.c"
 
-CVAR_BOOL(cvar_r1_ui_heat_map, "r1.ui.heat_map", true);
+CVAR_BOOL(cvar_r1_ui_heat_map, "r1.ui.heat_map", false);
 
 fn_local uint32_t r1_begin_timed_region(rhi_command_list_t *list, string_t identifier)
 {

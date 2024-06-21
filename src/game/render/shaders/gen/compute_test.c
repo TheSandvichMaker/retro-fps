@@ -20,20 +20,19 @@ void shader_compute_test_set_draw_params(rhi_command_list_t *list, compute_test_
 	"\n" \
 	"ConstantBuffer< compute_test_draw_parameters_t > draw : register(b0);\n" \
 	"\n" \
-	"	\n" \
-	"		[numthreads(128, 1, 1)]\n" \
-	"		void MainCS(int id : SV_DispatchThreadID)\n" \
-	"		{\n" \
-	"			StructuredBuffer<float>   input_buffer  = draw.input_buffer .Get();\n" \
-	"			RWStructuredBuffer<float> output_buffer = draw.output_buffer.Get();\n" \
 	"\n" \
-	"			float input = input_buffer[id];\n" \
 	"\n" \
-	"			// Super cool compute kernel\n" \
-	"			float result = input * input;\n" \
+	"[numthreads(128, 1, 1)]\n" \
+	"void MainCS(int id : SV_DispatchThreadID)\n" \
+	"{\n" \
+	"	StructuredBuffer<float>   input_buffer  = draw.input_buffer .Get();\n" \
+	"	RWStructuredBuffer<float> output_buffer = draw.output_buffer.Get();\n" \
 	"\n" \
-	"			output_buffer[id] = result;\n" \
-	"		}\n" \
-	"	\n" \
-	"	\n" \
+	"	float input = input_buffer[id];\n" \
+	"\n" \
+	"	// Super cool compute kernel\n" \
+	"	float result = input * input;\n" \
+	"\n" \
+	"	output_buffer[id] = result;\n" \
+	"}\n" \
 	"\n" \

@@ -16,25 +16,25 @@ typedef enum df_shader_ident_t
 {
 	DfShader_none,
 
-	DfShader_brush_vs, // src/shaders/brush.dfs
-	DfShader_brush_ps, // src/shaders/brush.dfs
+	DfShader_brush_vs, // src/shaders/brush.metashader
+	DfShader_brush_ps, // src/shaders/brush.metashader
 
-	DfShader_compute_test_cs, // src/shaders/compute_test.dfs
+	DfShader_compute_test_cs, // src/shaders/compute_test.metashader
 
-	DfShader_debug_lines_vs, // src/shaders/debug_lines.dfs
-	DfShader_debug_lines_ps, // src/shaders/debug_lines.dfs
+	DfShader_debug_lines_ps, // src/shaders/debug_lines.metashader
+	DfShader_debug_lines_vs, // src/shaders/debug_lines.metashader
 
-	DfShader_fullscreen_triangle_vs, // src/shaders/fullscreen_triangle.dfs
+	DfShader_fullscreen_triangle_vs, // src/shaders/fullscreen_triangle.metashader
 
-	DfShader_post_ps, // src/shaders/post.dfs
+	DfShader_post_ps, // src/shaders/post.metashader
 
-	DfShader_shadow_vs, // src/shaders/shadow.dfs
+	DfShader_shadow_vs, // src/shaders/shadow.metashader
 
-	DfShader_ui_vs, // src/shaders/ui.dfs
-	DfShader_ui_heatmap_ps, // src/shaders/ui.dfs
-	DfShader_ui_ps, // src/shaders/ui.dfs
+	DfShader_ui_vs, // src/shaders/ui.metashader
+	DfShader_ui_ps, // src/shaders/ui.metashader
+	DfShader_ui_heatmap_ps, // src/shaders/ui.metashader
 
-	DfShader_ui_visualize_heatmap_ps, // src/shaders/ui_visualize_heatmap.dfs
+	DfShader_ui_visualize_heatmap_ps, // src/shaders/ui_visualize_heatmap.metashader
 
 	DfShader_COUNT,
 } df_shader_ident_t;
