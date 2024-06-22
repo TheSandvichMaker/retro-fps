@@ -4,8 +4,14 @@
 
 typedef struct post_draw_parameters_t
 {
-	rhi_texture_srv_t hdr_color;
+	rhi_texture_srv_t blue_noise;
 	uint32_t sample_count;
+	v2u_t pad0;
+	rhi_texture_srv_t depth_buffer;
+	v3u_t pad1;
+	rhi_texture_srv_t hdr_color;
+	v3u_t pad2;
+	rhi_texture_srv_t shadow_map;
 } post_draw_parameters_t;
 
 fn void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_t *params);

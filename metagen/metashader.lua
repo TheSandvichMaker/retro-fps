@@ -13,9 +13,6 @@ function parse_metashader_block(shader_file_name, shader_text)
 	local result = nil
 
 	if i ~= nil then
-		local curly_open  = 123
-		local curly_close = 125
-
 		-- skip whitespace
 		i, j = string.find(shader_text, "^%s*", j + 1)
 

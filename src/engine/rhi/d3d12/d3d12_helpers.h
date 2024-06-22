@@ -10,6 +10,7 @@
 		if (FAILED(__hr))                                         \
 		{                                                         \
 			win32_hresult_error_box(__hr, "D3D12 Call Failed!");  \
+		    DEBUG_BREAK(); \
 			on_fail;                                              \
 		}                                                         \
 	}

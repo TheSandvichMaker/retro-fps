@@ -4,8 +4,14 @@
 
 struct post_draw_parameters_t
 {
-	df::Resource< Texture2DMS< float4 > > hdr_color;
+	df::Resource< Texture2D< float4 > > blue_noise;
 	uint sample_count;
+	uint2 pad0;
+	df::Resource< Texture2DMS< float > > depth_buffer;
+	uint3 pad1;
+	df::Resource< Texture2DMS< float3 > > hdr_color;
+	uint3 pad2;
+	df::Resource< Texture2D< float > > shadow_map;
 };
 
 ConstantBuffer< post_draw_parameters_t > draw : register(b0);
@@ -14,24 +20,119 @@ ConstantBuffer< post_draw_parameters_t > draw : register(b0);
 
 #include "common.hlsli"
 
-float4 MainPS(FullscreenTriangleOutVS IN) : SV_Target
+float3 fog_blend(float3 color, float4 fog)
+{
+    return color*fog.a + fog.rgb;
+}
+
+float phase(float3 v, float3 l, float k)
+{
+    float numerator = (1.0 - k*k);
+    float denominator = square(1.0 - k*dot(l, v));
+    return (1.0 / (4*PI))*(numerator / denominator);
+}
+
+float4 integrate_fog(float2 uv, uint2 co, float dither, uint sample_index)
+{
+	float3 o, d;
+	camera_ray(uv, o, d);
+
+	float max_march_distance = 1024;
+	uint  steps              = 16;
+
+	float t      = 0;
+	float t_step = 1.0 / float(steps);
+	float depth  = 1.0 / draw.depth_buffer.Get().Load(co, sample_index);
+
+	float stop_distance = min(depth, max_march_distance);
+
+    float density    = view.fog_density;
+    float absorption = view.fog_absorption;
+    float scattering = view.fog_scattering;
+    float extinction = absorption + scattering;
+    float phase_k    = view.fog_phase_k;
+    float sun_phase  = phase(d, view.sun_direction, phase_k);
+
+    float3 ambient = 0.5*float3(0.3f, 0.5f, 0.9f);
+    float3 illumination = 0;
+    float  transmission = 1;
+    for (uint i = 0; i < steps; i++)
+    {
+        float step_size = stop_distance*t_step;
+
+        float  dist = stop_distance*(t - dither*t_step);
+        float3 p = o + dist*d;
+
+        float3 projected_p = mul(view.sun_matrix, float4(p, 1)).xyz;
+        projected_p.y  = -projected_p.y;
+        projected_p.xy = 0.5*projected_p.xy + 0.5;
+
+        float p_depth = projected_p.z;
+
+        float sun_shadow = 0.0f;
+        if (p_depth > 0.0f)
+        {
+			Texture2D<float> shadowmap = draw.shadow_map.Get();
+
+			float2 dim;
+			shadowmap.GetDimensions(dim.x, dim.y);
+
+            sun_shadow = 1.0 - SampleShadowPCF3x3(shadowmap, dim, projected_p.xy, p_depth);
+        }
+
+        transmission *= exp(-density*extinction*step_size);
+
+        float3 direct_light = rcp(4.0f*PI)*ambient;
+        direct_light += view.sun_color*(1.0 - sun_shadow)*sun_phase;
+
+        float3 in_scattering  = direct_light;
+        float  out_scattering = scattering*density;
+
+        float3 current_light = in_scattering*out_scattering;
+
+        illumination += transmission*current_light*step_size;    
+        t += t_step;
+    }
+
+    float remainder = depth - stop_distance;
+    if (isinf(remainder))
+    {
+        transmission = 0;
+        illumination += view.sun_color*sun_phase*scattering*density*rcp(density*extinction);
+    }
+    else
+    {
+        transmission *= exp(-remainder*density*extinction);
+        illumination += transmission*view.sun_color*sun_phase*scattering*density*remainder;
+    }
+    
+    return float4(illumination, transmission);
+}
+
+float4 post_ps(FullscreenTriangleOutVS IN) : SV_Target
 {
 	uint2 co = uint2(IN.pos.xy);
 
-	Texture2DMS<float4> tex_color = draw.hdr_color.Get();
+	Texture2DMS<float3> tex_color = draw.hdr_color.Get();
+	
+	Texture2D<float4> tex_blue_noise = draw.blue_noise.Get();
+
+	float4 blue_noise = tex_blue_noise.Load(uint3(co % 64, 0));
 
 	float4 sum = 0.0;
 	for (uint i = 0; i < draw.sample_count; i++)
 	{
-		float4 color = tex_color.Load(co, i);
+		float3 color = tex_color.Load(co, i).rgb;
+
+		float4 fog = integrate_fog(IN.uv, co, blue_noise.a, i);
+		color = fog_blend(color, fog);
 
 		float2 sample_position = tex_color.GetSamplePosition(i);
-
-		float weight = 1.0 ; //smoothstep(8, 0, sample_position.x)*smoothstep(8, 0, sample_position.y);
+		float  weight          = 1.0;
 
 		// tonemap
-		color.rgb = 1.0 - exp(-color.rgb);
-		color.rgb *= weight;
+		color = 1.0 - exp(-color.rgb);
+		color *= weight;
 
 		sum.rgb += color.rgb;
 		sum.a   += weight;
@@ -39,5 +140,8 @@ float4 MainPS(FullscreenTriangleOutVS IN) : SV_Target
 
 	sum.rgb *= rcp(sum.a);
 
-	return float4(sum.rgb, 1.0);
+	float3 dither = RemapTriPDF(blue_noise.rgb) / 255.0;
+	float3 color  = sum.rgb + dither;
+
+	return float4(color, 1.0);
 }

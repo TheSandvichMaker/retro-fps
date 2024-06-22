@@ -298,6 +298,15 @@ void r1_init(void)
 
 	r1->black_texture_srv = rhi_get_texture_srv(r1->black_texture);
 
+	for (size_t i = 0; i < ARRAY_COUNT(r1->blue_noise); i++)
+	{
+		asset_hash_t   hash  = asset_hash_from_string(Sf("gamedata/textures/noise/LDR_RGBA_%zu.png", i));
+		asset_image_t *image = get_image_blocking(hash);
+
+		r1->blue_noise    [i] = image->rhi_texture;
+		r1->blue_noise_srv[i] = rhi_get_texture_srv(r1->blue_noise[i]);
+	}
+
 	r1->shadow_map_resolution = 2048;
 	r1->shadow_map = rhi_create_texture(&(rhi_create_texture_params_t){
 	    .debug_name = S("sun_shadow_map"),
@@ -472,6 +481,7 @@ void r1_begin_frame(void)
 {
 	m_reset(r1->push_constants_arena);
 	r1->next_region_index = 0;
+	r1->frame_index += 1;
 }
 
 void r1_finish_recording_draw_streams(void)
@@ -500,11 +510,17 @@ void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t backbuffer, r_v
 		const rhi_texture_desc_t *backbuffer_desc = rhi_get_texture_desc(backbuffer);
 
 		set_view_parameters(list, &(view_parameters_t) {
-			.world_to_clip = world_to_clip,
-			.sun_matrix    = sun_matrix,
-			.sun_direction = sun_direction,
-			.sun_color     = view->scene.sun_color,
-			.view_size     = make_v2((float)backbuffer_desc->width, (float)backbuffer_desc->height),
+			.world_to_clip  = world_to_clip,
+			.view_to_clip   = view->proj_matrix,
+			.world_to_view  = view->view_matrix,
+			.sun_matrix     = sun_matrix,
+			.sun_direction  = sun_direction,
+			.sun_color      = view->scene.sun_color,
+			.view_size      = make_v2((float)backbuffer_desc->width, (float)backbuffer_desc->height),
+			.fog_density    = view->scene.fog_density,
+			.fog_absorption = view->scene.fog_absorption,
+			.fog_scattering = view->scene.fog_scattering,
+			.fog_phase_k    = view->scene.fog_phase_k,
 		});
 
 		rhi_texture_t rt_hdr = r1->window.rt_hdr;
@@ -520,8 +536,8 @@ void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t backbuffer, r_v
 			}
 		}
 
-		// r1_post_process(list, rt_hdr, backbuffer);
-		rhi_do_test_stuff(list, rt_hdr, backbuffer, r1->psos.post_process);
+		r1_post_process(list, rt_hdr, backbuffer);
+		// rhi_do_test_stuff(list, rt_hdr, backbuffer, r1->psos.post_process);
 	}
 }
 
@@ -767,8 +783,13 @@ void r1_post_process(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_text
 		{
 			rhi_set_pso(list, r1->psos.post_process);
 
+			uint32_t blue_noise_index = r1->frame_index % ARRAY_COUNT(r1->blue_noise);
+
 			post_draw_parameters_t draw_parameters = {
 				.hdr_color    = rhi_get_texture_srv(hdr_color),
+				.depth_buffer = rhi_get_texture_srv(r1->window.depth_stencil),
+				.shadow_map   = rhi_get_texture_srv(r1->shadow_map),
+				.blue_noise   = r1->blue_noise_srv[blue_noise_index],
 				.sample_count = r1->multisample_count,
 			};
 			shader_post_set_draw_params(list, &draw_parameters);

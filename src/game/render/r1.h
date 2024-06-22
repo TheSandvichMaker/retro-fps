@@ -27,6 +27,9 @@ typedef struct r1_state_t
 	rhi_texture_t     black_texture;
 	rhi_texture_srv_t black_texture_srv;
 
+	rhi_texture_t     blue_noise[8];
+	rhi_texture_srv_t blue_noise_srv[8];
+
 	rect2i_t          unbounded_scissor_rect;
 
 	uint32_t          shadow_map_resolution;
@@ -46,6 +49,8 @@ typedef struct r1_state_t
 	uint64_t timestamp_frequency;
 	uint32_t next_region_index;
 	string_storage_t(256) region_identifiers[R1MaxRegions];
+
+	uint32_t frame_index;
 
 	//r1_ui_render_state_t ui;
 

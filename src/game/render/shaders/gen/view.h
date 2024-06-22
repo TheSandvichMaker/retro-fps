@@ -5,12 +5,17 @@
 typedef struct view_parameters_t
 {
 	m4x4_t sun_matrix;
+	m4x4_t view_to_clip;
 	m4x4_t world_to_clip;
+	m4x4_t world_to_view;
 	v3_t sun_color;
-	uint32_t pad0;
+	float fog_absorption;
 	v3_t sun_direction;
-	uint32_t pad1;
+	float fog_density;
 	v2_t view_size;
+	float fog_phase_k;
+	float fog_scattering;
+	uint32_t frame_index;
 } view_parameters_t;
 
 fn void set_view_parameters(rhi_command_list_t *list, view_parameters_t *params);

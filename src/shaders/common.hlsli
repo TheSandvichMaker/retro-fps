@@ -3,11 +3,53 @@
 #include "bindless.hlsli"
 #include "gen/view.hlsli"
 
+#define PI (3.1415926535898)
+
 struct FullscreenTriangleOutVS
 {
 	float4 pos : SV_POSITION;
 	float2 uv  : TEXCOORD;
 };
+
+void camera_ray(float2 uv, out float3 position, out float3 direction)
+{
+    float3 camera_x = {
+        view.world_to_view[0][0],
+        view.world_to_view[0][1],
+        view.world_to_view[0][2],
+    };
+
+    float3 camera_y = {
+        view.world_to_view[1][0],
+        view.world_to_view[1][1],
+        view.world_to_view[1][2],
+    };
+
+    float3 camera_z = {
+        view.world_to_view[2][0],
+        view.world_to_view[2][1],
+        view.world_to_view[2][2],
+    };
+
+    position = -(view.world_to_view[0][3]*camera_x +
+                 view.world_to_view[1][3]*camera_y +
+                 view.world_to_view[2][3]*camera_z);
+
+    float2 nds = 2*uv - 1;
+    nds.y = -nds.y;
+
+    float film_half_w = rcp(view.view_to_clip[0][0]);
+    float film_half_h = rcp(view.view_to_clip[1][1]);
+
+    direction = normalize(nds.x*camera_x*film_half_w +
+                          nds.y*camera_y*film_half_h -
+                          camera_z);
+}
+
+float square(float x)
+{
+	return x*x;
+}
 
 float Max3(float3 v)
 {
@@ -20,9 +62,10 @@ float QuasirandomDither(float2 co)
     return frac(dot(co, magic));
 }
 
-float RemapTriPDF(float n)
+template <typename T>
+T RemapTriPDF(T n)
 {
-    float orig = n * 2.0 - 1.0;
+    T orig = n * 2.0 - 1.0;
     n = orig * rsqrt(abs(orig));
     return max(-1.0, n) - sign(orig);
 }
