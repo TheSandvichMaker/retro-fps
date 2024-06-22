@@ -17,6 +17,20 @@ typedef enum cvar_flags_t
 	CVarFlag_registered = 0x1,
 } cvar_flags_t;
 
+typedef union cvar_value_t
+{
+	bool     boolean;
+	int32_t  i32;
+	float    f32;
+	string_t string;
+} cvar_value_t;
+
+typedef struct cvar_string_block_t
+{
+	uint16_t size;
+	char     bytes[1];
+} cvar_string_block_t;
+
 typedef struct cvar_t
 {
 	cvar_kind_t  kind;
@@ -24,13 +38,10 @@ typedef struct cvar_t
 
 	string_t key;
 
-	union
-	{
-		bool     boolean;
-		int32_t  i32;
-		float    f32;
-		string_t string;
-	} as;
+	cvar_value_t default_value;
+	cvar_value_t as;
+
+	cvar_string_block_t *string_block;
 
 	union
 	{
@@ -47,7 +58,12 @@ typedef struct cvar_t
 
 typedef struct cvar_state_t
 {
+	bool initialized;
+
 	table_t cvar_table;
+
+	arena_t       arena;
+	simple_heap_t string_allocator;
 } cvar_state_t;
 
 global cvar_state_t g_cvars;
@@ -77,7 +93,7 @@ global cvar_state_t g_cvars;
 		.max.f32 =  INFINITY,                                                 \
 	};
 
-#define CVAR_I32_EX(in_variable, in_key, in_min, in_max, in_default_value)    \
+#define CVAR_I32_EX(in_variable, in_key, in_default_value, in_min, in_max)    \
 	global cvar_t in_variable = {                                             \
 		.kind    = CVarKind_i32,                                              \
 		.key     = Sc(in_key),                                                \
@@ -86,7 +102,7 @@ global cvar_state_t g_cvars;
 		.max.i32 = in_max,                                                    \
 	};
 
-#define CVAR_F32_EX(in_variable, in_key, in_min, in_max, in_default_value)    \
+#define CVAR_F32_EX(in_variable, in_key, in_default_value, in_min, in_max)    \
 	global cvar_t in_variable = {                                             \
 		.kind    = CVarKind_f32,                                              \
 		.key     = Sc(in_key),                                                \
@@ -99,11 +115,14 @@ global cvar_state_t g_cvars;
 	global cvar_t in_variable = {                                             \
 		.kind      = CVarKind_string,                                         \
 		.key       = Sc(in_key),                                              \
-		.as.string = in_default_value,                                        \
+		.as.string = Sc(in_default_value),                                    \
 	};
 
-fn void    cvar_register(cvar_t *cvar);
-fn cvar_t *cvar_find    (string_t key);
+fn void cvar_init_system(void);
+
+fn void    cvar_register (cvar_t *cvar);
+fn cvar_t *cvar_find     (string_t key);
+fn size_t  get_cvar_count(void);
 
 fn bool     cvar_read_bool  (cvar_t *cvar);
 fn int32_t  cvar_read_i32   (cvar_t *cvar);

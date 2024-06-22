@@ -397,8 +397,6 @@ void app_init(platform_init_io_t *io)
 	equip_action_system(app->action_system);
 
 	app->console = m_alloc_struct(&app->arena, console_t);
-	// @UiFonts - this is stupid
-	app->console->font = app->ui->style.font;
 
 	app->editor = m_alloc_struct(&app->arena, editor_t);
 	editor_init(app->editor);
@@ -614,7 +612,7 @@ fn_local void tick_ui(platform_tick_io_t *io, app_state_t *app, input_t *input, 
 
 	equip_gamestate(app->game);
 
-	ui_begin(dt);
+	ui_begin(dt, rect2_from_min_dim(make_v2(0, 0), client_size));
 	{
 		//update_and_render_in_game_editor();
 		editor_update_and_render(app->editor);

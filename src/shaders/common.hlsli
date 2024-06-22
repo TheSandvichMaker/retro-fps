@@ -222,3 +222,18 @@ float3 rgb_from_hsv(float3 c)
     float3 p = abs(frac(c.xxx + K.xyz) * 6.0 - K.www);
     return c.z * lerp(K.xxx, saturate(p - K.xxx), c.y);
 }
+
+// https://ai.googleblog.com/2019/08/turbo-improved-rainbow-colormap-for.html
+float3 ColorMapTurbo(float t)
+{
+    const float3 c0 = float3(0.1140890109226559, 0.06288340699912215, 0.2248337216805064);
+    const float3 c1 = float3(6.716419496985708, 3.182286745507602, 7.571581586103393);
+    const float3 c2 = float3(-66.09402360453038, -4.9279827041226, -10.09439367561635);
+    const float3 c3 = float3(228.7660791526501, 25.04986699771073, -91.54105330182436);
+    const float3 c4 = float3(-334.8351565777451, -69.31749712757485, 288.5858850615712);
+    const float3 c5 = float3(218.7637218434795, 67.52150567819112, -305.2045772184957);
+    const float3 c6 = float3(-52.88903478218835, -21.54527364654712, 110.5174647748972);
+
+    t = saturate(t);
+    return c0+t*(c1+t*(c2+t*(c3+t*(c4+t*(c5+t*c6)))));
+}

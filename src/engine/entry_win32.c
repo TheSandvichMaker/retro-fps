@@ -527,6 +527,7 @@ int wWinMain(HINSTANCE instance,
         argv[i] = utf8_from_utf16(&win32_arena, string16_from_cstr(argv_wide[i]));
     }
 
+	cvar_init_system();
 	platform_init((size_t)argc, argv, &hooks);
 
 	if (!hooks.tick && !hooks.tick_audio)

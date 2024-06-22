@@ -1,18 +1,32 @@
 #pragma once
 
-#define UI_ROW_CHECKBOX_ON_LEFT 1
+typedef uint32_t ui_row_builder_flags_t;
+typedef enum ui_row_builder_flags_enum_t
+{
+	UiRowBuilder_insert_row_separators = 0x1,
+	UiRowBuilder_checkbox_on_left      = 0x2,
+} ui_row_builder_flags_enum_t;
 
 typedef struct ui_row_builder_t
 {
 	rect2_t  rect;
 	uint32_t row_index;
+	ui_row_builder_flags_t flags;
 } ui_row_builder_t;
 
-fn ui_row_builder_t ui_make_row_builder(rect2_t rect);
+typedef struct ui_row_builder_params_t
+{
+	ui_row_builder_flags_t flags;
+} ui_row_builder_params_t;
 
-fn rect2_t ui_row_ex   (ui_row_builder_t *builder, float height, bool draw_background);
-fn rect2_t ui_row      (ui_row_builder_t *builder);
-fn void    ui_row_split(ui_row_builder_t *builder, rect2_t *label, rect2_t *widget);
+fn ui_row_builder_t ui_make_row_builder_ex(rect2_t rect, const ui_row_builder_params_t *params);
+fn ui_row_builder_t ui_make_row_builder   (rect2_t rect);
+
+fn rect2_t ui_row_ex       (ui_row_builder_t *builder, float height, bool draw_background);
+fn rect2_t ui_row          (ui_row_builder_t *builder);
+fn void    ui_row_split    (ui_row_builder_t *builder, rect2_t *label, rect2_t *widget);
+fn void    ui_row_spacer   (ui_row_builder_t *builder, ui_size_t size);
+fn void    ui_row_separator(ui_row_builder_t *builder);
 
 fn void ui_row_header       (ui_row_builder_t *builder, string_t label);
 fn void ui_row_label        (ui_row_builder_t *builder, string_t label);

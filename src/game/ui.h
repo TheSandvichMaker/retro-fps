@@ -260,7 +260,10 @@ typedef enum ui_style_scalar_t
 typedef enum ui_style_color_t
 {
     UiColor_text,
+    UiColor_text_low,
+    UiColor_text_preview,
     UiColor_text_shadow,
+    UiColor_text_selection,
 
 	UiColor_widget_shadow,
 	UiColor_widget_error_background,
@@ -270,6 +273,8 @@ typedef enum ui_style_color_t
     UiColor_window_title_bar_hot,
     UiColor_window_close_button,
     UiColor_window_outline,
+
+	UiColor_region_outline,
 
     UiColor_progress_bar_empty,
     UiColor_progress_bar_filled,
@@ -311,10 +316,7 @@ typedef struct ui_style_t
 	stack_t(font_t *, UI_STYLE_STACK_COUNT) fonts[UiFont_COUNT];
 
 	string_t font_data; // so we can rebuild the font at different sizes without going out to disk
-	font_t *font;
-
 	string_t header_font_data; // so we can rebuild the font at different sizes without going out to disk
-	font_t *header_font;
 } ui_style_t;
 
 fn ui_anim_t *ui_get_anim  (ui_id_t id, v4_t init_value);
@@ -389,6 +391,7 @@ fn void    ui_draw_rect_roundedness_shadow (rect2_t rect, v4_t color, v4_t round
 fn void    ui_draw_rect_roundedness_outline(rect2_t rect, v4_t color, v4_t roundedness, float width);
 fn void    ui_draw_rect_outline            (rect2_t rect, v4_t color, float outline_width);
 fn void    ui_draw_circle                  (v2_t p, float r, v4_t color);
+fn void    ui_draw_debug_rect              (rect2_t rect, v4_t color);
 
 //
 // Widget Building Utilities
@@ -438,7 +441,7 @@ typedef struct ui_state_header_t
 {
 	ui_id_t id;
 	uint16_t size;
-	PAD(2);
+	uint16_t flags;
 	uint32_t created_frame_index;
 	uint32_t last_touched_frame_index;
 } ui_state_header_t;
@@ -451,15 +454,14 @@ typedef struct ui_tooltip_t
 	string_storage_t(UI_MAX_TOOLTIP_LENGTH) text;
 } ui_tooltip_t;
 
-#define UI_DEPTH_LEVELS_PER_LAYER (2048u)
-
 typedef enum ui_render_layer_t
 {
-	UI_LAYER_BACKGROUND         = 1*UI_DEPTH_LEVELS_PER_LAYER,
-	UI_LAYER_FOREGROUND         = 2*UI_DEPTH_LEVELS_PER_LAYER,
-	UI_LAYER_OVERLAY_BACKGROUND = 3*UI_DEPTH_LEVELS_PER_LAYER,
-	UI_LAYER_OVERLAY_FOREGROUND = 4*UI_DEPTH_LEVELS_PER_LAYER,
-	UI_LAYER_TOOLTIP            = 5*UI_DEPTH_LEVELS_PER_LAYER,
+	UI_LAYER_BACKGROUND         = 1,
+	UI_LAYER_FOREGROUND         = 2,
+	UI_LAYER_OVERLAY_BACKGROUND = 3,
+	UI_LAYER_OVERLAY_FOREGROUND = 4,
+	UI_LAYER_TOOLTIP            = 5,
+	UI_LAYER_DEBUG_OVERLAY      = 255,
 } ui_render_layer_t;
 
 typedef struct ui_render_command_key_t
@@ -530,8 +532,11 @@ typedef struct ui_t
 	bool has_focus;
 	bool hovered;
 
+	hires_time_t init_time;
 	hires_time_t current_time;
 	hires_time_t hover_time;
+
+	double       current_time_s;
 
 	float hover_time_seconds;
 
@@ -557,6 +562,8 @@ typedef struct ui_t
 	ui_id_t focused_id;
 
 	table_t widget_validation_table;
+
+	rect2_t ui_area;
 
 	v2_t    set_mouse_p;
 	rect2_t restrict_mouse_rect;
@@ -635,10 +642,17 @@ fn void ui_hoverable       (ui_id_t id, rect2_t rect);
 fn bool ui_is_hovered      (ui_id_t id);
 fn bool ui_is_hovered_delay(ui_id_t id, float delay);
 
-fn void *ui_get_state_raw(ui_id_t id, bool *first_touch, uint16_t size);
-#define ui_get_state(id, first_touch, type) (type *)ui_get_state_raw(id, first_touch, sizeof(type))
+typedef uint16_t ui_state_flags_t;
+typedef enum ui_state_flags_enum_t
+{
+	UiStateFlag_persistent = 0x1,
+} ui_state_flags_enum_t;
 
-fn bool ui_begin(float dt);
+fn void *ui_get_state_raw(ui_id_t id, bool *first_touch, uint16_t size, ui_state_flags_t flags);
+#define ui_get_state_ex(id, first_touch, type, flags) (type *)ui_get_state_raw(id, first_touch, sizeof(type), flags)
+#define ui_get_state(id, first_touch, type) (type *)ui_get_state_raw(id, first_touch, sizeof(type), 0)
+
+fn bool ui_begin(float dt, rect2_t ui_area);
 fn void ui_end(void);
 fn ui_render_command_list_t *ui_get_render_commands(void);
 

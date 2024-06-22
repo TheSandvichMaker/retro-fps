@@ -74,3 +74,8 @@ void radix_sort_u64(uint64_t *array, size_t count)
         }
     }
 }
+
+void radix_sort_keys(sort_key_t *array, size_t count)
+{
+	radix_sort_u64((uint64_t *)array, count);
+}

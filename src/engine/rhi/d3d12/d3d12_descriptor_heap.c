@@ -151,6 +151,8 @@ void d3d12_descriptor_heap_flush_pending_frees(d3d12_descriptor_heap_t *heap, ui
 
 		if (pending->frame_index <= frame_index)
 		{
+			log(RHI_D3D12, SuperSpam, "Freeing descriptor %u which was set to be freed at frame index %llu, current frame index: %llu", pending->index, pending->frame_index, frame_index);
+
 			heap->free_indices[new_free_count++] = pending->index;
 			heap->pending_free_tail += 1;
 		}
@@ -183,6 +185,8 @@ d3d12_descriptor_t d3d12_allocate_descriptor_persistent(d3d12_descriptor_heap_t 
 		.gpu   = { heap->gpu_base.ptr + heap->stride * index },
 		.index = index,
 	};
+
+	log(RHI_D3D12, SuperSpam, "Allocated persistent descriptor %u from heap: %cs", result.index, heap->debug_name);
 
 	return result;
 }
@@ -231,9 +235,11 @@ void d3d12_free_descriptor_persistent(d3d12_descriptor_heap_t *heap, uint32_t in
 
 		uint32_t pending_index = heap->pending_free_head++ % heap->capacity; // TODO: mask pow2
 
+		log(RHI_D3D12, SuperSpam, "Deferred descriptor %u to be freed at frame index %llu, current frame index: %llu", index, g_rhi.fence_value, g_rhi.frame_index);
+
 		heap->pending_free_indices[pending_index] = (d3d12_pending_free_t){
 			.index       = index,
-			.frame_index = g_rhi.fence_value,
+			.frame_index = g_rhi.fence_value + g_rhi.frame_latency,
 		};
 
 #if DREAM_SLOW

@@ -18,20 +18,18 @@ typedef enum ui_scrollable_region_flags_t
 	UiScrollableRegionFlags_draw_scroll_bar   = 0x4,
 } ui_scrollable_region_flags_t;
 
-typedef struct ui_scrollable_region_state_t
+typedef struct ui_scrollable_region_t
 {
 	ui_scrollable_region_flags_t flags;
 	rect2_t start_rect;
-	float   scrolling_zone_x;
-	float   scrolling_zone_y;
-	float   scroll_offset_x;
-	float   scroll_offset_y;
 	v2_t    interpolated_scroll_offset;
-} ui_scrollable_region_state_t;
+	v2_t    scroll_zone;
+	v2_t    scroll_offset;
+} ui_scrollable_region_t;
 
-fn rect2_t ui_scrollable_region_begin_ex(ui_id_t id, rect2_t start_rect, ui_scrollable_region_flags_t flags);
-fn rect2_t ui_scrollable_region_begin   (ui_id_t id, rect2_t start_rect);
-fn void    ui_scrollable_region_end     (ui_id_t id, rect2_t final_rect);
+fn rect2_t ui_scrollable_region_begin_ex(ui_scrollable_region_t *state, rect2_t start_rect, ui_scrollable_region_flags_t flags);
+fn rect2_t ui_scrollable_region_begin   (ui_scrollable_region_t *state, rect2_t start_rect);
+fn void    ui_scrollable_region_end     (ui_scrollable_region_t *state, rect2_t final_rect);
 
 //
 // Header
@@ -124,7 +122,20 @@ typedef struct ui_text_edit_state_t
 	int cursor;
 } ui_text_edit_state_t;
 
-fn void ui_text_edit(rect2_t rect, dynamic_string_t *buffer);
+typedef struct ui_text_edit_params_t
+{
+	string_t preview_text;
+} ui_text_edit_params_t;
+
+typedef uint32_t ui_text_edit_result_t;
+typedef enum ui_text_edit_result_enum_t
+{
+	UiTextEditResult_edited   = 0x1,
+	UiTextEditResult_committed = 0x2,
+} ui_text_edit_result_enum_t;
+
+fn ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *buffer, const ui_text_edit_params_t *params);
+fn ui_text_edit_result_t ui_text_edit(rect2_t rect, dynamic_string_t *buffer);
 
 //
 // Color Picker

@@ -1,14 +1,29 @@
-ui_row_builder_t ui_make_row_builder(rect2_t rect)
+ui_row_builder_t ui_make_row_builder_ex(rect2_t rect, const ui_row_builder_params_t *params)
 {
 	ui_row_builder_t result = {
-		.rect = rect,
+		.rect  = rect,
+		.flags = params->flags,
 	};
 
 	return result;
 }
 
+ui_row_builder_t ui_make_row_builder(rect2_t rect)
+{
+	ui_row_builder_params_t params = {
+		.flags = UiRowBuilder_checkbox_on_left,
+	};
+
+	return ui_make_row_builder_ex(rect, &params);
+}
+
 rect2_t ui_row_ex(ui_row_builder_t *builder, float height, bool draw_background)
 {
+	if (builder->row_index > 0 && (builder->flags & UiRowBuilder_insert_row_separators))
+	{
+		ui_row_separator(builder);
+	}
+
 	float margin = ui_scalar(UiScalar_row_margin);
 	float bot_margin = ceilf(0.5f*margin);
 	float top_margin = margin - bot_margin;
@@ -19,14 +34,14 @@ rect2_t ui_row_ex(ui_row_builder_t *builder, float height, bool draw_background)
 	if (draw_background)
 	{
 		UI_Scalar(UiScalar_roundedness, 0.0f)
-		ui_draw_rect_shadow(row, make_v4(0, 0, 0, 0.25f), 0.2f, 2.0f);
+		ui_draw_rect_shadow(row, make_v4(0, 0, 0, 0.02f), 0.2f, 2.0f);
 	}
-
-	builder->row_index += 1;
 
 	rect2_t result = row;
 	rect2_cut_from_bottom(result, ui_sz_pix(bot_margin), NULL, &result);
 	rect2_cut_from_top   (result, ui_sz_pix(top_margin), NULL, &result);
+
+	builder->row_index += 1;
 
 	return result;
 }
@@ -43,16 +58,29 @@ void ui_row_split(ui_row_builder_t *builder, rect2_t *label, rect2_t *widget)
 	rect2_cut_from_left(row, ui_sz_pct(0.5f), label, widget);
 }
 
+void ui_row_spacer(ui_row_builder_t *builder, ui_size_t size)
+{
+	rect2_cut_from_top(builder->rect, size, NULL, &builder->rect);
+}
+
+void ui_row_separator(ui_row_builder_t *builder)
+{
+	ui_row_spacer(builder, ui_sz_pix(ui_scalar(UiScalar_row_margin)));
+
+	rect2_t separator_rect;
+	rect2_cut_from_top(builder->rect, ui_sz_pix(1.0f), &separator_rect, &builder->rect);
+
+	ui_draw_rect(separator_rect, ui_color(UiColor_region_outline));
+
+	ui_row_spacer(builder, ui_sz_pix(ui_scalar(UiScalar_row_margin)));
+}
+
 void ui_row_header(ui_row_builder_t *builder, string_t label)
 {
 	float height = ui_font(UiFont_header)->height;
 
-	rect2_cut_from_top(builder->rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)), NULL, &builder->rect);
-
 	rect2_t row = ui_row_ex(builder, height, true);
 	ui_header(row, label);
-
-	rect2_cut_from_top(builder->rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)), NULL, &builder->rect);
 }
 
 void ui_row_label(ui_row_builder_t *builder, string_t label)
@@ -130,26 +158,29 @@ bool ui_row_radio_buttons(ui_row_builder_t *builder, string_t label, int *state,
 
 bool ui_row_checkbox(ui_row_builder_t *builder, string_t label, bool *v)
 {
-#if UI_ROW_CHECKBOX_ON_LEFT
-	rect2_t row = ui_row(builder);
+	if (builder->flags & UiRowBuilder_checkbox_on_left)
+	{
+		rect2_t row = ui_row(builder);
 
-	rect2_t checkbox_rect;
-	rect2_cut_from_left(row, ui_sz_aspect(1.0f),                           &checkbox_rect, &row);
-	rect2_cut_from_left(row, ui_sz_pix(ui_scalar(UiScalar_widget_margin)), NULL,           &row);
+		rect2_t checkbox_rect;
+		rect2_cut_from_left(row, ui_sz_aspect(1.0f),                           &checkbox_rect, &row);
+		rect2_cut_from_left(row, ui_sz_pix(ui_scalar(UiScalar_widget_margin)), NULL,           &row);
 
-	ui_label(row, label);
-	return ui_checkbox(checkbox_rect, v);
-#else
-	rect2_t label_rect, widget_rect;
-	ui_row_split(builder, &label_rect, &widget_rect);
+		ui_label(row, label);
+		return ui_checkbox(checkbox_rect, v);
+	}
+	else
+	{
+		rect2_t label_rect, widget_rect;
+		ui_row_split(builder, &label_rect, &widget_rect);
 
-	ui_label(label_rect, label);
+		ui_label(label_rect, label);
 
-	rect2_t checkbox_rect;
-	rect2_cut_from_right(widget_rect, ui_sz_aspect(1.0f), &checkbox_rect, NULL);
+		rect2_t checkbox_rect;
+		rect2_cut_from_left(widget_rect, ui_sz_aspect(1.0f), &checkbox_rect, NULL);
 
-	return ui_checkbox(checkbox_rect, v);
-#endif
+		return ui_checkbox(checkbox_rect, v);
+	}
 }
 
 bool ui_row_slider_int(ui_row_builder_t *builder, string_t label, int *v, int min, int max)

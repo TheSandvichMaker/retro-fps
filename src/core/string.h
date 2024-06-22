@@ -54,9 +54,23 @@ fn string_t string_path_leaf(string_t path);
 fn string_t string_path_directory(string_t path);
 fn bool string_path_strip_root(string_t path, string_t *out_root, string_t *out_remainder);
 
+typedef uint32_t string_match_flags_t;
+typedef enum string_match_flags_enum_t
+{
+	StringMatch_case_insensitive = 0x1,
+} string_match_flags_enum_t;
+
 fn bool string_match(string_t a, string_t b);
 fn bool string_match_nocase(string_t a, string_t b);
 fn bool string_match_prefix(string_t string, string_t prefix);
+fn size_t find_substring          (string_t text, string_t pattern, string_match_flags_t flags);
+fn size_t find_substring_backwards(string_t text, string_t pattern, string_match_flags_t flags);
+
+// like strcmp, useful for sorting
+fn int string_compare(string_t a, string_t b, string_match_flags_t flags);
+
+// levenshtein distance
+fn int calculate_edit_distance(string_t s, string_t t, string_match_flags_t flags);
 
 // TODO: remove from header
 fn_local bool is_whitespace(char c)

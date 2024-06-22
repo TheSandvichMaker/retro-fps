@@ -75,11 +75,30 @@ void editor_process_windows(editor_t *editor)
 		ui_push_id(id);
 		{
 			// handle dragging and resizing first to remove frame delay
+			bool is_being_dragged = ui_is_active(id);
 
-			if (ui_is_active(id))
+			if (is_being_dragged)
 			{
 				v2_t new_p = add(ui->input.mouse_p, ui->drag_offset);
 				window->rect = rect2_reposition_min(window->rect, new_p); 
+
+				// compute total window rect
+				rect2_t rect = window->rect;
+
+				float   title_bar_height = ui_font(UiFont_header)->height + 2.0f*ui_scalar(UiScalar_text_margin) + 4.0f;
+				rect2_t title_bar = rect2_add_top(rect, title_bar_height);
+
+				rect2_t total = rect2_union(title_bar, rect);
+
+				float w = rect2_width (total);
+				float h = rect2_height(total);
+
+				rect2_t restrict_rect = ui->ui_area;
+				restrict_rect = rect2_shrink2   (restrict_rect, 0.5f*w, 0.5f*h);
+				restrict_rect = rect2_add_offset(restrict_rect, ui->drag_anchor);
+
+				ui->restrict_mouse_rect = restrict_rect;
+				ui->cursor              = Cursor_none;
 			}
 
 			ui_id_t id_n  = ui_id(S("tray_id_n"));
@@ -128,6 +147,19 @@ void editor_process_windows(editor_t *editor)
 			// ---
 
 			rect2_t rect = window->rect;
+
+			/*
+			float held_offset = 0.0f;
+
+			if (is_being_dragged)
+			{
+				held_offset = 8.0f;
+			}
+
+			held_offset = ui_interpolate_f32(ui_id(S("held_offset")), held_offset);
+
+			rect = rect2_add_offset(rect, make_v2(0, held_offset));
+			*/
 
 			float   title_bar_height = ui_font(UiFont_header)->height + 2.0f*ui_scalar(UiScalar_text_margin) + 4.0f;
 			rect2_t title_bar = rect2_add_top(rect, title_bar_height);
@@ -186,19 +218,35 @@ void editor_process_windows(editor_t *editor)
 			bool has_focus = /*ui_has_focus() &&*/ (window == editor->focus_window);
 
 			float focus_t = ui_interpolate_f32(ui_id(S("focus")), has_focus);
-			float shadow_amount = lerp(0.15f, 0.25f, focus_t);
 
-			v4_t  title_bar_color           = ui_color(UiColor_window_title_bar);
+			float shadow_amount = has_focus ? 0.25f : 0.15f;
+
+			if (is_being_dragged)
+			{
+				shadow_amount = 0.05f;
+			}
+
+			shadow_amount = ui_interpolate_f32(ui_id(S("shadow")), shadow_amount);
+
+			ui_style_color_t title_bar_color_id = UiColor_window_title_bar;
+
+			if (is_being_dragged)
+			{
+				title_bar_color_id = UiColor_window_title_bar_hot;
+			}
+
+			v4_t  title_bar_color           = ui_color(title_bar_color_id);
 			float title_bar_luma            = luminance(title_bar_color.xyz);
 			v4_t  title_bar_color_greyscale = make_v4(title_bar_luma, title_bar_luma, title_bar_luma, 1.0f);
 
 			v4_t  interpolated_title_bar_color = v4_lerps(title_bar_color_greyscale, title_bar_color, focus_t);
+			interpolated_title_bar_color = ui_interpolate_v4(ui_id(S("title_bar_color")), interpolated_title_bar_color);
 
 			ui_draw_rect_roundedness_shadow(rect2_shrink(total, 1.0f), make_v4(0, 0, 0, 0), make_v4(5, 5, 5, 5), shadow_amount, 32.0f);
 			ui_draw_rect_roundedness(title_bar, interpolated_title_bar_color, make_v4(2, 0, 2, 0));
 			ui_draw_rect_roundedness(rect, ui_color(UiColor_window_background), make_v4(0, 2, 0, 2));
 			ui_push_clip_rect(title_bar);
-			ui_draw_text(ui->style.header_font, ui_text_center_p(ui->style.header_font, title_bar_minus_outline, title), title);
+			ui_draw_text(ui_font(UiFont_header), ui_text_center_p(ui_font(UiFont_header), title_bar_minus_outline, title), title);
 			ui_pop_clip_rect();
 			ui_draw_rect_roundedness_outline(total, ui_color(UiColor_window_outline), make_v4(2, 2, 2, 2), 2.0f);
 
@@ -227,6 +275,11 @@ void editor_process_windows(editor_t *editor)
 				case EditorWindow_ui_test:
 				{
 					editor_do_ui_test_window(&editor->ui_test, window);
+				} break;
+
+				case EditorWindow_cvars:
+				{
+					editor_do_cvar_window(&editor->cvar_window_state, window);
 				} break;
 			}
 
@@ -269,13 +322,16 @@ void editor_init(editor_t *editor)
 	string_into_storage(editor->windows[EditorWindow_lightmap].title,    S("Lightmap Editor"));
 	string_into_storage(editor->windows[EditorWindow_convex_hull].title, S("Convex Hull Debugger"));
 	string_into_storage(editor->windows[EditorWindow_ui_test].title,     S("UI Test Window"));
+	string_into_storage(editor->windows[EditorWindow_cvars].title,       S("Console Variables"));
 
 	editor->windows[EditorWindow_lightmap].kind    = EditorWindow_lightmap;
 	editor->windows[EditorWindow_convex_hull].kind = EditorWindow_convex_hull;
 	editor->windows[EditorWindow_ui_test].kind     = EditorWindow_ui_test;
+	editor->windows[EditorWindow_cvars].kind       = EditorWindow_cvars;
 
 	editor_init_lightmap_stuff(&editor->lightmap);
 	editor_init_convex_hull_debugger(&editor->convex_hull);
+	editor_init_cvar_window(&editor->cvar_window_state);
 }
 
 void editor_update_and_render(editor_t *editor)
@@ -300,6 +356,11 @@ void editor_update_and_render(editor_t *editor)
     if (ui_key_pressed(Key_f4, true))
 	{
 		editor_toggle_window_openness(editor, &editor->windows[EditorWindow_ui_test]);
+	}
+
+    if (ui_key_pressed(Key_f5, true))
+	{
+		editor_toggle_window_openness(editor, &editor->windows[EditorWindow_cvars]);
 	}
 
 	editor_process_windows(editor);

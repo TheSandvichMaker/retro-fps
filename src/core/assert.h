@@ -58,3 +58,6 @@ typedef struct debug_break_state_t
 			*out_debug_break_state = &MACRO_IDENT(debug_break_state); \
 		}                                                             \
 	} while (false)
+
+#define VERIFY(expr) if (!(expr)) { DEBUG_BREAK(); }
+#define VERIFY_ONCE(expr) if (!(expr)) { DEBUG_BREAK_ONCE(NULL); }

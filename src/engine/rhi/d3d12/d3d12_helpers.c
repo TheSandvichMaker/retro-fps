@@ -118,12 +118,14 @@ void d3d12_deferred_release(IUnknown *resource)
 
 	d3d12_deferred_release_t *release = &queue->queue[queue->head++ % ARRAY_COUNT(queue->queue)];
 	release->resource    = resource;
-	release->frame_index = g_rhi.fence_value;
+	release->frame_index = g_rhi.fence_value + g_rhi.frame_latency;
+
+	log(RHI_D3D12, SuperSpam, "Deferred release of resource to frame index %llu, current frame index: %llu", release->frame_index, g_rhi.frame_index);
 
 	mutex_unlock(&queue->mutex);
 }
 
-void d3d12_flush_deferred_release_queue(uint32_t frame_index)
+void d3d12_flush_deferred_release_queue(uint64_t frame_index)
 {
 	d3d12_deferred_release_queue_t *queue = &g_rhi.deferred_release_queue;
 
@@ -141,6 +143,7 @@ void d3d12_flush_deferred_release_queue(uint32_t frame_index)
 
 		if (release->frame_index <= frame_index)
 		{
+			log(RHI_D3D12, SuperSpam, "Deferred-freeing resource with frame index %llu at frame index %llu", release->frame_index, frame_index);
 			COM_SAFE_RELEASE(release->resource);
 		}
 		else

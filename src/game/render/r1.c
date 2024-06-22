@@ -2,7 +2,8 @@
 
 #include "shaders/gen/shaders.c"
 
-CVAR_BOOL(cvar_r1_ui_heat_map, "r1.ui.heat_map", false);
+CVAR_BOOL  (cvar_r1_ui_heat_map,       "r1.ui.heat_map",       false);
+CVAR_I32_EX(cvar_r1_ui_heat_map_scale, "r1.ui.heat_map_scale", 16, 1, 255);
 
 fn_local uint32_t r1_begin_timed_region(rhi_command_list_t *list, string_t identifier)
 {
@@ -245,6 +246,14 @@ fn_local void r1_load_all_shaders(void);
 
 void r1_init(void)
 {
+	//------------------------------------------------------------------------
+	// register cvars
+
+	cvar_register(&cvar_r1_ui_heat_map);
+	cvar_register(&cvar_r1_ui_heat_map_scale);
+
+	//------------------------------------------------------------------------
+
 	ASSERT(!r1);
 
 	r1 = m_bootstrap(r1_state_t, arena);
@@ -881,9 +890,11 @@ void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, ui_render_command_
 		{
 			rhi_set_pso(list, r1->psos.ui_visualize_heatmap);
 
+			int32_t heat_map_scale = cvar_read_i32(&cvar_r1_ui_heat_map_scale);
+
 			ui_visualize_heatmap_draw_parameters_t draw_parameters = {
 				.heatmap = rhi_get_texture_srv(r1->window.ui_heatmap_rt),
-				.scale   = 255.0f / 16.0f,
+				.scale   = 255.0f / (float)heat_map_scale,
 			};
 			shader_ui_visualize_heatmap_set_draw_params(list, &draw_parameters);
 

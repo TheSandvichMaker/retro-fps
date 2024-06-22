@@ -38,41 +38,41 @@ void ui_error_widget(rect2_t rect, string_t widget_name, string_t error_message)
 // Scrollable Region
 //
 
-rect2_t ui_scrollable_region_begin_ex(ui_id_t id, rect2_t start_rect, ui_scrollable_region_flags_t flags)
+rect2_t ui_scrollable_region_begin_ex(ui_scrollable_region_t *state, rect2_t start_rect, ui_scrollable_region_flags_t flags)
 {
+	ui_id_t id = ui_id_pointer(state);
 	ui_validate_widget(id);
 
-	ui_scrollable_region_state_t *state = ui_get_state(id, NULL, ui_scrollable_region_state_t);
 	state->flags      = flags;
 	state->start_rect = start_rect;
 
 	ui_push_clip_rect(start_rect);
 
-	v4_t offset = { state->scroll_offset_x, state->scroll_offset_y };
-	offset = ui_interpolate_v4(id, offset);
+	v4_t offset = {0};
+	offset.xy = state->scroll_offset;
+	offset    = ui_interpolate_v4(id, offset);
 
 	state->interpolated_scroll_offset = offset.xy;
 	
 	rect2_t result_rect = rect2_add_offset(start_rect, offset.xy);
 
-	if (state->scrolling_zone_y && (flags & UiScrollableRegionFlags_draw_scroll_bar))
+	if (state->scroll_zone.y != 0.0f && (flags & UiScrollableRegionFlags_draw_scroll_bar))
 	{
 		rect2_cut_from_right(result_rect, ui_sz_pix(ui_scalar(UiScalar_scroll_tray_width)), NULL, &result_rect);
+		rect2_cut_from_right(result_rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)), NULL, &result_rect);
 	}
-
-	result_rect = rect2_cut_margins(result_rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)));
 
 	return result_rect;
 }
 
-rect2_t ui_scrollable_region_begin(ui_id_t id, rect2_t start_rect)
+rect2_t ui_scrollable_region_begin(ui_scrollable_region_t *state, rect2_t start_rect)
 {
-	return ui_scrollable_region_begin_ex(id, start_rect, UiScrollableRegionFlags_scroll_both);
+	return ui_scrollable_region_begin_ex(state, start_rect, UiScrollableRegionFlags_scroll_both|UiScrollableRegionFlags_draw_scroll_bar);
 }
 
-void ui_scrollable_region_end(ui_id_t id, rect2_t final_rect)
+void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 {
-	ui_scrollable_region_state_t *state = ui_get_state(id, NULL, ui_scrollable_region_state_t);
+	ui_id_t id = ui_id_pointer(state);
 
 	ui_pop_clip_rect();
 
@@ -97,13 +97,13 @@ void ui_scrollable_region_end(ui_id_t id, rect2_t final_rect)
 		if (ui->hovered_scroll_region.value == id.value)
 		{
 			float mouse_wheel = ui_mouse_wheel(true);
-			state->scroll_offset_y = flt_clamp(state->scroll_offset_y - mouse_wheel, 0.0f, scrolling_zone_height);
+			state->scroll_offset.y = flt_clamp(state->scroll_offset.y - mouse_wheel, 0.0f, scrolling_zone_height);
 		}
 	}
 
 	ui_scrollable_region_flags_t flags = state->flags;
 
-	if (state->scrolling_zone_y && (flags & UiScrollableRegionFlags_draw_scroll_bar))
+	if (state->scroll_zone.y && (flags & UiScrollableRegionFlags_draw_scroll_bar))
 	{
 		rect2_t start_rect     = state->start_rect;
 		float   visible_height = rect2_height(start_rect);
@@ -111,7 +111,7 @@ void ui_scrollable_region_end(ui_id_t id, rect2_t final_rect)
 		float total_content_height = start_rect.max.y - (final_rect.max.y - state->interpolated_scroll_offset.y);
 		float scrolling_zone_ratio = visible_height / total_content_height;
 
-		float scroll_offset = state->scroll_offset_y;
+		float scroll_offset = state->scroll_offset.y;
 		float scroll_pct    = scroll_offset / scrolling_zone_height;
 
 		rect2_t tray;
@@ -139,7 +139,7 @@ void ui_scrollable_region_end(ui_id_t id, rect2_t final_rect)
 
 	}
 
-	state->scrolling_zone_y = scrolling_zone_height;
+	state->scroll_zone.y = scrolling_zone_height;
 }
 
 //
@@ -260,7 +260,7 @@ bool ui_button(rect2_t rect, string_t label)
 	rect2_t shadow = rect;
 	rect2_t button = rect2_add_offset(rect, make_v2(0.0f, hover_lift));
 
-	ui_draw_rect(shadow, mul(color_interp, 0.5f));
+	ui_draw_rect(shadow, mul(color_interp, 0.75f));
 	ui_draw_rect(button, color_interp);
 
 	ui_push_clip_rect(button);
@@ -514,7 +514,7 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 		ui_draw_rect(right, ui_color(UiColor_slider_background));
 	}
 
-	ui_draw_rect(shadow, mul(color, 0.5f));
+	ui_draw_rect(shadow, mul(color, 0.75f));
 	ui_draw_rect(handle, color);
 
 	string_t value_text = {0};
@@ -657,12 +657,14 @@ fn_local float ui_text_edit__get_caret_x(prepared_glyphs_t *prep, size_t index)
 	return result;
 }
 
-void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
+ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *buffer, const ui_text_edit_params_t *params)
 {
+	ui_text_edit_result_t result = 0;
+
 	if (buffer->count > INT32_MAX)
 	{
 		ui_error_widget(rect, S("ui_text_edit"), S("Way too huge buffer passed to ui_text_edit!"));
-		return;
+		return result;
 	}
 
 	arena_t *temp = m_get_temp(NULL, 0);
@@ -698,6 +700,8 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 			{
 				case UiEvent_text:
 				{
+					bool contains_representable_text = false;
+
 					for (size_t i = 0; i < event->text.count; i++)
 					{
 						// TODO: Unicode
@@ -705,14 +709,46 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 
 						if (c >= 32 && c < 127)
 						{
-							bool success = dyn_string_insertc(buffer, (int)state->cursor, c);
+							contains_representable_text = true;
+							break;
+						}
+					}
 
-							if (success)
+					if (contains_representable_text)
+					{
+						int start = (int)state->selection_start;
+						int end   = (int)state->cursor;
+
+						if (start != end)
+						{
+							if (start > end) SWAP(int, start, end);
+
+							int remove_count = end - start;
+							dyn_string_remove_range(buffer, start, remove_count);
+
+							state->cursor = start;
+
+							result |= UiTextEditResult_edited;
+						}
+
+						for (size_t i = 0; i < event->text.count; i++)
+						{
+							// TODO: Unicode
+							char c = event->text.data[i];
+
+							if (c >= 32 && c < 127)
 							{
-								state->cursor += 1;
-								state->selection_start = state->cursor;
+								bool success = dyn_string_insertc(buffer, (int)state->cursor, c);
 
-								inserted_character = true;
+								if (success)
+								{
+									state->cursor += 1;
+									state->selection_start = state->cursor;
+
+									inserted_character = true;
+
+									result |= UiTextEditResult_edited;
+								}
 							}
 						}
 					}
@@ -726,6 +762,11 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 					{
 						switch (event->keycode)
 						{
+							case Key_return:
+							{
+								result |= UiTextEditResult_committed;
+							} break;
+
 							// @UiInput: dedicated UI keycodes?
 							case Key_left:
 							{
@@ -748,11 +789,6 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 									if (!event->shift) 
 									{
 										state->selection_start = state->cursor;
-									}
-
-									if (event->ctrl)
-									{
-
 									}
 								}
 
@@ -781,9 +817,9 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 									{
 										state->selection_start = state->cursor;
 									}
-
-									ui_consume_event(event);
 								}
+
+								ui_consume_event(event);
 							} break;
 
 							// @UiInput: dedicated UI keycodes?
@@ -811,10 +847,7 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 								state->cursor          = start;
 								state->selection_start = state->cursor;
 
-								if (delete)    debug_notif(COLORF_BLUE, 2.0f, 
-														   Sf("delete    (s: %zu, e: %zu (#%zu))", start, end, remove_count));
-								if (backspace) debug_notif(COLORF_BLUE, 2.0f, 
-														   Sf("backspace (s: %zu, e: %zu (#%zu))", start, end, remove_count));
+								result |= UiTextEditResult_edited;
 
 								ui_consume_event(event);
 							} break;
@@ -842,7 +875,19 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 	font_t *font = ui_font(UiFont_default);
 
 	ui_draw_rect(rect, ui_color(UiColor_slider_background));
-	ui_draw_text_aligned(font, buffer_rect, string, make_v2(0.0f, 0.5f));
+
+	if (string.count > 0)
+	{
+		ui_draw_text_aligned(font, buffer_rect, string, make_v2(0.0f, 0.5f));
+	}
+	else if (params->preview_text.count > 0)
+	{
+		UI_Color(UiColor_text, ui_color(UiColor_text_preview))
+		ui_draw_text_aligned(font, buffer_rect, params->preview_text, make_v2(0.0f, 0.5f));
+	}
+
+	v4_t caret_color = ui_color(UiColor_text);
+	caret_color.w = 0.5f + 0.25f*(float)sin(1.7 * PI64 * ui->current_time_s);
 
 	if (has_focus)
 	{
@@ -879,21 +924,15 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 			rect2_t cursor_rect = rect2_from_min_dim(make_v2(cursor_p - 1.0f, buffer_rect.min.y + 2.0f), make_v2(2.0f, rect2_height(buffer_rect) - 4.0f));
 			rect2_t selection_rect = rect2_min_max(make_v2(selection_start_p, buffer_rect.min.y), make_v2(selection_end_p, buffer_rect.max.y));
 
-			v4_t caret_color = ui_color(UiColor_text);
-			caret_color.w = 0.75f;
-
 			if (selection_size == 0)
 			{
 				ui_draw_rect_roundedness(cursor_rect, caret_color, v4_from_scalar(0.0f));
 			}
 
-			ui_draw_rect(selection_rect, make_v4(0.5f, 0.0f, 0.0f, 0.5));
+			ui_draw_rect(selection_rect, ui_color(UiColor_text_selection));
 		}
 		else
 		{
-			v4_t caret_color = ui_color(UiColor_text);
-			caret_color.w = 0.75f;
-
 			ui_draw_rect_roundedness(rect2_from_min_dim(make_v2(buffer_rect.min.x - 1.0f, buffer_rect.min.y + 2.0f),
 														make_v2(2.0f, rect2_height(buffer_rect) - 4.0f)), 
 									 caret_color, v4_from_scalar(0.0f));
@@ -903,6 +942,14 @@ void ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 	ui_pop_id();
 
 	m_scope_end(temp);
+
+	return result;
+}
+
+ui_text_edit_result_t ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
+{
+	ui_text_edit_params_t params = {0};
+	return ui_text_edit_ex(rect, buffer, &params);
 }
 
 

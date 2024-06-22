@@ -2,6 +2,13 @@
 // Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
 // ============================================================
 
+CVAR_BOOL(cvar_ui_show_restrict_rects, "ui.show_restrict_rects", false);
+CVAR_BOOL(cvar_ui_never_hide_cursor,   "ui.never_hide_cursor",   false);
+CVAR_BOOL(cvar_ui_disable_animations,  "ui.disable_animations",  false);
+CVAR_F32(cvar_dummy_f32, "dummy_f32", 4.0f);
+CVAR_I32(cvar_dummy_i32, "dummy_i32", 2);
+CVAR_STRING(cvar_dummy_string, "dummy_string", "test");
+
 //
 // IDs
 //
@@ -408,7 +415,7 @@ ui_anim_t *ui_get_anim(ui_id_t id, v4_t target)
 
 	ui_anim_t *result = NULL;
 
-	bool enabled = ui_scalar(UiScalar_animation_enabled) != 0.0f;
+	bool enabled = (ui_scalar(UiScalar_animation_enabled) != 0.0f) && !cvar_read_bool(&cvar_ui_disable_animations);
 	if (enabled)
 	{
 		ui_id_t          *restrict active_ids   = list->active_ids;
@@ -476,7 +483,7 @@ ui_anim_t *ui_get_anim(ui_id_t id, v4_t target)
 				active_ids[anim_index] = id;
 				result = &active_anims[anim_index];
 
-				log(UI, Spam, "Spawned anim %.*s", Sx(UI_ID_GET_NAME(id)));
+				log(UI, SuperSpam, "Spawned anim %.*s", Sx(UI_ID_GET_NAME(id)));
 			}
 			else
 			{
@@ -707,24 +714,21 @@ font_t *ui_font(ui_style_font_t font_id)
 
 void ui_set_font_height(float size)
 {
-	if (ui->style.font)
+	for (size_t i = 0; i < UiFont_COUNT; i++)
 	{
-		destroy_font(ui->style.font);
-		ui->style.font = NULL;
-	}
-
-	if (ui->style.header_font)
-	{
-		destroy_font(ui->style.header_font);
-		ui->style.header_font = NULL;
+		if (ui->style.base_fonts[i])
+		{
+			destroy_font(ui->style.base_fonts[i]);
+			ui->style.base_fonts[i] = NULL;
+		}
 	}
 
 	font_range_t ranges[] = {
 		{ .start = ' ', .end = '~' },
 	};
 
-	ui->style.font        = make_font_from_memory(S("UI Font"), ui->style.font_data, ARRAY_COUNT(ranges), ranges, size);
-	ui->style.header_font = make_font_from_memory(S("UI Header Font"), ui->style.header_font_data, ARRAY_COUNT(ranges), ranges, 1.5f*size);
+	ui->style.base_fonts[UiFont_default] = make_font_from_memory(S("UI Font"), ui->style.font_data, ARRAY_COUNT(ranges), ranges, size);
+	ui->style.base_fonts[UiFont_header ] = make_font_from_memory(S("UI Header Font"), ui->style.header_font_data, ARRAY_COUNT(ranges), ranges, 1.5f*size);
 }
 
 void ui_push_clip_rect(rect2_t rect)
@@ -1030,6 +1034,26 @@ void ui_draw_rect_roundedness_shadow(rect2_t rect, v4_t color, v4_t roundness, f
 	});
 }
 
+void ui_draw_debug_rect(rect2_t rect, v4_t color)
+{
+	uint32_t color_packed = pack_color(color);
+
+	ui_render_layer_t old_layer = ui->render_layer;
+	ui->render_layer = UI_LAYER_DEBUG_OVERLAY;
+
+	ui_do_rect((r_ui_rect_t){
+		.rect         = rect, 
+		.roundedness  = 0.0f,
+		.color_00     = color_packed,
+		.color_10     = color_packed,
+		.color_11     = color_packed,
+		.color_01     = color_packed,
+		.inner_radius = 2.0f,
+	});
+
+	ui->render_layer = old_layer;
+}
+
 void ui_draw_rect_outline(rect2_t rect, v4_t color, float width)
 {
 	uint32_t color_packed = pack_color(color);
@@ -1308,7 +1332,7 @@ bool ui_id_has_focus(ui_id_t id)
 	return ui->has_focus && ui->focused_id.value == id.value;
 }
 
-void *ui_get_state_raw(ui_id_t id, bool *first_touch, uint16_t size)
+void *ui_get_state_raw(ui_id_t id, bool *first_touch, uint16_t size, ui_state_flags_t flags)
 {
 	ui_state_header_t *state = table_find_object(&ui->state_index, id.value);
 
@@ -1320,6 +1344,7 @@ void *ui_get_state_raw(ui_id_t id, bool *first_touch, uint16_t size)
 		state->id                  = id;
 		state->size                = real_size;
 		state->created_frame_index = ui->frame_index;
+		state->flags               = flags;
 		table_insert_object(&ui->state_index, id.value, state);
 
 		if (first_touch) *first_touch = true;
@@ -1367,6 +1392,18 @@ bool ui_is_hovered_delay(ui_id_t id, float delay)
 
 static void ui_initialize(void)
 {
+	//------------------------------------------------------------------------
+	// register console variables
+
+	cvar_register(&cvar_ui_show_restrict_rects);
+	cvar_register(&cvar_ui_never_hide_cursor);
+	cvar_register(&cvar_ui_disable_animations);
+	cvar_register(&cvar_dummy_f32);
+	cvar_register(&cvar_dummy_i32);
+	cvar_register(&cvar_dummy_string);
+
+	//------------------------------------------------------------------------
+
 	zero_struct(ui);
 	// ui->state = (pool_t)INIT_POOL(ui_state_t);
 
@@ -1385,6 +1422,8 @@ static void ui_initialize(void)
 	v4_t hot    = make_v4(0.25f, 0.45f, 0.40f, 1.0f);
 	v4_t active = make_v4(0.30f, 0.55f, 0.50f, 1.0f);
 	v4_t fired  = make_v4(0.45f, 0.65f, 0.55f, 1.0f);
+
+	ui->init_time = os_hires_time();
 
 	ui->style.base_scalars[UiScalar_tooltip_delay         ] = 0.0f;
 	ui->style.base_scalars[UiScalar_animation_enabled     ] = 1.0f;
@@ -1406,14 +1445,18 @@ static void ui_initialize(void)
 	ui->style.base_scalars[UiScalar_min_scroll_bar_size   ] = 32.0f;
 	ui->style.base_scalars[UiScalar_slider_handle_ratio   ] = 1.0f / 4.0f;
 	ui->style.base_colors [UiColor_text                   ] = make_v4(0.95f, 0.90f, 0.85f, 1.0f);
+	ui->style.base_colors [UiColor_text_low               ] = make_v4(0.85f, 0.80f, 0.75f, 1.0f);
+	ui->style.base_colors [UiColor_text_preview           ] = mul(0.65f, ui->style.base_colors[UiColor_text]);
 	ui->style.base_colors [UiColor_text_shadow            ] = make_v4(0.00f, 0.00f, 0.00f, 0.50f);
+	ui->style.base_colors [UiColor_text_selection         ] = make_v4(0.12f, 0.40f, 0.32f, 0.50f);
 	ui->style.base_colors [UiColor_widget_shadow          ] = make_v4(0.00f, 0.00f, 0.00f, 0.20f);
 	ui->style.base_colors [UiColor_widget_error_background] = make_v4(0.50f, 0.20f, 0.20f, 0.50f);
 	ui->style.base_colors [UiColor_window_background      ] = background;
 	ui->style.base_colors [UiColor_window_title_bar       ] = make_v4(0.25f, 0.35f, 0.30f, 1.0f);
-	ui->style.base_colors [UiColor_window_title_bar_hot   ] = make_v4(0.45f, 0.22f, 0.22f, 1.0f);
+	ui->style.base_colors [UiColor_window_title_bar_hot   ] = make_v4(0.29f, 0.41f, 0.36f, 1.0f);
 	ui->style.base_colors [UiColor_window_close_button    ] = make_v4(0.35f, 0.15f, 0.15f, 1.0f);
 	ui->style.base_colors [UiColor_window_outline         ] = make_v4(0.1f, 0.1f, 0.1f, 0.20f);
+	ui->style.base_colors [UiColor_region_outline         ] = make_v4(0.28f, 0.265f, 0.25f, 0.5f);
 	ui->style.base_colors [UiColor_progress_bar_empty     ] = background_hi;
 	ui->style.base_colors [UiColor_progress_bar_filled    ] = hot;
 	ui->style.base_colors [UiColor_button_idle            ] = foreground;
@@ -1425,9 +1468,6 @@ static void ui_initialize(void)
 	ui->style.base_colors [UiColor_slider_hot             ] = hot;
 	ui->style.base_colors [UiColor_slider_active          ] = active;
 
-	ui->style.base_fonts[UiFont_default] = ui->style.font; // @UiFonts
-	ui->style.base_fonts[UiFont_header]  = ui->style.header_font; // @UiFonts
-
 	ui->render_commands.capacity = UI_RENDER_COMMANDS_CAPACITY;
 	ui->render_commands.keys     = m_alloc_array_nozero(&ui->arena, ui->render_commands.capacity, ui_render_command_key_t);
 	ui->render_commands.commands = m_alloc_array_nozero(&ui->arena, ui->render_commands.capacity, ui_render_command_t);
@@ -1435,7 +1475,7 @@ static void ui_initialize(void)
 	ui->initialized = true;
 }
 
-bool ui_begin(float dt)
+bool ui_begin(float dt, rect2_t ui_area)
 {
 	ASSERT(ui);
 	ASSERT(ui->initialized);
@@ -1443,6 +1483,7 @@ bool ui_begin(float dt)
 	ui__trickle_input(&ui->input, &ui->queued_input);
 
 	ui->dt = dt;
+	ui->ui_area = ui_area;
 
 	ui->last_frame_culled_rect_count = ui->culled_rect_count;
 	ui->culled_rect_count = 0;
@@ -1453,7 +1494,8 @@ bool ui_begin(float dt)
 	{
 		ui_state_header_t *state = it.ptr;
 
-		if (state->last_touched_frame_index < ui->frame_index)
+		if (!(state->flags & UiStateFlag_persistent) &&
+			state->last_touched_frame_index < ui->frame_index)
 		{
 			table_remove(&ui->state_index, state->id.value);
 			simple_heap_free(&ui->state_allocator, state, state->size);
@@ -1468,7 +1510,8 @@ bool ui_begin(float dt)
 	arena_t *frame_arena = ui_frame_arena();
 	m_reset_and_decommit(frame_arena);
 
-	ui->current_time = os_hires_time();
+	ui->current_time   = os_hires_time();
+	ui->current_time_s = os_seconds_elapsed(ui->init_time, ui->current_time);
 
     if (!ui->active.value)
 	{
@@ -1532,14 +1575,14 @@ void ui_end(void)
 
 		string_t text = string_from_storage(tooltip->text);
 
-		float text_w = ui_text_width(ui->style.font, text);
+		float text_w = ui_text_width(ui_font(UiFont_default), text);
 
 		float center_x = 0.5f*(float)res_x;
 		rect2_t rect = rect2_center_dim(make_v2(center_x, at_y), make_v2(4.0f + text_w, font_height));
 
 		ui_draw_rect_shadow(rect, make_v4(0, 0, 0, 0.5f), 0.20f, 32.0f);
-		ui_draw_text_aligned(ui->style.font, rect, text, make_v2(0.5f, 0.5f));
-		at_y += ui->style.font->y_advance;
+		ui_draw_text_aligned(ui_font(UiFont_default), rect, text, make_v2(0.5f, 0.5f));
+		at_y += ui_font(UiFont_default)->y_advance;
 	}
 
 	stack_reset(ui->tooltip_stack);
@@ -1554,7 +1597,7 @@ void ui_end(void)
 	{
 		debug_notif_t *notif = sll_pop(notifs);
 
-		v2_t text_dim = ui_text_dim(ui->style.font, notif->text);
+		v2_t text_dim = ui_text_dim(ui_font(UiFont_default), notif->text);
 
 		v2_t pos = add(notif_at, make_v2(0, -text_dim.y));
 
@@ -1564,7 +1607,7 @@ void ui_end(void)
 		color.w *= smoothstep(saturate(4.0f * lifetime_t));
 
 		UI_Color(UiColor_text, color)
-		ui_draw_text(ui->style.font, pos, notif->text);
+		ui_draw_text(ui_font(UiFont_default), pos, notif->text);
 
 		notif_at.y -= text_dim.y + 4.0;
 
@@ -1610,6 +1653,34 @@ void ui_end(void)
 		ui->first_free_event = ui->input.events.head;
 		ui->input.events.head = NULL;
 		ui->input.events.tail = NULL;
+	}
+
+	if (cvar_read_bool(&cvar_ui_show_restrict_rects))
+	{
+		if (!rect2_is_inside_out(ui->restrict_mouse_rect))
+		{
+			rect2_t rect = ui->restrict_mouse_rect;
+
+			if (rect2_width(rect) == 0.0f)
+			{
+				rect = rect2_add_right(rect, 1.0f);
+			}
+
+			if (rect2_height(rect) == 0.0f)
+			{
+				rect = rect2_add_bottom(rect, 1.0f);
+			}
+
+			ui_draw_debug_rect(rect, COLORF_YELLOW);
+		}
+	}
+
+	if (cvar_read_bool(&cvar_ui_never_hide_cursor))
+	{
+		if (ui->cursor == Cursor_none)
+		{
+			ui->cursor = Cursor_arrow;
+		}
 	}
 }
 

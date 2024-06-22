@@ -20,8 +20,15 @@ float4 MainPS(FullscreenTriangleOutVS IN) : SV_Target
 
 	Texture2D heatmap = draw.heatmap.Get();
 
-	float  heatmap_value = draw.scale * heatmap.SampleLevel(df::s_linear_clamped, IN.uv, 0).r;
-	float3 result        = rgb_from_hsv(float3(heatmap_value, 1.0, 1.0));
+	float heatmap_value = draw.scale * heatmap.SampleLevel(df::s_linear_clamped, IN.uv, 0).r;
 
-	return float4(result, 0.5);
+	float4 result = { 0, 0, 0, 0 };
+
+	if (heatmap_value > 0.0f)
+	{
+		result.rgb = ColorMapTurbo(heatmap_value);
+		result.a   = 0.5f;
+	}
+
+	return result;
 }

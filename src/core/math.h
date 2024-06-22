@@ -22,7 +22,8 @@ typedef __m128 v4sf;  // vector of 4 float (sse1)
         e03, e13, e23, e33, \
     }
 
-#define PI32 3.1415926536f
+#define PI32 (3.1415926536f)
+#define PI64 (3.141592653589793238)
 
 fn_local float square(float x)
 {

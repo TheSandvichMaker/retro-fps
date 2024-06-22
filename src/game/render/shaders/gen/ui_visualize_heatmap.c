@@ -29,9 +29,16 @@ void shader_ui_visualize_heatmap_set_draw_params(rhi_command_list_t *list, ui_vi
 	"\n" \
 	"	Texture2D heatmap = draw.heatmap.Get();\n" \
 	"\n" \
-	"	float  heatmap_value = draw.scale * heatmap.SampleLevel(df::s_linear_clamped, IN.uv, 0).r;\n" \
-	"	float3 result        = rgb_from_hsv(float3(heatmap_value, 1.0, 1.0));\n" \
+	"	float heatmap_value = draw.scale * heatmap.SampleLevel(df::s_linear_clamped, IN.uv, 0).r;\n" \
 	"\n" \
-	"	return float4(result, 0.5);\n" \
+	"	float4 result = { 0, 0, 0, 0 };\n" \
+	"\n" \
+	"	if (heatmap_value > 0.0f)\n" \
+	"	{\n" \
+	"		result.rgb = ColorMapTurbo(heatmap_value);\n" \
+	"		result.a   = 0.5f;\n" \
+	"	}\n" \
+	"\n" \
+	"	return result;\n" \
 	"}\n" \
 	"\n" \

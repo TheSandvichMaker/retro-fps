@@ -325,6 +325,37 @@ bool string_match_prefix(string_t string, string_t prefix)
     return string_match(substring(string, 0, prefix.count), prefix);
 }
 
+int string_compare(string_t a, string_t b, string_match_flags_t flags)
+{
+	int diff = 0;
+
+    for (size_t i = 0; i < MIN(a.count, b.count); i++)
+    {
+		char char_a = a.data[i];
+		char char_b = b.data[i];
+
+		if (flags & StringMatch_case_insensitive)
+		{
+			char_a = to_lower(char_a);
+			char_b = to_lower(char_b);
+		}
+
+		diff = char_a - char_b;
+
+		if (diff)
+		{
+			break;
+		}
+    }
+
+	if (diff == 0 && a.count != b.count)
+	{
+		diff = a.count < b.count ? -1 : 1;
+	}
+
+    return diff;
+}
+
 void string_skip(string_t *string, size_t count)
 {
     if (count > string->count) count = string->count;
@@ -609,4 +640,127 @@ void string_storage_append_impl(string_storage_overlay_t *storage, size_t capaci
 
 	copy_memory(&storage->data[storage->count], string.data, copy_size);
 	storage->count += copy_size;
+}
+
+int calculate_edit_distance(string_t s, string_t t, string_match_flags_t flags)
+{
+    int n = (int)s.count;
+    int m = (int)t.count;
+    int stride = n + 1;
+
+	int result = -1;
+
+	m_scoped_temp
+	{
+		int *matrix = m_alloc_array(temp, (n + 1)*(m + 1), int);
+
+		for (int i = 1; i <= n; i += 1) matrix[i       ] = i;
+		for (int i = 1; i <= m; i += 1) matrix[i*stride] = i;
+
+		for (int i = 1; i <= n; i += 1)
+		{
+			char s_i = s.data[i - 1];
+
+			if (flags & StringMatch_case_insensitive)
+			{
+				s_i = to_lower(s_i);
+			}
+
+			for (int j = 1; j <= m; j += 1)
+			{
+				char t_j = t.data[j - 1];
+
+				if (flags & StringMatch_case_insensitive)
+				{
+					t_j = to_lower(t_j);
+				}
+
+				int cost = (s_i == t_j ? 0 : 1);
+
+				int cell_a = matrix[(i - 1) + (j    )*stride] + 1;
+				int cell_b = matrix[(i    ) + (j - 1)*stride] + 1;
+				int cell_c = matrix[(i - 1) + (j - 1)*stride] + cost;
+
+				int value = MIN(MIN(cell_a, cell_b), cell_c);
+
+				matrix[i + j*stride] = value;
+			}
+		}
+
+		result = matrix[n + m*stride];
+	}
+
+    return result;
+}
+
+// NOTE: I took this from textit - my unfinishd text editor. I don't remember where I got this algorithm though, or what it is called.
+size_t find_substring(string_t text, string_t pattern, string_match_flags_t flags)
+{
+    size_t m = pattern.count;
+    size_t R = ~1ull;
+    size_t pattern_mask[256];
+
+	VERIFY(m < 8*sizeof(size_t));
+
+    if (m == 0) return 0;
+    if (m >= 8*sizeof(size_t)) return STRING_NPOS; // too long
+
+    for (size_t i = 0; i < 256; i += 1) pattern_mask[i] = ~0ull;
+    for (size_t i = 0; i < m;   i += 1)
+    {
+        uint8_t c = pattern.data[i];
+        if (flags & StringMatch_case_insensitive) c = to_lower(c);
+        pattern_mask[c] &= ~(1ull << i);
+    }
+
+    for (size_t i = 0; i < text.count; i += 1)
+    {
+        uint8_t c = text.data[i];
+        if (flags & StringMatch_case_insensitive) c = to_lower(c);
+        R |= pattern_mask[c];
+        R <<= 1;
+
+        if ((R & (1ull << m)) == 0)
+        {
+            return i - m + 1;
+        }
+    }
+
+    return STRING_NPOS;
+}
+
+// NOTE: I took this from textit - my unfinishd text editor. I don't remember where I got this algorithm though, or what it is called.
+size_t find_substring_backwards(string_t text, string_t pattern, string_match_flags_t flags)
+{
+    size_t m = pattern.count;
+    size_t R = ~1ull;
+    size_t pattern_mask[256];
+
+	VERIFY(m < 8*sizeof(size_t));
+
+    if (m == 0) return 0;
+    if (m >= 8*sizeof(size_t)) return STRING_NPOS; // too long
+
+    for (size_t i = 0; i < 256; i += 1) pattern_mask[i] = ~0ull;
+    for (size_t i = 0; i < m;   i += 1)
+    {
+        uint8_t c = pattern.data[m - i - 1];
+        if (flags & StringMatch_case_insensitive) c = to_lower(c);
+        pattern_mask[c] &= ~(1ull << i);
+    }
+
+    for (size_t i = 0; i < text.count; i += 1)
+    {
+        uint8_t c = text.data[text.count - i - 1];
+        if (flags & StringMatch_case_insensitive) c = to_lower(c);
+        R |= pattern_mask[c];
+        R <<= 1;
+
+        if ((R & (1ull << m)) == 0)
+        {
+            return text.count - i - 1;
+        }
+    }
+
+    return STRING_NPOS;
 }

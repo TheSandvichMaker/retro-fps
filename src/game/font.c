@@ -159,8 +159,11 @@ font_t *make_font_from_memory(string_t cosmetic_name, string_t font_data, size_t
 
 void destroy_font(font_t *font)
 {
-	rhi_destroy_texture(font->texture);
-	m_release(&font->arena);
+	if (font)
+	{
+		rhi_destroy_texture(font->texture);
+		m_release(&font->arena);
+	}
 }
 
 font_glyph_t *font_get_glyph(font_t *font, uint32_t codepoint)

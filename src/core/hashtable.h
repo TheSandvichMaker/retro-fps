@@ -45,7 +45,10 @@ typedef struct table_iter_t
 {
     // internal state
     const table_t *table;
-    uint64_t index;
+    uint64_t internal_index;
+
+	uint64_t i;
+	uint64_t key;
 
     // iterator result
     union
@@ -59,7 +62,7 @@ fn_local table_iter_t table_iter(const table_t *table)
 {
     table_iter_t it = {
         .table = table,
-        .index = 0,
+		.i = (uint64_t)-1,
     };
 
     return it;
@@ -76,20 +79,23 @@ fn_local bool table_iter_next(table_iter_t *it)
 
 	table_entry_t *entries = table_get_entries(table);
 
-    while (it->index <= table->mask)
+    while (it->internal_index <= table->mask)
     {
-        if (entries[it->index].key != TABLE_UNUSED_KEY_VALUE)
+        if (entries[it->internal_index].key != TABLE_UNUSED_KEY_VALUE)
         {
             result = true;
 
-            it->value = entries[it->index].value;
-            it->index += 1;
+			it->key   = entries[it->internal_index].key;
+            it->value = entries[it->internal_index].value;
+            it->internal_index += 1;
 
             break;
         }
 
-        it->index += 1;
+        it->internal_index += 1;
     }
+
+	it->i += 1;
 
     return result;
 }

@@ -33,6 +33,7 @@ typedef enum log_category_t
 	LogCat_AssetPacker,
 	LogCat_MapLoad,
 	LogCat_Game,
+	LogCat_CVar,
 
 	LogCat_Max,
 } log_category_t;

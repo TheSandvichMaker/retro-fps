@@ -26,6 +26,7 @@ string_t log_category_to_string[] = {
 	[LogCat_AssetPacker]   = Sc("AssetPacker"),
 	[LogCat_MapLoad]       = Sc("MapLoad"),
 	[LogCat_Game]          = Sc("Game"),
+	[LogCat_CVar]          = Sc("CVar"),
 	[LogCat_Max]           = Sc("INVALID LOG CATEGORY"),
 };
 
@@ -35,7 +36,7 @@ typedef struct log_context_t
 } log_context_t;
 
 global thread_local log_context_t log_ctx = {
-	.log_level_disabled[LogLevel_SuperSpam] = true,
+	.log_level_disabled[LogLevel_SuperSpam] = false,
 };
 
 void set_log_filter_for_thread(log_level_t level, bool enabled)

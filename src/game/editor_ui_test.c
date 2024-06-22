@@ -1,14 +1,14 @@
 void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *window)
 {
+	rect2_t window_rect = rect2_cut_margins(window->rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)));
+
 	ui_scrollable_region_flags_t scroll_flags = 
 		UiScrollableRegionFlags_scroll_vertical|
 		UiScrollableRegionFlags_draw_scroll_bar;
 
-	rect2_t rect = window->rect;
-	rect = rect2_shrink(rect, 1.0f);
+	rect2_t rect = window_rect;
 
-	ui_id_t scroll_region_id = ui_child_id(ui_id_pointer(state), S("scroll_region"));
-	rect2_t content_rect = ui_scrollable_region_begin_ex(scroll_region_id, rect, scroll_flags);
+	rect2_t content_rect = ui_scrollable_region_begin_ex(&window->scroll_region, rect, scroll_flags);
 
 	ui_row_builder_t builder = ui_make_row_builder(content_rect);
 
@@ -128,6 +128,6 @@ void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *wi
 	ui_row_color_picker(&builder, S("UiColor_slider_hot"), &ui->style.base_colors[UiColor_slider_hot]);
 	ui_row_color_picker(&builder, S("UiColor_slider_active"), &ui->style.base_colors[UiColor_slider_active]);
 
-	ui_scrollable_region_end(scroll_region_id, builder.rect);
+	ui_scrollable_region_end(&window->scroll_region, builder.rect);
 }
 
