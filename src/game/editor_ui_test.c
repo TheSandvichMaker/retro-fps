@@ -65,7 +65,9 @@ void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *wi
 	state->edit_buffer.data     = state->edit_buffer_storage;
 	state->edit_buffer.capacity = ARRAY_COUNT(state->edit_buffer_storage);
 
-	ui_row_text_edit(&builder, S("Text Edit"), &state->edit_buffer);
+	ui_row_text_edit_ex(&builder, S("Text Edit"), &state->edit_buffer, &(ui_text_edit_params_t){
+		.numeric_only = false,
+	});
 
 	ui_row_checkbox(&builder, S("Debug Drawing"), &r1->debug_drawing_enabled);
 
@@ -105,28 +107,29 @@ void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *wi
 
 	ui_row_slider(&builder, S("Filter Test"), &mixer.filter_test, -1.0f, 1.0f);
 
-	static v4_t color = { 1, 0, 0, 1 };
-	ui_row_color_picker(&builder, S("Test Color"), &color);
-
-	ui_row_color_picker(&builder, S("UiColor_text"), &ui->style.base_colors[UiColor_text]);
-	ui_row_color_picker(&builder, S("UiColor_text_shadow"), &ui->style.base_colors[UiColor_text_shadow]);
-	ui_row_color_picker(&builder, S("UiColor_widget_shadow"), &ui->style.base_colors[UiColor_widget_shadow]);
-	ui_row_color_picker(&builder, S("UiColor_widget_error_background"), &ui->style.base_colors[UiColor_widget_error_background]);
-	ui_row_color_picker(&builder, S("UiColor_window_background"), &ui->style.base_colors[UiColor_window_background]);
-	ui_row_color_picker(&builder, S("UiColor_window_title_bar"), &ui->style.base_colors[UiColor_window_title_bar]);
-	ui_row_color_picker(&builder, S("UiColor_window_title_bar_hot"), &ui->style.base_colors[UiColor_window_title_bar_hot]);
-	ui_row_color_picker(&builder, S("UiColor_window_close_button"), &ui->style.base_colors[UiColor_window_close_button]);
-	ui_row_color_picker(&builder, S("UiColor_window_outline"), &ui->style.base_colors[UiColor_window_outline]);
-	ui_row_color_picker(&builder, S("UiColor_progress_bar_empty"), &ui->style.base_colors[UiColor_progress_bar_empty]);
-	ui_row_color_picker(&builder, S("UiColor_progress_bar_filled"), &ui->style.base_colors[UiColor_progress_bar_filled]);
-	ui_row_color_picker(&builder, S("UiColor_button_idle"), &ui->style.base_colors[UiColor_button_idle]);
-	ui_row_color_picker(&builder, S("UiColor_button_hot"), &ui->style.base_colors[UiColor_button_hot]);
-	ui_row_color_picker(&builder, S("UiColor_button_active"), &ui->style.base_colors[UiColor_button_active]);
-	ui_row_color_picker(&builder, S("UiColor_button_fired"), &ui->style.base_colors[UiColor_button_fired]);
-	ui_row_color_picker(&builder, S("UiColor_slider_background"), &ui->style.base_colors[UiColor_slider_background]);
-	ui_row_color_picker(&builder, S("UiColor_slider_foreground"), &ui->style.base_colors[UiColor_slider_foreground]);
-	ui_row_color_picker(&builder, S("UiColor_slider_hot"), &ui->style.base_colors[UiColor_slider_hot]);
-	ui_row_color_picker(&builder, S("UiColor_slider_active"), &ui->style.base_colors[UiColor_slider_active]);
+	local_persist bool open = true;
+	if (ui_row_collapsable_region(&builder, S("Theme Colors"), &open))
+	{
+		ui_row_color_picker(&builder, S("UiColor_text"), &ui->style.base_colors[UiColor_text]);
+		ui_row_color_picker(&builder, S("UiColor_text_shadow"), &ui->style.base_colors[UiColor_text_shadow]);
+		ui_row_color_picker(&builder, S("UiColor_widget_shadow"), &ui->style.base_colors[UiColor_widget_shadow]);
+		ui_row_color_picker(&builder, S("UiColor_widget_error_background"), &ui->style.base_colors[UiColor_widget_error_background]);
+		ui_row_color_picker(&builder, S("UiColor_window_background"), &ui->style.base_colors[UiColor_window_background]);
+		ui_row_color_picker(&builder, S("UiColor_window_title_bar"), &ui->style.base_colors[UiColor_window_title_bar]);
+		ui_row_color_picker(&builder, S("UiColor_window_title_bar_hot"), &ui->style.base_colors[UiColor_window_title_bar_hot]);
+		ui_row_color_picker(&builder, S("UiColor_window_close_button"), &ui->style.base_colors[UiColor_window_close_button]);
+		ui_row_color_picker(&builder, S("UiColor_window_outline"), &ui->style.base_colors[UiColor_window_outline]);
+		ui_row_color_picker(&builder, S("UiColor_progress_bar_empty"), &ui->style.base_colors[UiColor_progress_bar_empty]);
+		ui_row_color_picker(&builder, S("UiColor_progress_bar_filled"), &ui->style.base_colors[UiColor_progress_bar_filled]);
+		ui_row_color_picker(&builder, S("UiColor_button_idle"), &ui->style.base_colors[UiColor_button_idle]);
+		ui_row_color_picker(&builder, S("UiColor_button_hot"), &ui->style.base_colors[UiColor_button_hot]);
+		ui_row_color_picker(&builder, S("UiColor_button_active"), &ui->style.base_colors[UiColor_button_active]);
+		ui_row_color_picker(&builder, S("UiColor_button_fired"), &ui->style.base_colors[UiColor_button_fired]);
+		ui_row_color_picker(&builder, S("UiColor_slider_background"), &ui->style.base_colors[UiColor_slider_background]);
+		ui_row_color_picker(&builder, S("UiColor_slider_foreground"), &ui->style.base_colors[UiColor_slider_foreground]);
+		ui_row_color_picker(&builder, S("UiColor_slider_hot"), &ui->style.base_colors[UiColor_slider_hot]);
+		ui_row_color_picker(&builder, S("UiColor_slider_active"), &ui->style.base_colors[UiColor_slider_active]);
+	}
 
 	ui_scrollable_region_end(&window->scroll_region, builder.rect);
 }

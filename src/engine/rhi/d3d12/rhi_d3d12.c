@@ -789,6 +789,9 @@ void rhi_resize_window(rhi_window_t handle, uint32_t new_width, uint32_t new_hei
 
 		ID3D12Device_CreateRenderTargetView(g_rhi.device, frame_buffer->resource, &rtv_desc, frame_buffer->rtv.cpu);
 	}
+
+	window->w = new_width;
+	window->h = new_height;
 }
 
 rhi_texture_t rhi_get_current_backbuffer(rhi_window_t handle)

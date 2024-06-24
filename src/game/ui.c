@@ -2,9 +2,11 @@
 // Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
 // ============================================================
 
-CVAR_BOOL(cvar_ui_show_restrict_rects, "ui.show_restrict_rects", false);
-CVAR_BOOL(cvar_ui_never_hide_cursor,   "ui.never_hide_cursor",   false);
-CVAR_BOOL(cvar_ui_disable_animations,  "ui.disable_animations",  false);
+CVAR_BOOL(cvar_ui_show_restrict_rects,   "ui.show_restrict_rects",   false);
+CVAR_BOOL(cvar_ui_never_hide_cursor,     "ui.never_hide_cursor",     false);
+CVAR_BOOL(cvar_ui_never_restrict_cursor, "ui.never_restrict_cursor", false);
+CVAR_BOOL(cvar_ui_disable_animations,    "ui.disable_animations",    false);
+
 CVAR_F32(cvar_dummy_f32, "dummy_f32", 4.0f);
 CVAR_I32(cvar_dummy_i32, "dummy_i32", 2);
 CVAR_STRING(cvar_dummy_string, "dummy_string", "test");
@@ -731,13 +733,18 @@ void ui_set_font_height(float size)
 	ui->style.base_fonts[UiFont_header ] = make_font_from_memory(S("UI Header Font"), ui->style.header_font_data, ARRAY_COUNT(ranges), ranges, 1.5f*size);
 }
 
-void ui_push_clip_rect(rect2_t rect)
+void ui_push_clip_rect(rect2_t rect, bool intersect_with_old_clip_rect)
 {
 	if (ALWAYS(!stack_full(ui->clip_rect_stack)))
 	{
-		r_rect2_fixed_t fixed   = rect2_to_fixed(rect);
-		r_rect2_fixed_t clipped = rect2_fixed_intersect(fixed, ui_get_clip_rect_fixed());
-		stack_push(ui->clip_rect_stack, clipped);
+		r_rect2_fixed_t fixed  = rect2_to_fixed(rect);
+
+		if (intersect_with_old_clip_rect)
+		{
+			fixed = rect2_fixed_intersect(fixed, ui_get_clip_rect_fixed());
+		}
+
+		stack_push(ui->clip_rect_stack, fixed);
 	}
 }
 
@@ -795,8 +802,7 @@ rect2_t ui_text_op(font_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t
 
                 ui_push_command(
 					(ui_render_command_key_t){
-						.layer  = ui->render_layer,
-						.window = 0,
+						.layer = ui->current_layer,
 					},
 
 					&(ui_render_command_t){
@@ -960,8 +966,7 @@ fn_local void ui_do_rect(r_ui_rect_t rect)
 
 		ui_push_command(
 			(ui_render_command_key_t){
-				.layer  = ui->render_layer,
-				.window = 0,
+				.layer = ui->current_layer,
 			},
 			&(ui_render_command_t){
 				.rect = rect,
@@ -1038,8 +1043,8 @@ void ui_draw_debug_rect(rect2_t rect, v4_t color)
 {
 	uint32_t color_packed = pack_color(color);
 
-	ui_render_layer_t old_layer = ui->render_layer;
-	ui->render_layer = UI_LAYER_DEBUG_OVERLAY;
+	// force render on top
+	ui_layer_t old_layer = ui_set_layer((ui_layer_t){ .value = UINT16_MAX });
 
 	ui_do_rect((r_ui_rect_t){
 		.rect         = rect, 
@@ -1051,7 +1056,7 @@ void ui_draw_debug_rect(rect2_t rect, v4_t color)
 		.inner_radius = 2.0f,
 	});
 
-	ui->render_layer = old_layer;
+	ui_set_layer(old_layer);
 }
 
 void ui_draw_rect_outline(rect2_t rect, v4_t color, float width)
@@ -1110,7 +1115,7 @@ bool ui_mouse_in_rect(rect2_t rect)
 	return rect2_contains_point(rect2_intersect(rect, clip_rect), ui->input.mouse_p);
 }
 
-ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, ui_priority_t priority)
+ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect)
 {
 	uint32_t result = 0;
 
@@ -1118,7 +1123,7 @@ ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, 
 
 	if (hovered)
 	{
-        ui_set_next_hot(id, priority);
+        ui_set_next_hot(id);
 		result |= UI_HOVERED;
 	}
 
@@ -1152,18 +1157,6 @@ ui_interaction_t ui_default_widget_behaviour_priority(ui_id_t id, rect2_t rect, 
 	}
 
 	return result;
-}
-
-ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect)
-{
-	ui_priority_t priority = UI_PRIORITY_DEFAULT;
-
-	if (ui->override_priority != UI_PRIORITY_DEFAULT)
-	{
-		priority = ui->override_priority;
-	}
-
-	return ui_default_widget_behaviour_priority(id, rect, priority);
 }
 
 float ui_roundedness_ratio(rect2_t rect)
@@ -1292,12 +1285,12 @@ void ui_set_hot(ui_id_t id)
 	}
 }
 
-void ui_set_next_hot(ui_id_t id, ui_priority_t priority)
+void ui_set_next_hot(ui_id_t id)
 {
-	if (ui->next_hot_priority <= priority)
+	if (ui->current_layer.value >= ui->interaction_layer.value)
 	{
 		ui->next_hot          = id;
-		ui->next_hot_priority = priority;
+		ui->interaction_layer = ui->current_layer;
 	}
 }
 
@@ -1397,7 +1390,9 @@ static void ui_initialize(void)
 
 	cvar_register(&cvar_ui_show_restrict_rects);
 	cvar_register(&cvar_ui_never_hide_cursor);
+	cvar_register(&cvar_ui_never_restrict_cursor);
 	cvar_register(&cvar_ui_disable_animations);
+
 	cvar_register(&cvar_dummy_f32);
 	cvar_register(&cvar_dummy_i32);
 	cvar_register(&cvar_dummy_string);
@@ -1415,9 +1410,11 @@ static void ui_initialize(void)
 	ui->style.header_font_data = fs_read_entire_file(&ui->arena, S("gamedata/fonts/NotoSans/NotoSans-Bold.ttf"));
 	ui_set_font_height(18.0f);
 
-	v4_t background    = make_v4(0.19f, 0.15f, 0.17f, 1.0f);
-	v4_t background_hi = make_v4(0.22f, 0.18f, 0.18f, 1.0f);
-	v4_t foreground    = make_v4(0.33f, 0.28f, 0.28f, 1.0f);
+	v4_t background     = make_v4(0.19f, 0.15f, 0.17f, 1.0f);
+	v4_t background_hi  = make_v4(0.22f, 0.18f, 0.18f, 1.0f);
+	v4_t foreground     = make_v4(0.33f, 0.28f, 0.28f, 1.0f);
+	v4_t foreground_hi  = make_v4(0.37f, 0.31f, 0.31f, 1.0f);
+	v4_t foreground_hi2 = make_v4(0.40f, 0.33f, 0.32f, 1.0f);
 
 	v4_t hot    = make_v4(0.25f, 0.45f, 0.40f, 1.0f);
 	v4_t active = make_v4(0.30f, 0.55f, 0.50f, 1.0f);
@@ -1467,6 +1464,10 @@ static void ui_initialize(void)
 	ui->style.base_colors [UiColor_slider_foreground      ] = foreground;
 	ui->style.base_colors [UiColor_slider_hot             ] = hot;
 	ui->style.base_colors [UiColor_slider_active          ] = active;
+	ui->style.base_colors [UiColor_scrollbar_background   ] = background_hi;
+	ui->style.base_colors [UiColor_scrollbar_foreground   ] = foreground;
+	ui->style.base_colors [UiColor_scrollbar_hot          ] = foreground_hi;
+	ui->style.base_colors [UiColor_scrollbar_active       ] = foreground_hi2;
 
 	ui->render_commands.capacity = UI_RENDER_COMMANDS_CAPACITY;
 	ui->render_commands.keys     = m_alloc_array_nozero(&ui->arena, ui->render_commands.capacity, ui_render_command_key_t);
@@ -1488,7 +1489,7 @@ bool ui_begin(float dt, rect2_t ui_area)
 	ui->last_frame_culled_rect_count = ui->culled_rect_count;
 	ui->culled_rect_count = 0;
 	ui->last_frame_ui_rect_count = ui->render_commands.count;
-    ui_reset_render_commands();
+	ui_reset_render_commands();
 
 	for (table_iter_t it = table_iter(&ui->state_index); table_iter_next(&it);)
 	{
@@ -1505,6 +1506,9 @@ bool ui_begin(float dt, rect2_t ui_area)
 	ui_tick_animations(&ui->anim_list, dt);
 
 	ui->frame_index += 1;
+
+	ui->current_layer     = (ui_layer_t){0};
+	ui->interaction_layer = (ui_layer_t){0};
 	
 	// now that the frame index is incremented, clear the current frame arena
 	arena_t *frame_arena = ui_frame_arena();
@@ -1535,7 +1539,6 @@ bool ui_begin(float dt, rect2_t ui_area)
 	}
 
 	ui->next_hot                   = UI_ID_NULL;
-	ui->next_hot_priority          = UI_PRIORITY_DEFAULT;
 	ui->next_hovered_panel         = UI_ID_NULL;
 	ui->next_hovered_widget        = UI_ID_NULL;
 	ui->next_hovered_scroll_region = UI_ID_NULL;
@@ -1554,17 +1557,15 @@ bool ui_begin(float dt, rect2_t ui_area)
 	ui->set_mouse_p = make_v2(-1, -1);
 	ui->restrict_mouse_rect = rect2_inverted_infinity();
 
+	ui->slider_input = dynamic_string_on_storage(ui->slider_input_buffer);
+
 	return ui->has_focus;
 }
 
 void ui_end(void)
 {
-#if 0
-    int res_x, res_y;
-    render->get_resolution(&res_x, &res_y);
-#endif
-	int res_x = 1920;
-	int res_y = 1080;
+	int res_x = rect2_width (ui->ui_area);
+	int res_y = rect2_height(ui->ui_area);
 
 	float font_height = ui_font(UiFont_default)->height;
 	float at_y = 32.0f;
@@ -1682,6 +1683,11 @@ void ui_end(void)
 			ui->cursor = Cursor_arrow;
 		}
 	}
+
+	if (cvar_read_bool(&cvar_ui_never_restrict_cursor))
+	{
+		ui->restrict_mouse_rect = rect2_inverted_infinity();
+	}
 }
 
 void debug_text(v4_t color, string_t fmt, ...)
@@ -1730,4 +1736,46 @@ void debug_notif_replicate(debug_notif_t *notif)
 
 	repl->next = ui->first_debug_notif;
 	ui->first_debug_notif = repl;
+}
+
+void ui_set_window_index(uint8_t index)
+{
+	if (ui->current_layer.sub_layer != 0)
+	{
+		log(UI, Error, "Warning: Set the UI window index but there are unpopped layer(s), current sub_layer: %u", ui->current_layer.sub_layer);
+	}
+	
+	ui->current_layer.window = index;
+}
+
+void ui_push_layer(void)
+{
+	if (ui->current_layer.sub_layer == 255)
+	{
+		log(UI, Error, "Warning: Can't push any more layers, we're at the max (255)");
+	}
+	else
+	{
+		ui->current_layer.sub_layer += 1;
+	}
+}
+
+void ui_pop_layer(void)
+{
+	if (ui->current_layer.sub_layer == 0)
+	{
+		log(UI, Error, "Warning: Can't pop any more layers, we're at the min (0)");
+	}
+	else
+	{
+		ui->current_layer.sub_layer -= 1;
+	}
+}
+
+ui_layer_t ui_set_layer(ui_layer_t layer)
+{
+	ui_layer_t old_layer = ui->current_layer;
+	ui->current_layer = layer;
+
+	return old_layer;
 }

@@ -64,7 +64,7 @@ float4 brush_ps(VS_OUT IN) : SV_Target
 	float2 lightmap_dim;
 	lightmap.GetDimensions(lightmap_dim.x, lightmap_dim.y);
 
-	float3 light = lightmap.Sample(df::s_aniso_wrap, FatPixel(lightmap_dim, IN.lightmap_uv)).rgb;
+	float3 light = lightmap.Sample(df::s_aniso_clamped, IN.lightmap_uv/*FatPixel(lightmap_dim, IN.lightmap_uv)*/).rgb;
 
 	const float3 shadow_test_pos   = IN.shadowmap_position.xyz / IN.shadowmap_position.w;
 	const float2 shadow_test_uv    = 0.5 + float2(0.5, -0.5)*shadow_test_pos.xy;

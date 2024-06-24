@@ -46,11 +46,18 @@ rect2_t ui_scrollable_region_begin_ex(ui_scrollable_region_t *state, rect2_t sta
 	state->flags      = flags;
 	state->start_rect = start_rect;
 
-	ui_push_clip_rect(start_rect);
+	ui_push_clip_rect(start_rect, true);
 
 	v4_t offset = {0};
 	offset.xy = state->scroll_offset;
-	offset    = ui_interpolate_v4(id, offset);
+
+	ui_id_t handle_id = ui_child_id(id, S("handle"));
+
+	// GARBAGE ALERT
+	if (!ui_is_active(handle_id))
+	{
+		offset = ui_interpolate_v4(ui_child_id(id, S("offset")), offset);
+	}
 
 	state->interpolated_scroll_offset = offset.xy;
 	
@@ -105,6 +112,11 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 
 	if (state->scroll_zone.y && (flags & UiScrollableRegionFlags_draw_scroll_bar))
 	{
+		ui_id_t handle_id = ui_child_id(id, S("handle"));
+
+		//------------------------------------------------------------------------
+		// Figure out rectangles
+
 		rect2_t start_rect     = state->start_rect;
 		float   visible_height = rect2_height(start_rect);
 
@@ -124,7 +136,13 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 		scrollbar_size = MAX(scrollbar_size, ui_scalar(UiScalar_min_scroll_bar_size));
 
 		float scrollbar_movement = visible_height - scrollbar_size;
-		float scrollbar_offset   = ui_interpolate_f32(ui_child_id(id, S("scrollbar")), scroll_pct*scrollbar_movement);
+		float scrollbar_offset   = scroll_pct*scrollbar_movement;
+		
+		// A bit manual, I'd rather suppress the animation at the site where we're dealing with interaction
+		if (!ui_is_active(handle_id))
+		{
+			scrollbar_offset = ui_interpolate_f32(ui_child_id(id, S("scrollbar")), scrollbar_offset);
+		}
 
 		rect2_t handle;
 		{
@@ -133,8 +151,75 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 			rect2_cut_from_top(cut_rect, ui_sz_pix(scrollbar_size),   &handle, &cut_rect);
 		}
 
-		ui_push_clip_rect(inner_tray);
-		ui_draw_rect(handle, ui_color(UiColor_slider_foreground));
+		//------------------------------------------------------------------------
+		// Handle interaction
+
+		if (ui_is_active(handle_id))
+		{
+			if (ui_button_released(UiButton_left, true))
+			{
+				ui_clear_active();
+			}
+			else
+			{
+				float actuating_height_min = inner_tray.min.y + 0.5f*scrollbar_size;
+				float actuating_height_max = inner_tray.max.y - 0.5f*scrollbar_size;
+				float centered_mouse_y     = ui->input.mouse_p.y - ui->drag_anchor.y;
+				float mouse_bary           = flt_saturate(1.0 - (centered_mouse_y - actuating_height_min) / (actuating_height_max - actuating_height_min));
+
+				state->scroll_offset.y = mouse_bary*scrolling_zone_height;
+
+				// TODO: This is dodgy too - I just want to say "don't interpolate this" 
+				ui_set_v4(ui_child_id(id, S("offset")), make_v4(state->scroll_offset.x, state->scroll_offset.y, 0, 0));
+
+				//------------------------------------------------------------------------
+				// Restrict and hide mouse
+
+				float restrict_min = actuating_height_min + ui->drag_anchor.y;
+				float restrict_max = actuating_height_max + ui->drag_anchor.y;
+
+				ui->restrict_mouse_rect = rect2_min_max(
+					make_v2(ui->input.mouse_p_on_lmb.x, restrict_min),
+					make_v2(ui->input.mouse_p_on_lmb.x, restrict_max));
+
+				ui->cursor = Cursor_none;
+			}
+		}
+		else if (ui_is_hot(handle_id))
+		{
+			if (ui_button_pressed(UiButton_left, true))
+			{
+				ui_set_active(handle_id);
+				ui->drag_anchor = sub(ui->input.mouse_p, rect2_center(handle));
+			}
+		} 
+
+		if (ui_mouse_in_rect(handle))
+		{
+			ui_set_next_hot(handle_id);
+		}
+
+		//------------------------------------------------------------------------
+		// Draw scrollbar
+
+		ui_style_color_t color_id = UiColor_scrollbar_foreground;
+
+		if (ui_is_active(handle_id))
+		{
+			color_id = UiColor_scrollbar_active;
+		}
+		else if (ui_is_hot(handle_id))
+		{
+			color_id = UiColor_scrollbar_hot;
+		}
+
+		v4_t color = ui_interpolate_v4(ui_child_id(id, S("handle_color")), ui_color(color_id));
+
+		ui_push_clip_rect(inner_tray, true);
+		ui_draw_rect(handle, color);
+
+		//------------------------------------------------------------------------
+
 		ui_pop_clip_rect();
 
 	}
@@ -143,12 +228,44 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 }
 
 //
+// Collapsable Region
+//
+
+bool ui_collapsable_region(rect2_t rect, string_t title, bool *open)
+{
+	ui_header(rect, title);
+
+	ui_id_t id = ui_id(title);
+	ui_validate_widget(id);
+
+	if (ui_mouse_in_rect(rect))
+	{
+		ui_set_next_hot(id);
+	}
+
+	if (ui_is_hot(id))
+	{
+		ui->cursor = Cursor_hand;
+
+		if (ui_button_pressed(UiButton_left, true))
+		{
+			if (open)
+			{
+				*open = !*open;
+			}
+		}
+	}
+
+	return open ? *open : true;
+}
+
+//
 // Header
 //
 
 void ui_header(rect2_t rect, string_t label)
 {
-	ui_push_clip_rect(rect);
+	ui_push_clip_rect(rect, true);
 
 	font_t *font = ui_font(UiFont_header);
 	ui_draw_text_default_alignment(font, rect, label);
@@ -162,7 +279,7 @@ void ui_header(rect2_t rect, string_t label)
 
 void ui_label(rect2_t rect, string_t label)
 {
-	ui_push_clip_rect(rect);
+	ui_push_clip_rect(rect, true);
 
 	rect = rect2_cut_margins(rect, ui_sz_pix(ui_scalar(UiScalar_text_margin)));
 
@@ -205,8 +322,7 @@ bool ui_button(rect2_t rect, string_t label)
 
 	if (ui_mouse_in_rect(rect))
 	{
-		// @UiPriority
-		ui_set_next_hot(id, UI_PRIORITY_DEFAULT);
+		ui_set_next_hot(id);
 	}
 
 	if (ui_is_hot(id))
@@ -263,7 +379,7 @@ bool ui_button(rect2_t rect, string_t label)
 	ui_draw_rect(shadow, mul(color_interp, 0.75f));
 	ui_draw_rect(button, color_interp);
 
-	ui_push_clip_rect(button);
+	ui_push_clip_rect(button, true);
 	ui_draw_text_aligned(ui_font(UiFont_default), button, label, make_v2(0.5f, 0.5f));
 	ui_pop_clip_rect();
 
@@ -285,7 +401,7 @@ bool ui_checkbox(rect2_t rect, bool *result_value)
 
 	if (ui_mouse_in_rect(rect))
 	{
-		ui_set_next_hot(id, UI_PRIORITY_DEFAULT);
+		ui_set_next_hot(id);
 	}
 
 	if (ui_is_hot(id))
@@ -391,9 +507,15 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 
 		//rect = rect2_cut_margins_horizontally(rect, ui_sz_pix(ui_scalar(UiScalar_widget_margin)));
 
-		int32_t delta = 0;
-
 		float roundedness = ui_scalar(UiScalar_roundedness);
+
+		float delta = 0;
+		float base_increment = p->increment_amount;
+
+		if (ui_key_held(Key_control, false))
+		{
+			base_increment = p->major_increment_amount;
+		}
 
 		// @UiRoundednessHack
 		UI_Scalar(UiScalar_roundedness, 0.0f)
@@ -408,15 +530,17 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 		UI_Color (UiColor_roundedness, make_v4(roundedness, roundedness, 0, 0))
 		if (ui_button(inc, S("+")))
 		{
-			delta =  1;
+			delta = 1;
 		}
 
 		switch (p->type)
 		{
-			case UiSlider_f32: *p->f32.v += delta*p->increment_amount; break;
-			case UiSlider_i32: *p->i32.v += delta*p->increment_amount; break;
+			case UiSlider_f32: *p->f32.v += delta*base_increment; break;
+			case UiSlider_i32: *p->i32.v += delta*base_increment; break;
 		}
 	}
+
+	rect2_t slider_body = rect;
 
 	float slider_w           = rect2_width(rect);
 	float handle_w           = max(16.0f, slider_w*ui_scalar(UiScalar_slider_handle_ratio));
@@ -481,41 +605,16 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 	rect2_t handle = rect2_cut_left(&rect, handle_w);
 	rect2_t right  = rect;
 
+	(void)left;
+	(void)right;
+
 	// TODO: don't hack this logic
 	if (p->flags & UiSliderFlags_inc_dec_buttons)
 	{
 		handle = rect2_cut_margins_horizontally(handle, ui_sz_pix(ui_scalar(UiScalar_widget_margin)));
 	}
 
-	(void)left;
-	(void)right;
-
 	ui_interaction_t interaction = ui_default_widget_behaviour(id, handle);
-
-	v4_t color = ui_animate_colors(id, interaction, 
-								   ui_color(UiColor_slider_foreground),
-								   ui_color(UiColor_slider_hot),
-								   ui_color(UiColor_slider_active),
-								   ui_color(UiColor_slider_active));
-
-	if (interaction & UI_RELEASED)
-	{
-		ui->set_mouse_p = add(rect2_center(handle), ui->drag_anchor);
-	}
-
-	float hover_lift = ui_hover_lift(id);
-
-	rect2_t shadow = handle;
-	handle = rect2_add_offset(handle, make_v2(0, hover_lift));
-
-	UI_Scalar(UiScalar_roundedness, 0.0f)
-	{
-		ui_draw_rect(body, ui_color(UiColor_slider_background));
-		ui_draw_rect(right, ui_color(UiColor_slider_background));
-	}
-
-	ui_draw_rect(shadow, mul(color, 0.75f));
-	ui_draw_rect(handle, color);
 
 	string_t value_text = {0};
 
@@ -532,7 +631,47 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 		} break;
 	}
 
-	ui_draw_text_aligned(ui_font(UiFont_default), body, value_text, make_v2(0.5f, 0.5f));
+	ui_id_t text_input_id = ui_id(S("text_input"));
+
+	if (ui_key_held(Key_control, false) || ui_id_has_focus(text_input_id))
+	{
+		ui_push_id(text_input_id);
+		ui_text_edit_result_t result = ui_text_edit_ex(slider_body, &ui->slider_input, &(ui_text_edit_params_t){
+			.preview_text = value_text,
+			.align_x      = 0.5f,
+		});
+		(void)result;
+		ui_pop_id();
+	}
+	else
+	{
+		v4_t color = ui_animate_colors(id, interaction, 
+			ui_color(UiColor_slider_foreground),
+			ui_color(UiColor_slider_hot),
+			ui_color(UiColor_slider_active),
+			ui_color(UiColor_slider_active));
+
+		if (interaction & UI_RELEASED)
+		{
+			ui->set_mouse_p = add(rect2_center(handle), ui->drag_anchor);
+		}
+
+		float hover_lift = ui_hover_lift(id);
+
+		rect2_t shadow = handle;
+		handle = rect2_add_offset(handle, make_v2(0, hover_lift));
+
+		UI_Scalar(UiScalar_roundedness, 0.0f)
+		{
+			ui_draw_rect(body, ui_color(UiColor_slider_background));
+			ui_draw_rect(right, ui_color(UiColor_slider_background));
+		}
+
+		ui_draw_rect(shadow, mul(color, 0.75f));
+		ui_draw_rect(handle, color);
+
+		ui_draw_text_aligned(ui_font(UiFont_default), body, value_text, make_v2(0.5f, 0.5f));
+	}
 
 	ui_pop_id();
 }
@@ -556,7 +695,8 @@ bool ui_slider_ex(rect2_t rect, float *v, float min, float max, float granularit
 	ui_slider_params_t p = {
 		.type  = UiSlider_f32,
 		.flags = flags,
-		.increment_amount = 1,
+		.increment_amount       = 1,
+		.major_increment_amount = 5,
 		.f32 = {
 			.granularity = granularity,
 			.v           = v,
@@ -594,7 +734,8 @@ bool ui_slider_int_ex(rect2_t rect, int32_t *v, int32_t min, int32_t max, ui_sli
 	ui_slider_params_t p = {
 		.type  = UiSlider_i32,
 		.flags = flags,
-		.increment_amount = 1,
+		.increment_amount       = 1,
+		.major_increment_amount = 5,
 		.i32 = {
 			.v           = v,
 			.min         = min,
@@ -690,6 +831,11 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *buffer, co
 	bool inserted_character = false;
 	bool selection_active   = state->cursor != state->selection_start;
 
+	if (state->cursor > (int)buffer->count)
+	{
+		state->cursor = (int)buffer->count;
+	}
+
 	if (has_focus)
 	{
 		for (ui_event_t *event = ui_iterate_events();
@@ -707,7 +853,11 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *buffer, co
 						// TODO: Unicode
 						char c = event->text.data[i];
 
-						if (c >= 32 && c < 127)
+						bool accept_text = params->numeric_only
+								? ((c >= '0' && c <= '9') || c == '.' || c == '-' || c == '+' || c == 'x')
+								: ((c >= 32  && c <= 127));
+
+						if (accept_text)
 						{
 							contains_representable_text = true;
 							break;
@@ -736,7 +886,11 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *buffer, co
 							// TODO: Unicode
 							char c = event->text.data[i];
 
-							if (c >= 32 && c < 127)
+							bool accept_text = params->numeric_only
+									? ((c >= '0' && c <= '9') || c == '.' || c == '-' || c == '+' || c == 'x')
+									: ((c >= 32  && c <= 127));
+
+							if (accept_text)
 							{
 								bool success = dyn_string_insertc(buffer, (int)state->cursor, c);
 
@@ -762,6 +916,18 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *buffer, co
 					{
 						switch (event->keycode)
 						{
+							case Key_escape:
+							{
+								result |= UiTextEditResult_terminated;
+
+								if (buffer->count == 0 && ui_id_has_focus(id))
+								{
+									ui->focused_id = UI_ID_NULL;
+								}
+
+								ui_consume_event(event);
+							} break;
+
 							case Key_return:
 							{
 								result |= UiTextEditResult_committed;
@@ -878,12 +1044,12 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *buffer, co
 
 	if (string.count > 0)
 	{
-		ui_draw_text_aligned(font, buffer_rect, string, make_v2(0.0f, 0.5f));
+		ui_draw_text_aligned(font, buffer_rect, string, make_v2(params->align_x, 0.5f));
 	}
 	else if (params->preview_text.count > 0)
 	{
 		UI_Color(UiColor_text, ui_color(UiColor_text_preview))
-		ui_draw_text_aligned(font, buffer_rect, params->preview_text, make_v2(0.0f, 0.5f));
+		ui_draw_text_aligned(font, buffer_rect, params->preview_text, make_v2(params->align_x, 0.5f));
 	}
 
 	v4_t caret_color = ui_color(UiColor_text);
@@ -933,9 +1099,11 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *buffer, co
 		}
 		else
 		{
-			ui_draw_rect_roundedness(rect2_from_min_dim(make_v2(buffer_rect.min.x - 1.0f, buffer_rect.min.y + 2.0f),
-														make_v2(2.0f, rect2_height(buffer_rect) - 4.0f)), 
-									 caret_color, v4_from_scalar(0.0f));
+			rect2_t caret_rect = rect2_from_min_dim(
+				make_v2(buffer_rect.min.x - 1.0f, buffer_rect.min.y + 2.0f),
+				make_v2(2.0f, rect2_height(buffer_rect) - 4.0f));
+
+			ui_draw_rect_roundedness(caret_rect, caret_color, v4_from_scalar(0.0f));
 		}
 	}
 
@@ -948,7 +1116,9 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *buffer, co
 
 ui_text_edit_result_t ui_text_edit(rect2_t rect, dynamic_string_t *buffer)
 {
-	ui_text_edit_params_t params = {0};
+	ui_text_edit_params_t params = {
+		.align_x = 0.0f,
+	};
 	return ui_text_edit_ex(rect, buffer, &params);
 }
 
@@ -970,7 +1140,7 @@ void ui_hue_picker(rect2_t rect, float *hue)
 
 	if (ui_mouse_in_rect(rect))
 	{
-		ui_set_next_hot(id, UI_PRIORITY_DEFAULT);
+		ui_set_next_hot(id);
 	}
 
 	if (ui_is_hot(id))
@@ -983,15 +1153,15 @@ void ui_hue_picker(rect2_t rect, float *hue)
 
 	if (ui_is_active(id))
 	{
-		v2_t bary = bary_from_rect2(rect, ui->input.mouse_p);
-		*hue = flt_saturate(bary.y);
-
 		if (ui_button_released(UiButton_left, true))
 		{
 			ui_clear_active();
 		}
 		else
 		{
+			v2_t bary = bary_from_rect2(rect, ui->input.mouse_p);
+			*hue = flt_saturate(bary.y);
+
 			ui->cursor              = Cursor_none;
 			ui->cursor_reset_delay  = 1;
 			ui->restrict_mouse_rect = rect;
@@ -1013,6 +1183,24 @@ void ui_hue_picker(rect2_t rect, float *hue)
 		.color_01    = color_packed,
 		.flags       = R_UI_RECT_HUE_PICKER,
 	});
+
+	float indicator_offset = floorf(rect.min.y + (*hue) * (rect.max.y - rect.min.y));
+
+	rect2_t indicator_rect_background = {
+		.min = { rect.min.x, indicator_offset - 2 },
+		.max = { rect.max.x, indicator_offset + 1 }, // WHY MAX.X -1
+	};
+
+	// UI_Scalar(UiScalar_roundedness, 0.0f)
+	ui_draw_rect(indicator_rect_background, ui_color(UiColor_widget_shadow));
+
+	rect2_t indicator_rect = {
+		.min = { rect.min.x, indicator_offset - 1 },
+		.max = { rect.max.x, indicator_offset     }, // WHY MAX.X -1
+	};
+
+	// UI_Scalar(UiScalar_roundedness, 0.0f)
+	ui_draw_rect(indicator_rect, make_v4(1, 1, 1, 1));
 }
 
 void ui_sat_val_picker(rect2_t rect, float hue, float *sat, float *val)
@@ -1028,7 +1216,7 @@ void ui_sat_val_picker(rect2_t rect, float hue, float *sat, float *val)
 
 	if (ui_mouse_in_rect(rect))
 	{
-		ui_set_next_hot(id, UI_PRIORITY_DEFAULT);
+		ui_set_next_hot(id);
 	}
 
 	if (ui_is_hot(id))

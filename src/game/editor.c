@@ -63,12 +63,16 @@ void editor_process_windows(editor_t *editor)
 {
 	editor_window_t *hovered_window = NULL;
 
+	uint8_t window_index = 0;
+
 	for (editor_window_t *window = editor->first_window;
 		 window;
-		 window = window->next)
+		 window = window->next, window_index += 1)
 	{
 		if (!window->open)
 			continue;
+
+		ui_set_window_index(window_index);
 
 		ui_id_t id = ui_id_pointer(window);
 
@@ -245,7 +249,7 @@ void editor_process_windows(editor_t *editor)
 			ui_draw_rect_roundedness_shadow(rect2_shrink(total, 1.0f), make_v4(0, 0, 0, 0), make_v4(5, 5, 5, 5), shadow_amount, 32.0f);
 			ui_draw_rect_roundedness(title_bar, interpolated_title_bar_color, make_v4(2, 0, 2, 0));
 			ui_draw_rect_roundedness(rect, ui_color(UiColor_window_background), make_v4(0, 2, 0, 2));
-			ui_push_clip_rect(title_bar);
+			ui_push_clip_rect(title_bar, true);
 			ui_draw_text(ui_font(UiFont_header), ui_text_center_p(ui_font(UiFont_header), title_bar_minus_outline, title), title);
 			ui_pop_clip_rect();
 			ui_draw_rect_roundedness_outline(total, ui_color(UiColor_window_outline), make_v4(2, 2, 2, 2), 2.0f);
@@ -256,7 +260,7 @@ void editor_process_windows(editor_t *editor)
 			// rect = rect2_shrink(rect, margin);
 			// rect = rect2_pillarbox(rect, ui_scalar(UiScalar_window_margin));
 
-			ui_push_clip_rect(rect);
+			ui_push_clip_rect(rect, true);
 
 			window->focused = has_focus;
 

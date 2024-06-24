@@ -75,6 +75,21 @@ void ui_row_separator(ui_row_builder_t *builder)
 	ui_row_spacer(builder, ui_sz_pix(ui_scalar(UiScalar_row_margin)));
 }
 
+void ui_row_error_widget(ui_row_builder_t *builder, string_t widget_name, string_t error_message)
+{
+	float height = 2.0f*ui_default_row_height();
+	rect2_t row = ui_row_ex(builder, height, false);
+	ui_error_widget(row, widget_name, error_message);
+}
+
+bool ui_row_collapsable_region(ui_row_builder_t *builder, string_t label, bool *open)
+{
+	float height = ui_font(UiFont_header)->height;
+
+	rect2_t row = ui_row_ex(builder, height, true);
+	return ui_collapsable_region(row, label, open);
+}
+
 void ui_row_header(ui_row_builder_t *builder, string_t label)
 {
 	float height = ui_font(UiFont_header)->height;
@@ -219,6 +234,15 @@ bool ui_row_slider_ex(ui_row_builder_t *builder, string_t label, float *f, float
 	return ui_slider_ex(widget_rect, f, min, max, granularity, 0);
 }
 
+void ui_row_text_edit_ex(ui_row_builder_t *builder, string_t label, dynamic_string_t *buffer, const ui_text_edit_params_t *params)
+{
+	rect2_t label_rect, widget_rect;
+	ui_row_split(builder, &label_rect, &widget_rect);
+
+	ui_label(label_rect, label);
+	ui_text_edit_ex(widget_rect, buffer, params);
+}
+
 void ui_row_text_edit(ui_row_builder_t *builder, string_t label, dynamic_string_t *buffer)
 {
 	rect2_t label_rect, widget_rect;
@@ -232,64 +256,132 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 {
 	// TODO: Add alpha control
 
-	float height = 6.0f*ui_font(UiFont_header)->height;
-	rect2_t row = ui_row_ex(builder, height, true);
+	ui_id_t id = ui_id_pointer(color);
+	ui_validate_widget(id);
 
 	if (!color)
 	{
-		ui_error_widget(row, S("ui_row_color_picker"), S("no color passed"));
+		ui_row_error_widget(builder, S("ui_row_color_picker"), S("Did not pass a color to ui_row_color_picker!"));
 		return;
 	}
 
-	ui_id_t id = ui_id(label);
-	ui_validate_widget(id);
+	rect2_t label_rect, widget_rect;
+	ui_row_split(builder, &label_rect, &widget_rect);
 
-	ui_push_id(id);
+	ui_label(label_rect, label); 
+
+	rect2_t color_block_rect = widget_rect;
+
+	ui_draw_rect        (color_block_rect, *color);
+	ui_draw_rect_outline(color_block_rect, make_v4(1, 1, 1, 0.1f), 1.0f);
+
+	v3_t hsv = hsv_from_rgb(color->xyz).hsv;
+
+	// string_t hsv_text = Sf("HSV: (%.02f, %.02f, %.02f)", hsv.x, hsv.y, hsv.z);
+	string_t rgb_text = Sf("(%.02f, %.02f, %.02f, %.02f)", color->x, color->y, color->z, color->w);
+
+	v4_t text_color = ui_color(UiColor_text_low);
+
+	if (hsv.z > 0.5f)
+	{
+		text_color.xyz = mul(text_color.xyz, 0.05f);
+	}
+
+	UI_Color(UiColor_text, text_color)
+	ui_draw_text_aligned(ui_font(UiFont_default), color_block_rect, rgb_text, make_v2(0.5f, 0.5f));
 
 	bool first_use;
 	ui_color_picker_state_t *state = ui_get_state(id, &first_use, ui_color_picker_state_t);
 
-	if (first_use ||
-		color->x != state->cached_color.x ||
-		color->y != state->cached_color.y ||
-		color->z != state->cached_color.z ||
-		color->w != state->cached_color.w)
+	if (ui_mouse_in_rect(color_block_rect))
 	{
-		v3_t hsv = hsv_from_rgb(color->xyz).hsv;
-		state->hue = hsv.x;
-		state->sat = hsv.y;
-		state->val = hsv.z;
+		ui_set_next_hot(id);
 	}
 
-	rect2_t label_rect, widget_rect;
-	rect2_cut_from_left(row, ui_sz_pct(0.5f), &label_rect, &widget_rect);
+	bool popup_opened_this_frame = false;
 
-	rect2_t sat_val_picker_rect;
-	rect2_cut_from_left(widget_rect, ui_sz_aspect(1.0f), &sat_val_picker_rect, &widget_rect);
-	rect2_cut_from_left(widget_rect, ui_sz_pix(ui_scalar(UiScalar_widget_margin)), NULL, &widget_rect);
+	if (ui_is_hot(id))
+	{
+		if (ui_button_pressed(UiButton_left, true))
+		{
+			popup_opened_this_frame = true;
 
-	rect2_t hue_picker_rect;
-	rect2_cut_from_left(widget_rect, ui_sz_aspect(0.2f), &hue_picker_rect, &widget_rect);
-	rect2_cut_from_left(widget_rect, ui_sz_pix(ui_scalar(UiScalar_widget_margin)), NULL, &widget_rect);
+			state->popup_open           = true;
+			state->popup_position       = ui->input.mouse_p;
+			state->color_before_editing = *color;
+		}
+	}
 
-	ui_label(label_rect, label);
+	if (state->popup_open)
+	{
+		ui_push_layer();
 
-	ui_hue_picker    (hue_picker_rect,     &state->hue);
-	ui_sat_val_picker(sat_val_picker_rect,  state->hue, &state->sat, &state->val);
+		if (popup_opened_this_frame ||
+			color->x != state->cached_color.x ||
+			color->y != state->cached_color.y ||
+			color->z != state->cached_color.z ||
+			color->w != state->cached_color.w)
+		{
+			v3_t hsv = hsv_from_rgb(color->xyz).hsv;
+			state->hue = hsv.x;
+			state->sat = hsv.y;
+			state->val = hsv.z;
+		}
 
-	v3_t rgb = rgb_from_hsv((v3_t){state->hue, state->sat, state->val});
+		v2_t    popup_size = make_v2(318, 256);
+		rect2_t popup_rect = rect2_from_min_dim(state->popup_position, popup_size);
 
-	float font_height = ui_font(UiFont_default)->height;
+		ui_push_clip_rect(ui->ui_area, false);
 
-	rect2_t hsv_rect, rgb_rect;
-	rect2_cut_from_top(widget_rect, ui_sz_pix(font_height), &hsv_rect, &widget_rect);
-	rect2_cut_from_top(widget_rect, ui_sz_pix(font_height), &rgb_rect, &widget_rect);
+		ui_draw_rect_shadow (popup_rect, ui_color(UiColor_window_background), 0.5f, 16.0f);
+		ui_draw_rect_outline(popup_rect, ui_color(UiColor_window_outline), 2.0f);
 
-	ui_label(hsv_rect, Sf("HSV: (%.02f, %.02f, %.02f)", state->hue, state->sat, state->val));
-	ui_label(rgb_rect, Sf("RGB: (%.02f, %.02f, %.02f)", rgb.x, rgb.y, rgb.z));
+		popup_rect = rect2_cut_margins(popup_rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)));
 
-	color->xyz = rgb;
+		ui_push_clip_rect(popup_rect, true);
+
+		rect2_t sat_val_picker_rect;
+		rect2_cut_from_left(popup_rect, ui_sz_aspect(1.0f), &sat_val_picker_rect, &popup_rect);
+		rect2_cut_from_left(popup_rect, ui_sz_pix(ui_scalar(UiScalar_widget_margin)), NULL, &popup_rect);
+
+		rect2_t hue_picker_rect;
+		rect2_cut_from_left(popup_rect, ui_sz_aspect(0.1f), &hue_picker_rect, &popup_rect);
+		rect2_cut_from_left(popup_rect, ui_sz_pix(ui_scalar(UiScalar_widget_margin)), NULL, &popup_rect);
+
+		ui_label(label_rect, label);
+
+		ui_hue_picker    (hue_picker_rect,     &state->hue);
+		ui_sat_val_picker(sat_val_picker_rect,  state->hue, &state->sat, &state->val);
+
+		v3_t rgb = rgb_from_hsv((v3_t){state->hue, state->sat, state->val});
+
+		float font_height = ui_font(UiFont_default)->height;
+
+		rect2_t hsv_rect, rgb_rect;
+		rect2_cut_from_top(popup_rect, ui_sz_pix(font_height), &hsv_rect, &popup_rect);
+		rect2_cut_from_top(popup_rect, ui_sz_pix(font_height), &rgb_rect, &popup_rect);
+
+		ui_label(hsv_rect, Sf("HSV: (%.02f, %.02f, %.02f)", state->hue, state->sat, state->val));
+		ui_label(rgb_rect, Sf("RGB: (%.02f, %.02f, %.02f)", rgb.x, rgb.y, rgb.z));
+
+		color->xyz = rgb;
+
+		if (ui_key_pressed(Key_escape, true))
+		{
+			state->popup_open = false;
+			*color = state->color_before_editing;
+		}
+		else if (ui_key_pressed(Key_return, true))
+		{
+			state->popup_open = false;
+		}
+
+		ui_pop_clip_rect();
+
+		ui_pop_clip_rect();
+
+		ui_pop_layer();
+	}
+
 	state->cached_color = *color;
-
-	ui_pop_id();
 }

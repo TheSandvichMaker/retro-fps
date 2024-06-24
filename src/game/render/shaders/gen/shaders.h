@@ -16,8 +16,8 @@ typedef enum df_shader_ident_t
 {
 	DfShader_none,
 
-	DfShader_brush_vs, // src/shaders/brush.metashader
 	DfShader_brush_ps, // src/shaders/brush.metashader
+	DfShader_brush_vs, // src/shaders/brush.metashader
 
 	DfShader_compute_test_cs, // src/shaders/compute_test.metashader
 
@@ -30,9 +30,9 @@ typedef enum df_shader_ident_t
 
 	DfShader_shadow_vs, // src/shaders/shadow.metashader
 
-	DfShader_ui_heatmap_ps, // src/shaders/ui.metashader
 	DfShader_ui_vs, // src/shaders/ui.metashader
 	DfShader_ui_ps, // src/shaders/ui.metashader
+	DfShader_ui_heatmap_ps, // src/shaders/ui.metashader
 
 	DfShader_ui_visualize_heatmap_ps, // src/shaders/ui_visualize_heatmap.metashader
 

@@ -32,6 +32,12 @@ fn rect2_t ui_scrollable_region_begin   (ui_scrollable_region_t *state, rect2_t 
 fn void    ui_scrollable_region_end     (ui_scrollable_region_t *state, rect2_t final_rect);
 
 //
+// Collapsable Region
+//
+
+fn bool ui_collapsable_region(rect2_t rect, string_t title, bool *open);
+
+//
 // Header
 //
 
@@ -82,10 +88,11 @@ typedef enum ui_slider_flags_t
 
 typedef struct ui_slider_params_t
 {
-	ui_slider_type_t      type;
+	ui_slider_type_t  type;
 	ui_slider_flags_t flags;
 
-	float increment_amount;
+	float       increment_amount;
+	float major_increment_amount;
 
 	union
 	{
@@ -124,14 +131,17 @@ typedef struct ui_text_edit_state_t
 
 typedef struct ui_text_edit_params_t
 {
+	bool     numeric_only;
 	string_t preview_text;
+	float    align_x;
 } ui_text_edit_params_t;
 
 typedef uint32_t ui_text_edit_result_t;
 typedef enum ui_text_edit_result_enum_t
 {
-	UiTextEditResult_edited   = 0x1,
-	UiTextEditResult_committed = 0x2,
+	UiTextEditResult_edited     = 0x1,
+	UiTextEditResult_committed  = 0x2,
+	UiTextEditResult_terminated = 0x4,
 } ui_text_edit_result_enum_t;
 
 fn ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *buffer, const ui_text_edit_params_t *params);

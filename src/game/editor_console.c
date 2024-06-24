@@ -179,6 +179,11 @@ void editor_do_cvar_window(cvar_window_state_t *state, editor_window_t *window)
 		window->scroll_region.scroll_offset.y = 0.0f;
 	}
 
+	if (edit_result & UiTextEditResult_terminated)
+	{
+		dyn_string_clear(&state->search_string);
+	}
+
 	string_t search_string = state->search_string.string;
 
 	ui_row_spacer(&outer_builder, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)));

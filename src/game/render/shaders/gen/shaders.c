@@ -11,18 +11,18 @@
 #include "ui_visualize_heatmap.c"
 
 df_shader_info_t df_shaders[DfShader_COUNT] = {
-	[DfShader_brush_vs] = {
-		.name        = Sc("brush_vs"),
-		.entry_point = Sc("brush_vs"),
-		.target      = Sc("vs_6_6"),
-		.hlsl_source = Sc(DF_SHADER_BRUSH_SOURCE_CODE),
-		.path_hlsl   = Sc("src/shaders/gen/brush.hlsl"),
-		.path_dfs    = Sc("src/shaders/brush.metashader"),
-	},
 	[DfShader_brush_ps] = {
 		.name        = Sc("brush_ps"),
 		.entry_point = Sc("brush_ps"),
 		.target      = Sc("ps_6_6"),
+		.hlsl_source = Sc(DF_SHADER_BRUSH_SOURCE_CODE),
+		.path_hlsl   = Sc("src/shaders/gen/brush.hlsl"),
+		.path_dfs    = Sc("src/shaders/brush.metashader"),
+	},
+	[DfShader_brush_vs] = {
+		.name        = Sc("brush_vs"),
+		.entry_point = Sc("brush_vs"),
+		.target      = Sc("vs_6_6"),
 		.hlsl_source = Sc(DF_SHADER_BRUSH_SOURCE_CODE),
 		.path_hlsl   = Sc("src/shaders/gen/brush.hlsl"),
 		.path_dfs    = Sc("src/shaders/brush.metashader"),
@@ -81,14 +81,6 @@ df_shader_info_t df_shaders[DfShader_COUNT] = {
 		.path_dfs    = Sc("src/shaders/shadow.metashader"),
 	},
 
-	[DfShader_ui_heatmap_ps] = {
-		.name        = Sc("ui_heatmap_ps"),
-		.entry_point = Sc("UIHeatMapPS"),
-		.target      = Sc("ps_6_6"),
-		.hlsl_source = Sc(DF_SHADER_UI_SOURCE_CODE),
-		.path_hlsl   = Sc("src/shaders/gen/ui.hlsl"),
-		.path_dfs    = Sc("src/shaders/ui.metashader"),
-	},
 	[DfShader_ui_vs] = {
 		.name        = Sc("ui_vs"),
 		.entry_point = Sc("MainVS"),
@@ -100,6 +92,14 @@ df_shader_info_t df_shaders[DfShader_COUNT] = {
 	[DfShader_ui_ps] = {
 		.name        = Sc("ui_ps"),
 		.entry_point = Sc("MainPS"),
+		.target      = Sc("ps_6_6"),
+		.hlsl_source = Sc(DF_SHADER_UI_SOURCE_CODE),
+		.path_hlsl   = Sc("src/shaders/gen/ui.hlsl"),
+		.path_dfs    = Sc("src/shaders/ui.metashader"),
+	},
+	[DfShader_ui_heatmap_ps] = {
+		.name        = Sc("ui_heatmap_ps"),
+		.entry_point = Sc("UIHeatMapPS"),
 		.target      = Sc("ps_6_6"),
 		.hlsl_source = Sc(DF_SHADER_UI_SOURCE_CODE),
 		.path_hlsl   = Sc("src/shaders/gen/ui.hlsl"),

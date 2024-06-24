@@ -1773,6 +1773,13 @@ fn_local rect2_t rect2_do_cut(rect2_cut_t cut, float a)
 	return (rect2_t){ 0 };
 }
 
+fn_local float bary_from_range(float min, float max, float t)
+{
+	float range  = max - min;
+	float result = (t - min) / range;
+	return result;
+}
+
 fn_local v2_t bary_from_rect2(rect2_t rect, v2_t p)
 {
 	v2_t dim    = rect2_dim(rect);

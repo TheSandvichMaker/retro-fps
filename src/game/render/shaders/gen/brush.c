@@ -83,7 +83,7 @@ void shader_brush_set_pass_params(rhi_command_list_t *list, brush_pass_parameter
 	"	float2 lightmap_dim;\n" \
 	"	lightmap.GetDimensions(lightmap_dim.x, lightmap_dim.y);\n" \
 	"\n" \
-	"	float3 light = lightmap.Sample(df::s_aniso_wrap, FatPixel(lightmap_dim, IN.lightmap_uv)).rgb;\n" \
+	"	float3 light = lightmap.Sample(df::s_aniso_clamped, IN.lightmap_uv/*FatPixel(lightmap_dim, IN.lightmap_uv)*/).rgb;\n" \
 	"\n" \
 	"	const float3 shadow_test_pos   = IN.shadowmap_position.xyz / IN.shadowmap_position.w;\n" \
 	"	const float2 shadow_test_uv    = 0.5 + float2(0.5, -0.5)*shadow_test_pos.xy;\n" \

@@ -289,6 +289,11 @@ typedef enum ui_style_color_t
     UiColor_slider_hot,
     UiColor_slider_active,
 
+    UiColor_scrollbar_background,
+    UiColor_scrollbar_foreground,
+    UiColor_scrollbar_hot,
+    UiColor_scrollbar_active,
+
 	// TODO: Replace hack with something more sane
 	UiColor_roundedness,
 
@@ -372,7 +377,7 @@ fn v2_t    ui_text_center_p                (font_t *font, rect2_t rect, string_t
 
 fn r_rect2_fixed_t ui_get_clip_rect_fixed  (void);
 fn rect2_t         ui_get_clip_rect        (void);
-fn void            ui_push_clip_rect       (rect2_t rect);
+fn void            ui_push_clip_rect       (rect2_t rect, bool intersect_with_old_clip_rect);
 fn void            ui_pop_clip_rect        (void);
 
 fn rect2_t ui_draw_text                    (font_t *font, v2_t p, string_t text);
@@ -454,15 +459,19 @@ typedef struct ui_tooltip_t
 	string_storage_t(UI_MAX_TOOLTIP_LENGTH) text;
 } ui_tooltip_t;
 
-typedef enum ui_render_layer_t
+typedef struct ui_layer_t
 {
-	UI_LAYER_BACKGROUND         = 1,
-	UI_LAYER_FOREGROUND         = 2,
-	UI_LAYER_OVERLAY_BACKGROUND = 3,
-	UI_LAYER_OVERLAY_FOREGROUND = 4,
-	UI_LAYER_TOOLTIP            = 5,
-	UI_LAYER_DEBUG_OVERLAY      = 255,
-} ui_render_layer_t;
+	union
+	{
+		struct
+		{
+			uint8_t sub_layer;
+			uint8_t window;
+		};
+
+		uint16_t value;
+	};
+} ui_layer_t;
 
 typedef struct ui_render_command_key_t
 {
@@ -470,9 +479,8 @@ typedef struct ui_render_command_key_t
 	{
 		struct
 		{
-			uint16_t command_index;
-			uint8_t  layer;
-			uint8_t  window;
+			uint16_t   command_index;
+			ui_layer_t layer;
 		};
 		uint32_t u32;
 	};
@@ -544,11 +552,12 @@ typedef struct ui_t
 	ui_id_t next_hot;
 	ui_id_t active;
 
-	ui_priority_t override_priority;
-	ui_priority_t next_hot_priority;
-
 	ui_id_t next_id;
 	rect2_t next_rect;
+
+	// terrible naming alert
+	ui_layer_t     current_layer; // layer the current widgets/rendering is at
+	ui_layer_t interaction_layer; // layer that you need to be at or greater than to have your interactions go through
 
 	ui_id_t next_hovered_panel;
 	ui_id_t hovered_panel;
@@ -570,6 +579,9 @@ typedef struct ui_t
 	v2_t    drag_anchor;
 	v2_t    drag_offset;
 	rect2_t resize_original_rect;
+
+	string_storage_t(256) slider_input_buffer;
+	dynamic_string_t      slider_input;
 
 	ui_layout_t        *layout;
 	ui_prepared_rect_t *first_free_prepared_rect;
@@ -600,7 +612,6 @@ typedef struct ui_t
 	uint64_t next_notif_id;
 
 	stack_t(r_rect2_fixed_t, UI_CLIP_RECT_STACK_COUNT) clip_rect_stack;
-	ui_render_layer_t render_layer;
     ui_render_command_list_t render_commands;
 
     size_t culled_rect_count;
@@ -627,7 +638,16 @@ fn bool ui_is_hot          (ui_id_t id);
 fn bool ui_is_active       (ui_id_t id);
 fn bool ui_is_hovered_panel(ui_id_t id);
 
-fn void ui_set_next_hot    (ui_id_t id, ui_priority_t priority);
+fn void ui_set_window_index(uint8_t index);
+fn void ui_push_layer();
+fn void ui_pop_layer();
+
+fn void ui_begin_container(ui_id_t id);
+fn void ui_end_container  (ui_id_t id);
+
+fn ui_layer_t ui_set_layer(ui_layer_t layer);
+
+fn void ui_set_next_hot    (ui_id_t id);
 fn void ui_set_hot         (ui_id_t id); // maybe should be never used?
 fn void ui_set_active      (ui_id_t id);
 

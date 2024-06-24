@@ -332,11 +332,6 @@ fn_local LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 			bool pressed  = (bool)(message == WM_KEYDOWN || message == WM_SYSKEYDOWN);
 			bool repeated = (bool)(lparam & 0xFFFF);
 
-			if (pressed && vk_code == VK_RETURN)
-			{
-				rhi_set_window_fullscreen(user->rhi_window, !rhi_get_window_fullscreen(user->rhi_window));
-			}
-
 			platform_event_t event = {
 				.kind         = Event_key,
 				.key.pressed  = pressed,
