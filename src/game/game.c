@@ -104,7 +104,7 @@ void player_noclip(player_t *player, float dt)
     float move_speed = 200.0f;
     v3_t move_delta = { 0 };
 
-    if (action_held(Action_run))      move_speed *= 2.0f;
+    if (action_held(Action_run))      move_speed *= cvar_read_f32(&cvar_player_sprint_multiplier);
 
     if (action_held(Action_forward))  move_delta.x += move_speed;
     if (action_held(Action_back))     move_delta.x -= move_speed;
@@ -176,7 +176,7 @@ void player_movement(map_t *map, player_t *player, float dt)
         }
     }
 
-    float crouch_animation_speed = 0.15f;
+    float crouch_animation_speed = cvar_read_f32(&cvar_player_crouch_speed);
     if (player->crouched)
     {
         if (player->crouch_t < 1.0f)
@@ -214,7 +214,7 @@ void player_movement(map_t *map, player_t *player, float dt)
 
     if (player->support && action_pressed(Action_jump))
     {
-        float jump_force = 300.0f;
+        float jump_force = cvar_read_f32(&cvar_player_jump_force);
         player->support = NULL;
         player->dp.z += jump_force;
     }

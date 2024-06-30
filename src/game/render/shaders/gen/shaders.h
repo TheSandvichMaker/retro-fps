@@ -21,8 +21,8 @@ typedef enum df_shader_ident_t
 
 	DfShader_compute_test_cs, // src/shaders/compute_test.metashader
 
-	DfShader_debug_lines_ps, // src/shaders/debug_lines.metashader
 	DfShader_debug_lines_vs, // src/shaders/debug_lines.metashader
+	DfShader_debug_lines_ps, // src/shaders/debug_lines.metashader
 
 	DfShader_fullscreen_triangle_vs, // src/shaders/fullscreen_triangle.metashader
 
@@ -30,9 +30,9 @@ typedef enum df_shader_ident_t
 
 	DfShader_shadow_vs, // src/shaders/shadow.metashader
 
-	DfShader_ui_vs, // src/shaders/ui.metashader
 	DfShader_ui_ps, // src/shaders/ui.metashader
 	DfShader_ui_heatmap_ps, // src/shaders/ui.metashader
+	DfShader_ui_vs, // src/shaders/ui.metashader
 
 	DfShader_ui_visualize_heatmap_ps, // src/shaders/ui_visualize_heatmap.metashader
 

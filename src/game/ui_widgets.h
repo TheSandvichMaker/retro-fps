@@ -113,11 +113,42 @@ typedef struct ui_slider_params_t
 	};
 } ui_slider_params_t;
 
-fn void ui_slider_base  (ui_id_t id, rect2_t rect, ui_slider_params_t *p);
-fn bool ui_slider_ex    (rect2_t rect, float *v, float min, float max, float granularity, ui_slider_flags_t flags);
-fn bool ui_slider       (rect2_t rect, float *v, float min, float max);
-fn bool ui_slider_int_ex(rect2_t rect, int32_t *v, int32_t min, int32_t max, ui_slider_flags_t flags);
-fn bool ui_slider_int   (rect2_t rect, int32_t *v, int32_t min, int32_t max);
+fn void ui_slider_old_base  (ui_id_t id, rect2_t rect, ui_slider_params_t *p);
+fn bool ui_slider_old_ex    (rect2_t rect, float *v, float min, float max, float granularity, ui_slider_flags_t flags);
+fn bool ui_slider_old       (rect2_t rect, float *v, float min, float max);
+fn bool ui_slider_old_int_ex(rect2_t rect, int32_t *v, int32_t min, int32_t max, ui_slider_flags_t flags);
+fn bool ui_slider_old_int   (rect2_t rect, int32_t *v, int32_t min, int32_t max);
+
+//
+// Slider (new)
+//
+
+typedef struct ui_slider_parameters_t
+{
+	ui_id_t id;
+	ui_slider_type_t type;
+
+	double min;
+	double max;
+	double granularity;
+
+	union
+	{
+		void    *v;
+		float   *f32;
+		int32_t *i32;
+	};
+
+	const char *format_string;
+} ui_slider_parameters_t;
+
+fn bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p);
+fn bool ui_slider_ex  (rect2_t rect, float   *v, float   min, float   max, float granularity);
+fn bool ui_slider     (rect2_t rect, float   *v, float   min, float   max);
+fn bool ui_slider_int (rect2_t rect, int32_t *v, int32_t min, int32_t max);
+
+fn bool ui_drag_float (rect2_t rect, float   *v);
+fn bool ui_draw_int   (rect2_t rect, int32_t *v);
 
 //
 // Text Edit

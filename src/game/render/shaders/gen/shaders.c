@@ -37,18 +37,18 @@ df_shader_info_t df_shaders[DfShader_COUNT] = {
 		.path_dfs    = Sc("src/shaders/compute_test.metashader"),
 	},
 
-	[DfShader_debug_lines_ps] = {
-		.name        = Sc("debug_lines_ps"),
-		.entry_point = Sc("MainPS"),
-		.target      = Sc("ps_6_6"),
-		.hlsl_source = Sc(DF_SHADER_DEBUG_LINES_SOURCE_CODE),
-		.path_hlsl   = Sc("src/shaders/gen/debug_lines.hlsl"),
-		.path_dfs    = Sc("src/shaders/debug_lines.metashader"),
-	},
 	[DfShader_debug_lines_vs] = {
 		.name        = Sc("debug_lines_vs"),
 		.entry_point = Sc("MainVS"),
 		.target      = Sc("vs_6_6"),
+		.hlsl_source = Sc(DF_SHADER_DEBUG_LINES_SOURCE_CODE),
+		.path_hlsl   = Sc("src/shaders/gen/debug_lines.hlsl"),
+		.path_dfs    = Sc("src/shaders/debug_lines.metashader"),
+	},
+	[DfShader_debug_lines_ps] = {
+		.name        = Sc("debug_lines_ps"),
+		.entry_point = Sc("MainPS"),
+		.target      = Sc("ps_6_6"),
 		.hlsl_source = Sc(DF_SHADER_DEBUG_LINES_SOURCE_CODE),
 		.path_hlsl   = Sc("src/shaders/gen/debug_lines.hlsl"),
 		.path_dfs    = Sc("src/shaders/debug_lines.metashader"),
@@ -81,14 +81,6 @@ df_shader_info_t df_shaders[DfShader_COUNT] = {
 		.path_dfs    = Sc("src/shaders/shadow.metashader"),
 	},
 
-	[DfShader_ui_vs] = {
-		.name        = Sc("ui_vs"),
-		.entry_point = Sc("MainVS"),
-		.target      = Sc("vs_6_6"),
-		.hlsl_source = Sc(DF_SHADER_UI_SOURCE_CODE),
-		.path_hlsl   = Sc("src/shaders/gen/ui.hlsl"),
-		.path_dfs    = Sc("src/shaders/ui.metashader"),
-	},
 	[DfShader_ui_ps] = {
 		.name        = Sc("ui_ps"),
 		.entry_point = Sc("MainPS"),
@@ -101,6 +93,14 @@ df_shader_info_t df_shaders[DfShader_COUNT] = {
 		.name        = Sc("ui_heatmap_ps"),
 		.entry_point = Sc("UIHeatMapPS"),
 		.target      = Sc("ps_6_6"),
+		.hlsl_source = Sc(DF_SHADER_UI_SOURCE_CODE),
+		.path_hlsl   = Sc("src/shaders/gen/ui.hlsl"),
+		.path_dfs    = Sc("src/shaders/ui.metashader"),
+	},
+	[DfShader_ui_vs] = {
+		.name        = Sc("ui_vs"),
+		.entry_point = Sc("MainVS"),
+		.target      = Sc("vs_6_6"),
 		.hlsl_source = Sc(DF_SHADER_UI_SOURCE_CODE),
 		.path_hlsl   = Sc("src/shaders/gen/ui.hlsl"),
 		.path_dfs    = Sc("src/shaders/ui.metashader"),

@@ -13,9 +13,6 @@ void cvar_register(cvar_t *cvar)
 
 	if (ALWAYS(!(cvar->flags & CVarFlag_registered)))
 	{
-		// TODO: Seems a bit goofy.
-		cvar->default_value = cvar->as;
-
 		m_scoped_temp
 		{
 			string_t key_lower = string_to_lower(temp, cvar->key);
@@ -146,10 +143,7 @@ void cvar_write_string(cvar_t *cvar, string_t string)
 {
 	cvar_validate_and_register(cvar, CVarKind_string);
 
-	if (cvar->string_block)
-	{
-		simple_heap_free(&g_cvars.string_allocator, cvar->string_block, cvar->string_block->size);
-	}
+	cvar_string_block_t *old_block = cvar->string_block; ;
 
 	uint16_t string_block_header_size = offsetof(cvar_string_block_t, bytes);
 
@@ -165,6 +159,73 @@ void cvar_write_string(cvar_t *cvar, string_t string)
 	memcpy(cvar->string_block->bytes, string.data, string.count);
 
 	cvar->as.string = (string_t){ .data = cvar->string_block->bytes, .count = string.count };
+
+	if (old_block)
+	{
+		simple_heap_free(&g_cvars.string_allocator, old_block, old_block->size);
+	}
+}
+
+bool cvar_is_default(cvar_t *cvar)
+{
+	bool result = false;
+
+	switch (cvar->kind)
+	{
+		case CVarKind_bool:
+		{
+			result = cvar->as.boolean == cvar->as_default.boolean;
+		} break;
+
+		case CVarKind_i32:
+		{
+			result = cvar->as.i32 == cvar->as_default.i32;
+		} break;
+
+		case CVarKind_f32:
+		{
+			result = cvar->as.f32 == cvar->as_default.f32;
+		} break;
+
+		case CVarKind_string:
+		{
+			result = string_match(cvar->as.string, cvar->as_default.string);
+		} break;
+	}
+
+	return result;
+}
+
+void cvar_reset_to_default(cvar_t *cvar)
+{
+	switch (cvar->kind)
+	{
+		case CVarKind_bool:
+		{
+			cvar->as.boolean = cvar->as_default.boolean;
+		} break;
+
+		case CVarKind_i32:
+		{
+			cvar->as.i32 = cvar->as_default.i32;
+		} break;
+
+		case CVarKind_f32:
+		{
+			cvar->as.f32 = cvar->as_default.f32;
+		} break;
+
+		case CVarKind_string:
+		{
+			cvar->as.string = cvar->as_default.string;
+
+			if (cvar->string_block)
+			{
+				simple_heap_free(&g_cvars.string_allocator, cvar->string_block, cvar->string_block->size);
+				cvar->string_block = NULL;
+			}
+		} break;
+	}
 }
 
 table_iter_t cvar_iter(void)

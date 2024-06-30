@@ -137,17 +137,19 @@ void editor_init_cvar_window(cvar_window_state_t *state)
 	state->search_string = dynamic_string_on_storage(state->search_string_storage);
 }
 
-int cvar_compare_alphabetic(const void *a, const void *b)
+int cvar_compare_alphabetic(const void *a, const void *b, void *user_data)
 {
+	(void)user_data;
+
 	const cvar_t *cvar_a = *(cvar_t **)a;
 	const cvar_t *cvar_b = *(cvar_t **)b;
 
 	return string_compare(cvar_a->key, cvar_b->key, StringMatch_case_insensitive);
 }
 
-int cvar_compare_edit_distance(const void *userdata, const void *a, const void *b)
+int cvar_compare_edit_distance(const void *a, const void *b, void *user_data)
 {
-	const string_t *search_string = userdata;
+	const string_t *search_string = user_data;
 
 	const cvar_t *cvar_a = *(cvar_t **)a;
 	const cvar_t *cvar_b = *(cvar_t **)b;
@@ -216,14 +218,17 @@ void editor_do_cvar_window(cvar_window_state_t *state, editor_window_t *window)
 
 	if (search_string.count > 0)
 	{
-		qsort_s(cvars, cvar_count, sizeof(cvar_t *), cvar_compare_edit_distance, &search_string);
+		merge_sort_array(cvars, cvar_count, cvar_compare_edit_distance, &search_string);
 	}
 	else
 	{
-		qsort(cvars, cvar_count, sizeof(cvar_t *), cvar_compare_alphabetic);
+		merge_sort_array(cvars, cvar_count, cvar_compare_alphabetic, NULL);
 	}
 
-	UI_Color(UiColor_text, ui_color(UiColor_text_low))
+	//------------------------------------------------------------------------
+
+	ui_push_color(UiColor_text, ui_color(UiColor_text_low));
+
 	for (size_t i = 0; i < cvar_count; i++)
 	{
 		cvar_t *cvar = cvars[i];
@@ -237,34 +242,66 @@ void editor_do_cvar_window(cvar_window_state_t *state, editor_window_t *window)
 			}
 		}
 
+		rect2_t row = ui_row(&builder);
+
+		rect2_t reset_rect;
+		rect2_cut_from_right(row, ui_sz_pix(18.0f), &reset_rect, &row);
+		rect2_cut_from_right(row, ui_sz_pix(ui_scalar(UiScalar_widget_margin)), NULL, &row);
+
+		rect2_t label_rect, widget_rect;
+		rect2_cut_from_left(row, ui_sz_pct(0.667f), &label_rect, &widget_rect);
+
+		ui_label(label_rect, cvar->key);
+
 		switch (cvar->kind)
 		{
 			case CVarKind_bool:
 			{
-				ui_row_checkbox(&builder, cvar->key, &cvar->as.boolean);
+				rect2_t checkbox_rect;
+				rect2_cut_from_left(widget_rect, ui_sz_aspect(1.0f), &checkbox_rect, NULL);
+
+				checkbox_rect = rect2_cut_margins(checkbox_rect, ui_sz_pix(2.0f));
+
+				ui_checkbox(checkbox_rect, &cvar->as.boolean);
 			} break;
 
 			case CVarKind_i32:
 			{
-				ui_row_slider_int(&builder, cvar->key, &cvar->as.i32, cvar->min.i32, cvar->max.i32);
+				ui_slider_int(widget_rect, &cvar->as.i32, cvar->min.i32, cvar->max.i32);
 			} break;
 
 			case CVarKind_f32:
 			{
-				ui_row_slider(&builder, cvar->key, &cvar->as.f32, cvar->min.f32, cvar->max.f32);
+				ui_slider(widget_rect, &cvar->as.f32, cvar->min.f32, cvar->max.f32);
 			} break;
 
 			case CVarKind_string:
 			{
-				ui_row_label(&builder, Sf("%cs: %cs", cvar->key, cvar->as.string));
+				ui_label(widget_rect, Sf("\"%cs\"", cvar->as.string));
 			} break;
 
 			default:
 			{
-				ui_row_label(&builder, Sf("%cs (placeholder)", cvar->key));
+				ui_label(widget_rect, Sf("%cs (placeholder)", cvar->key));
 			} break;
 		}
+
+		if (!cvar_is_default(cvar))
+		{
+			ui_push_id(ui_id(cvar->key));
+
+			if (ui_button(reset_rect, S("X")))
+			{
+				cvar_reset_to_default(cvar);
+			}
+
+			ui_pop_id();
+		}
 	}
+
+	ui_pop_color(UiColor_text);
+
+	//------------------------------------------------------------------------
 
 	ui_scrollable_region_end(&window->scroll_region, builder.rect);
 

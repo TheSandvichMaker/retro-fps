@@ -190,6 +190,7 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 			if (ui_button_pressed(UiButton_left, true))
 			{
 				ui_set_active(handle_id);
+				ui_gain_focus(handle_id);
 				ui->drag_anchor = sub(ui->input.mouse_p, rect2_center(handle));
 			}
 		} 
@@ -320,7 +321,7 @@ bool ui_button(rect2_t rect, string_t label)
 
 	ui_style_color_t color_id = UiColor_button_idle;
 
-	if (ui_mouse_in_rect(rect))
+	if (ui_mouse_in_rect(rect) && !ui->disabled)
 	{
 		ui_set_next_hot(id);
 	}
@@ -330,6 +331,7 @@ bool ui_button(rect2_t rect, string_t label)
 		if (ui_button_pressed(UiButton_left, true))
 		{
 			ui_set_active(id);
+			ui_gain_focus(id);
 		}
 
 		color_id = UiColor_button_hot;
@@ -409,6 +411,7 @@ bool ui_checkbox(rect2_t rect, bool *result_value)
 		if (ui_button_pressed(UiButton_left, true))
 		{
 			ui_set_active(id);
+			ui_gain_focus(id);
 		}
 
 		color_id = UiColor_button_hot;
@@ -451,37 +454,22 @@ bool ui_checkbox(rect2_t rect, bool *result_value)
 	v4_t color        = ui_color(color_id);
 	v4_t color_interp = ui_interpolate_v4(id, color);
 
-	float h = rect2_height(rect);
-	float checkbox_thickness = 0.15f;
-	float checkbox_thickness_pixels = checkbox_thickness*h;
+	float checkbox_thickness_pixels = 1;
 
-	rect2_t check_rect = rect2_shrink(rect, 1.5f*checkbox_thickness_pixels);
+	// Stop a high roundedness from making a checkbox look like a radio button
+	float roundedness = flt_min(8.0f, ui_scalar(UiScalar_roundedness));
 
-	// clamp roundedness to avoid the checkbox looking like a radio button and
-	// transfer roundedness of outer rect to inner rect so the countours match
-	float roundedness_ratio = min(0.66f, ui_roundedness_ratio(rect));
-	float outer_roundedness = roundf(ui_roundedness_ratio_to_abs(rect,       roundedness_ratio));
-	float inner_roundedness = roundf(ui_roundedness_ratio_to_abs(check_rect, roundedness_ratio));
+	rect2_t check_rect = rect2_shrink(rect, 2.0f*checkbox_thickness_pixels);
 
-	UI_Scalar(UiScalar_roundedness, outer_roundedness)
-	{
-		// rect2_t checkbox_shadow = rect;
-		// rect = rect2_add_offset(rect, make_v2(0, hover_lift));
-
-		// ui_draw_rect_outline(checkbox_shadow, ui_color(UiColor_widget_shadow), checkbox_thickness_pixels);
-		ui_draw_rect_outline(rect, color_interp, checkbox_thickness_pixels);
-	}
+	UI_Scalar(UiScalar_roundedness, roundedness)
+	ui_draw_rect_outline(rect, color_interp, checkbox_thickness_pixels);
 
 	if (*result_value) 
 	{
-		UI_Scalar(UiScalar_roundedness, inner_roundedness)
-		{
-			// rect2_t check_shadow = check_rect;
-			// check_rect = rect2_add_offset(check_rect, make_v2(0, hover_lift));
+		float inner_roundedness = flt_max(0.0f, roundedness - 2.0f);
 
-			// ui_draw_rect(check_shadow, ui_color(UiColor_widget_shadow));
-			ui_draw_rect(check_rect, color_interp);
-		}
+		UI_Scalar(UiScalar_roundedness, inner_roundedness)
+		ui_draw_rect(check_rect, color_interp);
 	}
 
 	return result;
@@ -491,7 +479,7 @@ bool ui_checkbox(rect2_t rect, bool *result_value)
 // Slider
 //
 
-fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
+fn_local void ui_slider_old_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 {
 	if (NEVER(!ui->initialized)) 
 		return;
@@ -539,8 +527,6 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 			case UiSlider_i32: *p->i32.v += delta*base_increment; break;
 		}
 	}
-
-	rect2_t slider_body = rect;
 
 	float slider_w           = rect2_width(rect);
 	float handle_w           = max(16.0f, slider_w*ui_scalar(UiScalar_slider_handle_ratio));
@@ -631,52 +617,37 @@ fn_local void ui_slider_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
 		} break;
 	}
 
-	ui_id_t text_input_id = ui_id(S("text_input"));
+	v4_t color = ui_animate_colors(id, interaction, 
+		ui_color(UiColor_slider_foreground),
+		ui_color(UiColor_slider_hot),
+		ui_color(UiColor_slider_active),
+		ui_color(UiColor_slider_active));
 
-	if (ui_key_held(Key_control, false) || ui_id_has_focus(text_input_id))
+	if (interaction & UI_RELEASED)
 	{
-		ui_push_id(text_input_id);
-		ui_text_edit_result_t result = ui_text_edit_ex(slider_body, &ui->slider_input, &(ui_text_edit_params_t){
-			.preview_text = value_text,
-			.align_x      = 0.5f,
-		});
-		(void)result;
-		ui_pop_id();
+		ui->set_mouse_p = add(rect2_center(handle), ui->drag_anchor);
 	}
-	else
+
+	float hover_lift = ui_hover_lift(id);
+
+	rect2_t shadow = handle;
+	handle = rect2_add_offset(handle, make_v2(0, hover_lift));
+
+	UI_Scalar(UiScalar_roundedness, 0.0f)
 	{
-		v4_t color = ui_animate_colors(id, interaction, 
-			ui_color(UiColor_slider_foreground),
-			ui_color(UiColor_slider_hot),
-			ui_color(UiColor_slider_active),
-			ui_color(UiColor_slider_active));
-
-		if (interaction & UI_RELEASED)
-		{
-			ui->set_mouse_p = add(rect2_center(handle), ui->drag_anchor);
-		}
-
-		float hover_lift = ui_hover_lift(id);
-
-		rect2_t shadow = handle;
-		handle = rect2_add_offset(handle, make_v2(0, hover_lift));
-
-		UI_Scalar(UiScalar_roundedness, 0.0f)
-		{
-			ui_draw_rect(body, ui_color(UiColor_slider_background));
-			ui_draw_rect(right, ui_color(UiColor_slider_background));
-		}
-
-		ui_draw_rect(shadow, mul(color, 0.75f));
-		ui_draw_rect(handle, color);
-
-		ui_draw_text_aligned(ui_font(UiFont_default), body, value_text, make_v2(0.5f, 0.5f));
+		ui_draw_rect(body, ui_color(UiColor_slider_background));
+		ui_draw_rect(right, ui_color(UiColor_slider_background));
 	}
+
+	ui_draw_rect(shadow, mul(color, 0.75f));
+	ui_draw_rect(handle, color);
+
+	ui_draw_text_aligned(ui_font(UiFont_default), body, value_text, make_v2(0.5f, 0.5f));
 
 	ui_pop_id();
 }
 
-bool ui_slider_ex(rect2_t rect, float *v, float min, float max, float granularity, ui_slider_flags_t flags)
+bool ui_slider_old_ex(rect2_t rect, float *v, float min, float max, float granularity, ui_slider_flags_t flags)
 {
 	if (NEVER(!ui->initialized)) 
 		return false;
@@ -705,17 +676,17 @@ bool ui_slider_ex(rect2_t rect, float *v, float min, float max, float granularit
 		},
 	};
 
-	ui_slider_base(id, rect, &p);
+	ui_slider_old_base(id, rect, &p);
 	
 	return *v != init_v;
 }
 
-bool ui_slider(rect2_t rect, float *v, float min, float max)
+bool ui_slider_old(rect2_t rect, float *v, float min, float max)
 {
-	return ui_slider_ex(rect, v, min, max, 0.01f, 0);
+	return ui_slider_old_ex(rect, v, min, max, 0.01f, 0);
 }
 
-bool ui_slider_int_ex(rect2_t rect, int32_t *v, int32_t min, int32_t max, ui_slider_flags_t flags)
+bool ui_slider_int_old_ex(rect2_t rect, int32_t *v, int32_t min, int32_t max, ui_slider_flags_t flags)
 {
 	if (NEVER(!ui->initialized)) 
 		return false;
@@ -743,14 +714,312 @@ bool ui_slider_int_ex(rect2_t rect, int32_t *v, int32_t min, int32_t max, ui_sli
 		},
 	};
 
-	ui_slider_base(id, rect, &p);
+	ui_slider_old_base(id, rect, &p);
 	
 	return *v != init_v;
 }
 
+bool ui_slider_int_old(rect2_t rect, int32_t *v, int32_t min, int32_t max)
+{
+	return ui_slider_int_old_ex(rect, v, min, max, UiSliderFlags_inc_dec_buttons);
+}
+
+//
+// Slider (new)
+//
+
+typedef struct ui_slider_state_t
+{
+	string_storage_t(256) text_input_storage;
+	dynamic_string_t      text_input;
+
+	double value;
+
+	union
+	{
+		float   cached_f32;
+		int32_t cached_i32;
+	};
+} ui_slider_state_t;
+
+bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
+{
+	ui_id_t id = p->id;
+	ui_validate_widget(id);
+
+	//------------------------------------------------------------------------
+
+	bool first_use;
+	ui_slider_state_t *state = ui_get_state(id, &first_use, ui_slider_state_t);
+
+	if (first_use)
+	{
+		state->text_input.capacity = string_storage_size(state->text_input_storage);
+		state->text_input.data     = state->text_input_storage.data;
+	}
+
+	double old_value = 0.0f;
+
+	if (p->v)
+	{
+		switch (p->type)
+		{
+			case UiSlider_f32: old_value =         *p->f32; break;
+			case UiSlider_i32: old_value = (double)*p->i32; break;
+			INVALID_DEFAULT_CASE;
+		}
+
+		if (*p->i32 != state->cached_i32)
+		{
+			state->value = old_value;
+		}
+	}
+	else
+	{
+		state->value = 0.0;
+	}
+
+	double new_value = state->value;
+
+	bool has_bounds = p->min != p->max;
+
+	//------------------------------------------------------------------------
+	// Interaction
+
+	if (ui_mouse_in_rect(rect))
+	{
+		ui_set_next_hot(id);
+	}
+
+	ui_id_t text_input_id = ui_child_id(id, S("text_input"));
+
+	if (ui_is_hot(id))
+	{
+		bool control_held = ui_key_held(Key_control, false);
+
+		if (control_held)
+		{
+			ui->cursor = Cursor_text_input;
+		}
+
+		if (ui_button_pressed(UiButton_left, true))
+		{
+			ui_set_active(id);
+			ui_gain_focus(id);
+
+			if (control_held)
+			{
+				ui_set_active(text_input_id);
+				ui_gain_focus(text_input_id);
+
+				state->text_input.count = 0;
+			}
+		}
+	}
+
+	if (ui_id_has_focus(text_input_id))
+	{
+		ui_push_layer();
+
+		ui_set_next_id(text_input_id);
+		ui_text_edit_result_t result = ui_text_edit_ex(rect, &state->text_input, &(ui_text_edit_params_t){
+			.numeric_only = true,
+			.preview_text = Sf(p->format_string, new_value),
+			.align_x      = 0.0f,
+		});
+
+		if (result & UiTextEditResult_committed)
+		{
+			parse_float_result_t parsed = string_parse_float(state->text_input.string);
+
+			if (parsed.is_valid)
+			{
+				new_value = parsed.value;
+
+				if (p->type == UiSlider_i32)
+				{
+					new_value = round(new_value);
+				}
+
+				ui_set_f32(ui_child_id(id, S("display_value")), new_value);
+			}
+		}
+
+		if (result & (UiTextEditResult_committed|UiTextEditResult_terminated))
+		{
+			ui_clear_active();
+			ui_gain_focus(id);
+		}
+
+		ui_pop_layer();
+	}
+	else 
+	{
+		if (ui_is_active(id))
+		{
+			if (ui_button_released(UiButton_left, true))
+			{
+				ui_clear_active();
+
+				new_value = p->granularity * roundf(new_value / p->granularity);
+			}
+			else
+			{
+				ui->cursor      = Cursor_none;
+				ui->set_mouse_p = ui->input.mouse_p_on_lmb;
+
+				v2_t delta = sub(ui->input.mouse_p, ui->input.mouse_p_on_lmb);
+
+				double range                = has_bounds ? p->max - p->min : 5.0;
+				double units_to_cover_range = 256.0;
+				double rate                 = range / units_to_cover_range;
+
+				if (ui_key_held(Key_shift, false))
+				{
+					rate *= 0.1;
+				}
+
+				new_value += rate*delta.y;
+				if (has_bounds) new_value = CLAMP(new_value, p->min, p->max);
+
+				ui_set_f32(ui_child_id(id, S("display_value")), new_value);
+			}
+		}
+
+		if (ui_id_has_focus(id))
+		{
+			double rate = 1.0;
+
+			if (ui_key_held(Key_shift, false))
+			{
+				rate *= 0.1;
+			}
+
+			if (ui_key_held(Key_control, false))
+			{
+				rate *= 10.0;
+			}
+
+			if (ui_key_pressed(Key_left, true))
+			{
+				new_value -= rate*p->granularity;
+				if (has_bounds) new_value = CLAMP(new_value, p->min, p->max);
+			}
+
+			if (ui_key_pressed(Key_right, true))
+			{
+				new_value += rate*p->granularity;
+				if (has_bounds) new_value = CLAMP(new_value, p->min, p->max);
+			}
+		}
+	}
+
+	//------------------------------------------------------------------------
+	// Drawing
+
+	rect2_t slider_area = rect2_cut_margins(rect, ui_sz_pix(ui_scalar(UiScalar_slider_margin) + 1.0f));
+
+	double display_value = ui_interpolate_f32(ui_child_id(id, S("display_value")), new_value);
+
+	ui_draw_rect(rect, ui_color(UiColor_slider_background));
+
+	ui_push_clip_rect(rect, true);
+
+	if (has_bounds)
+	{
+		float pct = (display_value - p->min) / (p->max - p->min);
+
+		if (pct < 0.0) pct = 0.0;
+		if (pct > 1.0) pct = 1.0;
+
+		rect2_t slider_rect;
+		rect2_cut_from_left(slider_area, ui_sz_pct(pct), &slider_rect, NULL);
+
+		float inner_roundedness = flt_max(0.0f, ui_scalar(UiScalar_roundedness) - (ui_scalar(UiScalar_slider_margin) + 1));
+
+		UI_Scalar(UiScalar_roundedness, inner_roundedness)
+		ui_draw_rect(slider_rect, ui_color(UiColor_slider_foreground));
+	}
+
+	double rounded_value = p->granularity*round(new_value / p->granularity);
+	ui_draw_text_aligned(ui_font(UiFont_default), slider_area, Sf(p->format_string, rounded_value), make_v2(0.5f, 0.5f));
+
+	ui_pop_clip_rect();
+
+	ui_style_color_t outline_color = ui_id_has_focus(id) 
+		? UiColor_slider_outline_focused 
+		: UiColor_slider_outline;
+
+	ui_draw_rect_outline(rect, ui_color(outline_color), 1.0f);
+
+	if (p->v)
+	{
+		if (old_value != new_value)
+		{
+			switch (p->type)
+			{
+				case UiSlider_f32: state->cached_f32 = *p->f32 = (float)        rounded_value ; break;
+				case UiSlider_i32: state->cached_i32 = *p->i32 = (int32_t)round(rounded_value); break;
+			}
+		}
+	}
+
+	state->value = new_value;
+
+	return new_value != old_value;
+}
+
+bool ui_slider_ex(rect2_t rect, float *v, float min, float max, float granularity)
+{
+	return ui_slider_base(rect, &(ui_slider_parameters_t){
+		.id            = ui_id_pointer(v),
+		.type          = UiSlider_f32,
+		.min           = min,
+		.max           = max,
+		.granularity   = granularity,
+		.f32           = v,
+		.format_string = "%0.2f",
+	});
+}
+
+bool ui_slider(rect2_t rect, float *v, float min, float max)
+{
+	return ui_slider_ex(rect, v, min, max, 0.01f);
+}
+
 bool ui_slider_int(rect2_t rect, int32_t *v, int32_t min, int32_t max)
 {
-	return ui_slider_int_ex(rect, v, min, max, UiSliderFlags_inc_dec_buttons);
+	return ui_slider_base(rect, &(ui_slider_parameters_t){
+		.id            = ui_id_pointer(v),
+		.type          = UiSlider_i32,
+		.min           = min,
+		.max           = max,
+		.granularity   = 1.0,
+		.i32           = v,
+		.format_string = "%g",
+	});
+}
+
+bool ui_drag_float(rect2_t rect, float *v)
+{
+	return ui_slider_base(rect, &(ui_slider_parameters_t){
+		.id            = ui_id_pointer(v),
+		.type          = UiSlider_f32,
+		.granularity   = 0.01f,
+		.f32           = v,
+		.format_string = "%0.2f",
+	});
+}
+
+bool ui_draw_int(rect2_t rect, int32_t *v)
+{
+	return ui_slider_base(rect, &(ui_slider_parameters_t){
+		.id            = ui_id_pointer(v),
+		.type          = UiSlider_i32,
+		.granularity   = 1.0f,
+		.i32           = v,
+		.format_string = "%g",
+	});
 }
 
 //
@@ -1148,6 +1417,7 @@ void ui_hue_picker(rect2_t rect, float *hue)
 		if (ui_button_pressed(UiButton_left, true))
 		{
 			ui_set_active(id);
+			ui_gain_focus(id);
 		}
 	}
 
@@ -1224,6 +1494,7 @@ void ui_sat_val_picker(rect2_t rect, float hue, float *sat, float *val)
 		if (ui_button_pressed(UiButton_left, true))
 		{
 			ui_set_active(id);
+			ui_gain_focus(id);
 		}
 	}
 

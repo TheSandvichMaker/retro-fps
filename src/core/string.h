@@ -121,7 +121,15 @@ fn string_t string_split_word(string_t *string);
 fn string_t string_split_line(string_t *string);
 
 fn bool string_parse_int(string_t *string, int64_t *value);
-fn bool string_parse_float(string_t *string, float *value);
+
+typedef struct parse_float_result_t
+{
+	bool   is_valid;
+	float  value;
+	size_t advance;
+} parse_float_result_t;
+
+fn parse_float_result_t string_parse_float(string_t string);
 
 fn null_term_string16_t utf16_from_utf8(arena_t *arena, string_t   string);
 fn null_term_string_t   utf8_from_utf16(arena_t *arena, string16_t string);

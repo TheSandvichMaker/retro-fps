@@ -38,7 +38,7 @@ typedef struct cvar_t
 
 	string_t key;
 
-	cvar_value_t default_value;
+	cvar_value_t as_default;
 	cvar_value_t as;
 
 	cvar_string_block_t *string_block;
@@ -70,52 +70,54 @@ global cvar_state_t g_cvars;
 
 #define CVAR_BOOL(in_variable, in_key, in_default_value)                      \
 	global cvar_t in_variable = {                                             \
-		.kind       = CVarKind_bool,                                          \
-		.key        = Sc(in_key),                                             \
-		.as.boolean = !!(in_default_value),                                   \
+		.kind               = CVarKind_bool,                                  \
+		.key                = Sc(in_key),                                     \
+		.as.boolean         = !!(in_default_value),                           \
+		.as_default.boolean = !!(in_default_value),                           \
 	};
 
 #define CVAR_I32(in_variable, in_key, in_default_value)                       \
 	global cvar_t in_variable = {                                             \
-		.kind    = CVarKind_i32,                                              \
-		.key     = Sc(in_key),                                                \
-		.as.i32  = in_default_value,                                          \
-		.min.i32 = INT32_MIN,                                                 \
-		.max.i32 = INT32_MAX,                                                 \
+		.kind            = CVarKind_i32,                                      \
+		.key             = Sc(in_key),                                        \
+		.as.i32          = in_default_value,                                  \
+		.as_default.i32  = in_default_value,                                  \
 	};
 
 #define CVAR_F32(in_variable, in_key, in_default_value)                       \
 	global cvar_t in_variable = {                                             \
-		.kind    = CVarKind_f32,                                              \
-		.key     = Sc(in_key),                                                \
-		.as.f32  = in_default_value,                                          \
-		.min.f32 = -INFINITY,                                                 \
-		.max.f32 =  INFINITY,                                                 \
+		.kind           = CVarKind_f32,                                       \
+		.key            = Sc(in_key),                                         \
+		.as.f32         = in_default_value,                                   \
+		.as_default.f32 = in_default_value,                                   \
 	};
 
 #define CVAR_I32_EX(in_variable, in_key, in_default_value, in_min, in_max)    \
 	global cvar_t in_variable = {                                             \
-		.kind    = CVarKind_i32,                                              \
-		.key     = Sc(in_key),                                                \
-		.as.i32  = in_default_value,                                          \
-		.min.i32 = in_min,                                                    \
-		.max.i32 = in_max,                                                    \
+		.kind           = CVarKind_i32,                                       \
+		.key            = Sc(in_key),                                         \
+		.as.i32         = in_default_value,                                   \
+		.as_default.i32 = in_default_value,                                   \
+		.min.i32        = in_min,                                             \
+		.max.i32        = in_max,                                             \
 	};
 
 #define CVAR_F32_EX(in_variable, in_key, in_default_value, in_min, in_max)    \
 	global cvar_t in_variable = {                                             \
-		.kind    = CVarKind_f32,                                              \
-		.key     = Sc(in_key),                                                \
-		.as.f32  = in_default_value,                                          \
-		.min.f32 = in_min,                                                    \
-		.max.f32 = in_max,                                                    \
+		.kind           = CVarKind_f32,                                       \
+		.key            = Sc(in_key),                                         \
+		.as.f32         = in_default_value,                                   \
+		.as_default.f32 = in_default_value,                                   \
+		.min.f32        = in_min,                                             \
+		.max.f32        = in_max,                                             \
 	};
 
 #define CVAR_STRING(in_variable, in_key, in_default_value)                    \
 	global cvar_t in_variable = {                                             \
-		.kind      = CVarKind_string,                                         \
-		.key       = Sc(in_key),                                              \
-		.as.string = Sc(in_default_value),                                    \
+		.kind              = CVarKind_string,                                 \
+		.key               = Sc(in_key),                                      \
+		.as.string         = Sc(in_default_value),                            \
+		.as_default.string = Sc(in_default_value),                            \
 	};
 
 fn void cvar_init_system(void);
@@ -133,5 +135,8 @@ fn void cvar_write_bool  (cvar_t *cvar, bool     value);
 fn void cvar_write_i32   (cvar_t *cvar, int32_t  value);
 fn void cvar_write_f32   (cvar_t *cvar, float    value);
 fn void cvar_write_string(cvar_t *cvar, string_t value);
+
+fn bool cvar_is_default(cvar_t *cvar);
+fn void cvar_reset_to_default(cvar_t *cvar);
 
 fn table_iter_t cvar_iter(void);

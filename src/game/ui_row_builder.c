@@ -42,6 +42,7 @@ rect2_t ui_row_ex(ui_row_builder_t *builder, float height, bool draw_background)
 	rect2_cut_from_top   (result, ui_sz_pix(top_margin), NULL, &result);
 
 	builder->row_index += 1;
+	builder->last_row = result;
 
 	return result;
 }
@@ -181,6 +182,8 @@ bool ui_row_checkbox(ui_row_builder_t *builder, string_t label, bool *v)
 		rect2_cut_from_left(row, ui_sz_aspect(1.0f),                           &checkbox_rect, &row);
 		rect2_cut_from_left(row, ui_sz_pix(ui_scalar(UiScalar_widget_margin)), NULL,           &row);
 
+		checkbox_rect = rect2_cut_margins(checkbox_rect, ui_sz_pix(2.0f));
+
 		ui_label(row, label);
 		return ui_checkbox(checkbox_rect, v);
 	}
@@ -194,6 +197,8 @@ bool ui_row_checkbox(ui_row_builder_t *builder, string_t label, bool *v)
 		rect2_t checkbox_rect;
 		rect2_cut_from_left(widget_rect, ui_sz_aspect(1.0f), &checkbox_rect, NULL);
 
+		checkbox_rect = rect2_cut_margins(checkbox_rect, ui_sz_pix(2.0f));
+
 		return ui_checkbox(checkbox_rect, v);
 	}
 }
@@ -205,15 +210,6 @@ bool ui_row_slider_int(ui_row_builder_t *builder, string_t label, int *v, int mi
 
 	ui_label(label_rect, label);
 	return ui_slider_int(widget_rect, v, min, max);
-}
-
-bool ui_row_slider_int_ex(ui_row_builder_t *builder, string_t label, int *v, int min, int max, ui_slider_flags_t flags)
-{
-	rect2_t label_rect, widget_rect;
-	ui_row_split(builder, &label_rect, &widget_rect);
-
-	ui_label(label_rect, label);
-	return ui_slider_int_ex(widget_rect, v, min, max, flags);
 }
 
 bool ui_row_slider(ui_row_builder_t *builder, string_t label, float *f, float min, float max)
@@ -231,7 +227,7 @@ bool ui_row_slider_ex(ui_row_builder_t *builder, string_t label, float *f, float
 	ui_row_split(builder, &label_rect, &widget_rect);
 
 	ui_label(label_rect, label);
-	return ui_slider_ex(widget_rect, f, min, max, granularity, 0);
+	return ui_slider_ex(widget_rect, f, min, max, granularity);
 }
 
 void ui_row_text_edit_ex(ui_row_builder_t *builder, string_t label, dynamic_string_t *buffer, const ui_text_edit_params_t *params)
@@ -312,9 +308,24 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 		}
 	}
 
-	if (state->popup_open)
+	float popup_openness = ui_interpolate_f32(ui_child_id(id, S("openness")), state->popup_open);
+
+	if (popup_opened_this_frame || popup_openness > 0.001f)
 	{
 		ui_push_layer();
+
+		if (state->popup_open)
+		{
+			if (ui_key_pressed(Key_escape, true))
+			{
+				state->popup_open = false;
+				*color = state->color_before_editing;
+			}
+			else if (ui_key_pressed(Key_return, true))
+			{
+				state->popup_open = false;
+			}
+		}
 
 		if (popup_opened_this_frame ||
 			color->x != state->cached_color.x ||
@@ -328,8 +339,9 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 			state->val = hsv.z;
 		}
 
-		v2_t    popup_size = make_v2(318, 256);
-		rect2_t popup_rect = rect2_from_min_dim(state->popup_position, popup_size);
+		v2_t    popup_size     = make_v2(popup_openness*318, popup_openness*256);
+		v2_t    popup_position = add(state->popup_position, make_v2(0, -popup_size.y));
+		rect2_t popup_rect     = rect2_from_min_dim(popup_position, popup_size);
 
 		ui_push_clip_rect(ui->ui_area, false);
 
@@ -337,8 +349,6 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 		ui_draw_rect_outline(popup_rect, ui_color(UiColor_window_outline), 2.0f);
 
 		popup_rect = rect2_cut_margins(popup_rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)));
-
-		ui_push_clip_rect(popup_rect, true);
 
 		rect2_t sat_val_picker_rect;
 		rect2_cut_from_left(popup_rect, ui_sz_aspect(1.0f), &sat_val_picker_rect, &popup_rect);
@@ -365,18 +375,6 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 		ui_label(rgb_rect, Sf("RGB: (%.02f, %.02f, %.02f)", rgb.x, rgb.y, rgb.z));
 
 		color->xyz = rgb;
-
-		if (ui_key_pressed(Key_escape, true))
-		{
-			state->popup_open = false;
-			*color = state->color_before_editing;
-		}
-		else if (ui_key_pressed(Key_return, true))
-		{
-			state->popup_open = false;
-		}
-
-		ui_pop_clip_rect();
 
 		ui_pop_clip_rect();
 

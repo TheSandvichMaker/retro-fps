@@ -595,22 +595,21 @@ bool string_parse_int(string_t *inout_string, int64_t *out_value)
     return result;
 }
 
-bool string_parse_float(string_t *string, float *value)
+parse_float_result_t string_parse_float(string_t string)
 {
-	bool result = false;
+	parse_float_result_t result = {0};
 
 	m_scoped_temp
 	{
-		char *null_terminated = string_null_terminate(temp, *string).data;
+		char *null_terminated = string_null_terminate(temp, string).data;
 
 		const char *strtod_end = NULL;
-		*value = (float)strtod(null_terminated, &strtod_end);
+		result.value = (float)strtod(null_terminated, &strtod_end);
 
-		result = strtod_end != null_terminated;
-		if (result)
+		result.is_valid = strtod_end != null_terminated;
+		if (result.is_valid)
 		{
-			string->data  += strtod_end - null_terminated;
-			string->count -= strtod_end - null_terminated;
+			result.advance = strtod_end - null_terminated;
 		}
 	}
 

@@ -72,20 +72,24 @@ ui_id_t ui_id_pointer_(void *pointer UI_ID_NAME_PARAM)
 		result = ui->next_id;
 		ui->next_id = UI_ID_NULL;
 	}
+	else
+	{
+		ui_id_t parent = UI_ID_NULL;
+
+		if (!stack_empty(ui->id_stack))
+		{
+			parent = stack_top(ui->id_stack);
+		}
+
+		result = ui_combine_ids(parent, result);
+	}
 
 	if (result.value)
 	{
 		UI_ID_SET_NAME(result, name);
 	}
 
-	ui_id_t parent = UI_ID_NULL;
-
-	if (!stack_empty(ui->id_stack))
-	{
-		parent = stack_top(ui->id_stack);
-	}
-
-	return ui_combine_ids(parent, result);
+	return result;
 }
 
 ui_id_t ui_id_u64_(uint64_t u64 UI_ID_NAME_PARAM)
@@ -1053,7 +1057,7 @@ void ui_draw_debug_rect(rect2_t rect, v4_t color)
 		.color_10     = color_packed,
 		.color_11     = color_packed,
 		.color_01     = color_packed,
-		.inner_radius = 2.0f,
+		.inner_radius = 1.0f,
 	});
 
 	ui_set_layer(old_layer);
@@ -1136,6 +1140,7 @@ ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect)
 			result |= UI_PRESSED;
 			ui->drag_anchor = sub(ui->input.mouse_p, rect2_center(rect));
 			ui_set_active(id);
+			ui_gain_focus(id);
 		}
 	}
 
@@ -1297,7 +1302,6 @@ void ui_set_next_hot(ui_id_t id)
 void ui_set_active(ui_id_t id)
 {
 	ui->active = id;
-	ui->focused_id = id;
 }
 
 void ui_clear_next_hot(void)
@@ -1323,6 +1327,12 @@ bool ui_has_focus(void)
 bool ui_id_has_focus(ui_id_t id)
 {
 	return ui->has_focus && ui->focused_id.value == id.value;
+}
+
+void ui_gain_focus(ui_id_t id)
+{
+	ui->has_focus = true;
+	ui->focused_id = id;
 }
 
 void *ui_get_state_raw(ui_id_t id, bool *first_touch, uint16_t size, ui_state_flags_t flags)
@@ -1415,6 +1425,7 @@ static void ui_initialize(void)
 	v4_t foreground     = make_v4(0.33f, 0.28f, 0.28f, 1.0f);
 	v4_t foreground_hi  = make_v4(0.37f, 0.31f, 0.31f, 1.0f);
 	v4_t foreground_hi2 = make_v4(0.40f, 0.33f, 0.32f, 1.0f);
+	v4_t focus_color    = make_v4(0.35f, 0.30f, 0.50f, 1.0f);
 
 	v4_t hot    = make_v4(0.25f, 0.45f, 0.40f, 1.0f);
 	v4_t active = make_v4(0.30f, 0.55f, 0.50f, 1.0f);
@@ -1441,6 +1452,7 @@ static void ui_initialize(void)
 	ui->style.base_scalars[UiScalar_outer_window_margin   ] = 4.0f;
 	ui->style.base_scalars[UiScalar_min_scroll_bar_size   ] = 32.0f;
 	ui->style.base_scalars[UiScalar_slider_handle_ratio   ] = 1.0f / 4.0f;
+	ui->style.base_scalars[UiScalar_slider_margin         ] = 1.0f;
 	ui->style.base_colors [UiColor_text                   ] = make_v4(0.95f, 0.90f, 0.85f, 1.0f);
 	ui->style.base_colors [UiColor_text_low               ] = make_v4(0.85f, 0.80f, 0.75f, 1.0f);
 	ui->style.base_colors [UiColor_text_preview           ] = mul(0.65f, ui->style.base_colors[UiColor_text]);
@@ -1464,6 +1476,8 @@ static void ui_initialize(void)
 	ui->style.base_colors [UiColor_slider_foreground      ] = foreground;
 	ui->style.base_colors [UiColor_slider_hot             ] = hot;
 	ui->style.base_colors [UiColor_slider_active          ] = active;
+	ui->style.base_colors [UiColor_slider_outline         ] = foreground_hi2;
+	ui->style.base_colors [UiColor_slider_outline_focused ] = focus_color;
 	ui->style.base_colors [UiColor_scrollbar_background   ] = background_hi;
 	ui->style.base_colors [UiColor_scrollbar_foreground   ] = foreground;
 	ui->style.base_colors [UiColor_scrollbar_hot          ] = foreground_hi;
@@ -1688,6 +1702,11 @@ void ui_end(void)
 	{
 		ui->restrict_mouse_rect = rect2_inverted_infinity();
 	}
+
+	if (ui->current_layer.sub_layer > 0)
+	{
+		log(UI, Error, "Ended UI frame with unpopped layer(s), current sub_layer: %u", ui->current_layer.sub_layer);
+	}
 }
 
 void debug_text(v4_t color, string_t fmt, ...)
@@ -1742,7 +1761,7 @@ void ui_set_window_index(uint8_t index)
 {
 	if (ui->current_layer.sub_layer != 0)
 	{
-		log(UI, Error, "Warning: Set the UI window index but there are unpopped layer(s), current sub_layer: %u", ui->current_layer.sub_layer);
+		log(UI, Error, "Set the UI window index but there are unpopped layer(s), current sub_layer: %u", ui->current_layer.sub_layer);
 	}
 	
 	ui->current_layer.window = index;
@@ -1752,7 +1771,7 @@ void ui_push_layer(void)
 {
 	if (ui->current_layer.sub_layer == 255)
 	{
-		log(UI, Error, "Warning: Can't push any more layers, we're at the max (255)");
+		log(UI, Error, "Can't push any more layers, we're at the max (255)");
 	}
 	else
 	{
@@ -1764,7 +1783,7 @@ void ui_pop_layer(void)
 {
 	if (ui->current_layer.sub_layer == 0)
 	{
-		log(UI, Error, "Warning: Can't pop any more layers, we're at the min (0)");
+		log(UI, Error, "Can't pop any more layers, we're at the min (0)");
 	}
 	else
 	{

@@ -1657,7 +1657,7 @@ fn_local rect2_t rect2_add_left(rect2_t rect, float a)
 
 fn_local rect2_t rect2_add_right(rect2_t rect, float a)
 {
-	float max_x = MAX(rect.x0, rect.x0 + a);
+	float max_x = MAX(rect.x1, rect.x1 + a);
 	return (rect2_t){ .min = { rect.max.x, rect.min.y }, .max = { max_x, rect.max.y } };
 }
 

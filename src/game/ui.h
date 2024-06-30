@@ -250,6 +250,7 @@ typedef enum ui_style_scalar_t
 	UiScalar_min_scroll_bar_size,
 
     UiScalar_slider_handle_ratio,
+    UiScalar_slider_margin,
 
 	// interaction
 	UiScalar_release_margin,
@@ -288,6 +289,8 @@ typedef enum ui_style_color_t
     UiColor_slider_foreground,
     UiColor_slider_hot,
     UiColor_slider_active,
+    UiColor_slider_outline,
+    UiColor_slider_outline_focused,
 
     UiColor_scrollbar_background,
     UiColor_scrollbar_foreground,
@@ -379,6 +382,9 @@ fn r_rect2_fixed_t ui_get_clip_rect_fixed  (void);
 fn rect2_t         ui_get_clip_rect        (void);
 fn void            ui_push_clip_rect       (rect2_t rect, bool intersect_with_old_clip_rect);
 fn void            ui_pop_clip_rect        (void);
+
+#define UI_ClipRect(rect, interesct_with_old_clip_rect) \
+	DEFER_LOOP(ui_push_clip_rect(rect, interesct_with_old_clip_rect), ui_pop_clip_rect())
 
 fn rect2_t ui_draw_text                    (font_t *font, v2_t p, string_t text);
 fn rect2_t ui_draw_text_aligned            (font_t *font, rect2_t rect, string_t text, v2_t align);
@@ -606,6 +612,8 @@ typedef struct ui_t
 	ui_event_queue_t queued_input;
 	ui_input_t       input;
 
+	bool disabled;
+
 	ui_style_t   style;
 
 	debug_notif_t *first_debug_notif;
@@ -639,8 +647,12 @@ fn bool ui_is_active       (ui_id_t id);
 fn bool ui_is_hovered_panel(ui_id_t id);
 
 fn void ui_set_window_index(uint8_t index);
+
 fn void ui_push_layer();
 fn void ui_pop_layer();
+
+#define UI_Layer() \
+	DEFER_LOOP(ui_push_layer(), ui_pop_layer())
 
 fn void ui_begin_container(ui_id_t id);
 fn void ui_end_container  (ui_id_t id);
@@ -657,6 +669,7 @@ fn void ui_clear_active    (void);
 
 fn bool ui_has_focus       (void);
 fn bool ui_id_has_focus    (ui_id_t id);
+fn void ui_gain_focus      (ui_id_t id);
 
 fn void ui_hoverable       (ui_id_t id, rect2_t rect);
 fn bool ui_is_hovered      (ui_id_t id);

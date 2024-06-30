@@ -1399,8 +1399,7 @@ float float_from_key(map_t *map, map_entity_t *entity, string_t key)
 {
     string_t value = value_from_key(map, entity, key);
 
-    float result = 0.0f;
-    string_parse_float(&value, &result);
+    float result = string_parse_float(value).value;
 
     return result;
 }
@@ -1411,9 +1410,26 @@ v3_t v3_from_key(map_t *map, map_entity_t *entity, string_t key)
 
     v3_t v3 = { 0 };
 
-    string_parse_float(&value, &v3.x); 
-    string_parse_float(&value, &v3.y); 
-    string_parse_float(&value, &v3.z); 
+	{
+		parse_float_result_t parsed = string_parse_float(value);
+		v3.x = parsed.value;
+		
+		string_skip(&value, parsed.advance);
+	}
+
+	{
+		parse_float_result_t parsed = string_parse_float(value);
+		v3.y = parsed.value;
+		
+		string_skip(&value, parsed.advance);
+	}
+
+	{
+		parse_float_result_t parsed = string_parse_float(value);
+		v3.z = parsed.value;
+		
+		string_skip(&value, parsed.advance);
+	}
 
     return v3;
 }

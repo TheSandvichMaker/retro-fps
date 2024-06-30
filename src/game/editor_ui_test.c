@@ -47,6 +47,7 @@ void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *wi
 	ui_row_slider_ex(&builder, S("UI Text Margin"), &ui->style.base_scalars[UiScalar_text_margin], 0.0f, 8.0f, 1.0f);
 
 	ui_row_slider_ex(&builder, S("UI Row Margin"), &ui->style.base_scalars[UiScalar_row_margin], 0.0f, 8.0f, 1.0f);
+	ui_row_slider_ex(&builder, S("UI Slider Margin"), &ui->style.base_scalars[UiScalar_slider_margin], 0.0f, 8.0f, 1.0f);
 	ui_row_slider_ex(&builder, S("UI Outer Window Margin"), &ui->style.base_scalars[UiScalar_outer_window_margin], 0.0f, 48.0f, 1.0f);
 	ui_row_slider_ex(&builder, S("UI Scroll Tray Width"), &ui->style.base_scalars[UiScalar_scroll_tray_width], 0.0f, 48.0f, 1.0f);
 
