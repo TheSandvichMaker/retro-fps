@@ -320,150 +320,16 @@ typedef struct play_sound_t
 	float            min_distance;
 } play_sound_t;
 
-fn_local bool write_mix_command(const mix_command_t *command)
-{
-	uint32_t w = atomic_load_explicit(&mixer.command_write_index, memory_order_relaxed);
-	uint32_t r = atomic_load_explicit(&mixer.command_read_index,  memory_order_acquire);
-
-	if (w - r == MIXER_COMMAND_BUFFER_SIZE)
-	{
-		return false;
-	}
-
-	mixer.commands[w % MIXER_COMMAND_BUFFER_SIZE] = *command;
-	atomic_store_explicit(&mixer.command_write_index, w + 1, memory_order_release);
-
-	return true;
-}
-
-fn_local bool read_mix_command(mix_command_t *command)
-{
-	uint32_t r = atomic_load_explicit(&mixer.command_read_index,  memory_order_relaxed);
-	uint32_t w = atomic_load_explicit(&mixer.command_write_index, memory_order_acquire);
-
-	if (w - r == 0)
-	{
-		return false;
-	}
-
-	*command = mixer.commands[r % MIXER_COMMAND_BUFFER_SIZE];
-	atomic_store_explicit(&mixer.command_read_index, r + 1, memory_order_release);
-
-	return true;
-}
-
-fn_local mixer_id_t play_sound(const play_sound_t *params)
-{
-	mixer_id_t id = make_mixer_id(MIXER_ID_TYPE_PLAYING_SOUND, mixer.next_playing_sound_id++);
-
-	mix_command_t command = {
-		.kind = MIX_PLAY_SOUND,
-		.id   = id,
-		.play_sound = {
-			.waveform     = params->waveform,
-			.category     = params->category,
-			.volume       = params->volume,
-			.flags        = params->flags,
-			.p            = params->p,
-			.min_distance = params->min_distance,
-		},
-	};
-	write_mix_command(&command);
-
-	return id;
-}
-
-fn_local uint32_t samples_from_seconds(float seconds)
-{
-	uint32_t result = (uint32_t)(seconds*DREAM_MIX_SAMPLE_RATE);
-	return result;
-}
-
-fn_local void stop_sound_harsh(mixer_id_t id)
-{
-	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
-
-	mix_command_t command = {
-		.kind = MIX_STOP_SOUND,
-		.id   = id,
-	};
-	write_mix_command(&command);
-}
-
-fn_local void stop_sound(mixer_id_t id)
-{
-	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
-
-	write_mix_command(&(mix_command_t){
-		.kind = MIX_FADE,
-		.id   = id,
-		.fade = {
-			.flags    = FADE_TARGET_VOLUME|FADE_STOP_SOUND_WHEN_FINISHED,
-			.style    = FADE_STYLE_LINEAR,
-			.start    = 1.0f,
-			.target   = 0.0f,
-			.duration = 32,
-		},
-	});
-}
-
-fn_local void fade_out_sound(mixer_id_t id, float fade_time)
-{
-	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
-
-	uint32_t duration = samples_from_seconds(fade_time);
-
-	write_mix_command(&(mix_command_t){
-		.kind = MIX_FADE,
-		.id   = id,
-		.fade = {
-			.flags    = FADE_TARGET_VOLUME|FADE_STOP_SOUND_WHEN_FINISHED,
-			.style    = FADE_STYLE_SMOOTHSTEP,
-			.start    = 1.0f,
-			.target   = 0.0f,
-			.duration = duration,
-		},
-	});
-}
-
-fn_local void mixer_set_listener(v3_t p, v3_t d)
-{
-	write_mix_command(&(mix_command_t){
-		.kind = MIX_UPDATE_LISTENER,
-		.listener = {
-			.p = p,
-			.d = d,
-		},
-	});
-}
-
-fn_local void set_sound_position(mixer_id_t id, v3_t p)
-{
-	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
-
-	write_mix_command(&(mix_command_t){
-		.kind = MIX_SOUND_POSITION,
-		.id   = id,
-		.sound_p = {
-			.p = p,
-		},
-	});
-}
-
-fn_local void update_playing_sound_flags(mixer_id_t id, uint32_t unset_flags, uint32_t set_flags)
-{
-    if (!mixer_id_valid(id)) return;
-	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
-
-	write_mix_command(&(mix_command_t){
-		.kind = MIX_SET_PLAYING_SOUND_FLAGS,
-		.id   = id,
-		.set_playing_sound_flags = {
-			.unset_flags = unset_flags,
-			.set_flags   = set_flags,
-		},
-	});
-}
+fn bool       write_mix_command         (const mix_command_t *command);
+fn bool       read_mix_command          (mix_command_t *command);
+fn mixer_id_t play_sound                (const play_sound_t *params);
+fn uint32_t   samples_from_seconds      (float seconds);
+fn void       stop_sound_harsh          (mixer_id_t id);
+fn void       stop_sound                (mixer_id_t id);
+fn void       fade_out_sound            (mixer_id_t id, float fade_time);
+fn void       mixer_set_listener        (v3_t p, v3_t d);
+fn void       set_sound_position        (mixer_id_t id, v3_t p);
+fn void       update_playing_sound_flags(mixer_id_t id, uint32_t unset_flags, uint32_t set_flags);
 
 fn void mix_samples(uint32_t frames_to_mix, float *buffer);
 

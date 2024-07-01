@@ -97,7 +97,6 @@ df_shader_info_t df_shaders[DfShader_COUNT] = {
 		.path_hlsl   = Sc("src/shaders/gen/ui.hlsl"),
 		.path_dfs    = Sc("src/shaders/ui.metashader"),
 	},
-
 	[DfShader_ui_vs] = {
 		.name        = Sc("ui_vs"),
 		.entry_point = Sc("MainVS"),
@@ -106,6 +105,7 @@ df_shader_info_t df_shaders[DfShader_COUNT] = {
 		.path_hlsl   = Sc("src/shaders/gen/ui.hlsl"),
 		.path_dfs    = Sc("src/shaders/ui.metashader"),
 	},
+
 	[DfShader_ui_visualize_heatmap_ps] = {
 		.name        = Sc("ui_visualize_heatmap_ps"),
 		.entry_point = Sc("MainPS"),
@@ -114,5 +114,4 @@ df_shader_info_t df_shaders[DfShader_COUNT] = {
 		.path_hlsl   = Sc("src/shaders/gen/ui_visualize_heatmap.hlsl"),
 		.path_dfs    = Sc("src/shaders/ui_visualize_heatmap.metashader"),
 	},
-
 };

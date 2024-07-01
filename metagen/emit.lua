@@ -344,7 +344,7 @@ function process_shaders(p)
 
 	source:write("df_shader_info_t df_shaders[DfShader_COUNT] = {\n")
 
-	for _, bundle_info in ipairs(bundles) do
+	for i, bundle_info in ipairs(bundles) do
 		local bundle      = bundle_info.bundle
 		local bundle_name = bundle_info.bundle.name
 		local bundle_path = bundle_info.path
@@ -358,7 +358,7 @@ function process_shaders(p)
 		table.sort(shaders, function(a, b) return a.name < b.name end)
 
 		if bundle.shaders then
-			for _, v in ipairs(shaders) do
+			for j, v in ipairs(shaders) do
 				local shader_name = v.name
 				local shader      = v.shader
 				source:write("\t[DfShader_" .. shader_name .. "] = {\n")
@@ -370,8 +370,8 @@ function process_shaders(p)
 				source:write("\t\t.path_dfs    = Sc(\"" .. bundle_path .. "\"),\n")
 				source:write("\t},\n")
 
-				if next(bundle.shaders, shader_name) == nil and 
-				   next(bundles, _)                  ~= nil then
+				if next(shaders, j) == nil and 
+				   next(bundles, i) ~= nil then
 					source:write("\n")
 				end
 			end

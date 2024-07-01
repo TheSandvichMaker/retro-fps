@@ -6,13 +6,161 @@
 
 #define MIXER_FLUSH_DENORMALS 1
 
-//
-//
-//
+//------------------------------------------------------------------------
+// Mix Commands
+
+bool write_mix_command(const mix_command_t *command)
+{
+	uint32_t w = atomic_load_explicit(&mixer.command_write_index, memory_order_relaxed);
+	uint32_t r = atomic_load_explicit(&mixer.command_read_index,  memory_order_acquire);
+
+	if (w - r == MIXER_COMMAND_BUFFER_SIZE)
+	{
+		log(Mixer, Warning, "Mixer command buffer is full. Did not write command - this probably means it is lost forever.");
+		return false;
+	}
+
+	mixer.commands[w % MIXER_COMMAND_BUFFER_SIZE] = *command;
+	atomic_store_explicit(&mixer.command_write_index, w + 1, memory_order_release);
+
+	return true;
+}
+
+bool read_mix_command(mix_command_t *command)
+{
+	uint32_t r = atomic_load_explicit(&mixer.command_read_index,  memory_order_relaxed);
+	uint32_t w = atomic_load_explicit(&mixer.command_write_index, memory_order_acquire);
+
+	if (w - r == 0)
+	{
+		return false;
+	}
+
+	*command = mixer.commands[r % MIXER_COMMAND_BUFFER_SIZE];
+	atomic_store_explicit(&mixer.command_read_index, r + 1, memory_order_release);
+
+	return true;
+}
+
+mixer_id_t play_sound(const play_sound_t *params)
+{
+	mixer_id_t id = make_mixer_id(MIXER_ID_TYPE_PLAYING_SOUND, mixer.next_playing_sound_id++);
+
+	mix_command_t command = {
+		.kind = MIX_PLAY_SOUND,
+		.id   = id,
+		.play_sound = {
+			.waveform     = params->waveform,
+			.category     = params->category,
+			.volume       = params->volume,
+			.flags        = params->flags,
+			.p            = params->p,
+			.min_distance = params->min_distance,
+		},
+	};
+	write_mix_command(&command);
+
+	return id;
+}
+
+uint32_t samples_from_seconds(float seconds)
+{
+	uint32_t result = (uint32_t)(seconds*DREAM_MIX_SAMPLE_RATE);
+	return result;
+}
+
+void stop_sound_harsh(mixer_id_t id)
+{
+	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
+
+	mix_command_t command = {
+		.kind = MIX_STOP_SOUND,
+		.id   = id,
+	};
+	write_mix_command(&command);
+}
+
+void stop_sound(mixer_id_t id)
+{
+	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
+
+	write_mix_command(&(mix_command_t){
+		.kind = MIX_FADE,
+		.id   = id,
+		.fade = {
+			.flags    = FADE_TARGET_VOLUME|FADE_STOP_SOUND_WHEN_FINISHED,
+			.style    = FADE_STYLE_LINEAR,
+			.start    = 1.0f,
+			.target   = 0.0f,
+			.duration = 32,
+		},
+	});
+}
+
+void fade_out_sound(mixer_id_t id, float fade_time)
+{
+	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
+
+	uint32_t duration = samples_from_seconds(fade_time);
+
+	write_mix_command(&(mix_command_t){
+		.kind = MIX_FADE,
+		.id   = id,
+		.fade = {
+			.flags    = FADE_TARGET_VOLUME|FADE_STOP_SOUND_WHEN_FINISHED,
+			.style    = FADE_STYLE_SMOOTHSTEP,
+			.start    = 1.0f,
+			.target   = 0.0f,
+			.duration = duration,
+		},
+	});
+}
+
+void mixer_set_listener(v3_t p, v3_t d)
+{
+	write_mix_command(&(mix_command_t){
+		.kind = MIX_UPDATE_LISTENER,
+		.listener = {
+			.p = p,
+			.d = d,
+		},
+	});
+}
+
+void set_sound_position(mixer_id_t id, v3_t p)
+{
+	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
+
+	write_mix_command(&(mix_command_t){
+		.kind = MIX_SOUND_POSITION,
+		.id   = id,
+		.sound_p = {
+			.p = p,
+		},
+	});
+}
+
+void update_playing_sound_flags(mixer_id_t id, uint32_t unset_flags, uint32_t set_flags)
+{
+    if (!mixer_id_valid(id)) return;
+	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
+
+	write_mix_command(&(mix_command_t){
+		.kind = MIX_SET_PLAYING_SOUND_FLAGS,
+		.id   = id,
+		.set_playing_sound_flags = {
+			.unset_flags = unset_flags,
+			.set_flags   = set_flags,
+		},
+	});
+}
+
+//------------------------------------------------------------------------
+// Mixer
 
 mixer_t mixer = {
-	.playing_sounds = INIT_POOL(playing_sound_t),
-	.active_fades   = INIT_POOL(fade_t),
+	.playing_sounds         = INIT_POOL(playing_sound_t),
+	.active_fades           = INIT_POOL(fade_t),
 	.reverb_amount          = 0.25f,
 	.reverb_feedback        = 0.85f,
 	.reverb_delay_time      = 1433,
@@ -20,8 +168,6 @@ mixer_t mixer = {
 	.reverb_diffusion_angle = 25.0f,
 };
 
-//
-//
 //
 
 fn_local float limit(float s)
@@ -113,9 +259,9 @@ fn_local void reverb_set_diffusion_angle(reverb_t *effect, float diffusion_angle
 
 fn_local void reverb_init(reverb_t *effect, float feedback, float diffusion_angle)
 {
-	effect->feedback = feedback;
-	effect->index_l = 0;
-	effect->index_r = 0;
+	effect->feedback     = feedback;
+	effect->index_l      = 0;
+	effect->index_r      = 0;
 	effect->delay_time_l = 1433;
 	effect->delay_time_r = 1433 + 23;
 	zero_array(&effect->buffer_l[0], ARRAY_COUNT(effect->buffer_l));
@@ -168,10 +314,10 @@ fn_local void stop_playing_sound_internal(playing_sound_t *playing)
 void mix_samples(uint32_t frames_to_mix, float *buffer)
 {
 #if MIXER_FLUSH_DENORMALS
-#define FLUSH_TO_ZERO_BIT      (1 << 15)
-#define DENORMALS_ARE_ZERO_BIT (1 << 6)
-	uint32_t old_csr = _mm_getcsr();
-	uint32_t new_csr = old_csr|FLUSH_TO_ZERO_BIT|DENORMALS_ARE_ZERO_BIT;
+	const uint32_t flush_to_zero_bit      = 1u << 15;
+	const uint32_t denormals_are_zero_bit = 1u << 6;
+	const uint32_t old_csr = _mm_getcsr();
+	const uint32_t new_csr = old_csr|flush_to_zero_bit|denormals_are_zero_bit;
 	_mm_setcsr(new_csr);
 #endif
 
@@ -186,9 +332,9 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 
 	size_t mix_channel_count = 2; // TODO: Surround sound!?
 
-	//
-	// Cycle Through Commands
-	//
+	//------------------------------------------------------------------------
+	// Process commands
+	//------------------------------------------------------------------------
 
 	mix_command_t command;
 	while (read_mix_command(&command))
@@ -293,9 +439,9 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 		}
 	}
 
-	//
-	// Mix Sounds
-	//
+	//------------------------------------------------------------------------
+	// Mix sounds
+	//------------------------------------------------------------------------
 
     float *mix_buffer = m_alloc_array(temp, mix_channel_count*frames_to_mix, float);
 
@@ -513,7 +659,6 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
         }
     }
 
-#if 1
 	mixer.reverb.delay_time_l = (uint32_t)mixer.reverb_delay_time;
 	mixer.reverb.delay_time_r = (uint32_t)((float)mixer.reverb_delay_time * mixer.reverb_stereo_spread);
 	mixer.reverb.feedback = mixer.reverb_feedback;
@@ -526,7 +671,6 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 		buffer[2*i + 0] += wet.x;
 		buffer[2*i + 1] += wet.y;
 	}
-#endif
 
 	mixer.frame_index += frames_to_mix;
 
