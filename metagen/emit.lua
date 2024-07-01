@@ -119,6 +119,18 @@ function emit.c_emit_parameter_struct(struct_name, packed_parameters)
 	io.write("} ", struct_name, ";\n\n")
 end
 
+function emit.table_to_sorted_array(the_table)
+	local result = {}
+
+	for k, v in pairs(the_table) do
+		table.insert(result, { k = k, v = v })
+	end
+
+	table.sort(result, function(a, b) return a.k < b.k end)
+
+	return result
+end
+
 -- returns a string, does not emit directly
 function emit.hlsl_emit_parameter_struct(struct_name, packed_parameters)
 	assert(struct_name)
@@ -311,7 +323,11 @@ function process_shaders(p)
 		assert(bundle.shaders, bundle_name .. ".dfs did not export any shaders")
 
 		if bundle.shaders then
-			for shader_name, shader in pairs(bundle.shaders) do
+			local shaders = emit.table_to_sorted_array(bundle.shaders)
+
+			for i, v in ipairs(shaders) do
+				local shader_name = v.k
+				local shader      = v.v
 				header:write("\tDfShader_" .. shader_name .. ", // " .. bundle_path .. "\n")
 			end
 		end
@@ -349,18 +365,12 @@ function process_shaders(p)
 		local bundle_name = bundle_info.bundle.name
 		local bundle_path = bundle_info.path
 
-		local shaders = {}
-
-		for shader_name, shader in pairs(bundle.shaders) do
-			table.insert(shaders, { name = shader_name, shader = shader })
-		end
-
-		table.sort(shaders, function(a, b) return a.name < b.name end)
+		local shaders = emit.table_to_sorted_array(bundle.shaders)
 
 		if bundle.shaders then
 			for j, v in ipairs(shaders) do
-				local shader_name = v.name
-				local shader      = v.shader
+				local shader_name = v.k
+				local shader      = v.v
 				source:write("\t[DfShader_" .. shader_name .. "] = {\n")
 				source:write("\t\t.name        = Sc(\"" .. shader_name .. "\"),\n")
 				source:write("\t\t.entry_point = Sc(\"" .. shader.entry .. "\"),\n")

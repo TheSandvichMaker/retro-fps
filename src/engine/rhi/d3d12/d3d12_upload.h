@@ -10,6 +10,7 @@ typedef struct d3d12_upload_submission_t
 	uint64_t                   fence_value;
 	uint32_t                   offset;
 	uint32_t                   size;
+	size_t                     head;
 } d3d12_upload_submission_t;
 
 typedef struct d3d12_upload_ring_buffer_t

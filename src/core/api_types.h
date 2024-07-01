@@ -66,10 +66,6 @@
 
 #define DEFAULT_STRING_ALIGN 16
 
-#define slice_t(type) struct { type *data; size_t count; }
-#define for_slice(it, slice) for (size_t it = 0; it < (slice).count; it++)
-#define slice_at(slice, index) (ASSERT((index) < (slice).count), &(slice).data[index])
-
 typedef struct string_t
 {
     char  *data;

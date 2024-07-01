@@ -96,28 +96,43 @@ d3d12_upload_context_t d3d12_upload_begin(size_t size, size_t align)
 			{
 				size_t aligned_head = align_forward(ring_buffer->head, align);
 
-				size_t capacity_used      = aligned_head - ring_buffer->tail;
-				size_t capacity_available = ring_buffer->capacity - capacity_used;
+				size_t allocation_offset_start = (aligned_head           ) & ring_buffer->mask;
+				size_t allocation_offset_end   = (aligned_head + size - 1) & ring_buffer->mask;
 
-				if (capacity_available >= size)
+				if (allocation_offset_start >= allocation_offset_end)
 				{
-					size_t allocation_offset_start = (aligned_head           ) & ring_buffer->mask;
-					size_t allocation_offset_end   = (aligned_head + size - 1) & ring_buffer->mask;
+					aligned_head = align_forward(ring_buffer->head, ring_buffer->capacity);
 
-					if (allocation_offset_start < allocation_offset_end)
+					allocation_offset_start = (aligned_head           ) & ring_buffer->mask;
+					allocation_offset_end   = (aligned_head + size - 1) & ring_buffer->mask;
+				}
+
+				if (ring_buffer->tail <= aligned_head)
+				{
+					size_t capacity_used      = aligned_head - ring_buffer->tail;
+					size_t capacity_available = ring_buffer->capacity - capacity_used;
+
+					if (capacity_available >= size)
 					{
-						size_t submission_index = ring_buffer->submission_head % ARRAY_COUNT(ring_buffer->submissions);
-						submission = &ring_buffer->submissions[submission_index];
-						submission->offset = (uint32_t)allocation_offset_start;
-						submission->size   = (uint32_t)size;
+						size_t allocation_offset_start = (aligned_head           ) & ring_buffer->mask;
+						size_t allocation_offset_end   = (aligned_head + size - 1) & ring_buffer->mask;
 
-						ring_buffer->submission_head += 1;
-						ring_buffer->head             = submission->offset + submission->size;
+						if (allocation_offset_start < allocation_offset_end)
+						{
+							size_t submission_index = ring_buffer->submission_head % ARRAY_COUNT(ring_buffer->submissions);
+							submission = &ring_buffer->submissions[submission_index];
+							submission->offset = (uint32_t)allocation_offset_start;
+							submission->size   = (uint32_t)size;
+							submission->head   = aligned_head + submission->size;
 
-						log(RHI_D3D12, SuperSpam, "Acquired ring buffer upload submission %zu (offset: %zu, size: %zu)", 
-							submission_index, 
-							allocation_offset_start,
-							size);
+							ring_buffer->submission_head += 1;
+							ring_buffer->head             = submission->head;
+
+							log(RHI_D3D12, SuperSpam, "Acquired ring buffer upload submission %zu (offset: %zu, size: %zu)", 
+								submission_index, 
+								allocation_offset_start,
+								size);
+						}
 					}
 				}
 			}
@@ -144,7 +159,7 @@ d3d12_upload_context_t d3d12_upload_begin(size_t size, size_t align)
 				log(RHI_D3D12, SuperSpam, "Retired ring buffer submission %zu", retired_submission_index);
 
 				ring_buffer->submission_tail += 1;
-				ring_buffer->tail             = retired_submission->offset + retired_submission->size;
+				ring_buffer->tail             = retired_submission->head;
 			}
 
 			try_count += 1;
