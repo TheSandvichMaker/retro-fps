@@ -31,7 +31,9 @@ void editor_do_lightmap_window(editor_lightmap_state_t *lm_editor, editor_window
     v3_t ambient_color = v3_from_key(map, worldspawn, S("ambient_color"));
     ambient_color = mul(1.0f / 255.0f, ambient_color);
 
-	if (!map->lightmap_state || !map->lightmap_state->finalized)
+	lum_state_flags_t flags = map->lightmap_state ? atomic_load(&map->lightmap_state->flags) : 0;
+
+	if (!map->lightmap_state || !(flags & LumStateFlag_finalized))
 	{
 		ui_row_header(&builder, S("Bake Settings"));
 
@@ -153,7 +155,7 @@ void editor_do_lightmap_window(editor_lightmap_state_t *lm_editor, editor_window
 		}
 	}
 
-	if (map->lightmap_state && map->lightmap_state->finalized)
+	if (map->lightmap_state && (flags & LumStateFlag_finalized))
 	{
 		lum_bake_state_t *state = map->lightmap_state;
 
@@ -196,9 +198,7 @@ void editor_do_lightmap_window(editor_lightmap_state_t *lm_editor, editor_window
 
 	if (map->lightmap_state)
 	{
-		lum_bake_state_t *state = map->lightmap_state;
-
-		if (state->finalized)
+		if (flags & LumStateFlag_finalized)
 		{
 			ui_row_header(&builder, S("Lightmap Debugger"));
 

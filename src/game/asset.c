@@ -47,7 +47,7 @@ typedef struct asset_node_t
 
 typedef struct asset_slot_t
 {
-	alignas(64) uint32_t state;
+	alignas(64) atomic uint32_t state;
 	PAD(60);
 
 	// for the time being, every single asset slot gets its own arena:
@@ -257,7 +257,7 @@ static void preload_asset_info(asset_slot_t *asset)
         INVALID_DEFAULT_CASE;
 	}
 
-	atomic_or_u32(&asset->state, AssetState_info_resident);
+	atomic_fetch_or(&asset->state, AssetState_info_resident);
 }
 
 void initialize_asset_system(const asset_config_t *config)
@@ -384,7 +384,7 @@ static asset_slot_t *get_or_load_asset_async(asset_hash_t hash, asset_kind_t kin
 		bool should_load = (state & AssetState_on_disk) && !(state & (AssetState_resident|AssetState_being_loaded));
 
 		if (should_load &&
-			atomic_cas_u32(&asset->state, new_state, state) == state)
+			atomic_compare_exchange_strong(&asset->state, &state, new_state))
 		{
 			asset_job_t job = {
 				.kind  = ASSET_JOB_LOAD_FROM_DISK,
@@ -407,7 +407,7 @@ static asset_slot_t *get_or_load_asset_blocking(asset_hash_t hash, asset_kind_t 
 		bool should_load = (state & AssetState_on_disk) && !(state & (AssetState_being_loaded));
 
 		if (should_load &&
-			atomic_cas_u32(&asset->state, new_state, state) == state)
+			atomic_compare_exchange_strong(&asset->state, &state, new_state))
 		{
 			asset_job_t job = {
 				.kind  = ASSET_JOB_LOAD_FROM_DISK,
@@ -432,7 +432,7 @@ void reload_asset(asset_hash_t hash)
 		bool should_load = (state & AssetState_on_disk) && !(state & AssetState_being_loaded);
 
 		if (should_load &&
-			atomic_cas_u32(&asset->state, new_state, state) == state)
+			atomic_compare_exchange_strong(&asset->state, &state, new_state))
 		{
 			asset_job_t job = {
 				.kind  = ASSET_JOB_LOAD_FROM_DISK,

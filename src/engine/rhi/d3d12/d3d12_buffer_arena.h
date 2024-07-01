@@ -2,10 +2,12 @@
 
 typedef struct d3d12_buffer_arena_t 
 {
+	alignas(64) atomic uint32_t at;
+	alignas(64)
+
 	ID3D12Resource           *buffer;
 	D3D12_GPU_VIRTUAL_ADDRESS gpu_base;
 	char                     *cpu_base;
-	uint32_t                  at;
 	uint32_t                  capacity;
 } d3d12_buffer_arena_t;
 

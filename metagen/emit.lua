@@ -349,8 +349,18 @@ function process_shaders(p)
 		local bundle_name = bundle_info.bundle.name
 		local bundle_path = bundle_info.path
 
+		local shaders = {}
+
+		for shader_name, shader in pairs(bundle.shaders) do
+			table.insert(shaders, { name = shader_name, shader = shader })
+		end
+
+		table.sort(shaders, function(a, b) return a.name < b.name end)
+
 		if bundle.shaders then
-			for shader_name, shader in pairs(bundle.shaders) do
+			for _, v in ipairs(shaders) do
+				local shader_name = v.name
+				local shader      = v.shader
 				source:write("\t[DfShader_" .. shader_name .. "] = {\n")
 				source:write("\t\t.name        = Sc(\"" .. shader_name .. "\"),\n")
 				source:write("\t\t.entry_point = Sc(\"" .. shader.entry .. "\"),\n")

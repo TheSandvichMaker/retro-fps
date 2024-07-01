@@ -190,7 +190,6 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 			if (ui_button_pressed(UiButton_left, true))
 			{
 				ui_set_active(handle_id);
-				ui_gain_focus(handle_id);
 				ui->drag_anchor = sub(ui->input.mouse_p, rect2_center(handle));
 			}
 		} 
@@ -331,7 +330,6 @@ bool ui_button(rect2_t rect, string_t label)
 		if (ui_button_pressed(UiButton_left, true))
 		{
 			ui_set_active(id);
-			ui_gain_focus(id);
 		}
 
 		color_id = UiColor_button_hot;
@@ -411,7 +409,6 @@ bool ui_checkbox(rect2_t rect, bool *result_value)
 		if (ui_button_pressed(UiButton_left, true))
 		{
 			ui_set_active(id);
-			ui_gain_focus(id);
 		}
 
 		color_id = UiColor_button_hot;
@@ -747,6 +744,8 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 	ui_id_t id = p->id;
 	ui_validate_widget(id);
 
+	ui_push_id(id);
+
 	//------------------------------------------------------------------------
 
 	bool first_use;
@@ -783,6 +782,67 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 
 	bool has_bounds = p->min != p->max;
 
+	double min = p->min;
+	double max = p->max;
+
+	if (!has_bounds)
+	{
+		min = -INFINITY;
+		max = +INFINITY;
+	}
+
+	//------------------------------------------------------------------------
+	// Inc/Dec buttons
+
+	if (p->flags & UiSliderFlags_inc_dec_buttons)
+	{
+		v2_t dim = rect2_dim(rect);
+
+		float w = dim.x;
+		float h = dim.y;
+
+		if (w > 3.0f*h)
+		{
+			rect2_t dec = rect2_cut_left (&rect, h);
+			rect2_t inc = rect2_cut_right(&rect, h);
+
+			double increment = p->increment_amount;
+
+			if (ui_key_held(Key_control, false))
+			{
+				increment = p->major_increment_amount;
+			}
+
+			if (ui_button(dec, S("-")))
+			{
+				if (new_value             >= min &&
+					new_value - increment <  min)
+				{
+					new_value = min;
+				}
+				else
+				{
+					new_value -= increment;
+				}
+			}
+
+			if (ui_button(inc, S("+")))
+			{
+				if (new_value             <= max &&
+					new_value + increment >  max)
+				{
+					new_value = max;
+				}
+				else
+				{
+					new_value += increment;
+				}
+			}
+
+			rect = rect2_cut_margins_horizontally(rect, ui_sz_pix(ui_scalar(UiScalar_widget_margin)));
+		}
+	}
+
 	//------------------------------------------------------------------------
 	// Interaction
 
@@ -791,7 +851,7 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 		ui_set_next_hot(id);
 	}
 
-	ui_id_t text_input_id = ui_child_id(id, S("text_input"));
+	ui_id_t text_input_id = ui_id(S("text_input"));
 
 	if (ui_is_hot(id))
 	{
@@ -804,15 +864,14 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 
 		if (ui_button_pressed(UiButton_left, true))
 		{
-			ui_set_active(id);
-			ui_gain_focus(id);
-
 			if (control_held)
 			{
-				ui_set_active(text_input_id);
 				ui_gain_focus(text_input_id);
-
 				state->text_input.count = 0;
+			}
+			else
+			{
+				ui_set_active(id);
 			}
 		}
 	}
@@ -841,7 +900,7 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 					new_value = round(new_value);
 				}
 
-				ui_set_f32(ui_child_id(id, S("display_value")), new_value);
+				ui_set_f32(ui_id(S("display_value")), new_value);
 			}
 		}
 
@@ -870,7 +929,7 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 
 				v2_t delta = sub(ui->input.mouse_p, ui->input.mouse_p_on_lmb);
 
-				double range                = has_bounds ? p->max - p->min : 5.0;
+				double range                = has_bounds ? p->max - p->min : 10.0;
 				double units_to_cover_range = 256.0;
 				double rate                 = range / units_to_cover_range;
 
@@ -880,9 +939,9 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 				}
 
 				new_value += rate*delta.y;
-				if (has_bounds) new_value = CLAMP(new_value, p->min, p->max);
+				new_value  = CLAMP(new_value, min, max);
 
-				ui_set_f32(ui_child_id(id, S("display_value")), new_value);
+				ui_set_f32(ui_id(S("display_value")), new_value);
 			}
 		}
 
@@ -903,13 +962,17 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 			if (ui_key_pressed(Key_left, true))
 			{
 				new_value -= rate*p->granularity;
-				if (has_bounds) new_value = CLAMP(new_value, p->min, p->max);
+				new_value  = CLAMP(new_value, min, max);
+
+				ui_set_f32(ui_id(S("display_value")), new_value);
 			}
 
 			if (ui_key_pressed(Key_right, true))
 			{
 				new_value += rate*p->granularity;
-				if (has_bounds) new_value = CLAMP(new_value, p->min, p->max);
+				new_value  = CLAMP(new_value, min, max);
+
+				ui_set_f32(ui_id(S("display_value")), new_value);
 			}
 		}
 	}
@@ -919,7 +982,7 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 
 	rect2_t slider_area = rect2_cut_margins(rect, ui_sz_pix(ui_scalar(UiScalar_slider_margin) + 1.0f));
 
-	double display_value = ui_interpolate_f32(ui_child_id(id, S("display_value")), new_value);
+	double display_value = ui_interpolate_f32(ui_id(S("display_value")), new_value);
 
 	ui_draw_rect(rect, ui_color(UiColor_slider_background));
 
@@ -966,6 +1029,8 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 
 	state->value = new_value;
 
+	ui_pop_id();
+
 	return new_value != old_value;
 }
 
@@ -989,12 +1054,23 @@ bool ui_slider(rect2_t rect, float *v, float min, float max)
 
 bool ui_slider_int(rect2_t rect, int32_t *v, int32_t min, int32_t max)
 {
+	ui_slider_flags_t flags = 0;
+
+	// stupid...
+	if (min != max)
+	{
+		flags = UiSliderFlags_inc_dec_buttons;
+	}
+
 	return ui_slider_base(rect, &(ui_slider_parameters_t){
 		.id            = ui_id_pointer(v),
 		.type          = UiSlider_i32,
+		.flags         = flags,
 		.min           = min,
 		.max           = max,
 		.granularity   = 1.0,
+		.increment_amount = 1,
+		.major_increment_amount = 5,
 		.i32           = v,
 		.format_string = "%g",
 	});
@@ -1011,7 +1087,7 @@ bool ui_drag_float(rect2_t rect, float *v)
 	});
 }
 
-bool ui_draw_int(rect2_t rect, int32_t *v)
+bool ui_drag_int(rect2_t rect, int32_t *v)
 {
 	return ui_slider_base(rect, &(ui_slider_parameters_t){
 		.id            = ui_id_pointer(v),
@@ -1417,7 +1493,6 @@ void ui_hue_picker(rect2_t rect, float *hue)
 		if (ui_button_pressed(UiButton_left, true))
 		{
 			ui_set_active(id);
-			ui_gain_focus(id);
 		}
 	}
 
@@ -1494,7 +1569,6 @@ void ui_sat_val_picker(rect2_t rect, float hue, float *sat, float *val)
 		if (ui_button_pressed(UiButton_left, true))
 		{
 			ui_set_active(id);
-			ui_gain_focus(id);
 		}
 	}
 

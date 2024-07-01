@@ -4,7 +4,7 @@ if "%1"=="clean" rmdir build /S /Q
 
 if not exist build mkdir build
 
-set flags=/nologo /Z7 /WX /W4 /wd4201 /wd4115 /wd4013 /wd4116 /wd4324 /std:c11 /I..\src /I..\external\include /DUNICODE=1 /D_CRT_SECURE_NO_WARNINGS /DPLATFORM_WIN32=1 /DDREAM_DEVELOPER=1
+set flags=/nologo /Z7 /WX /W4 /wd4201 /wd4115 /wd4013 /wd4116 /wd4324 /std:c11 /experimental:c11atomics /I..\src /I..\external\include /DUNICODE=1 /D_CRT_SECURE_NO_WARNINGS /DPLATFORM_WIN32=1 /DDREAM_DEVELOPER=1
 set debug_flags=/Od /MTd /DDREAM_SLOW=1
 set release_flags=/O2 /MT
 set linker_flags=/opt:ref /incremental:no /libpath:..\external\lib\x64

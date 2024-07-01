@@ -1,5 +1,7 @@
 #pragma once
 
+typedef void (*cvar_command_t)(string_t arguments);
+
 typedef enum cvar_kind_t
 {
 	CVarKind_NONE,
@@ -8,6 +10,7 @@ typedef enum cvar_kind_t
 	CVarKind_i32,
 	CVarKind_f32,
 	CVarKind_string,
+	CVarKind_command,
 
 	CVarKind_COUNT,
 } cvar_kind_t;
@@ -19,10 +22,11 @@ typedef enum cvar_flags_t
 
 typedef union cvar_value_t
 {
-	bool     boolean;
-	int32_t  i32;
-	float    f32;
-	string_t string;
+	bool           boolean;
+	int32_t        i32;
+	float          f32;
+	string_t       string;
+	cvar_command_t command;
 } cvar_value_t;
 
 typedef struct cvar_string_block_t
@@ -120,6 +124,18 @@ global cvar_state_t g_cvars;
 		.as_default.string = Sc(in_default_value),                            \
 	};
 
+#define CVAR_COMMAND(in_variable, in_key)                        \
+	fn_local void PASTE(in_variable, _func)(string_t arguments); \
+																 \
+	global cvar_t in_variable = {                                \
+		.kind               = CVarKind_command,                  \
+		.key                = Sc(in_key),                        \
+		.as.command         = PASTE(in_variable, _func),         \
+		.as_default.command = PASTE(in_variable, _func),         \
+	};                                                           \
+																 \
+	void PASTE(in_variable, _func)(string_t arguments)
+
 fn void cvar_init_system(void);
 
 fn void    cvar_register (cvar_t *cvar);
@@ -135,6 +151,8 @@ fn void cvar_write_bool  (cvar_t *cvar, bool     value);
 fn void cvar_write_i32   (cvar_t *cvar, int32_t  value);
 fn void cvar_write_f32   (cvar_t *cvar, float    value);
 fn void cvar_write_string(cvar_t *cvar, string_t value);
+
+fn void cvar_execute_command(cvar_t *cvar, string_t arguments);
 
 fn bool cvar_is_default(cvar_t *cvar);
 fn void cvar_reset_to_default(cvar_t *cvar);

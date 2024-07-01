@@ -29,10 +29,10 @@ d3d12_buffer_allocation_t d3d12_arena_alloc(d3d12_buffer_arena_t *arena, uint32_
 	{
 		// TODO: The only reason why this is a CAS loop is because of the align - I could think of ways around that
 		// I could also just have an allocator per thread, but...
-		at         = atomic_load_u32(&arena->at);
+		at         = atomic_load(&arena->at);
 		at_aligned = align_forward(arena->at, alignment);
 
-		if (atomic_cas_u32(&arena->at, at_aligned + size, at) == at)
+		if (atomic_compare_exchange_strong(&arena->at, &at, at_aligned + size))
 		{
 			break;
 		}

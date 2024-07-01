@@ -12,6 +12,7 @@
 #include <setjmp.h>
 #include <stdalign.h>
 #include <stdlib.h>
+#include <stdatomic.h>
 
 #define DEPRECATED(details) __declspec(deprecated(details))
 

@@ -251,7 +251,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
 	lum_params_t         *params = &state->params;
     lum_thread_context_t *thread = &job->thread_contexts[job_context->thread_index];
 
-    if (state->cancel)
+    if (atomic_load(&state->flags) & LumStateFlag_cancel)
         goto done;
 
     map_t *map = params->map;
@@ -287,8 +287,8 @@ static void lum_job(job_context_t *job_context, void *userdata)
     for (size_t y = 0; y < h; y++)
     for (size_t x = 0; x < w; x++)
     {
-        if (state->cancel)
-            goto done;
+		if (atomic_load(&state->flags) & LumStateFlag_cancel)
+			goto done;
 
         float u = ((float)x + 0.5f) / (float)(w);
         float v = ((float)y + 0.5f) / (float)(h);
@@ -345,7 +345,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
         indirect_lighting_pixels[y*w + x] = indirect_lighting;
     }
 
-    if (state->cancel)
+	if (atomic_load(&state->flags) & LumStateFlag_cancel)
         goto done;
 
 #if  1
@@ -397,7 +397,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
     }
 #endif
 
-    if (state->cancel)
+	if (atomic_load(&state->flags) & LumStateFlag_cancel)
         goto done;
 
     for (int k = 0; k < 1; k++)
@@ -447,7 +447,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
         }
     }
 
-    if (state->cancel)
+	if (atomic_load(&state->flags) & LumStateFlag_cancel)
         goto done;
 
     for (int y = 0; y < h; y++)
@@ -456,7 +456,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
         direct_lighting_pixels[y*w + x] = add(direct_lighting_pixels[y*w + x], indirect_lighting_pixels[y*w + x]);
     }
 
-    if (state->cancel)
+	if (atomic_load(&state->flags) & LumStateFlag_cancel)
         goto done;
 
     uint32_t *packed = m_alloc_array(temp, w*h, uint32_t);
@@ -489,7 +489,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
 	poly->lightmap_rhi = lightmap_rhi;
 
 done:
-	atomic_increment_u32(&state->jobs_completed);
+	atomic_fetch_add(&state->jobs_completed, 1);
 
 	if (bake_jobs_completed(state))
 	{
@@ -538,7 +538,7 @@ static void trace_volumetric_lighting_job(job_context_t *job_context, void *user
 	lum_params_t     *params = &state->params;
 	map_t            *map    = params->map;
 
-    if (state->cancel)
+	if (atomic_load(&state->flags) & LumStateFlag_cancel)
         goto done;
 
     rect3_t fogmap_bounds = map->bounds;
@@ -564,7 +564,7 @@ static void trace_volumetric_lighting_job(job_context_t *job_context, void *user
     for (size_t y = 0; y < height; y++)
     for (size_t x = 0; x < width;  x++)
     {
-        if (state->cancel)
+		if (atomic_load(&state->flags) & LumStateFlag_cancel)
             goto done;
 
         v3_t uvw = {
@@ -657,7 +657,7 @@ static void trace_volumetric_lighting_job(job_context_t *job_context, void *user
 #endif
 
 done:
-	atomic_increment_u32(&state->jobs_completed);
+	atomic_fetch_add(&state->jobs_completed, 1);
 
 	if (bake_jobs_completed(state))
 	{
@@ -720,11 +720,13 @@ bool bake_finalize(lum_bake_state_t *state)
 {
     bool result = false;
 
-    if (state->cancel)
+	lum_state_flags_t flags = atomic_load(&state->flags);
+
+    if (flags & LumStateFlag_cancel)
     {
         release_bake_state(state);
     } 
-    else if (!state->finalized && bake_jobs_completed(state))
+    else if (!(flags & LumStateFlag_finalized) && bake_jobs_completed(state))
 	{
 		lum_debug_data_t *debug = &state->results.debug;
 
@@ -743,10 +745,9 @@ bool bake_finalize(lum_bake_state_t *state)
 		state->end_time = os_hires_time();
 		state->final_bake_time = os_seconds_elapsed(state->start_time, state->end_time);
 
-		COMPILER_BARRIER;
+		atomic_fetch_or(&state->flags, LumStateFlag_finalized);
 
-		state->finalized = true;
-        result           = true;
+        result = true;
 	}
 
 	return result;
@@ -754,14 +755,16 @@ bool bake_finalize(lum_bake_state_t *state)
 
 void bake_cancel(lum_bake_state_t *state)
 {
-    state->cancel = true;
+	atomic_fetch_or(&state->flags, LumStateFlag_cancel);
 }
 
 bool release_bake_state(lum_bake_state_t *state)
 {
 	bool result = false;
 
-	if (state->finalized || (state->cancel && bake_jobs_completed(state)))
+	lum_state_flags_t flags = atomic_load(&state->flags);
+
+	if ((flags & LumStateFlag_finalized) || ((flags & LumStateFlag_cancel) && bake_jobs_completed(state)))
 	{
 		result = true;
 		m_release(&state->arena);

@@ -51,11 +51,12 @@ null_term_string_t cvar_kind_to_string(cvar_kind_t kind)
 
 	switch (kind)
 	{
-		case CVarKind_NONE:   result = S("<none>"); break;
-		case CVarKind_bool:   result = S("bool");   break;
-		case CVarKind_i32:    result = S("i32");    break;
-		case CVarKind_f32:    result = S("f32");    break;
-		case CVarKind_string: result = S("string"); break;
+		case CVarKind_NONE:    result = S("<none>"); break;
+		case CVarKind_bool:    result = S("bool");   break;
+		case CVarKind_i32:     result = S("i32");    break;
+		case CVarKind_f32:     result = S("f32");    break;
+		case CVarKind_string:  result = S("string"); break;
+		case CVarKind_command: result = S("command"); break;
 		INVALID_DEFAULT_CASE;
 	}
 
@@ -68,11 +69,12 @@ null_term_string_t cvar_kind_to_string_with_indefinite_article(cvar_kind_t kind)
 
 	switch (kind)
 	{
-		case CVarKind_NONE:   result = S("<none>");   break;
-		case CVarKind_bool:   result = S("a bool");   break;
-		case CVarKind_i32:    result = S("an i32");   break;
-		case CVarKind_f32:    result = S("an f32");   break;
-		case CVarKind_string: result = S("a string"); break;
+		case CVarKind_NONE:    result = S("<none>");    break;
+		case CVarKind_bool:    result = S("a bool");    break;
+		case CVarKind_i32:     result = S("an i32");    break;
+		case CVarKind_f32:     result = S("an f32");    break;
+		case CVarKind_string:  result = S("a string");  break;
+		case CVarKind_command: result = S("a command"); break;
 		INVALID_DEFAULT_CASE;
 	}
 
@@ -143,7 +145,7 @@ void cvar_write_string(cvar_t *cvar, string_t string)
 {
 	cvar_validate_and_register(cvar, CVarKind_string);
 
-	cvar_string_block_t *old_block = cvar->string_block; ;
+	cvar_string_block_t *old_block = cvar->string_block;
 
 	uint16_t string_block_header_size = offsetof(cvar_string_block_t, bytes);
 
@@ -164,6 +166,15 @@ void cvar_write_string(cvar_t *cvar, string_t string)
 	{
 		simple_heap_free(&g_cvars.string_allocator, old_block, old_block->size);
 	}
+}
+
+void cvar_execute_command(cvar_t *cvar, string_t arguments)
+{
+	cvar_validate_and_register(cvar, CVarKind_command);
+
+	ASSERT(cvar->as.command);
+
+	cvar->as.command(arguments);
 }
 
 bool cvar_is_default(cvar_t *cvar)
@@ -190,6 +201,11 @@ bool cvar_is_default(cvar_t *cvar)
 		case CVarKind_string:
 		{
 			result = string_match(cvar->as.string, cvar->as_default.string);
+		} break;
+
+		case CVarKind_command:
+		{
+			result = cvar->as.command == cvar->as_default.command;
 		} break;
 	}
 

@@ -128,9 +128,13 @@ typedef struct ui_slider_parameters_t
 	ui_id_t id;
 	ui_slider_type_t type;
 
+	ui_slider_flags_t flags;
+
 	double min;
 	double max;
 	double granularity;
+	double increment_amount;
+	double major_increment_amount;
 
 	union
 	{

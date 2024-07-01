@@ -81,15 +81,49 @@ v3_t player_view_direction(player_t *player)
     return dir;
 }
 
+fn_local void teleport_player(player_t *player, v3_t p)
+{
+	player->p       = p;
+	player->support = NULL;
+}
+
 CVAR_F32(cvar_player_sprint_multiplier, "player.sprint_multiplier", 2.0f);
 CVAR_F32(cvar_player_jump_force,        "player.jump_force",        300.0f);
 CVAR_F32(cvar_player_crouch_speed,      "player.crouch_speed",      0.15f);
+
+CVAR_COMMAND(ccmd_respawn_player, "player.respawn")
+{
+	(void)arguments;
+
+	if (g_game)
+	{
+		gamestate_t *game = g_game;
+
+		map_t    *map    = game->map;
+		player_t *player = game->player;
+
+		for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
+		{
+			map_entity_t *e = &map->entities[entity_index];
+
+			if (is_class(map, e, S("info_player_start")))
+			{
+				v3_t p = v3_from_key(map, e, S("origin"));
+
+				teleport_player(player, p);
+
+				break;
+			}
+		}
+	}
+}
 
 fn_local void register_player_cvars(void)
 {
 	cvar_register(&cvar_player_sprint_multiplier);
 	cvar_register(&cvar_player_jump_force);
 	cvar_register(&cvar_player_crouch_speed);
+	cvar_register(&ccmd_respawn_player);
 }
 
 void player_noclip(player_t *player, float dt)
@@ -141,7 +175,7 @@ void player_movement(map_t *map, player_t *player, float dt)
     float move_speed = 1500.0f;
     v3_t move_delta = { 0 };
 
-    if (action_held(Action_run))      move_speed *= 2.0f;
+    if (action_held(Action_run))      move_speed *= cvar_read_f32(&cvar_player_sprint_multiplier);
 
     if (action_held(Action_forward))  move_delta.x += 1.0f;
     if (action_held(Action_back))     move_delta.x -= 1.0f;
@@ -324,33 +358,7 @@ void player_movement(map_t *map, player_t *player, float dt)
 
         player->p = final_move;
         move_t -= t;
-
-#if 0
-        diag_add_arrow(&(diag_arrow_t){
-            .start = r_o,
-            .end   = add(r_o, mul(t, r_d)),
-            .color = { 1, 1, 0 },
-        });
-#endif
     }
-
-#if 0
-    diag_add_arrow(&(diag_arrow_t){
-        .start = player->p,
-        .end   = add(player->p, v3(1, 0, 0)),
-        .color = { 1, 0, 0 },
-    });
-    diag_add_arrow(&(diag_arrow_t){
-        .start = player->p,
-        .end   = add(player->p, v3(0, 1, 0)),
-        .color = { 0, 1, 0 },
-    });
-    diag_add_arrow(&(diag_arrow_t){
-        .start = player->p,
-        .end   = add(player->p, v3(0, 0, 1)),
-        .color = { 0, 0, 1 },
-    });
-#endif
 
     camera->p = player_view_origin(player);
 }
@@ -408,8 +416,8 @@ void app_init(platform_init_io_t *io)
 	bind_key_action         (Action_jump,           Key_space);
 	bind_key_action         (Action_run,            Key_shift);
 	bind_key_action         (Action_crouch,         Key_control);
-	bind_mouse_button_action(Action_fire1, Button_left);
-	bind_mouse_button_action(Action_fire2, Button_right);
+	bind_mouse_button_action(Action_fire1,          Button_left);
+	bind_mouse_button_action(Action_fire2,          Button_right);
 	bind_key_action         (Action_escape,         Key_escape);
 	bind_key_action         (Action_toggle_noclip,  Key_v);
 
@@ -712,7 +720,6 @@ fn_local void app_tick(platform_tick_io_t *io)
 
 	app->accumulator += frame_time;
 
-	// why are you inconsisteeeeent
 	if (action_pressed(Action_fire2))
 	{
 		the_ui->has_focus = true;

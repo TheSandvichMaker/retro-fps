@@ -248,8 +248,10 @@ void editor_do_cvar_window(cvar_window_state_t *state, editor_window_t *window)
 		rect2_cut_from_right(row, ui_sz_pix(18.0f), &reset_rect, &row);
 		rect2_cut_from_right(row, ui_sz_pix(ui_scalar(UiScalar_widget_margin)), NULL, &row);
 
+		float widget_size = flt_max(64.0f, ui_size_to_width(row, ui_sz_pct(0.3333f)));
+
 		rect2_t label_rect, widget_rect;
-		rect2_cut_from_left(row, ui_sz_pct(0.667f), &label_rect, &widget_rect);
+		rect2_cut_from_right(row, ui_sz_pix(widget_size), &widget_rect, &label_rect);
 
 		ui_label(label_rect, cvar->key);
 
@@ -280,9 +282,17 @@ void editor_do_cvar_window(cvar_window_state_t *state, editor_window_t *window)
 				ui_label(widget_rect, Sf("\"%cs\"", cvar->as.string));
 			} break;
 
+			case CVarKind_command:
+			{
+				if (ui_button(widget_rect, S("Run")))
+				{
+					cvar_execute_command(cvar, S(""));
+				}
+			} break;
+
 			default:
 			{
-				ui_label(widget_rect, Sf("%cs (placeholder)", cvar->key));
+				ui_label(widget_rect, Sf("%cs (unhandled cvar type)", cvar->key));
 			} break;
 		}
 

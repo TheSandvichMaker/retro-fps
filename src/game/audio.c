@@ -190,37 +190,32 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 	// Cycle Through Commands
 	//
 
-	uint32_t command_read_index  = mixer.command_read_index;
-	uint32_t command_write_index = mixer.command_write_index;
-
-	uint32_t command_index = command_read_index;
-	while (command_index != command_write_index)
+	mix_command_t command;
+	while (read_mix_command(&command))
 	{
-		mix_command_t *command = &mixer.commands[command_index++ % MIXER_COMMAND_BUFFER_SIZE];
-
-		switch (command->kind)
+		switch (command.kind)
 		{
 			case MIX_PLAY_SOUND:
 			{
-				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
+				if (NEVER(mixer_id_type(command.id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
 
 				playing_sound_t *playing = pool_add(&mixer.playing_sounds);
-				playing->id           = command->id;
-				playing->waveform     = command->play_sound.waveform;
-				playing->category     = command->play_sound.category;
-				playing->volume       = command->play_sound.volume;
-				playing->flags        = command->play_sound.flags;
-				playing->p            = command->play_sound.p;
-				playing->min_distance = command->play_sound.min_distance;
+				playing->id           = command.id;
+				playing->waveform     = command.play_sound.waveform;
+				playing->category     = command.play_sound.category;
+				playing->volume       = command.play_sound.volume;
+				playing->flags        = command.play_sound.flags;
+				playing->p            = command.play_sound.p;
+				playing->min_distance = command.play_sound.min_distance;
 
                 table_insert_object(&mixer.playing_sounds_index, playing->id.value, playing);
 			} break;
 
 			case MIX_STOP_SOUND:
 			{
-				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
+				if (NEVER(mixer_id_type(command.id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
 
-				playing_sound_t *playing = table_find_object(&mixer.playing_sounds_index, command->id.value);
+				playing_sound_t *playing = table_find_object(&mixer.playing_sounds_index, command.id.value);
 
 				if (ALWAYS(playing))
 				{
@@ -230,20 +225,20 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 
 			case MIX_FADE:
 			{
-				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
+				if (NEVER(mixer_id_type(command.id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
 
-				playing_sound_t *playing = table_find_object(&mixer.playing_sounds_index, command->id.value);
+				playing_sound_t *playing = table_find_object(&mixer.playing_sounds_index, command.id.value);
 
 				if (ALWAYS(playing))
 				{
 					fade_t *fade = pool_add(&mixer.active_fades);
 					fade->playing        = playing;
-					fade->flags          = command->fade.flags;
-					fade->start          = command->fade.start;
-					fade->target         = command->fade.target;
-					fade->current        = command->fade.start;
-					fade->style          = command->fade.style;
-					fade->frame_duration = command->fade.duration;
+					fade->flags          = command.fade.flags;
+					fade->start          = command.fade.start;
+					fade->target         = command.fade.target;
+					fade->current        = command.fade.start;
+					fade->style          = command.fade.style;
+					fade->frame_duration = command.fade.duration;
 					
 					dll_push_back(playing->first_fade, playing->last_fade, fade);
 					playing->fade_count += 1;
@@ -252,40 +247,40 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 
 			case MIX_UPDATE_LISTENER:
 			{
-				mixer.listener_p = command->listener.p;
-				mixer.listener_d = normalize_or_zero(command->listener.d);
+				mixer.listener_p = command.listener.p;
+				mixer.listener_d = normalize_or_zero(command.listener.d);
 				basis_vectors(mixer.listener_d, make_v3(0, 0, 1), &mixer.listener_x, &mixer.listener_y, &mixer.listener_z);
 			} break;
 
 			case MIX_SOUND_POSITION:
 			{
-				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
+				if (NEVER(mixer_id_type(command.id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
 
-				playing_sound_t *playing = table_find_object(&mixer.playing_sounds_index, command->id.value);
+				playing_sound_t *playing = table_find_object(&mixer.playing_sounds_index, command.id.value);
 
 				if (ALWAYS(playing))
 				{
-					playing->p = command->sound_p.p;
+					playing->p = command.sound_p.p;
 				}
 			} break;
 
 			case MIX_SET_PLAYING_SOUND_FLAGS:
 			{
-				if (NEVER(mixer_id_type(command->id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
+				if (NEVER(mixer_id_type(command.id) != MIXER_ID_TYPE_PLAYING_SOUND)) break;
 
-				playing_sound_t *playing = table_find_object(&mixer.playing_sounds_index, command->id.value);
+				playing_sound_t *playing = table_find_object(&mixer.playing_sounds_index, command.id.value);
 
 				if (ALWAYS(playing))
 				{
-					playing->flags &= ~command->set_playing_sound_flags.unset_flags;
-					playing->flags |=  command->set_playing_sound_flags.set_flags;
+					playing->flags &= ~command.set_playing_sound_flags.unset_flags;
+					playing->flags |=  command.set_playing_sound_flags.set_flags;
 				}
 			} break;
 
 #if 0
 			case MIX_SET_CATEGORY_VOLUME:
 			{
-				mix_command_set_category_volume_t *x = &command->set_category_volume;
+				mix_command_set_category_volume_t *x = &command.set_category_volume;
 
 				if (ALWAYS(x->category >= 0 && x->category < SOUND_CATEGORY_COUNT))
 				{
@@ -297,8 +292,6 @@ void mix_samples(uint32_t frames_to_mix, float *buffer)
 			INVALID_DEFAULT_CASE;
 		}
 	}
-
-	mixer.command_read_index = command_index;
 
 	//
 	// Mix Sounds

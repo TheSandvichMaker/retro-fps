@@ -98,11 +98,19 @@ typedef struct lum_job_t
 	PAD(48);
 } lum_job_t;
 
+typedef uint32_t lum_state_flags_t;
+typedef enum lum_state_flags_enum_t
+{
+	LumStateFlag_cancel    = 0x1,
+	LumStateFlag_finalized = 0x2,
+} lum_state_flags_enum_t;
+
 typedef struct lum_bake_state_t
 {
-    alignas(64)
-	volatile uint32_t jobs_completed; PAD(60);
-    volatile uint32_t cancel; PAD(60);
+	alignas(64) atomic uint32_t          jobs_completed;
+	alignas(64) atomic lum_state_flags_t flags;
+	alignas(64)
+
 	uint32_t          job_count;
 	uint32_t          thread_count;
 
@@ -115,8 +123,6 @@ typedef struct lum_bake_state_t
 	hires_time_t start_time;
 	hires_time_t end_time;
 	double       final_bake_time;
-
-	bool finalized;
 
 	struct
 	{

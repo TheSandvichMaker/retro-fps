@@ -37,6 +37,10 @@ for source in metashader_dir:lines() do
 	f:close()
 end
 
+table.sort(metashaders, function(a, b)
+	return a.file_name < b.file_name
+end)
+
 -- TODO: Put this somewhere better
 local view_parameters = {
 	world_to_clip  = float4x4, -- also known as "view-projection matrix"

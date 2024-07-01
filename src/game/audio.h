@@ -271,10 +271,12 @@ typedef struct reverb_t
 
 typedef struct mixer_t
 {
+	alignas(64) atomic uint32_t command_read_index;
+	alignas(64) atomic uint32_t command_write_index;
+	alignas(64)
+
 	float             category_volumes[SOUND_CATEGORY_COUNT];
 	uint32_t          next_playing_sound_id;
-	volatile uint32_t command_read_index;
-	volatile uint32_t command_write_index;
 	mix_command_t     commands[MIXER_COMMAND_BUFFER_SIZE];
 
 	// don't touch these directly (unless you know what you're doing etc etc):
@@ -318,20 +320,36 @@ typedef struct play_sound_t
 	float            min_distance;
 } play_sound_t;
 
-fn_local mix_command_t *push_mix_command(const mix_command_t *command)
+fn_local bool write_mix_command(const mix_command_t *command)
 {
-	// We should never be in a situation where we overwrite unprocessed mixer commands,
-	// but it's not catastrophic.
-	ASSERT(((mixer.command_write_index + 1) % MIXER_COMMAND_BUFFER_SIZE) != 
-		   ( mixer.command_read_index       % MIXER_COMMAND_BUFFER_SIZE));
+	uint32_t w = atomic_load_explicit(&mixer.command_write_index, memory_order_relaxed);
+	uint32_t r = atomic_load_explicit(&mixer.command_read_index,  memory_order_acquire);
 
-	uint32_t command_index = mixer.command_write_index;
-	copy_struct(&mixer.commands[command_index % MIXER_COMMAND_BUFFER_SIZE], command);
+	if (w - r == MIXER_COMMAND_BUFFER_SIZE)
+	{
+		return false;
+	}
 
-	COMPILER_BARRIER;
+	mixer.commands[w % MIXER_COMMAND_BUFFER_SIZE] = *command;
+	atomic_store_explicit(&mixer.command_write_index, w + 1, memory_order_release);
 
-	atomic_increment_u32(&mixer.command_write_index);
-	return &mixer.commands[command_index];
+	return true;
+}
+
+fn_local bool read_mix_command(mix_command_t *command)
+{
+	uint32_t r = atomic_load_explicit(&mixer.command_read_index,  memory_order_relaxed);
+	uint32_t w = atomic_load_explicit(&mixer.command_write_index, memory_order_acquire);
+
+	if (w - r == 0)
+	{
+		return false;
+	}
+
+	*command = mixer.commands[r % MIXER_COMMAND_BUFFER_SIZE];
+	atomic_store_explicit(&mixer.command_read_index, r + 1, memory_order_release);
+
+	return true;
 }
 
 fn_local mixer_id_t play_sound(const play_sound_t *params)
@@ -350,7 +368,7 @@ fn_local mixer_id_t play_sound(const play_sound_t *params)
 			.min_distance = params->min_distance,
 		},
 	};
-	push_mix_command(&command);
+	write_mix_command(&command);
 
 	return id;
 }
@@ -369,14 +387,14 @@ fn_local void stop_sound_harsh(mixer_id_t id)
 		.kind = MIX_STOP_SOUND,
 		.id   = id,
 	};
-	push_mix_command(&command);
+	write_mix_command(&command);
 }
 
 fn_local void stop_sound(mixer_id_t id)
 {
 	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
 
-	push_mix_command(&(mix_command_t){
+	write_mix_command(&(mix_command_t){
 		.kind = MIX_FADE,
 		.id   = id,
 		.fade = {
@@ -395,7 +413,7 @@ fn_local void fade_out_sound(mixer_id_t id, float fade_time)
 
 	uint32_t duration = samples_from_seconds(fade_time);
 
-	push_mix_command(&(mix_command_t){
+	write_mix_command(&(mix_command_t){
 		.kind = MIX_FADE,
 		.id   = id,
 		.fade = {
@@ -410,7 +428,7 @@ fn_local void fade_out_sound(mixer_id_t id, float fade_time)
 
 fn_local void mixer_set_listener(v3_t p, v3_t d)
 {
-	push_mix_command(&(mix_command_t){
+	write_mix_command(&(mix_command_t){
 		.kind = MIX_UPDATE_LISTENER,
 		.listener = {
 			.p = p,
@@ -423,7 +441,7 @@ fn_local void set_sound_position(mixer_id_t id, v3_t p)
 {
 	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
 
-	push_mix_command(&(mix_command_t){
+	write_mix_command(&(mix_command_t){
 		.kind = MIX_SOUND_POSITION,
 		.id   = id,
 		.sound_p = {
@@ -437,7 +455,7 @@ fn_local void update_playing_sound_flags(mixer_id_t id, uint32_t unset_flags, ui
     if (!mixer_id_valid(id)) return;
 	if (NEVER(mixer_id_type(id) != MIXER_ID_TYPE_PLAYING_SOUND)) return;
 
-	push_mix_command(&(mix_command_t){
+	write_mix_command(&(mix_command_t){
 		.kind = MIX_SET_PLAYING_SOUND_FLAGS,
 		.id   = id,
 		.set_playing_sound_flags = {

@@ -960,13 +960,13 @@ fn_local void ui_do_rect(r_ui_rect_t rect)
 	rect2_t clipped_rect = rect2_intersect(rect.rect, clip_rect);
 	if (!rect2_is_inside_out(clipped_rect) && rect2_area(clipped_rect) > 0.0f)
 	{
-		v2_t  dim             = rect2_dim(rect.rect);
-		float max_roundedness = mul(0.5f, min(dim.x, dim.y));
+		// v2_t  dim             = rect2_dim(rect.rect);
+		// float max_roundedness = mul(0.5f, min(dim.x, dim.y));
 
-		rect.roundedness.x = min(rect.roundedness.x, max_roundedness);
-		rect.roundedness.z = min(rect.roundedness.z, max_roundedness);
-		rect.roundedness.y = min(rect.roundedness.y, max_roundedness);
-		rect.roundedness.w = min(rect.roundedness.w, max_roundedness);
+		// rect.roundedness.x = min(rect.roundedness.x, max_roundedness);
+		// rect.roundedness.z = min(rect.roundedness.z, max_roundedness);
+		// rect.roundedness.y = min(rect.roundedness.y, max_roundedness);
+		// rect.roundedness.w = min(rect.roundedness.w, max_roundedness);
 
 		ui_push_command(
 			(ui_render_command_key_t){
@@ -1302,6 +1302,7 @@ void ui_set_next_hot(ui_id_t id)
 void ui_set_active(ui_id_t id)
 {
 	ui->active = id;
+	ui_gain_focus(id);
 }
 
 void ui_clear_next_hot(void)

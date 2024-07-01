@@ -4,6 +4,13 @@
 
 #pragma once
 
+#define atomic _Atomic
+
+//------------------------------------------------------------------------
+// Deprecated because I'm switching to using C11 atomics
+//------------------------------------------------------------------------
+
+#if 0
 // ------------------------------------------------------------------
 // Manual declaration of MSVC intrinsics to avoid including gunky 
 // headers
@@ -122,5 +129,7 @@ fn_local void atomic_store_u64(uint64_t volatile *target, uint64_t value)
 {
 	*target = value;
 }
+
+#endif
 
 #define COMPILER_BARRIER _ReadWriteBarrier()
