@@ -27,7 +27,7 @@
 #define local_persist static
 
 #define SUPPRESS_UNUSED_WARNING(x) (void)(x)
-
+#define CACHE_LINE_SIZE 64
 
 // still not sure where this should go, but it should be present in headers as well.
 // if the convention is that headers include api_types.h, then I guess this is the place

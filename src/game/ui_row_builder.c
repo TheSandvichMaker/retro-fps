@@ -129,6 +129,42 @@ bool ui_row_radio_buttons(ui_row_builder_t *builder, string_t label, int *state,
 	int current_state = state ? *state : 0;
 	int new_state = current_state;
 
+	ui_id_t id = ui_id(label);
+	ui_validate_widget(id);
+
+	ui_gain_tab_focus(id);
+
+	int keyboard_activated = -1;
+
+	bool responder = ui_in_responder_chain(id);
+
+	if (responder)
+	{
+		if (ui_key_pressed(Key_left, true))
+		{
+			if (ui->selection_index > 0)
+			{
+				ui->selection_index -= 1;
+			}
+		}
+
+		if (ui_key_pressed(Key_right, true))
+		{
+			if (ui->selection_index < option_count - 1)
+			{
+				ui->selection_index += 1;
+			}
+		}
+
+		if (ui_key_pressed(Key_return, true) ||
+			ui_key_pressed(Key_space, true))
+		{
+			keyboard_activated = ui->selection_index;
+		}
+	}
+
+	ui_push_responder_stack(id);
+
 	if (option_count > 0)
 	{
 		float margin       = ui_scalar(UiScalar_widget_margin);
@@ -153,15 +189,25 @@ bool ui_row_radio_buttons(ui_row_builder_t *builder, string_t label, int *state,
 
 			bool active = (current_state == i);
 
+			ui_suppress_next_tab_focus();
+
 			UI_Scalar          (UiScalar_roundedness, 0.0f)
 			UI_Color           (UiColor_roundedness, roundedness)
 			UI_ColorConditional(UiColor_button_idle, ui_color(UiColor_button_active), active)
-			if (ui_button(button_rect, option_labels[i]))
+			if (ui_button(button_rect, option_labels[i]) || (keyboard_activated == i))
 			{
 				new_state = i;
+				ui->selection_index = i;
+			}
+
+			if (responder && i == ui->selection_index)
+			{
+				ui_draw_focus_indicator(button_rect);
 			}
 		}
 	}
+
+	ui_pop_responder_stack();
 
 	if (state)
 	{
@@ -312,7 +358,7 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 
 	if (popup_opened_this_frame || popup_openness > 0.001f)
 	{
-		ui_push_layer();
+		ui_push_sub_layer();
 
 		if (state->popup_open)
 		{
@@ -378,7 +424,7 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 
 		ui_pop_clip_rect();
 
-		ui_pop_layer();
+		ui_pop_sub_layer();
 	}
 
 	state->cached_color = *color;

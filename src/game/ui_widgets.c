@@ -69,6 +69,23 @@ rect2_t ui_scrollable_region_begin_ex(ui_scrollable_region_t *state, rect2_t sta
 		rect2_cut_from_right(result_rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)), NULL, &result_rect);
 	}
 
+	ui_push_responder_stack(id);
+
+	if (ui_mouse_in_rect(start_rect))
+	{
+		ui_set_next_hot(id);
+	}
+
+	if (ui_is_hot(id))
+	{
+		if (ui_button_pressed(Button_left, true))
+		{
+			ui_gain_focus(id);
+		}
+	}
+
+	ui_push_sub_layer();
+
 	return result_rect;
 }
 
@@ -81,6 +98,7 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 {
 	ui_id_t id = ui_id_pointer(state);
 
+	ui_pop_sub_layer();
 	ui_pop_clip_rect();
 
 	float scrolling_zone_height = 0.0f;
@@ -105,6 +123,21 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 		{
 			float mouse_wheel = ui_mouse_wheel(true);
 			state->scroll_offset.y = flt_clamp(state->scroll_offset.y - mouse_wheel, 0.0f, scrolling_zone_height);
+		}
+	}
+
+	if (ui_in_responder_chain(id))
+	{
+		if (ui_key_pressed(Key_pagedown, true))
+		{
+			state->scroll_offset.y += 0.66f*scrolling_zone_height;
+			state->scroll_offset.y  = MIN(state->scroll_offset.y, scrolling_zone_height);
+		}
+
+		if (ui_key_pressed(Key_pageup, true))
+		{
+			state->scroll_offset.y -= 0.66f*scrolling_zone_height;
+			state->scroll_offset.y  = MAX(state->scroll_offset.y, 0.0f);
 		}
 	}
 
@@ -225,6 +258,8 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 	}
 
 	state->scroll_zone.y = scrolling_zone_height;
+
+	ui_pop_responder_stack();
 }
 
 //
@@ -315,6 +350,8 @@ bool ui_button(rect2_t rect, string_t label)
 
 	bool result = false;
 
+	ui_gain_tab_focus(id);
+
 	// @UiHoverable
 	ui_hoverable(id, rect);
 
@@ -362,6 +399,11 @@ bool ui_button(rect2_t rect, string_t label)
 		}
 	}
 
+	if (ui_in_responder_chain(id) && ui_key_pressed(Key_return, true))
+	{
+		result = true;
+	}
+
 	if (result)
 	{
 		// pow!
@@ -383,6 +425,11 @@ bool ui_button(rect2_t rect, string_t label)
 	ui_draw_text_aligned(ui_font(UiFont_default), button, label, make_v2(0.5f, 0.5f));
 	ui_pop_clip_rect();
 
+	if (ui_id_has_focus(id))
+	{
+		ui_draw_focus_indicator(button);
+	}
+
 	return result;
 }
 
@@ -394,6 +441,8 @@ bool ui_checkbox(rect2_t rect, bool *result_value)
 {
 	ui_id_t id = ui_id_pointer(result_value);
 	ui_validate_widget(id);
+
+	ui_gain_tab_focus(id);
 
 	bool result = false;
 
@@ -434,9 +483,13 @@ bool ui_checkbox(rect2_t rect, bool *result_value)
 		}
 	}
 
-	if (*result_value)
+	if (ui_in_responder_chain(id))
 	{
-		color_id = UiColor_button_active;
+		if (ui_key_pressed(Key_return, true) ||
+			ui_key_pressed(Key_space, true))
+		{
+			result = true;
+		}
 	}
 
 	// checkbox was pressed
@@ -446,6 +499,11 @@ bool ui_checkbox(rect2_t rect, bool *result_value)
 
 		// pow!
 		ui_set_v4(id, ui_color(UiColor_button_fired));
+	}
+
+	if (*result_value)
+	{
+		color_id = UiColor_button_active;
 	}
 
 	v4_t color        = ui_color(color_id);
@@ -469,6 +527,11 @@ bool ui_checkbox(rect2_t rect, bool *result_value)
 		ui_draw_rect(check_rect, color_interp);
 	}
 
+	if (ui_id_has_focus(id))
+	{
+		ui_draw_focus_indicator(rect);
+	}
+
 	return result;
 }
 
@@ -480,6 +543,8 @@ fn_local void ui_slider_old_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p
 {
 	if (NEVER(!ui->initialized)) 
 		return;
+
+	ui_gain_tab_focus(id);
 
 	ui_push_id(id);
 
@@ -794,6 +859,11 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 	//------------------------------------------------------------------------
 	// Inc/Dec buttons
 
+	bool has_inc_dec = false;
+
+	rect2_t inc_rect = rect2_inverted_infinity();
+	rect2_t dec_rect = rect2_inverted_infinity();
+
 	if (p->flags & UiSliderFlags_inc_dec_buttons)
 	{
 		v2_t dim = rect2_dim(rect);
@@ -803,48 +873,40 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 
 		if (w > 3.0f*h)
 		{
-			rect2_t dec = rect2_cut_left (&rect, h);
-			rect2_t inc = rect2_cut_right(&rect, h);
-
-			double increment = p->increment_amount;
-
-			if (ui_key_held(Key_control, false))
-			{
-				increment = p->major_increment_amount;
-			}
-
-			if (ui_button(dec, S("-")))
-			{
-				if (new_value             >= min &&
-					new_value - increment <  min)
-				{
-					new_value = min;
-				}
-				else
-				{
-					new_value -= increment;
-				}
-			}
-
-			if (ui_button(inc, S("+")))
-			{
-				if (new_value             <= max &&
-					new_value + increment >  max)
-				{
-					new_value = max;
-				}
-				else
-				{
-					new_value += increment;
-				}
-			}
-
+			has_inc_dec = true;
+			dec_rect = rect2_cut_left (&rect, h);
+			inc_rect = rect2_cut_right(&rect, h);
 			rect = rect2_cut_margins_horizontally(rect, ui_sz_pix(ui_scalar(UiScalar_widget_margin)));
+		}
+	}
+
+	double increment = p->increment_amount;
+
+	if (ui_key_held(Key_control, false))
+	{
+		increment = p->major_increment_amount;
+	}
+
+	if (has_inc_dec)
+	{
+		if (ui_button(dec_rect, S("-")))
+		{
+			if (new_value             >= min &&
+				new_value - increment <  min)
+			{
+				new_value = min;
+			}
+			else
+			{
+				new_value -= increment;
+			}
 		}
 	}
 
 	//------------------------------------------------------------------------
 	// Interaction
+
+	ui_gain_tab_focus(id);
 
 	if (ui_mouse_in_rect(rect))
 	{
@@ -878,7 +940,7 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 
 	if (ui_id_has_focus(text_input_id))
 	{
-		ui_push_layer();
+		ui_push_sub_layer();
 
 		ui_set_next_id(text_input_id);
 		ui_text_edit_result_t result = ui_text_edit_ex(rect, &state->text_input, &(ui_text_edit_params_t){
@@ -910,7 +972,7 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 			ui_gain_focus(id);
 		}
 
-		ui_pop_layer();
+		ui_pop_sub_layer();
 	}
 	else 
 	{
@@ -977,6 +1039,22 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 		}
 	}
 
+	if (has_inc_dec)
+	{
+		if (ui_button(inc_rect, S("+")))
+		{
+			if (new_value             <= max &&
+				new_value + increment >  max)
+			{
+				new_value = max;
+			}
+			else
+			{
+				new_value += increment;
+			}
+		}
+	}
+
 	//------------------------------------------------------------------------
 	// Drawing
 
@@ -1009,11 +1087,12 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 
 	ui_pop_clip_rect();
 
-	ui_style_color_t outline_color = ui_id_has_focus(id) 
-		? UiColor_slider_outline_focused 
-		: UiColor_slider_outline;
+	ui_draw_rect_outline(rect, ui_color(UiColor_slider_outline), 1.0f);
 
-	ui_draw_rect_outline(rect, ui_color(outline_color), 1.0f);
+	if (ui_id_has_focus(id))
+	{
+		ui_draw_focus_indicator(rect);
+	}
 
 	if (p->v)
 	{
@@ -1158,6 +1237,8 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *buffer, co
 
 	ui_id_t id = ui_id_pointer(buffer);
 	ui_validate_widget(id);
+
+	ui_gain_tab_focus(id);
 
 	ui_push_id(id);
 
@@ -1483,6 +1564,8 @@ void ui_hue_picker(rect2_t rect, float *hue)
 	ui_id_t id = ui_id_pointer(hue);
 	ui_validate_widget(id);
 
+	ui_gain_tab_focus(id);
+
 	if (ui_mouse_in_rect(rect))
 	{
 		ui_set_next_hot(id);
@@ -1558,6 +1641,8 @@ void ui_sat_val_picker(rect2_t rect, float hue, float *sat, float *val)
 
 	ui_id_t id = ui_combine_ids(ui_id_pointer(sat), ui_id_pointer(val));
 	ui_validate_widget(id);
+
+	ui_gain_tab_focus(id);
 
 	if (ui_mouse_in_rect(rect))
 	{
@@ -1646,4 +1731,192 @@ void ui_color_picker(rect2_t rect, v4_t *color)
 		.flags       = R_UI_RECT_HUE_PICKER,
 	});
 */
+}
+
+//------------------------------------------------------------------------
+// Window
+//------------------------------------------------------------------------
+
+bool ui_window_begin(ui_id_t id, ui_window_t *window, string_t title)
+{
+	if (!window->open)
+		return false;
+
+	ui_validate_widget(id);
+
+	ui_push_responder_stack(id);
+	ui_push_id(id);
+
+	// handle dragging and resizing first to remove frame delay
+	bool is_being_dragged = ui_is_active(id);
+
+	if (is_being_dragged)
+	{
+		v2_t new_p = add(ui->input.mouse_p, ui->drag_offset);
+		window->rect = rect2_reposition_min(window->rect, new_p); 
+
+		// compute total window rect
+		rect2_t rect = window->rect;
+
+		float   title_bar_height = ui_font(UiFont_header)->height + 2.0f*ui_scalar(UiScalar_text_margin) + 4.0f;
+		rect2_t title_bar = rect2_add_top(rect, title_bar_height);
+
+		rect2_t total = rect2_union(title_bar, rect);
+
+		float w = rect2_width (total);
+		float h = rect2_height(total);
+
+		rect2_t restrict_rect = ui->ui_area;
+		restrict_rect = rect2_shrink2   (restrict_rect, 0.5f*w, 0.5f*h);
+		restrict_rect = rect2_add_offset(restrict_rect, ui->drag_anchor);
+
+		ui->restrict_mouse_rect = restrict_rect;
+		ui->cursor              = Cursor_none;
+	}
+
+	ui_id_t id_n  = ui_id(S("tray_id_n"));
+	ui_id_t id_e  = ui_id(S("tray_id_e"));
+	ui_id_t id_s  = ui_id(S("tray_id_s"));
+	ui_id_t id_w  = ui_id(S("tray_id_w"));
+	ui_id_t id_ne = ui_id(S("tray_id_ne"));
+	ui_id_t id_nw = ui_id(S("tray_id_nw"));
+	ui_id_t id_se = ui_id(S("tray_id_se"));
+	ui_id_t id_sw = ui_id(S("tray_id_sw"));
+
+	if (ui_is_hot(id_n))  { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_ns; };
+	if (ui_is_hot(id_e))  { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_ew; };
+	if (ui_is_hot(id_s))  { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_ns; };
+	if (ui_is_hot(id_w))  { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_ew; };
+	if (ui_is_hot(id_ne)) { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_nesw; };
+	if (ui_is_hot(id_nw)) { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_nwse; };
+	if (ui_is_hot(id_se)) { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_nwse; };
+	if (ui_is_hot(id_sw)) { ui->cursor_reset_delay = 1; ui->cursor = Cursor_resize_nesw; };
+
+	ui_rect_edge_t tray_region = 0;
+
+	if (ui_is_active(id_n))  tray_region = UiRectEdge_n;
+	if (ui_is_active(id_e))  tray_region = UiRectEdge_e;
+	if (ui_is_active(id_s))  tray_region = UiRectEdge_s;
+	if (ui_is_active(id_w))  tray_region = UiRectEdge_w;
+	if (ui_is_active(id_ne)) tray_region = UiRectEdge_n|UiRectEdge_e;
+	if (ui_is_active(id_nw)) tray_region = UiRectEdge_n|UiRectEdge_w;
+	if (ui_is_active(id_se)) tray_region = UiRectEdge_s|UiRectEdge_e;
+	if (ui_is_active(id_sw)) tray_region = UiRectEdge_s|UiRectEdge_w;
+
+	if (tray_region)
+	{
+		v2_t delta = sub(ui->input.mouse_p, ui->input.mouse_p_on_lmb);
+
+		window->rect = ui->resize_original_rect;
+		if (tray_region & UiRectEdge_e) window->rect = rect2_extend_right(window->rect,  delta.x);
+		if (tray_region & UiRectEdge_w) window->rect = rect2_extend_left (window->rect, -delta.x);
+		if (tray_region & UiRectEdge_n) window->rect = rect2_extend_up   (window->rect,  delta.y);
+		if (tray_region & UiRectEdge_s) window->rect = rect2_extend_down (window->rect, -delta.y);
+
+		rect2_t min_rect = rect2_from_min_dim(window->rect.min, make_v2(64, 64));
+		window->rect = rect2_union(window->rect, min_rect);
+	}
+
+	rect2_t rect = window->rect;
+
+	float   title_bar_height = ui_font(UiFont_header)->height + 2.0f*ui_scalar(UiScalar_text_margin) + 4.0f;
+	rect2_t title_bar = rect2_add_top(rect, title_bar_height);
+
+	rect2_t total = rect2_union(title_bar, rect);
+
+	float tray_width = 8.0f;
+
+	rect2_t interact_total = rect2_extend(total, 0.5f*tray_width);
+	ui_interaction_t interaction = ui_default_widget_behaviour(id, interact_total);
+
+	if (interaction & UI_PRESSED)
+	{
+		ui->drag_offset = sub(window->rect.min, ui->input.mouse_p);
+	}
+
+	rect2_t tray_init = interact_total;
+	rect2_t tray_e  = rect2_cut_right (&tray_init, tray_width);
+	rect2_t tray_w  = rect2_cut_left  (&tray_init, tray_width);
+	rect2_t tray_n  = rect2_cut_top   (&tray_init, tray_width);
+	rect2_t tray_s  = rect2_cut_bottom(&tray_init, tray_width);
+	rect2_t tray_ne = rect2_cut_top   (&tray_e,    tray_width);
+	rect2_t tray_nw = rect2_cut_top   (&tray_w,    tray_width);
+	rect2_t tray_se = rect2_cut_bottom(&tray_e,    tray_width);
+	rect2_t tray_sw = rect2_cut_bottom(&tray_w,    tray_width);
+
+	ui_interaction_t tray_interaction = 0;
+	tray_interaction |= ui_default_widget_behaviour(id_n,  tray_n);
+	tray_interaction |= ui_default_widget_behaviour(id_e,  tray_e);
+	tray_interaction |= ui_default_widget_behaviour(id_s,  tray_s);
+	tray_interaction |= ui_default_widget_behaviour(id_w,  tray_w);
+	tray_interaction |= ui_default_widget_behaviour(id_ne, tray_ne);
+	tray_interaction |= ui_default_widget_behaviour(id_nw, tray_nw);
+	tray_interaction |= ui_default_widget_behaviour(id_se, tray_se);
+	tray_interaction |= ui_default_widget_behaviour(id_sw, tray_sw);
+
+	if (tray_interaction & UI_PRESSED)
+	{
+		ui->resize_original_rect = window->rect;
+	}
+
+	rect2_t title_bar_minus_outline = title_bar;
+	title_bar_minus_outline.max.y -= 2.0f;
+
+	bool has_focus = ui_in_responder_chain(id); // /*ui_has_focus() &&*/ (window == editor->focus_window);
+
+	float focus_t = ui_interpolate_f32(ui_id(S("focus")), has_focus);
+
+	float shadow_amount = has_focus ? 0.25f : 0.15f;
+
+	if (is_being_dragged)
+	{
+		shadow_amount = 0.05f;
+	}
+
+	shadow_amount = ui_interpolate_f32(ui_id(S("shadow")), shadow_amount);
+
+	ui_style_color_t title_bar_color_id = UiColor_window_title_bar;
+
+	if (is_being_dragged)
+	{
+		title_bar_color_id = UiColor_window_title_bar_hot;
+	}
+
+	v4_t  title_bar_color           = ui_color(title_bar_color_id);
+	float title_bar_luma            = luminance(title_bar_color.xyz);
+	v4_t  title_bar_color_greyscale = make_v4(title_bar_luma, title_bar_luma, title_bar_luma, 1.0f);
+
+	v4_t  interpolated_title_bar_color = v4_lerps(title_bar_color_greyscale, title_bar_color, focus_t);
+	interpolated_title_bar_color = ui_interpolate_v4(ui_id(S("title_bar_color")), interpolated_title_bar_color);
+
+	ui_draw_rect_roundedness_shadow(rect2_shrink(total, 1.0f), make_v4(0, 0, 0, 0), make_v4(5, 5, 5, 5), shadow_amount, 32.0f);
+	ui_draw_rect_roundedness(title_bar, interpolated_title_bar_color, make_v4(2, 0, 2, 0));
+	ui_draw_rect_roundedness(rect, ui_color(UiColor_window_background), make_v4(0, 2, 0, 2));
+	ui_push_clip_rect(title_bar, true);
+	ui_draw_text(ui_font(UiFont_header), ui_text_center_p(ui_font(UiFont_header), title_bar_minus_outline, title), title);
+	ui_pop_clip_rect();
+	ui_draw_rect_roundedness_outline(total, ui_color(UiColor_window_outline), make_v4(2, 2, 2, 2), 2.0f);
+
+	ui_push_clip_rect(rect, true);
+
+	window->focused = has_focus;
+
+	return true;
+}
+
+void ui_window_end(ui_id_t id, ui_window_t *window)
+{
+	(void)id;
+
+	if (window->open)
+	{
+		ui_pop_clip_rect();
+
+		ui_pop_id();
+		ui_pop_responder_stack();
+	}
+	else
+	{
+		log(UI, Error, "API misuse: Please only call ui_window_end if ui_window_begin returned true");
+	}
 }

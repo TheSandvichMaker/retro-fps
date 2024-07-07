@@ -290,12 +290,13 @@ typedef enum ui_style_color_t
     UiColor_slider_hot,
     UiColor_slider_active,
     UiColor_slider_outline,
-    UiColor_slider_outline_focused,
 
     UiColor_scrollbar_background,
     UiColor_scrollbar_foreground,
     UiColor_scrollbar_hot,
     UiColor_scrollbar_active,
+
+	UiColor_focus_indicator,
 
 	// TODO: Replace hack with something more sane
 	UiColor_roundedness,
@@ -403,6 +404,7 @@ fn void    ui_draw_rect_roundedness_outline(rect2_t rect, v4_t color, v4_t round
 fn void    ui_draw_rect_outline            (rect2_t rect, v4_t color, float outline_width);
 fn void    ui_draw_circle                  (v2_t p, float r, v4_t color);
 fn void    ui_draw_debug_rect              (rect2_t rect, v4_t color);
+fn void    ui_draw_focus_indicator         (rect2_t rect);
 
 //
 // Widget Building Utilities
@@ -472,7 +474,7 @@ typedef struct ui_layer_t
 		struct
 		{
 			uint8_t sub_layer;
-			uint8_t window;
+			uint8_t layer;
 		};
 
 		uint16_t value;
@@ -574,8 +576,6 @@ typedef struct ui_t
 	ui_id_t next_hovered_widget;
 	ui_id_t hovered_widget;
 
-	ui_id_t focused_id;
-
 	table_t widget_validation_table;
 
 	rect2_t ui_area;
@@ -586,9 +586,6 @@ typedef struct ui_t
 	v2_t    drag_offset;
 	rect2_t resize_original_rect;
 
-	string_storage_t(256) slider_input_buffer;
-	dynamic_string_t      slider_input;
-
 	ui_layout_t        *layout;
 	ui_prepared_rect_t *first_free_prepared_rect;
 
@@ -596,6 +593,17 @@ typedef struct ui_t
 
 	stack_t(ui_id_t, UI_ID_STACK_COUNT) id_stack;
 	stack_t(ui_tooltip_t, UI_TOOLTIP_STACK_COUNT) tooltip_stack;
+
+	ui_id_t focused_id; // TODO: remove?
+	bool    suppress_next_tab_focus;
+
+	int     selection_index;
+	bool    focus_on_next;
+	ui_id_t last_id;
+	ui_id_t tab_focus_id;
+
+	stack_t(ui_id_t, UI_ID_STACK_COUNT) responder_stack;
+	stack_t(ui_id_t, UI_ID_STACK_COUNT) responder_chain;
 
 	table_t       state_index;
 	simple_heap_t state_allocator;
@@ -646,18 +654,21 @@ fn bool ui_is_hot          (ui_id_t id);
 fn bool ui_is_active       (ui_id_t id);
 fn bool ui_is_hovered_panel(ui_id_t id);
 
-fn void ui_set_window_index(uint8_t index);
-
-fn void ui_push_layer();
-fn void ui_pop_layer();
+fn void ui_push_responder_stack(ui_id_t id);
+fn void ui_pop_responder_stack(void);
+fn bool ui_in_responder_chain(ui_id_t id);
 
 #define UI_Layer() \
-	DEFER_LOOP(ui_push_layer(), ui_pop_layer())
+	DEFER_LOOP(ui_push_sub_layer(), ui_pop_sub_layer())
 
 fn void ui_begin_container(ui_id_t id);
 fn void ui_end_container  (ui_id_t id);
 
+fn ui_layer_t ui_get_layer(void);
 fn ui_layer_t ui_set_layer(ui_layer_t layer);
+
+fn void ui_push_sub_layer();
+fn void ui_pop_sub_layer();
 
 fn void ui_set_next_hot    (ui_id_t id);
 fn void ui_set_hot         (ui_id_t id); // maybe should be never used?
@@ -667,13 +678,17 @@ fn void ui_clear_next_hot  (void);
 fn void ui_clear_hot       (void);
 fn void ui_clear_active    (void);
 
-fn bool ui_has_focus       (void);
-fn bool ui_id_has_focus    (ui_id_t id);
-fn void ui_gain_focus      (ui_id_t id);
+fn bool ui_has_focus              (void);
+fn bool ui_id_has_focus           (ui_id_t id);
+fn void ui_gain_focus             (ui_id_t id);
+fn void ui_gain_tab_focus         (ui_id_t id);
+fn void ui_suppress_next_tab_focus(void);
 
 fn void ui_hoverable       (ui_id_t id, rect2_t rect);
 fn bool ui_is_hovered      (ui_id_t id);
 fn bool ui_is_hovered_delay(ui_id_t id, float delay);
+
+fn void ui_remove_from_responder_chain(ui_id_t id);
 
 typedef uint16_t ui_state_flags_t;
 typedef enum ui_state_flags_enum_t

@@ -47,8 +47,8 @@ typedef struct asset_node_t
 
 typedef struct asset_slot_t
 {
-	alignas(64) atomic uint32_t state;
-	PAD(60);
+	alignas(CACHE_LINE_SIZE) atomic uint32_t state;
+	alignas(CACHE_LINE_SIZE)
 
 	// for the time being, every single asset slot gets its own arena:
 	arena_t arena;
@@ -61,30 +61,12 @@ typedef struct asset_slot_t
 
 	string_storage_t(1024) path;
 
-	// asset_node_t *latest;
 	union
 	{
 		asset_image_t image;
 		waveform_t waveform;
 	};
 } asset_slot_t;
-
-#if 0
-// asset_blob is an image_t, or waveform_t, etc depending on asset kind
-fn_local void asset__update_slot(asset_slot_t *slot, void *asset_blob)
-{
-	asset_node_t *node = m_alloc_struct(&slot->arena, asset_node_t);
-	node->asset_blob = asset_blob;
-
-	// atomic linked list insert
-	asset_node_t *previous_latest = slot->latest;
-	do
-	{
-		node->previous_version = previous_latest;
-	}
-	while (atomic_cas_ptr((void **)&slot->latest, node, previous_latest) != previous_latest);
-}
-#endif
 
 asset_image_t missing_image;
 waveform_t    missing_waveform;
@@ -172,22 +154,6 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 							.row_stride        = image.pitch,
 						},
 					});
-#if 0
-					asset->image = load_image_from_disk(&asset->arena, string_from_storage(asset->path), 4);
-					asset->image.renderer_handle = render->upload_texture(&(r_upload_texture_t){
-						.upload_flags = R_UPLOAD_TEXTURE_GEN_MIPMAPS,
-						.desc = {
-							.type   = R_TEXTURE_TYPE_2D,
-							.format = R_PIXEL_FORMAT_SRGB8_A8,
-							.w      = asset->image.info.w,
-							.h      = asset->image.info.h,
-						},
-						.data = {
-							.pitch  = asset->image.pitch,
-							.pixels = asset->image.pixels,
-						},
-					});
-#endif
 				} break;
 
 				case AssetKind_waveform:
@@ -225,7 +191,6 @@ static void preload_asset_info(asset_slot_t *asset)
 	{
 		case AssetKind_image:
 		{
-			// image_info_t *info = &asset->image.image.info;
 			asset_image_t *image = &asset->image;
 
 			m_scoped_temp

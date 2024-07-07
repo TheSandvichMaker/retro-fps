@@ -271,9 +271,9 @@ typedef struct reverb_t
 
 typedef struct mixer_t
 {
-	alignas(64) atomic uint32_t command_read_index;
-	alignas(64) atomic uint32_t command_write_index;
-	alignas(64)
+	alignas(CACHE_LINE_SIZE) atomic uint32_t command_read_index;
+	alignas(CACHE_LINE_SIZE) atomic uint32_t command_write_index;
+	alignas(CACHE_LINE_SIZE)
 
 	float             category_volumes[SOUND_CATEGORY_COUNT];
 	uint32_t          next_playing_sound_id;

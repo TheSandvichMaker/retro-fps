@@ -1,6 +1,6 @@
 void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *window)
 {
-	rect2_t window_rect = rect2_cut_margins(window->rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)));
+	rect2_t window_rect = rect2_cut_margins(window->window.rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)));
 
 	ui_scrollable_region_flags_t scroll_flags = 
 		UiScrollableRegionFlags_scroll_vertical|
@@ -11,13 +11,6 @@ void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *wi
 	rect2_t content_rect = ui_scrollable_region_begin_ex(&window->scroll_region, rect, scroll_flags);
 
 	ui_row_builder_t builder = ui_make_row_builder(content_rect);
-
-	if (window->hovered)
-	{
-		ui_tooltip(S("Window for testing out various UI features."));
-		ui_tooltip(Sf("UI Draw Command Count: %zu", ui->last_frame_ui_rect_count));
-		ui_tooltip(Sf("UI Culled Draw Command Count: %zu", ui->last_frame_culled_rect_count));
-	}
 
 	local_persist bool check_me = false;
 	ui_hover_tooltip(S("This checkbox does nothing! GOOD DAY SIR!!"));

@@ -189,3 +189,18 @@ fn ui_text_edit_result_t ui_text_edit(rect2_t rect, dynamic_string_t *buffer);
 fn void ui_hue_picker    (rect2_t rect, float *hue);
 fn void ui_sat_val_picker(rect2_t rect, float hue, float *sat, float *val);
 fn void ui_color_picker  (rect2_t rect, v4_t *color);
+
+//
+// Window
+//
+
+typedef struct ui_window_t
+{
+	rect2_t rect;
+
+	bool open;
+	bool focused;
+} ui_window_t;
+
+fn bool ui_window_begin(ui_id_t id, ui_window_t *window, string_t title);
+fn void ui_window_end  (ui_id_t id, ui_window_t *window);

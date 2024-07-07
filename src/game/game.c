@@ -95,25 +95,27 @@ CVAR_COMMAND(ccmd_respawn_player, "player.respawn")
 {
 	(void)arguments;
 
-	if (g_game)
+	if (!g_game)
 	{
-		gamestate_t *game = g_game;
+		return;
+	}
 
-		map_t    *map    = game->map;
-		player_t *player = game->player;
+	gamestate_t *game = g_game;
 
-		for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
+	map_t    *map    = game->map;
+	player_t *player = game->player;
+
+	for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)
+	{
+		map_entity_t *e = &map->entities[entity_index];
+
+		if (is_class(map, e, S("info_player_start")))
 		{
-			map_entity_t *e = &map->entities[entity_index];
+			v3_t p = v3_from_key(map, e, S("origin"));
 
-			if (is_class(map, e, S("info_player_start")))
-			{
-				v3_t p = v3_from_key(map, e, S("origin"));
+			teleport_player(player, p);
 
-				teleport_player(player, p);
-
-				break;
-			}
+			break;
 		}
 	}
 }

@@ -23,11 +23,14 @@ typedef struct editor_window_t
 	struct editor_window_t *prev;
 
 	string_storage_t(256) title;
-	rect2_t rect;
+	/*rect2_t rect;
 
 	bool open;
 	bool hovered;
 	bool focused;
+	*/
+
+	ui_window_t window;
 
 	ui_scrollable_region_t scroll_region;
 

@@ -1063,6 +1063,13 @@ void ui_draw_debug_rect(rect2_t rect, v4_t color)
 	ui_set_layer(old_layer);
 }
 
+void ui_draw_focus_indicator(rect2_t rect)
+{
+	ui_push_clip_rect(ui->ui_area, false);
+	ui_draw_rect_outline(rect2_add_radius(rect, v2s(2.0f)), ui_color(UiColor_focus_indicator), 2.0);
+	ui_pop_clip_rect();
+}
+
 void ui_draw_rect_outline(rect2_t rect, v4_t color, float width)
 {
 	uint32_t color_packed = pack_color(color);
@@ -1135,7 +1142,7 @@ ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect)
 	{
 		result |= UI_HOT;
 
-		if (ui_button_pressed(UiButton_left, false))
+		if (ui_button_pressed(UiButton_left, true))
 		{
 			result |= UI_PRESSED;
 			ui->drag_anchor = sub(ui->input.mouse_p, rect2_center(rect));
@@ -1148,7 +1155,7 @@ ui_interaction_t ui_default_widget_behaviour(ui_id_t id, rect2_t rect)
 	{
 		result |= UI_HELD;
 
-		if (ui_button_released(UiButton_left, false))
+		if (ui_button_released(UiButton_left, true))
 		{
 			if (hovered)
 			{
@@ -1330,10 +1337,99 @@ bool ui_id_has_focus(ui_id_t id)
 	return ui->has_focus && ui->focused_id.value == id.value;
 }
 
+void ui_push_responder_stack(ui_id_t id)
+{
+	if (ALWAYS(!stack_full(ui->responder_stack)))
+	{
+		stack_push(ui->responder_stack, id);
+	}
+}
+
+void ui_pop_responder_stack(void)
+{
+	if (ALWAYS(!stack_empty(ui->responder_stack)))
+	{
+		stack_pop(ui->responder_stack);
+	}
+}
+
 void ui_gain_focus(ui_id_t id)
 {
 	ui->has_focus = true;
 	ui->focused_id = id;
+
+	copy_struct(&ui->responder_chain, &ui->responder_stack);
+
+	if (!ui_in_responder_chain(id))
+	{
+		if (ALWAYS(!stack_full(ui->responder_chain)))
+		{
+			stack_push(ui->responder_chain, id);
+		}
+	}
+}
+
+bool ui_in_responder_chain(ui_id_t id)
+{
+	bool result = false;
+
+	for (size_t i = 0; i < stack_count(ui->responder_chain); i++)
+	{
+		if (ui_id_equal(ui->responder_chain.values[i], id))
+		{
+			result = true;
+			break;
+		}
+	}
+
+	return result;
+}
+
+void ui_remove_from_responder_chain(ui_id_t id)
+{
+	for (size_t i = 0; i < stack_count(ui->responder_chain); i++)
+	{
+		if (ui_id_equal(ui->responder_chain.values[i], id))
+		{
+			ui->responder_chain.at = i;
+			break;
+		}
+	}
+}
+
+void ui_gain_tab_focus(ui_id_t id)
+{
+	if (!ui->suppress_next_tab_focus)
+	{
+		if (ui->tab_focus_id.value == id.value || ui->focus_on_next)
+		{
+			ui_gain_focus(id);
+			ui->tab_focus_id  = UI_ID_NULL;
+			ui->focus_on_next = false;
+			ui->selection_index = 0;
+		}
+
+		if (ui_id_has_focus(id) && ui_key_pressed(Key_tab, true))
+		{
+			if (ui_key_held(Key_shift, false))
+			{
+				ui->tab_focus_id = ui->last_id;
+			}
+			else
+			{
+				ui->focus_on_next = true;
+			}
+		}
+
+		ui->last_id = id;
+	}
+
+	ui->suppress_next_tab_focus = false;
+}
+
+void ui_suppress_next_tab_focus(void)
+{
+	ui->suppress_next_tab_focus = true;
 }
 
 void *ui_get_state_raw(ui_id_t id, bool *first_touch, uint16_t size, ui_state_flags_t flags)
@@ -1426,7 +1522,7 @@ static void ui_initialize(void)
 	v4_t foreground     = make_v4(0.33f, 0.28f, 0.28f, 1.0f);
 	v4_t foreground_hi  = make_v4(0.37f, 0.31f, 0.31f, 1.0f);
 	v4_t foreground_hi2 = make_v4(0.40f, 0.33f, 0.32f, 1.0f);
-	v4_t focus_color    = make_v4(0.35f, 0.30f, 0.50f, 1.0f);
+	v4_t focus_color    = make_v4(0.65f, 0.35f, 0.80f, 1.0f);
 
 	v4_t hot    = make_v4(0.25f, 0.45f, 0.40f, 1.0f);
 	v4_t active = make_v4(0.30f, 0.55f, 0.50f, 1.0f);
@@ -1478,11 +1574,11 @@ static void ui_initialize(void)
 	ui->style.base_colors [UiColor_slider_hot             ] = hot;
 	ui->style.base_colors [UiColor_slider_active          ] = active;
 	ui->style.base_colors [UiColor_slider_outline         ] = foreground_hi2;
-	ui->style.base_colors [UiColor_slider_outline_focused ] = focus_color;
 	ui->style.base_colors [UiColor_scrollbar_background   ] = background_hi;
 	ui->style.base_colors [UiColor_scrollbar_foreground   ] = foreground;
 	ui->style.base_colors [UiColor_scrollbar_hot          ] = foreground_hi;
 	ui->style.base_colors [UiColor_scrollbar_active       ] = foreground_hi2;
+	ui->style.base_colors [UiColor_focus_indicator        ] = focus_color;
 
 	ui->render_commands.capacity = UI_RENDER_COMMANDS_CAPACITY;
 	ui->render_commands.keys     = m_alloc_array_nozero(&ui->arena, ui->render_commands.capacity, ui_render_command_key_t);
@@ -1572,8 +1668,6 @@ bool ui_begin(float dt, rect2_t ui_area)
 	ui->set_mouse_p = make_v2(-1, -1);
 	ui->restrict_mouse_rect = rect2_inverted_infinity();
 
-	ui->slider_input = dynamic_string_on_storage(ui->slider_input_buffer);
-
 	return ui->has_focus;
 }
 
@@ -1640,22 +1734,25 @@ void ui_end(void)
 		debug_notif_replicate(notif);
 	}
 
-	if (ui_button_pressed(UiButton_any, true))
-	{
-		ui->has_focus = ui->hovered;
-	}
+	DEBUG_ASSERT(stack_empty(ui->responder_stack));
+	stack_reset(ui->responder_stack);
 
 	if (ui->has_focus && ui_key_pressed(Key_escape, true))
 	{
-		if (ui_id_valid(ui->focused_id))
+		if (!stack_empty(ui->responder_chain))
 		{
-			ui->focused_id = UI_ID_NULL;
-		}
-		else
-		{
-			ui->has_focus = false;
+			stack_pop(ui->responder_chain);
 		}
 	}
+
+	// If at this point a button was pressed and it wasn't consumed by anyone, we must've clicked on nothingness
+	// and thus the UI must be unfocused.
+	if (ui_button_pressed(UiButton_any, true))
+	{
+		stack_reset(ui->responder_chain);
+	}
+
+	ui->has_focus = !stack_empty(ui->responder_chain);
 
 	ASSERT(ui->id_stack.at == 0);
 
@@ -1758,17 +1855,20 @@ void debug_notif_replicate(debug_notif_t *notif)
 	ui->first_debug_notif = repl;
 }
 
-void ui_set_window_index(uint8_t index)
+ui_layer_t ui_get_layer(void)
 {
-	if (ui->current_layer.sub_layer != 0)
-	{
-		log(UI, Error, "Set the UI window index but there are unpopped layer(s), current sub_layer: %u", ui->current_layer.sub_layer);
-	}
-	
-	ui->current_layer.window = index;
+	return ui->current_layer;
 }
 
-void ui_push_layer(void)
+ui_layer_t ui_set_layer(ui_layer_t layer)
+{
+	ui_layer_t old_layer = ui->current_layer;
+	ui->current_layer = layer;
+
+	return old_layer;
+}
+
+void ui_push_sub_layer(void)
 {
 	if (ui->current_layer.sub_layer == 255)
 	{
@@ -1780,7 +1880,7 @@ void ui_push_layer(void)
 	}
 }
 
-void ui_pop_layer(void)
+void ui_pop_sub_layer(void)
 {
 	if (ui->current_layer.sub_layer == 0)
 	{
@@ -1790,12 +1890,4 @@ void ui_pop_layer(void)
 	{
 		ui->current_layer.sub_layer -= 1;
 	}
-}
-
-ui_layer_t ui_set_layer(ui_layer_t layer)
-{
-	ui_layer_t old_layer = ui->current_layer;
-	ui->current_layer = layer;
-
-	return old_layer;
 }

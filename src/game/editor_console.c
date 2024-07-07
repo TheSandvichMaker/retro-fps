@@ -163,7 +163,7 @@ int cvar_compare_edit_distance(const void *a, const void *b, void *user_data)
 
 void editor_do_cvar_window(cvar_window_state_t *state, editor_window_t *window)
 {
-	rect2_t window_rect = rect2_cut_margins(window->rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)));
+	rect2_t window_rect = rect2_cut_margins(window->window.rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)));
 
 	//------------------------------------------------------------------------
 	// Exclude search bar from the scroll region

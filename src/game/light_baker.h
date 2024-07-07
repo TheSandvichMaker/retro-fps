@@ -82,20 +82,22 @@ typedef struct lum_debug_data_t
 
 typedef struct lum_thread_context_t
 {
-    arena_t          arena;    // 48
-    random_series_t  entropy;  // 52
-    lum_debug_data_t debug;    // 68
-	PAD(60);
+	alignas(CACHE_LINE_SIZE) 
+
+    arena_t          arena;   // 56
+    random_series_t  entropy; // 60
+    lum_debug_data_t debug;   // 76
 } lum_thread_context_t;
 
 typedef struct lum_job_t
 {
+	alignas(CACHE_LINE_SIZE)
+
     lum_thread_context_t    *thread_contexts; // 8
 	struct lum_bake_state_t *state;           // 16
 
     uint32_t brush_index;                     // 20
     uint32_t plane_index;                     // 24
-	PAD(48);
 } lum_job_t;
 
 typedef uint32_t lum_state_flags_t;
@@ -107,9 +109,9 @@ typedef enum lum_state_flags_enum_t
 
 typedef struct lum_bake_state_t
 {
-	alignas(64) atomic uint32_t          jobs_completed;
-	alignas(64) atomic lum_state_flags_t flags;
-	alignas(64)
+	alignas(CACHE_LINE_SIZE) atomic uint32_t          jobs_completed;
+	alignas(CACHE_LINE_SIZE) atomic lum_state_flags_t flags;
+	alignas(CACHE_LINE_SIZE)
 
 	uint32_t          job_count;
 	uint32_t          thread_count;
