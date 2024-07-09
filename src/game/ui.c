@@ -781,6 +781,8 @@ rect2_t ui_get_clip_rect(void)
 
 rect2_t ui_text_op(font_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op)
 {
+    PROFILE_BEGIN_FUNC;
+
 	rect2_t result = rect2_inverted_infinity();
 
 	uint32_t color_packed = pack_color(color);
@@ -826,6 +828,8 @@ rect2_t ui_text_op(font_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t
 			}
 		}
 	}
+
+    PROFILE_END_FUNC;
 
 	return result;
 }

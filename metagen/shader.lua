@@ -8,6 +8,7 @@ setmetatable(_G, {
 
 -- shader type definitions
 
+int      = { resource_type = "primitive", size = 1,  align = 1, align_legacy = 1, c_name = "int32_t", hlsl_name = "int"     }
 uint     = { resource_type = "primitive", size = 1,  align = 1, align_legacy = 1, c_name = "uint32_t", hlsl_name = "uint"     }
 uint2    = { resource_type = "primitive", size = 2,  align = 1, align_legacy = 2, c_name = "v2u_t",    hlsl_name = "uint2"    }
 uint3    = { resource_type = "primitive", size = 3,  align = 1, align_legacy = 3, c_name = "v3u_t",    hlsl_name = "uint3"    }

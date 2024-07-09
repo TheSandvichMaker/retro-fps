@@ -150,6 +150,8 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 			ID3D12Debug_EnableDebugLayer(debug);
 			g_rhi.debug_layer_enabled = true;
 
+            log(RHI_D3D12, Info, "Initialized D3D12 Debug Layer");
+
 			if (params->enable_gpu_based_validation)
 			{
 				ID3D12Debug1 *debug1;
@@ -161,6 +163,8 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 				{
 					ID3D12Debug1_SetEnableGPUBasedValidation(debug1, true);
 					g_rhi.gpu_based_validation_enabled = true;
+
+                    log(RHI_D3D12, Info, "Initialized D3D12 GBV");
 
 					COM_SAFE_RELEASE(debug1);
 				}
@@ -236,39 +240,42 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 	// Set Up Info Queue
 	//
 
-	ID3D12InfoQueue *info_queue;
+    if (params->enable_debug_layer)
+    {
+        ID3D12InfoQueue *info_queue;
 
-	hr = ID3D12Device_QueryInterface(device, &IID_ID3D12InfoQueue, &info_queue);
-	D3D12_LOG_FAILURE(hr, "Failed to create ID3D12InfoQueue");
+        hr = ID3D12Device_QueryInterface(device, &IID_ID3D12InfoQueue, &info_queue);
+        D3D12_LOG_FAILURE(hr, "Failed to create ID3D12InfoQueue");
 
-	if (SUCCEEDED(hr))
-	{
-		ID3D12InfoQueue_SetBreakOnSeverity(info_queue, D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
-		ID3D12InfoQueue_SetBreakOnSeverity(info_queue, D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
-		ID3D12InfoQueue_SetBreakOnSeverity(info_queue, D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
+        if (SUCCEEDED(hr))
+        {
+            ID3D12InfoQueue_SetBreakOnSeverity(info_queue, D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+            ID3D12InfoQueue_SetBreakOnSeverity(info_queue, D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+            ID3D12InfoQueue_SetBreakOnSeverity(info_queue, D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
 
-		D3D12_MESSAGE_SEVERITY severities[] = {
-			D3D12_MESSAGE_SEVERITY_INFO,
-		};
+            D3D12_MESSAGE_SEVERITY severities[] = {
+                D3D12_MESSAGE_SEVERITY_INFO,
+            };
 
-		D3D12_MESSAGE_ID deny_ids[] = {
-			D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
-			D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE,
-			D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE,
-		};
+            D3D12_MESSAGE_ID deny_ids[] = {
+                D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
+                D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE,
+                D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE,
+            };
 
-		D3D12_INFO_QUEUE_FILTER filter = {
-			.DenyList.NumSeverities = ARRAY_COUNT(severities),
-			.DenyList.pSeverityList = severities,
-			.DenyList.NumIDs        = ARRAY_COUNT(deny_ids),
-			.DenyList.pIDList       = deny_ids,
-		};
+            D3D12_INFO_QUEUE_FILTER filter = {
+                .DenyList.NumSeverities = ARRAY_COUNT(severities),
+                .DenyList.pSeverityList = severities,
+                .DenyList.NumIDs        = ARRAY_COUNT(deny_ids),
+                .DenyList.pIDList       = deny_ids,
+            };
 
-		hr = ID3D12InfoQueue_PushStorageFilter(info_queue, &filter);
-		D3D12_LOG_FAILURE(hr, "Failed to push D3D12InfoQueue storage filter");
+            hr = ID3D12InfoQueue_PushStorageFilter(info_queue, &filter);
+            D3D12_LOG_FAILURE(hr, "Failed to push D3D12InfoQueue storage filter");
 
-		COM_SAFE_RELEASE(info_queue);
-	}
+            COM_SAFE_RELEASE(info_queue);
+        }
+    }
 
 	//
 	// Create the direct command queue

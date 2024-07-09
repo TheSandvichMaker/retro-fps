@@ -399,7 +399,9 @@ bool ui_button(rect2_t rect, string_t label)
 		}
 	}
 
-	if (ui_in_responder_chain(id) && ui_key_pressed(Key_return, true))
+	if (ui_in_responder_chain(id) && 
+        (ui_key_pressed(Key_return, true) ||
+         ui_key_pressed(Key_space, true)))
 	{
 		result = true;
 	}
@@ -889,6 +891,7 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 
 	if (has_inc_dec)
 	{
+        ui_suppress_next_tab_focus();
 		if (ui_button(dec_rect, S("-")))
 		{
 			if (new_value             >= min &&
@@ -1036,11 +1039,20 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 
 				ui_set_f32(ui_id(S("display_value")), new_value);
 			}
+
+            if (ui_key_held(Key_control, false) && 
+                (ui_key_pressed(Key_return, true) ||
+                 ui_key_pressed(Key_space, true)))
+            {
+                ui_gain_focus(text_input_id);
+				state->text_input.count = 0;
+            }
 		}
 	}
 
 	if (has_inc_dec)
 	{
+        ui_suppress_next_tab_focus();
 		if (ui_button(inc_rect, S("+")))
 		{
 			if (new_value             <= max &&
@@ -1122,13 +1134,15 @@ bool ui_slider_ex(rect2_t rect, float *v, float min, float max, float granularit
 		.max           = max,
 		.granularity   = granularity,
 		.f32           = v,
-		.format_string = "%0.2f",
+		.format_string = "%g",
 	});
 }
 
 bool ui_slider(rect2_t rect, float *v, float min, float max)
 {
-	return ui_slider_ex(rect, v, min, max, 0.01f);
+    float range = max - min;
+    float granularity = range / 100.0f;
+	return ui_slider_ex(rect, v, min, max, granularity);
 }
 
 bool ui_slider_int(rect2_t rect, int32_t *v, int32_t min, int32_t max)

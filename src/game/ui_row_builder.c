@@ -429,3 +429,21 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 
 	state->cached_color = *color;
 }
+
+void ui_row_color_picker_v3(ui_row_builder_t *builder, string_t label, v3_t *color)
+{
+	if (!color)
+	{
+		ui_row_error_widget(builder, S("ui_row_color_picker"), S("Did not pass a color to ui_row_color_picker_v3!"));
+		return;
+	}
+
+    ui_set_next_id(ui_id_pointer(color));
+
+    v4_t color_ = { color->x, color->y, color->z, 1.0f };
+    ui_row_color_picker(builder, label, &color_);
+
+    color->x = color_.x;
+    color->y = color_.y;
+    color->z = color_.z;
+}

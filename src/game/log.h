@@ -34,6 +34,7 @@ typedef enum log_category_t
 	LogCat_MapLoad,
 	LogCat_Game,
 	LogCat_CVar,
+    LogCat_Serialize,
 
 	LogCat_Max,
 } log_category_t;

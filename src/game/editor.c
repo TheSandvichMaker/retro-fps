@@ -148,14 +148,101 @@ void editor_init(editor_t *editor)
 	editor_init_cvar_window(&editor->cvar_window_state);
 }
 
+void editor_show_timings(editor_t *editor)
+{
+    (void)editor;
+
+    arena_t *temp = m_get_temp_scope_begin(NULL, 0);
+
+    r1_stats_t stats = r1_report_stats(temp);
+
+    ui_set_layer((ui_layer_t){ .layer = 255 });
+
+    rect2_t full_area = ui->ui_area;
+
+    float one_third = ui_size_to_width(full_area, ui_sz_pct(0.33333f));
+
+    rect2_t gpu_area;
+    rect2_cut_from_left(full_area, ui_sz_pix(one_third), &gpu_area, &full_area);
+
+    {
+        ui_row_builder_t builder = ui_make_row_builder(gpu_area);
+
+        ui_row_header(&builder, S("GPU Timings"));
+
+        UI_Scalar(UiScalar_label_align_x, 0.5f)
+        {
+            double total = 0.0f;
+
+            for (size_t i = 0; i < stats.timings_count; i++)
+            {
+                r1_timing_t *timing = &stats.timings[i];
+
+                ui_row_label(&builder, Sf("%.*s: %.02fms", Sx(timing->identifier), 1000.0*timing->inclusive_time));
+                total += timing->exclusive_time;
+            }
+
+            ui_row_label(&builder, Sf("total: %.02fms", 1000.0*total));
+        }
+    }
+
+    rect2_t cpu_area;
+    rect2_cut_from_left(full_area, ui_sz_pix(one_third), &cpu_area, &full_area);
+
+	{
+		/*
+		uint64_t *sort_keys = m_alloc_array_nozero(temp, profiler_slots_count, uint64_t);
+
+		for (size_t i = 1; i < profiler_slots_count; i += 1)
+		{
+			profiler_slot_t *slot = &profiler_slots[i];
+
+			uint64_t key = i & 0xFFFF;          // low 16 bits is the index
+			key |= (slot->exclusive_tsc) << 16; // uppwer 48 bits is tsc
+
+			sort_keys[i - 1] = key;
+		}
+
+		radix_sort_u64(sort_keys, profiler_slots_count - 1);
+		*/
+
+        static uint64_t cpu_freq = 0;
+
+        if (cpu_freq == 0)
+        {
+            cpu_freq = os_estimate_cpu_timer_frequency(100);
+        }
+
+        ui_row_builder_t builder = ui_make_row_builder(cpu_area);
+
+        ui_row_header(&builder, S("CPU Timings"));
+
+        UI_Scalar(UiScalar_label_align_x, 0.5f)
+		for (size_t i = 1; i < profiler_slots_count; i++)
+		{
+			//uint64_t key = sort_keys[j];
+
+			//size_t i = key & 0xFFFF;
+			profiler_slot_t *slot = &profiler_slots_read[i];
+
+			double exclusive_ms  = tsc_to_ms(slot->exclusive_tsc, cpu_freq);
+			double inclusive_ms  = tsc_to_ms(slot->inclusive_tsc, cpu_freq);
+			double exclusive_pct = 0.0; //100.0*(exclusive_ms / total_time_ms);
+			double inclusive_pct = 0.0; //100.0*(inclusive_ms / total_time_ms);
+
+			ui_row_label(&builder, Sf("%-24s %.2f/%.2fms (%.2f/%.2f%%, %zu hits)", slot->tag, exclusive_ms, inclusive_ms, exclusive_pct, inclusive_pct, slot->hit_count));
+		}
+	}
+
+    m_scope_end(temp);
+}
+
 void editor_update_and_render(editor_t *editor)
 {
-	/*
     if (ui_key_pressed(Key_f1, true))
 	{
-        editor.show_timings = !editor.show_timings;
+        editor->show_timings = !editor->show_timings;
 	}
-	*/
 
     if (ui_key_pressed(Key_f2, true))
 	{
@@ -176,6 +263,11 @@ void editor_update_and_render(editor_t *editor)
 	{
 		editor_toggle_window_openness(editor, &editor->windows[EditorWindow_cvars]);
 	}
+
+    if (editor->show_timings)
+    {
+        editor_show_timings(editor);
+    }
 
 	editor_process_windows(editor);
 }

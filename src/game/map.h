@@ -150,6 +150,8 @@ typedef struct map_t
 	// map_edge_t        *edges;
     map_point_light_t *lights;
 
+    struct worldspawn_t *worldspawn;
+
 	// collision_geometry_t *collision_player;
     collision_geometry_t collision;
 
@@ -164,8 +166,10 @@ typedef struct map_t
 
 map_t *load_map(arena_t *arena, string_t path);
 
-bool     is_class      (map_t *map, map_entity_t *entity, string_t classname);
-string_t value_from_key(map_t *map, map_entity_t *entity, string_t key);
-int      int_from_key  (map_t *map, map_entity_t *entity, string_t key);
-float    float_from_key(map_t *map, map_entity_t *entity, string_t key);
-v3_t     v3_from_key   (map_t *map, map_entity_t *entity, string_t key);
+fn bool     is_class         (map_t *map, map_entity_t *entity, string_t classname);
+fn string_t value_from_key   (map_t *map, map_entity_t *entity, string_t key);
+fn int      int_from_key     (map_t *map, map_entity_t *entity, string_t key);
+fn float    float_from_key_or(map_t *map, map_entity_t *entity, string_t key, float default_value);
+fn v3_t     v3_from_key_or   (map_t *map, map_entity_t *entity, string_t key, v3_t  default_value);
+fn float    float_from_key   (map_t *map, map_entity_t *entity, string_t key);
+fn v3_t     v3_from_key      (map_t *map, map_entity_t *entity, string_t key);

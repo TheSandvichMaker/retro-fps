@@ -1191,7 +1191,7 @@ static void build_bvh(arena_t *arena, map_t *map)
     }
 }
 
-static void gather_lights(arena_t *arena, map_t *map)
+static void deserialize_entities(arena_t *arena, map_t *map)
 {
     map_point_light_t *lights = NULL;
 
@@ -1209,6 +1209,17 @@ static void gather_lights(arena_t *arena, map_t *map)
                 .color = mul(brightness, color),
             };
             sb_push(lights, light);
+        }
+        else if (is_class(map, entity, S("worldspawn")))
+        {
+            if (map->worldspawn)
+            {
+                log(Serialize, Error, "The map has more than one worldspawn, using the first one we found...");
+                continue;
+            }
+
+            map->worldspawn = m_alloc_struct(arena, worldspawn_t);
+            worldspawn_deserialize(map->worldspawn, map, entity);
         }
     }
 
@@ -1316,7 +1327,7 @@ map_t *load_map(arena_t *arena, string_t path)
         build_bvh(arena, map);
         map->bounds = map->nodes[0].bounds;
 
-        gather_lights(arena, map);
+        deserialize_entities(arena, map);
 
         // map->collision = collision_geometry_from_map(arena, map);
     }
@@ -1395,41 +1406,69 @@ int int_from_key(map_t *map, map_entity_t *entity, string_t key)
     return (int)result;
 }
 
-float float_from_key(map_t *map, map_entity_t *entity, string_t key)
+float float_from_key_or(map_t *map, map_entity_t *entity, string_t key, float default_value)
 {
     string_t value = value_from_key(map, entity, key);
 
-    float result = string_parse_float(value).value;
+    parse_float_result_t parse = string_parse_float(value);
+    float result = parse.is_valid ? parse.value : default_value;
 
     return result;
+
 }
 
-v3_t v3_from_key(map_t *map, map_entity_t *entity, string_t key)
+float float_from_key(map_t *map, map_entity_t *entity, string_t key)
+{
+    return float_from_key_or(map, entity, key, 0.0f);
+}
+
+v3_t v3_from_key_or(map_t *map, map_entity_t *entity, string_t key, v3_t default_value)
 {
     string_t value = value_from_key(map, entity, key);
 
     v3_t v3 = { 0 };
 
-	{
-		parse_float_result_t parsed = string_parse_float(value);
-		v3.x = parsed.value;
-		
-		string_skip(&value, parsed.advance);
-	}
+    parse_float_result_t parsed;
 
-	{
-		parse_float_result_t parsed = string_parse_float(value);
-		v3.y = parsed.value;
-		
-		string_skip(&value, parsed.advance);
-	}
+    // x
 
-	{
-		parse_float_result_t parsed = string_parse_float(value);
-		v3.z = parsed.value;
-		
-		string_skip(&value, parsed.advance);
-	}
+    parsed = string_parse_float(value);
+    if (!parsed.is_valid) goto parse_failed;
+
+    v3.x = parsed.value;
+
+    string_skip(&value, parsed.advance);
+
+    // y
+
+    parsed = string_parse_float(value);
+    if (!parsed.is_valid) goto parse_failed;
+
+    v3.y = parsed.value;
+    
+    string_skip(&value, parsed.advance);
+
+    // z
+
+    parsed = string_parse_float(value);
+    if (!parsed.is_valid) goto parse_failed;
+
+    v3.z = parsed.value;
+    
+    string_skip(&value, parsed.advance);
+
+    //
+
+    if (false)
+    {
+parse_failed:
+        v3 = default_value;
+    }
 
     return v3;
+}
+
+v3_t v3_from_key(map_t *map, map_entity_t *entity, string_t key)
+{
+    return v3_from_key_or(map, entity, key, make_v3(0.0f, 0.0f, 0.0f));
 }

@@ -14,10 +14,12 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"\n" \
 	"#include \"bindless.hlsli\"\n" \
 	"\n" \
+	"#include \"common.hlsli\"\n" \
+	"\n" \
 	"struct post_draw_parameters_t\n" \
 	"{\n" \
 	"	df::Resource< Texture2D< float4 > > blue_noise;\n" \
-	"	uint sample_count;\n" \
+	"	int sample_count;\n" \
 	"	uint2 pad0;\n" \
 	"	df::Resource< Texture2DMS< float > > depth_buffer;\n" \
 	"	uint3 pad1;\n" \
@@ -30,31 +32,29 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"\n" \
 	"\n" \
 	"\n" \
-	"#include \"common.hlsli\"\n" \
-	"\n" \
 	"float3 fog_blend(float3 color, float4 fog)\n" \
 	"{\n" \
 	"    return color*fog.a + fog.rgb;\n" \
 	"}\n" \
 	"\n" \
-	"float phase(float3 v, float3 l, float k)\n" \
+	"float henyey_greenstein(float3 v, float3 l, float k)\n" \
 	"{\n" \
 	"    float numerator = (1.0 - k*k);\n" \
 	"    float denominator = square(1.0 - k*dot(l, v));\n" \
 	"    return (1.0 / (4*PI))*(numerator / denominator);\n" \
 	"}\n" \
 	"\n" \
-	"float4 integrate_fog(float2 uv, uint2 co, float dither, uint sample_index)\n" \
+	"float4 integrate_fog(float2 uv, uint2 co, float dither, int sample_index)\n" \
 	"{\n" \
 	"	float3 o, d;\n" \
 	"	camera_ray(uv, o, d);\n" \
 	"\n" \
-	"	float max_march_distance = 1024;\n" \
-	"	uint  steps              = 16;\n" \
+	"	float max_march_distance = 1024.0;\n" \
+	"	int   steps              = 2;\n" \
 	"\n" \
-	"	float t      = 0;\n" \
 	"	float t_step = 1.0 / float(steps);\n" \
 	"	float depth  = 1.0 / draw.depth_buffer.Get().Load(co, sample_index);\n" \
+	"	float t      = dither*t_step;\n" \
 	"\n" \
 	"	float stop_distance = min(depth, max_march_distance);\n" \
 	"\n" \
@@ -63,39 +63,25 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"    float scattering = view.fog_scattering;\n" \
 	"    float extinction = absorption + scattering;\n" \
 	"    float phase_k    = view.fog_phase_k;\n" \
-	"    float sun_phase  = phase(d, view.sun_direction, phase_k);\n" \
+	"    float sun_phase  = henyey_greenstein(d, view.sun_direction, phase_k);\n" \
 	"\n" \
-	"    float3 ambient = 0.5*float3(0.3f, 0.5f, 0.9f);\n" \
-	"    float3 illumination = 0;\n" \
-	"    float  transmission = 1;\n" \
-	"    for (uint i = 0; i < steps; i++)\n" \
+	"    float3 ambient = view.fog_ambient_inscattering;\n" \
+	"\n" \
+	"    float3 illumination = 0.0;\n" \
+	"    float  transmission = 1.0;\n" \
+	"    for (int i = 0; i < steps; i++)\n" \
 	"    {\n" \
 	"        float step_size = stop_distance*t_step;\n" \
 	"\n" \
-	"        float  dist = stop_distance*(t - dither*t_step);\n" \
-	"        float3 p = o + dist*d;\n" \
-	"\n" \
-	"        float3 projected_p = mul(view.sun_matrix, float4(p, 1)).xyz;\n" \
-	"        projected_p.y  = -projected_p.y;\n" \
-	"        projected_p.xy = 0.5*projected_p.xy + 0.5;\n" \
-	"\n" \
-	"        float p_depth = projected_p.z;\n" \
-	"\n" \
-	"        float sun_shadow = 0.0f;\n" \
-	"        if (p_depth > 0.0f)\n" \
-	"        {\n" \
-	"			Texture2D<float> shadowmap = draw.shadow_map.Get();\n" \
-	"\n" \
-	"			float2 dim;\n" \
-	"			shadowmap.GetDimensions(dim.x, dim.y);\n" \
-	"\n" \
-	"            sun_shadow = 1.0 - SampleShadowPCF3x3(shadowmap, dim, projected_p.xy, p_depth);\n" \
-	"        }\n" \
+	"        float  dist = stop_distance*t;\n" \
+	"        float3 p    = o + dist*d;\n" \
 	"\n" \
 	"        transmission *= exp(-density*extinction*step_size);\n" \
 	"\n" \
-	"        float3 direct_light = rcp(4.0f*PI)*ambient;\n" \
-	"        direct_light += view.sun_color*(1.0 - sun_shadow)*sun_phase;\n" \
+	"        float3 direct_light = rcp(4.0*PI)*ambient;\n" \
+	"\n" \
+	"        float sun_shadow = SampleSunShadow(draw.shadow_map.Get(), p);\n" \
+	"        direct_light += view.sun_color*sun_shadow*sun_phase;\n" \
 	"\n" \
 	"        float3 in_scattering  = direct_light;\n" \
 	"        float  out_scattering = scattering*density;\n" \
@@ -109,7 +95,7 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"    float remainder = depth - stop_distance;\n" \
 	"    if (isinf(remainder))\n" \
 	"    {\n" \
-	"        transmission = 0;\n" \
+	"        transmission  = 0.0;\n" \
 	"        illumination += view.sun_color*sun_phase*scattering*density*rcp(density*extinction);\n" \
 	"    }\n" \
 	"    else\n" \
@@ -125,21 +111,24 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"{\n" \
 	"	uint2 co = uint2(IN.pos.xy);\n" \
 	"\n" \
-	"	Texture2DMS<float3> tex_color = draw.hdr_color.Get();\n" \
-	"	\n" \
-	"	Texture2D<float4> tex_blue_noise = draw.blue_noise.Get();\n" \
+	"	Texture2DMS<float3> tex_color      = draw.hdr_color .Get();\n" \
+	"	Texture2D  <float4> tex_blue_noise = draw.blue_noise.Get();\n" \
 	"\n" \
 	"	float4 blue_noise = tex_blue_noise.Load(uint3(co % 64, 0));\n" \
 	"\n" \
+	"    const float phi = 0.5*(1.0 + sqrt(5));\n" \
+	"\n" \
 	"	float4 sum = 0.0;\n" \
-	"	for (uint i = 0; i < draw.sample_count; i++)\n" \
+	"	for (int i = 0; i < draw.sample_count; i++)\n" \
 	"	{\n" \
 	"		float3 color = tex_color.Load(co, i).rgb;\n" \
+	"\n" \
+	"        float dither = frac(blue_noise[i % 4] + phi*float(i / 4));\n" \
 	"\n" \
 	"		float4 fog = integrate_fog(IN.uv, co, blue_noise.a, i);\n" \
 	"		color = fog_blend(color, fog);\n" \
 	"\n" \
-	"		float2 sample_position = tex_color.GetSamplePosition(i);\n" \
+	"		// float2 sample_position = tex_color.GetSamplePosition(i);\n" \
 	"		float  weight          = 1.0;\n" \
 	"\n" \
 	"		// tonemap\n" \

@@ -43,18 +43,19 @@ end)
 
 -- TODO: Put this somewhere better
 local view_parameters = {
-	world_to_clip  = float4x4, -- also known as "view-projection matrix"
-	view_to_clip   = float4x4, -- also known as "projection matrix"
-	world_to_view  = float4x4, -- also known as "view matrix"
-	sun_matrix     = float4x4,
-	sun_direction  = float3,
-	sun_color      = float3,
-	view_size      = float2,
-    fog_density    = float,
-    fog_absorption = float,
-    fog_scattering = float,
-    fog_phase_k    = float,
-    frame_index    = uint,
+	world_to_clip            = float4x4, -- also known as "view-projection matrix"
+	view_to_clip             = float4x4, -- also known as "projection matrix"
+	world_to_view            = float4x4, -- also known as "view matrix"
+	sun_matrix               = float4x4,
+	sun_direction            = float3,
+	sun_color                = float3,
+	view_size                = float2,
+    fog_density              = float,
+    fog_absorption           = float,
+    fog_scattering           = float,
+    fog_phase_k              = float,
+    fog_ambient_inscattering = float3,
+    frame_index              = uint,
 }
 
 process_shaders({

@@ -22,6 +22,9 @@
 
 #pragma warning(pop)
 
+extern __declspec(dllexport) uint32_t NvOptimusEnablement                  = 1;
+extern __declspec(dllexport) uint32_t AmdPowerXpressRequestHighPerformance = 1;
+
 #include "engine.h"
 
 #include "core/core.c"
@@ -522,6 +525,22 @@ int wWinMain(HINSTANCE instance,
         argv[i] = utf8_from_utf16(&win32_arena, string16_from_cstr(argv_wide[i]));
     }
 
+    bool enable_d3d_debug = false;
+    bool enable_d3d_gbv   = false;
+
+    for (int i = 0; i < argc; i++)
+    {
+        if (string_match(argv[i], S("-d3ddebug")))
+        {
+            enable_d3d_debug = true;
+        }
+
+        if (string_match(argv[i], S("-d3dgbv")))
+        {
+            enable_d3d_gbv = true;
+        }
+    }
+
 	cvar_init_system();
 	platform_init((size_t)argc, argv, &hooks);
 
@@ -587,8 +606,8 @@ int wWinMain(HINSTANCE instance,
 		.base = {
 			.frame_latency = 2,
 		},
-		.enable_debug_layer          = true,
-		.enable_gpu_based_validation = true,
+		.enable_debug_layer          = enable_d3d_debug,
+		.enable_gpu_based_validation = enable_d3d_gbv,
 	});
 
 	rhi_window_t rhi_window = { 0 };

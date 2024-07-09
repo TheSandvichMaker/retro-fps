@@ -190,6 +190,7 @@ typedef struct r_scene_parameters_t
     float             fog_absorption;
     float             fog_scattering;
     float             fog_phase_k;
+    v3_t              fog_ambient_inscattering;
 } r_scene_parameters_t;
 
 typedef struct r_view_t

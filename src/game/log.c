@@ -27,6 +27,7 @@ string_t log_category_to_string[] = {
 	[LogCat_MapLoad]       = Sc("MapLoad"),
 	[LogCat_Game]          = Sc("Game"),
 	[LogCat_CVar]          = Sc("CVar"),
+	[LogCat_Serialize]     = Sc("Serialize"),
 	[LogCat_Max]           = Sc("INVALID LOG CATEGORY"),
 };
 

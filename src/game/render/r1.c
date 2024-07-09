@@ -504,7 +504,7 @@ fn_local void r1_render_debug_lines(rhi_command_list_t *list, rhi_texture_t rt, 
 
 void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t backbuffer, r_view_t *view, map_t *map)
 {
-	R1_TIMED_REGION(list, S("Game View"))
+//	R1_TIMED_REGION(list, S("Game View"))
 	{
 		m4x4_t world_to_clip = mul(view->proj_matrix, view->view_matrix);
 
@@ -519,17 +519,18 @@ void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t backbuffer, r_v
 		const rhi_texture_desc_t *backbuffer_desc = rhi_get_texture_desc(backbuffer);
 
 		set_view_parameters(list, &(view_parameters_t) {
-			.world_to_clip  = world_to_clip,
-			.view_to_clip   = view->proj_matrix,
-			.world_to_view  = view->view_matrix,
-			.sun_matrix     = sun_matrix,
-			.sun_direction  = sun_direction,
-			.sun_color      = view->scene.sun_color,
-			.view_size      = make_v2((float)backbuffer_desc->width, (float)backbuffer_desc->height),
-			.fog_density    = view->scene.fog_density,
-			.fog_absorption = view->scene.fog_absorption,
-			.fog_scattering = view->scene.fog_scattering,
-			.fog_phase_k    = view->scene.fog_phase_k,
+			.world_to_clip            = world_to_clip,
+			.view_to_clip             = view->proj_matrix,
+			.world_to_view            = view->view_matrix,
+			.sun_matrix               = sun_matrix,
+			.sun_direction            = sun_direction,
+			.sun_color                = view->scene.sun_color,
+			.view_size                = make_v2((float)backbuffer_desc->width, (float)backbuffer_desc->height),
+			.fog_density              = view->scene.fog_density,
+			.fog_absorption           = view->scene.fog_absorption,
+			.fog_scattering           = view->scene.fog_scattering,
+			.fog_phase_k              = view->scene.fog_phase_k,
+            .fog_ambient_inscattering = view->scene.fog_ambient_inscattering,
 		});
 
 		rhi_texture_t rt_hdr = r1->window.rt_hdr;
@@ -546,7 +547,6 @@ void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t backbuffer, r_v
 		}
 
 		r1_post_process(list, rt_hdr, backbuffer);
-		// rhi_do_test_stuff(list, rt_hdr, backbuffer, r1->psos.post_process);
 	}
 }
 

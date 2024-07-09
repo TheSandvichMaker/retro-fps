@@ -1,3 +1,5 @@
+#include "common.hlsli"
+
 @metashader
 {
 	name = "post",
@@ -7,7 +9,7 @@
 		depth_buffer = Texture2DMS(float),
 		shadow_map   = Texture2D(float),
 		blue_noise   = Texture2D(float4),
-		sample_count = uint,
+		sample_count = int,
 	},
 
 	shaders = {
@@ -15,31 +17,29 @@
 	},
 }
 
-#include "common.hlsli"
-
 float3 fog_blend(float3 color, float4 fog)
 {
     return color*fog.a + fog.rgb;
 }
 
-float phase(float3 v, float3 l, float k)
+float henyey_greenstein(float3 v, float3 l, float k)
 {
     float numerator = (1.0 - k*k);
     float denominator = square(1.0 - k*dot(l, v));
     return (1.0 / (4*PI))*(numerator / denominator);
 }
 
-float4 integrate_fog(float2 uv, uint2 co, float dither, uint sample_index)
+float4 integrate_fog(float2 uv, uint2 co, float dither, int sample_index)
 {
 	float3 o, d;
 	camera_ray(uv, o, d);
 
-	float max_march_distance = 1024;
-	uint  steps              = 16;
+	float max_march_distance = 1024.0;
+	int   steps              = 2;
 
-	float t      = 0;
 	float t_step = 1.0 / float(steps);
 	float depth  = 1.0 / draw.depth_buffer.Get().Load(co, sample_index);
+	float t      = dither*t_step;
 
 	float stop_distance = min(depth, max_march_distance);
 
@@ -48,39 +48,25 @@ float4 integrate_fog(float2 uv, uint2 co, float dither, uint sample_index)
     float scattering = view.fog_scattering;
     float extinction = absorption + scattering;
     float phase_k    = view.fog_phase_k;
-    float sun_phase  = phase(d, view.sun_direction, phase_k);
+    float sun_phase  = henyey_greenstein(d, view.sun_direction, phase_k);
 
-    float3 ambient = 0.5*float3(0.3f, 0.5f, 0.9f);
-    float3 illumination = 0;
-    float  transmission = 1;
-    for (uint i = 0; i < steps; i++)
+    float3 ambient = view.fog_ambient_inscattering;
+
+    float3 illumination = 0.0;
+    float  transmission = 1.0;
+    for (int i = 0; i < steps; i++)
     {
         float step_size = stop_distance*t_step;
 
-        float  dist = stop_distance*(t - dither*t_step);
-        float3 p = o + dist*d;
-
-        float3 projected_p = mul(view.sun_matrix, float4(p, 1)).xyz;
-        projected_p.y  = -projected_p.y;
-        projected_p.xy = 0.5*projected_p.xy + 0.5;
-
-        float p_depth = projected_p.z;
-
-        float sun_shadow = 0.0f;
-        if (p_depth > 0.0f)
-        {
-			Texture2D<float> shadowmap = draw.shadow_map.Get();
-
-			float2 dim;
-			shadowmap.GetDimensions(dim.x, dim.y);
-
-            sun_shadow = 1.0 - SampleShadowPCF3x3(shadowmap, dim, projected_p.xy, p_depth);
-        }
+        float  dist = stop_distance*t;
+        float3 p    = o + dist*d;
 
         transmission *= exp(-density*extinction*step_size);
 
-        float3 direct_light = rcp(4.0f*PI)*ambient;
-        direct_light += view.sun_color*(1.0 - sun_shadow)*sun_phase;
+        float3 direct_light = rcp(4.0*PI)*ambient;
+
+        float sun_shadow = SampleSunShadow(draw.shadow_map.Get(), p);
+        direct_light += view.sun_color*sun_shadow*sun_phase;
 
         float3 in_scattering  = direct_light;
         float  out_scattering = scattering*density;
@@ -94,7 +80,7 @@ float4 integrate_fog(float2 uv, uint2 co, float dither, uint sample_index)
     float remainder = depth - stop_distance;
     if (isinf(remainder))
     {
-        transmission = 0;
+        transmission  = 0.0;
         illumination += view.sun_color*sun_phase*scattering*density*rcp(density*extinction);
     }
     else
@@ -110,21 +96,24 @@ float4 post_ps(FullscreenTriangleOutVS IN) : SV_Target
 {
 	uint2 co = uint2(IN.pos.xy);
 
-	Texture2DMS<float3> tex_color = draw.hdr_color.Get();
-	
-	Texture2D<float4> tex_blue_noise = draw.blue_noise.Get();
+	Texture2DMS<float3> tex_color      = draw.hdr_color .Get();
+	Texture2D  <float4> tex_blue_noise = draw.blue_noise.Get();
 
 	float4 blue_noise = tex_blue_noise.Load(uint3(co % 64, 0));
 
+    const float phi = 0.5*(1.0 + sqrt(5));
+
 	float4 sum = 0.0;
-	for (uint i = 0; i < draw.sample_count; i++)
+	for (int i = 0; i < draw.sample_count; i++)
 	{
 		float3 color = tex_color.Load(co, i).rgb;
+
+        float dither = frac(blue_noise[i % 4] + phi*float(i / 4));
 
 		float4 fog = integrate_fog(IN.uv, co, blue_noise.a, i);
 		color = fog_blend(color, fog);
 
-		float2 sample_position = tex_color.GetSamplePosition(i);
+		// float2 sample_position = tex_color.GetSamplePosition(i);
 		float  weight          = 1.0;
 
 		// tonemap

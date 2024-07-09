@@ -21,15 +21,13 @@ void editor_do_lightmap_window(editor_lightmap_state_t *lm_editor, editor_window
 
     gamestate_t  *game       = g_game;
     map_t        *map        = game->map;
-    map_entity_t *worldspawn = game->worldspawn;
+    // map_entity_t *worldspawn = game->worldspawn;
+    worldspawn_t *worldspawn = map->worldspawn;
 
-    v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
-    float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
+    v3_t  sun_color      = worldspawn->sun_color;
+    float sun_brightness = worldspawn->sun_brightness;
 
     sun_color = mul(sun_brightness, sun_color);
-
-    v3_t ambient_color = v3_from_key(map, worldspawn, S("ambient_color"));
-    ambient_color = mul(1.0f / 255.0f, ambient_color);
 
 	lum_state_flags_t flags = map->lightmap_state ? atomic_load(&map->lightmap_state->flags) : 0;
 
@@ -325,6 +323,16 @@ void editor_do_lightmap_window(editor_lightmap_state_t *lm_editor, editor_window
 			ui_row_label(&builder, Sf("time elapsed:  %02u:%02u", minutes, seconds));
 		}
 	}
+
+    ui_row_header(&builder, S("Worldspawn"));
+
+    ui_row_color_picker_v3(&builder, S("Sun Color"), &worldspawn->sun_color);
+    ui_row_slider         (&builder, S("Sun Brightness"), &worldspawn->sun_brightness, 0.0f, 10.0f);
+    ui_row_slider         (&builder, S("Fog Absorption"), &worldspawn->fog_absorption, 0.0f, 0.1f);
+    ui_row_slider         (&builder, S("Fog Density"),    &worldspawn->fog_density, 0.0f, 0.1f);
+    ui_row_slider         (&builder, S("Fog Scattering"), &worldspawn->fog_scattering, 0.0f, 0.1f);
+    ui_row_slider         (&builder, S("Fog Phase"),      &worldspawn->fog_phase, -1.0f, 1.0f);
+    ui_row_color_picker_v3(&builder, S("Fog Ambient Inscattering"), &worldspawn->fog_ambient_inscattering);
 
 	ui_scrollable_region_end(&window->scroll_region, builder.rect);
 }

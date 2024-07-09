@@ -61,4 +61,5 @@ typedef struct ui_color_picker_state_t
 	v4_t  cached_color;
 } ui_color_picker_state_t;
 
-fn void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color);
+fn void ui_row_color_picker   (ui_row_builder_t *builder, string_t label, v4_t *color);
+fn void ui_row_color_picker_v3(ui_row_builder_t *builder, string_t label, v3_t *color);

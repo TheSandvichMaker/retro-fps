@@ -8,8 +8,7 @@ typedef struct gamestate_t
 {
 	arena_t arena;
 
-    map_t        *map;
-	map_entity_t *worldspawn;
+    map_t *map;
 
 	camera_t global_camera;
 

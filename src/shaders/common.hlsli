@@ -133,14 +133,33 @@ float SampleShadowPCF3x3(Texture2D<float> shadowmap, float2 shadowmap_dim, float
     float4 gather4_c = shadowmap.GatherRed(df::s_aniso_clamped, projected_pos, int2(-1,  1));
     float4 gather4_d = shadowmap.GatherRed(df::s_aniso_clamped, projected_pos, int2( 1,  1));
 
-    float shadow = 0;
-    shadow += dot(float4(sfrac.z, 1, sfrac.w, sfrac.z*sfrac.w), gather4_a < test_depth);
-    shadow += dot(float4(1, sfrac.x, sfrac.x*sfrac.w, sfrac.w), gather4_b < test_depth);
-    shadow += dot(float4(sfrac.z*sfrac.y, sfrac.y, 1, sfrac.z), gather4_c < test_depth);
-    shadow += dot(float4(sfrac.y, sfrac.x*sfrac.y, sfrac.x, 1), gather4_d < test_depth);
-    shadow /= 9.0;
+    float transmittance = 0.0;
+    transmittance += dot(float4(sfrac.z, 1, sfrac.w, sfrac.z*sfrac.w), test_depth >= gather4_a);
+    transmittance += dot(float4(1, sfrac.x, sfrac.x*sfrac.w, sfrac.w), test_depth >= gather4_b);
+    transmittance += dot(float4(sfrac.z*sfrac.y, sfrac.y, 1, sfrac.z), test_depth >= gather4_c);
+    transmittance += dot(float4(sfrac.y, sfrac.x*sfrac.y, sfrac.x, 1), test_depth >= gather4_d);
+    transmittance /= 9.0;
 
-    return shadow;
+    return transmittance;
+}
+
+float SampleSunShadow(Texture2D<float> sun_shadowmap, float3 world_p)
+{
+    float3 projected_p = mul(view.sun_matrix, float4(world_p, 1)).xyz;
+    projected_p.y  = -projected_p.y;
+    projected_p.xy = 0.5*projected_p.xy + 0.5;
+
+    float p_depth = max(0.0, projected_p.z);
+
+    float sun_shadow = 1.0f;
+    {
+        float2 dim;
+        sun_shadowmap.GetDimensions(dim.x, dim.y);
+
+        sun_shadow = SampleShadowPCF3x3(sun_shadowmap, dim, projected_p.xy, p_depth);
+    }
+
+    return sun_shadow;
 }
 
 float2 SvPositionToClip(float2 sv_position)

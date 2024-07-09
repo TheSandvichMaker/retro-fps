@@ -8,12 +8,13 @@ typedef struct view_parameters_t
 	m4x4_t view_to_clip;
 	m4x4_t world_to_clip;
 	m4x4_t world_to_view;
-	v3_t sun_color;
+	v3_t fog_ambient_inscattering;
 	float fog_absorption;
-	v3_t sun_direction;
+	v3_t sun_color;
 	float fog_density;
-	v2_t view_size;
+	v3_t sun_direction;
 	float fog_phase_k;
+	v2_t view_size;
 	float fog_scattering;
 	uint32_t frame_index;
 } view_parameters_t;

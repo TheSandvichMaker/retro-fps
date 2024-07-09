@@ -40,8 +40,12 @@ typedef struct profiler_block_t
 global uint32_t         profiler_parent;
 extern uint64_t         profiler_slots_count;
 extern profiler_slot_t  profiler_slots[];
+extern profiler_slot_t  profiler_slots_read[];
 
-#define CREATE_PROFILER_TABLE profiler_slot_t profiler_slots[__COUNTER__ + 1]; uint64_t profiler_slots_count = __COUNTER__;
+#define CREATE_PROFILER_TABLE                             \
+    profiler_slot_t profiler_slots     [__COUNTER__ + 1]; \
+    profiler_slot_t profiler_slots_read[__COUNTER__];     \
+    uint64_t profiler_slots_count = __COUNTER__ - 1;
 
 #define PROF__VAR(var) PASTE(Prof__, var)
 #define PROF__ID (__COUNTER__ + 1)
@@ -111,5 +115,6 @@ fn_local double tsc_to_ms(uint64_t tsc, uint64_t freq)
 
 fn_local void profiler_begin_frame(void)
 {
+    copy_array(profiler_slots_read, profiler_slots, profiler_slots_count);
 	zero_array(profiler_slots, profiler_slots_count);
 }

@@ -64,8 +64,11 @@ D3D12_BLEND to_d3d12_blend(rhi_blend_t blend)
 		[RhiBlend_inv_src1_color]   = D3D12_BLEND_INV_SRC1_COLOR,
 		[RhiBlend_src1_alpha]       = D3D12_BLEND_SRC1_ALPHA,
 		[RhiBlend_inv_src1_alpha]   = D3D12_BLEND_INV_SRC1_ALPHA,
+#if 0
+        // Only available, it seems, in relatively recent SDK versions (not on my win10 laptop)
 		[RhiBlend_alpha_factor]     = D3D12_BLEND_ALPHA_FACTOR,
 		[RhiBlend_inv_alpha_factor] = D3D12_BLEND_INV_ALPHA_FACTOR,
+#endif
 	};
 
 	ASSERT(blend >= 0 && blend < ARRAY_COUNT(map));
@@ -359,8 +362,11 @@ rhi_blend_t from_d3d12_blend(D3D12_BLEND blend)
 		[D3D12_BLEND_INV_SRC1_COLOR]   = RhiBlend_inv_src1_color,
 		[D3D12_BLEND_SRC1_ALPHA]       = RhiBlend_src1_alpha,
 		[D3D12_BLEND_INV_SRC1_ALPHA]   = RhiBlend_inv_src1_alpha,
+#if 0
+        // Only available, it seems, in relatively recent SDK versions (not on my win10 laptop)
 		[D3D12_BLEND_ALPHA_FACTOR]     = RhiBlend_alpha_factor,
 		[D3D12_BLEND_INV_ALPHA_FACTOR] = RhiBlend_inv_alpha_factor,
+#endif
 	};
 
 	ASSERT(blend >= 0 && blend < ARRAY_COUNT(map));

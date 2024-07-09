@@ -484,7 +484,7 @@ double os_seconds_elapsed(hires_time_t start, hires_time_t end)
     return result;
 }
 
-uint64_t estimate_cpu_timer_frequency(uint64_t wait_ms)
+uint64_t os_estimate_cpu_timer_frequency(uint64_t wait_ms)
 {
     if (g_qpc_freq.QuadPart == 0)
     {

@@ -21,6 +21,7 @@
 #include "collision_geometry.c"
 #include "editor.c"
 #include "editor_console.c"
+#include "entities.c"
 #include "font.c"
 #include "freeverb.c"
 #include "input.c"
@@ -35,8 +36,8 @@
 #include "render_backend.c"
 #include "render_helpers.c"
 #include "ui.c"
-#include "ui_widgets.c"
 #include "ui_row_builder.c"
+#include "ui_widgets.c"
 //#include "in_game_editor.c"
 
 #include "render/r1.c"
@@ -464,16 +465,6 @@ void app_init(platform_init_io_t *io)
 	{
 		map_entity_t *e = &map->entities[entity_index];
 
-		if (is_class(map, e, S("worldspawn")))
-		{
-			if (game->worldspawn)
-			{
-				log(MapLoad, Warning, "More than one worldspawn in the map. Overwriting previously seen one!");
-			}
-
-			game->worldspawn = e;
-		}
-
 		if (is_class(map, e, S("info_player_start")))
 		{
 			player->p = v3_from_key(map, e, S("origin"));
@@ -676,23 +667,24 @@ fn_local void render_game(/*r1_t *r1, */gamestate_t *game, rhi_window_t window)
 
 		r_scene_parameters_t *scene = &view.scene;
 
-		map_entity_t *worldspawn = game->worldspawn;
+		worldspawn_t *worldspawn = map->worldspawn;
 
-		float sun_brightness = float_from_key(map, worldspawn, S("sun_brightness"));
-		v3_t  sun_color      = v3_normalize(v3_from_key(map, worldspawn, S("sun_color")));
+		float sun_brightness = worldspawn->sun_brightness;
+		v3_t  sun_color      = worldspawn->sun_color;
 			  sun_color      = mul(sun_brightness, sun_color);
 
 		// scene->skybox = skybox;
 		scene->sun_direction   = normalize(make_v3(0.25f, 0.75f, 1));
 		scene->sun_color       = sun_color;
 
-		scene->fogmap          = map->fogmap;
-		scene->fog_offset      = rect3_center(map->bounds);
-		scene->fog_dim         = rect3_dim(map->bounds);
-		scene->fog_absorption  = 0.002f;
-		scene->fog_density     = 0.02f;
-		scene->fog_scattering  = 0.04f;
-		scene->fog_phase_k     = 0.6f;
+		scene->fogmap                   = map->fogmap;
+		scene->fog_offset               = rect3_center(map->bounds);
+		scene->fog_dim                  = rect3_dim(map->bounds);
+		scene->fog_absorption           = worldspawn->fog_absorption;
+		scene->fog_density              = worldspawn->fog_density;
+		scene->fog_scattering           = worldspawn->fog_scattering;
+		scene->fog_phase_k              = worldspawn->fog_phase;
+        scene->fog_ambient_inscattering = worldspawn->fog_ambient_inscattering;
 
 		r1_update_window_resources(window);
 		r1_render_game_view(list, backbuffer, &view, map);
@@ -730,6 +722,8 @@ fn_local void app_tick(platform_tick_io_t *io)
 	bool first_iteration = true;
 	while (app->accumulator >= dt)
 	{
+        PROFILE_BEGIN(tick_game);
+
 		tick_game(game, (float)dt);
 		app->accumulator -= dt;
 
@@ -738,6 +732,8 @@ fn_local void app_tick(platform_tick_io_t *io)
 			action_system_clear_sticky_edges();
 			first_iteration = false;
 		}
+
+        PROFILE_END(tick_game);
 	}
 
 	unequip_action_system();
@@ -745,7 +741,13 @@ fn_local void app_tick(platform_tick_io_t *io)
 	rhi_window_t window = io->rhi_window;
 	v2_t client_size = rhi_get_window_client_size(window);
 
+    PROFILE_BEGIN(tick_ui);
+
 	tick_ui(io, app, io->input, client_size, (float)frame_time);
+
+    PROFILE_END(tick_ui);
+
+    PROFILE_BEGIN(render_game);
 
 	rhi_begin_frame();
 
@@ -754,6 +756,8 @@ fn_local void app_tick(platform_tick_io_t *io)
 	r1_render_ui(rhi_get_command_list(), rhi_get_current_backbuffer(window), &the_ui->render_commands);
 
 	rhi_end_frame();
+
+    PROFILE_END(render_game);
 
 	process_asset_changes();
 

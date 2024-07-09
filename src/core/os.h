@@ -16,7 +16,7 @@ fn bool os_execute_capture(string_t command, int *exit_code, arena_t *arena, str
 
 fn hires_time_t os_hires_time(void);
 fn double os_seconds_elapsed(hires_time_t start, hires_time_t end);
-fn uint64_t estimate_cpu_timer_frequency(uint64_t wait_ms);
+fn uint64_t os_estimate_cpu_timer_frequency(uint64_t wait_ms);
 
 fn void *vm_reserve (void *address, size_t size);
 fn bool  vm_commit  (void *address, size_t size);

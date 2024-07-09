@@ -13,6 +13,7 @@
 #include "dream.h"
 #include "font.h"
 #include "freeverb.h"
+#include "entities.h"
 #include "globals.h"
 #include "input.h"
 #include "intersect.h"
