@@ -1378,6 +1378,20 @@ bool is_class(map_t *map, map_entity_t *entity, string_t classname)
     return string_match(value_from_key(map, entity, S("classname")), classname);
 }
 
+bool expect_class(map_t *map, map_entity_t *entity, string_t expected_class)
+{
+    string_t entity_class = value_from_key(map, entity, S("classname"));
+
+    bool result = string_match(entity_class, expected_class);
+
+    if (!result)
+    {
+        log(Serialize, Error, "Expected entity with class '%cs', got '%cs'", expected_class, entity_class);
+    }
+
+    return result;
+}
+
 string_t value_from_key(map_t *map, map_entity_t *entity, string_t key)
 {
     string_t result = { 0 };

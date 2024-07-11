@@ -4,15 +4,22 @@
 
 #include "common.hlsli"
 
+// TODO: Split resolve and post pass parameters up properly
+
 struct post_draw_parameters_t
 {
-	df::Resource< Texture2D< float4 > > blue_noise;
+	df::Resource< Texture2D< float3 > > bloom0;
+	float bloom_amount;
 	int sample_count;
-	uint2 pad0;
-	df::Resource< Texture2DMS< float > > depth_buffer;
+	uint pad0;
+	df::Resource< Texture2D< float4 > > blue_noise;
 	uint3 pad1;
-	df::Resource< Texture2DMS< float3 > > hdr_color;
+	df::Resource< Texture2DMS< float > > depth_buffer;
 	uint3 pad2;
+	df::Resource< Texture2DMS< float3 > > hdr_color;
+	uint3 pad3;
+	df::Resource< Texture2D< float3 > > resolved_color;
+	uint3 pad4;
 	df::Resource< Texture2D< float > > shadow_map;
 };
 
@@ -38,7 +45,7 @@ float4 integrate_fog(float2 uv, uint2 co, float dither, int sample_index)
 	camera_ray(uv, o, d);
 
 	float max_march_distance = 1024.0;
-	int   steps              = 2;
+	int   steps              = 1;
 
 	float t_step = 1.0 / float(steps);
 	float depth  = 1.0 / draw.depth_buffer.Get().Load(co, sample_index);
@@ -95,9 +102,20 @@ float4 integrate_fog(float2 uv, uint2 co, float dither, int sample_index)
     return float4(illumination, transmission);
 }
 
-float4 post_ps(FullscreenTriangleOutVS IN) : SV_Target
+float3 reversible_tonemap(float3 color)
 {
-	uint2 co = uint2(IN.pos.xy);
+	return color*rcp(1 + max(color.r, max(color.g, color.b)));
+}
+
+float3 reversible_tonemap_inverse(float3 color)
+{
+	return color*rcp(1 - max(color.r, max(color.g, color.b)));
+}
+
+float4 resolve_msaa_ps(FullscreenTriangleOutVS IN) : SV_Target
+{
+	float2 uv = IN.uv;
+	uint2  co = uint2(IN.pos.xy);
 
 	Texture2DMS<float3> tex_color      = draw.hdr_color .Get();
 	Texture2D  <float4> tex_blue_noise = draw.blue_noise.Get();
@@ -120,7 +138,7 @@ float4 post_ps(FullscreenTriangleOutVS IN) : SV_Target
 		float  weight          = 1.0;
 
 		// tonemap
-		color = 1.0 - exp(-color.rgb);
+		color = reversible_tonemap(color.rgb);
 		color *= weight;
 
 		sum.rgb += color.rgb;
@@ -128,9 +146,29 @@ float4 post_ps(FullscreenTriangleOutVS IN) : SV_Target
 	}
 
 	sum.rgb *= rcp(sum.a);
+	sum.rgb  = reversible_tonemap_inverse(sum.rgb);
+
+	return float4(sum.rgb, 1.0);
+}
+
+float4 post_ps(FullscreenTriangleOutVS IN) : SV_Target
+{
+	float2 uv = IN.uv;
+	uint2  co = uint2(IN.pos.xy);
+
+	Texture2D<float3> tex_color      = draw.resolved_color.Get();
+	Texture2D<float4> tex_blue_noise = draw.blue_noise    .Get();
+
+	float3 color      = tex_color     .Load(uint3(co, 0));
+	float4 blue_noise = tex_blue_noise.Load(uint3(co % 64, 0));
+
+	float3 bloom = draw.bloom0.Get().SampleLevel(df::s_linear_clamped, uv, 0);
+
+	color = lerp(color, bloom, draw.bloom_amount);
+	color = 1.0 - exp(-color);
 
 	float3 dither = RemapTriPDF(blue_noise.rgb) / 255.0;
-	float3 color  = sum.rgb + dither;
+	color += dither;
 
 	return float4(color, 1.0);
 }

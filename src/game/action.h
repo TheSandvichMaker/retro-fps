@@ -16,6 +16,11 @@ typedef enum action_t
 	Action_right,
 	Action_forward,
 	Action_back,
+	Action_look_left,
+	Action_look_right,
+	Action_look_up,
+	Action_look_down,
+	Action_look_faster,
 	Action_jump,
 	Action_run,
 	Action_crouch,
@@ -66,10 +71,23 @@ typedef struct action_system_t
 	v2_t  mouse_p;
 	v2_t  mouse_dp;
 
+	cvar_t        *key_to_ccmd      [Key_COUNT];
 	uint64_t       key_to_actions   [Key_COUNT];
 	uint64_t       button_to_actions[Button_COUNT];
 	action_state_t action_states    [Action_COUNT];
 } action_system_t;
+
+typedef struct cmd_execution_node_t
+{
+	struct cmd_execution_node_t *next;
+	cvar_t *cmd;
+} cmd_execution_node_t;
+
+typedef struct cmd_execution_list_t
+{
+	cmd_execution_node_t *head;
+	cmd_execution_node_t *tail;
+} cmd_execution_list_t;
 
 global thread_local action_system_t *g_actions = NULL;
 
@@ -77,13 +95,16 @@ fn void equip_action_system  (action_system_t *action_system);
 fn void unequip_action_system(void);
 fn action_system_t *get_action_system(void);
 
+fn void bind_key_console_command(keycode_t key, cvar_t *ccmd);
+fn void unbind_key_console_command(keycode_t key);
+
 fn void bind_key_action  (action_t action, keycode_t key);
 fn void unbind_key_action(action_t action, keycode_t key);
 
 fn void bind_mouse_button_action  (action_t action, mouse_button_t button);
 fn void unbind_mouse_button_action(action_t action, mouse_button_t button);
 
-fn void ingest_action_system_input(input_t *input);
+fn cmd_execution_list_t ingest_action_system_input(arena_t *arena, input_t *input);
 fn void suppress_actions(bool suppress);
 
 fn bool action_pressed (action_t action);

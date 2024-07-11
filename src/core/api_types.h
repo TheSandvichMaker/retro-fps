@@ -10,9 +10,15 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <setjmp.h>
-#include <stdalign.h>
+// #include <stdalign.h>
 #include <stdlib.h>
-#include <stdatomic.h>
+
+#ifndef alignof
+#define alignof _Alignof
+#endif
+
+#define meta_struct
+#define meta(...)
 
 #define DEPRECATED(details) __declspec(deprecated(details))
 

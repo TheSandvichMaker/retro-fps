@@ -115,6 +115,7 @@ CVAR_COMMAND(ccmd_respawn_player, "player.respawn")
 			v3_t p = v3_from_key(map, e, S("origin"));
 
 			teleport_player(player, p);
+			player->dp = v3s(0.0f);
 
 			break;
 		}
@@ -399,7 +400,6 @@ void app_init(platform_init_io_t *io)
 
 	app->ui = m_alloc_struct(&app->arena, ui_t);
 
-	// @Globals - this is stupid
 	equip_ui(app->ui);
 	ui_initialize();
 	unequip_ui();
@@ -416,6 +416,11 @@ void app_init(platform_init_io_t *io)
 	bind_key_action         (Action_right,          Key_d);
 	bind_key_action         (Action_forward,        Key_w);
 	bind_key_action         (Action_back,           Key_s);
+	bind_key_action         (Action_look_left,      Key_left);
+	bind_key_action         (Action_look_right,     Key_right);
+	bind_key_action         (Action_look_up,        Key_down);
+	bind_key_action         (Action_look_down,      Key_up);
+	bind_key_action         (Action_look_faster,    Key_f);
 	bind_key_action         (Action_jump,           Key_space);
 	bind_key_action         (Action_run,            Key_shift);
 	bind_key_action         (Action_crouch,         Key_control);
@@ -423,6 +428,8 @@ void app_init(platform_init_io_t *io)
 	bind_mouse_button_action(Action_fire2,          Button_right);
 	bind_key_action         (Action_escape,         Key_escape);
 	bind_key_action         (Action_toggle_noclip,  Key_v);
+
+	bind_key_console_command(Key_backspace, &ccmd_respawn_player);
 
 	init_game_job_queues();
 
@@ -615,9 +622,7 @@ fn_local void tick_ui(platform_tick_io_t *io, app_state_t *app, input_t *input, 
 
 	ui_begin(dt, rect2_from_min_dim(make_v2(0, 0), client_size));
 	{
-		//update_and_render_in_game_editor();
 		editor_update_and_render(app->editor);
-		(void)client_size;
 		// update_and_draw_console(app->console, client_size, dt);
 	}
     ui_end();
@@ -628,7 +633,6 @@ fn_local void tick_ui(platform_tick_io_t *io, app_state_t *app, input_t *input, 
 	io->cursor              = ui->cursor;
 	io->set_mouse_p         = ui->set_mouse_p;
 
-	// @Globals
 	unequip_ui();
 }
 
@@ -702,7 +706,7 @@ fn_local void app_tick(platform_tick_io_t *io)
 	//r1_state_t       *r1             = app->r1;
 
 	equip_action_system(action_system);
-	ingest_action_system_input(io->input);
+	cmd_execution_list_t cmd_list = ingest_action_system_input(m_get_temp(NULL, 0), io->input);
 
 	suppress_actions(!io->has_focus || the_ui->has_focus);
 
@@ -719,10 +723,19 @@ fn_local void app_tick(platform_tick_io_t *io)
 		the_ui->has_focus = true;
 	}
 
+	equip_gamestate(app->game);
+
 	bool first_iteration = true;
 	while (app->accumulator >= dt)
 	{
         PROFILE_BEGIN(tick_game);
+
+		for (cmd_execution_node_t *node = cmd_list.head; node; node = node->next)
+		{
+			node->cmd->as.command((string_t){0});
+		}
+
+		cmd_list.head = cmd_list.tail = NULL;
 
 		tick_game(game, (float)dt);
 		app->accumulator -= dt;
@@ -736,6 +749,7 @@ fn_local void app_tick(platform_tick_io_t *io)
         PROFILE_END(tick_game);
 	}
 
+	unequip_gamestate();
 	unequip_action_system();
 
 	rhi_window_t window = io->rhi_window;

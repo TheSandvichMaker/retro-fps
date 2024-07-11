@@ -1,6 +1,6 @@
 void worldspawn_deserialize(worldspawn_t *dst, map_t *map, map_entity_t *src)
 {
-    if (is_class(map, src, S("worldspawn")))
+    if (expect_class(map, src, S("worldspawn")))
     {
         dst->sun_color                = v3_from_key_or   (map, src, S("sun_color"), make_v3(1, 1, 1));
         dst->sun_brightness           = float_from_key_or(map, src, S("sun_brightness"), 1.0f);
@@ -9,10 +9,5 @@ void worldspawn_deserialize(worldspawn_t *dst, map_t *map, map_entity_t *src)
         dst->fog_scattering           = float_from_key_or(map, src, S("fog_scattering"), 0.04f);
         dst->fog_phase                = float_from_key_or(map, src, S("fog_phase"), 0.6f);
         dst->fog_ambient_inscattering = v3_from_key_or   (map, src, S("fog_ambient_inscattering"), make_v3(0.0f, 0.0f, 0.0f));
-    }
-    else
-    {
-        log(Serialize, Error, "Tried to deserialize an entity as a worldspawn, but it is a %cs", 
-            value_from_key(map, src, S("classname")));
     }
 }

@@ -39,8 +39,9 @@ sampler s_aniso_wrap     : register(s0, space100);
 sampler s_aniso_clamped  : register(s1, space100);
 sampler s_linear_wrap    : register(s2, space100);
 sampler s_linear_clamped : register(s3, space100);
-sampler s_point_wrap     : register(s4, space100);
-sampler s_point_clamped  : register(s5, space100);
+sampler s_linear_border  : register(s4, space100);
+sampler s_point_wrap     : register(s5, space100);
+sampler s_point_clamped  : register(s6, space100);
 
 }
 

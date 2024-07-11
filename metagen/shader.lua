@@ -63,7 +63,7 @@ function RWStructuredBuffer(format)
 	}
 end
 
-function Texture2D(format)
+function Texture2D(format, ex)
 	local format_hlsl = "float4"
 
 	if format then 
@@ -71,9 +71,19 @@ function Texture2D(format)
 		format_hlsl = format.hlsl_name
 	end
 
+	local may_be_null = false
+
+	if ex ~= nil then
+		if ex.may_be_null == true then
+			may_be_null = true
+		end
+	end
+
 	return {
 		resource_type = "texture",
 		access        = "read",
+		multisample   = false,
+		may_be_null   = may_be_null,
 		size          = 1,
 		align_legacy  = 4, -- NOTE: my resources are 16 byte aligned with legacy cb packing because they're structs, even though they should be able to be packed tightly because they're just indices...
 		align         = 1,
@@ -82,7 +92,7 @@ function Texture2D(format)
 	}
 end
 
-function Texture2DMS(format)
+function Texture2DMS(format, ex)
 	local format_hlsl = "float4"
 
 	if format then 
@@ -90,9 +100,19 @@ function Texture2DMS(format)
 		format_hlsl = format.hlsl_name
 	end
 
+	local may_be_null = false
+
+	if ex ~= nil then
+		if ex.may_be_null == true then
+			may_be_null = true
+		end
+	end
+
 	return {
 		resource_type = "texture",
 		access        = "read",
+		multisample   = true,
+		may_be_null   = may_be_null,
 		size          = 1,
 		align_legacy  = 4, -- NOTE: my resources are 16 byte aligned with legacy cb packing because they're structs, even though they should be able to be packed tightly because they're just indices...
 		align         = 1,

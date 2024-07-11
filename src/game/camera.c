@@ -2,6 +2,9 @@
 // Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
 // ============================================================
 
+CVAR_F32_EX(cvar_camera_digital_look_speed,            "camera.digital_look_speed",            3.5f, 0.1f, 15.0f);
+CVAR_F32_EX(cvar_camera_digital_look_speed_multiplier, "camera.digital_look_speed_multiplier", 2.0f, 1.0f, 4.0f);
+
 void compute_camera_axes(camera_t *camera)
 
 {
@@ -14,6 +17,14 @@ void update_camera_rotation(camera_t *camera, float dt)
 	(void)dt;
 
 	v2_t dp = get_look_axes();
+
+	float digital_speed = cvar_read_f32(&cvar_camera_digital_look_speed);
+	if (action_held(Action_look_faster)) digital_speed *= cvar_read_f32(&cvar_camera_digital_look_speed_multiplier);
+
+	if (action_held(Action_look_left )) dp.x -= digital_speed;
+	if (action_held(Action_look_right)) dp.x += digital_speed;
+	if (action_held(Action_look_up   )) dp.y += digital_speed;
+	if (action_held(Action_look_down )) dp.y -= digital_speed;
 
     float look_speed_x = 0.1f;
     float look_speed_y = 0.1f;

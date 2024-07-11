@@ -611,6 +611,12 @@ DECLARE_VECTOR3_OP(sub, -)
 DECLARE_VECTOR3_OP(mul, *)
 DECLARE_VECTOR3_OP(div, /)
 
+fn_local v3_t v3s(float x)
+{
+    return (v3_t){x, x, x};
+}
+
+// TODO: Deprecate
 fn_local v3_t v3_from_scalar(float x)
 {
     return (v3_t){x, x, x};

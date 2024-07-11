@@ -1,0 +1,32 @@
+#include "common.hlsli"
+
+@metashader
+{
+	name = "bloom",
+
+	draw_parameters = {
+		tex_color      = Texture2D(float3),
+		inv_tex_size   = float2,
+	},
+
+	shaders = {
+		bloom_blur_ps = { target = "ps_6_6", entry = "bloom_blur_ps" },
+	},
+}
+
+float4 bloom_blur_ps(FullscreenTriangleOutVS IN) : SV_Target
+{
+	Texture2D<float3> tex_color    = draw.tex_color.Get();
+	float2            inv_tex_size = draw.inv_tex_size;
+
+	float2 uv = IN.uv;
+
+	float3 sum = 0.0;
+	sum += tex_color.SampleLevel(df::s_linear_border, uv + float2(-0.5, -0.5)*inv_tex_size, 0);
+	sum += tex_color.SampleLevel(df::s_linear_border, uv + float2(+0.5, -0.5)*inv_tex_size, 0);
+	sum += tex_color.SampleLevel(df::s_linear_border, uv + float2(+0.5, +0.5)*inv_tex_size, 0);
+	sum += tex_color.SampleLevel(df::s_linear_border, uv + float2(-0.5, +0.5)*inv_tex_size, 0);
+	sum *= 0.25;
+
+	return float4(sum, 1);
+}

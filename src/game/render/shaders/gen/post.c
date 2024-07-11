@@ -2,10 +2,12 @@
 
 void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_t *params)
 {
-	rhi_validate_texture_srv(params->blue_noise, S("shader_post_set_draw_params"));
-	rhi_validate_texture_srv(params->depth_buffer, S("shader_post_set_draw_params"));
-	rhi_validate_texture_srv(params->hdr_color, S("shader_post_set_draw_params"));
-	rhi_validate_texture_srv(params->shadow_map, S("shader_post_set_draw_params"));
+	rhi_validate_texture_srv(params->bloom0, S("shader_post_set_draw_params:bloom0"), RhiValidateTextureSrv_may_be_null);
+	rhi_validate_texture_srv(params->blue_noise, S("shader_post_set_draw_params:blue_noise"), 0);
+	rhi_validate_texture_srv(params->depth_buffer, S("shader_post_set_draw_params:depth_buffer"), RhiValidateTextureSrv_is_msaa|RhiValidateTextureSrv_may_be_null);
+	rhi_validate_texture_srv(params->hdr_color, S("shader_post_set_draw_params:hdr_color"), RhiValidateTextureSrv_is_msaa|RhiValidateTextureSrv_may_be_null);
+	rhi_validate_texture_srv(params->resolved_color, S("shader_post_set_draw_params:resolved_color"), RhiValidateTextureSrv_may_be_null);
+	rhi_validate_texture_srv(params->shadow_map, S("shader_post_set_draw_params:shadow_map"), RhiValidateTextureSrv_may_be_null);
 	rhi_set_parameters(list, 0, params, sizeof(*params));
 }
 
@@ -16,15 +18,22 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"\n" \
 	"#include \"common.hlsli\"\n" \
 	"\n" \
+	"// TODO: Split resolve and post pass parameters up properly\n" \
+	"\n" \
 	"struct post_draw_parameters_t\n" \
 	"{\n" \
-	"	df::Resource< Texture2D< float4 > > blue_noise;\n" \
+	"	df::Resource< Texture2D< float3 > > bloom0;\n" \
+	"	float bloom_amount;\n" \
 	"	int sample_count;\n" \
-	"	uint2 pad0;\n" \
-	"	df::Resource< Texture2DMS< float > > depth_buffer;\n" \
+	"	uint pad0;\n" \
+	"	df::Resource< Texture2D< float4 > > blue_noise;\n" \
 	"	uint3 pad1;\n" \
-	"	df::Resource< Texture2DMS< float3 > > hdr_color;\n" \
+	"	df::Resource< Texture2DMS< float > > depth_buffer;\n" \
 	"	uint3 pad2;\n" \
+	"	df::Resource< Texture2DMS< float3 > > hdr_color;\n" \
+	"	uint3 pad3;\n" \
+	"	df::Resource< Texture2D< float3 > > resolved_color;\n" \
+	"	uint3 pad4;\n" \
 	"	df::Resource< Texture2D< float > > shadow_map;\n" \
 	"};\n" \
 	"\n" \
@@ -50,7 +59,7 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"	camera_ray(uv, o, d);\n" \
 	"\n" \
 	"	float max_march_distance = 1024.0;\n" \
-	"	int   steps              = 2;\n" \
+	"	int   steps              = 1;\n" \
 	"\n" \
 	"	float t_step = 1.0 / float(steps);\n" \
 	"	float depth  = 1.0 / draw.depth_buffer.Get().Load(co, sample_index);\n" \
@@ -107,9 +116,20 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"    return float4(illumination, transmission);\n" \
 	"}\n" \
 	"\n" \
-	"float4 post_ps(FullscreenTriangleOutVS IN) : SV_Target\n" \
+	"float3 reversible_tonemap(float3 color)\n" \
 	"{\n" \
-	"	uint2 co = uint2(IN.pos.xy);\n" \
+	"	return color*rcp(1 + max(color.r, max(color.g, color.b)));\n" \
+	"}\n" \
+	"\n" \
+	"float3 reversible_tonemap_inverse(float3 color)\n" \
+	"{\n" \
+	"	return color*rcp(1 - max(color.r, max(color.g, color.b)));\n" \
+	"}\n" \
+	"\n" \
+	"float4 resolve_msaa_ps(FullscreenTriangleOutVS IN) : SV_Target\n" \
+	"{\n" \
+	"	float2 uv = IN.uv;\n" \
+	"	uint2  co = uint2(IN.pos.xy);\n" \
 	"\n" \
 	"	Texture2DMS<float3> tex_color      = draw.hdr_color .Get();\n" \
 	"	Texture2D  <float4> tex_blue_noise = draw.blue_noise.Get();\n" \
@@ -132,7 +152,7 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"		float  weight          = 1.0;\n" \
 	"\n" \
 	"		// tonemap\n" \
-	"		color = 1.0 - exp(-color.rgb);\n" \
+	"		color = reversible_tonemap(color.rgb);\n" \
 	"		color *= weight;\n" \
 	"\n" \
 	"		sum.rgb += color.rgb;\n" \
@@ -140,9 +160,29 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"	}\n" \
 	"\n" \
 	"	sum.rgb *= rcp(sum.a);\n" \
+	"	sum.rgb  = reversible_tonemap_inverse(sum.rgb);\n" \
+	"\n" \
+	"	return float4(sum.rgb, 1.0);\n" \
+	"}\n" \
+	"\n" \
+	"float4 post_ps(FullscreenTriangleOutVS IN) : SV_Target\n" \
+	"{\n" \
+	"	float2 uv = IN.uv;\n" \
+	"	uint2  co = uint2(IN.pos.xy);\n" \
+	"\n" \
+	"	Texture2D<float3> tex_color      = draw.resolved_color.Get();\n" \
+	"	Texture2D<float4> tex_blue_noise = draw.blue_noise    .Get();\n" \
+	"\n" \
+	"	float3 color      = tex_color     .Load(uint3(co, 0));\n" \
+	"	float4 blue_noise = tex_blue_noise.Load(uint3(co % 64, 0));\n" \
+	"\n" \
+	"	float3 bloom = draw.bloom0.Get().SampleLevel(df::s_linear_clamped, uv, 0);\n" \
+	"\n" \
+	"	color = lerp(color, bloom, draw.bloom_amount);\n" \
+	"	color = 1.0 - exp(-color);\n" \
 	"\n" \
 	"	float3 dither = RemapTriPDF(blue_noise.rgb) / 255.0;\n" \
-	"	float3 color  = sum.rgb + dither;\n" \
+	"	color += dither;\n" \
 	"\n" \
 	"	return float4(color, 1.0);\n" \
 	"}\n" \

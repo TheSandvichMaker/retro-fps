@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <stdatomic.h>
 #define atomic _Atomic
 
 //------------------------------------------------------------------------

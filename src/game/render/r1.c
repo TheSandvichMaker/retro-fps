@@ -2,8 +2,12 @@
 
 #include "shaders/gen/shaders.c"
 
-CVAR_BOOL  (cvar_r1_ui_heat_map,       "r1.ui.heat_map",       false);
-CVAR_I32_EX(cvar_r1_ui_heat_map_scale, "r1.ui.heat_map_scale", 16, 1, 255);
+CVAR_BOOL  (cvar_r1_ui_heat_map,            "r1.ui.heat_map",            false);
+CVAR_I32_EX(cvar_r1_ui_heat_map_scale,      "r1.ui.heat_map_scale",      16, 1, 255);
+CVAR_I32_EX(cvar_r1_bloom_downsample_steps, "r1.bloom.filter_downsample_steps", 8, 1, 8);
+CVAR_I32_EX(cvar_r1_bloom_upsample_steps,   "r1.bloom.filter_upsample_steps",   4, 1, 8);
+CVAR_F32_EX(cvar_r1_bloom_amount,           "r1.bloom.amount",           0.1f, 0.0f, 1.0f);
+CVAR_BOOL  (cvar_r1_bloom_preview,          "r1.bloom.preview",          false);
 
 fn_local uint32_t r1_begin_timed_region(rhi_command_list_t *list, string_t identifier)
 {
@@ -157,27 +161,16 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 		});
 	}
 
+	// resolve msaa
+	{
+		df_shader_info_t *ps = &df_shaders[DfShader_resolve_msaa_ps];
+		r1->psos.resolve_msaa = r1_create_fullscreen_pso(S("pso_resolve_msaa"), ps->bytecode, PixelFormat_r16g16b16a16_float);
+	}
+
 	// post process
 	{
-		df_shader_info_t *vs = &df_shaders[DfShader_fullscreen_triangle_vs];
 		df_shader_info_t *ps = &df_shaders[DfShader_post_ps];
-
-		r1->psos.post_process = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
-			.debug_name = S("pso_post_process"),
-			.vs = vs->bytecode,
-			.ps = ps->bytecode,
-			.blend = {
-				.render_target[0].write_mask = RhiColorWriteEnable_all,
-				.sample_mask                 = 0xFFFFFFFF,
-			},
-			.rasterizer = {
-				.cull_mode     = RhiCullMode_back,
-				.front_winding = RhiWinding_ccw,
-			},
-			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
-			.render_target_count     = 1,
-			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm_srgb,
-		});
+		r1->psos.post_process = r1_create_fullscreen_pso(S("pso_post_process"), ps->bytecode, PixelFormat_r8g8b8a8_unorm_srgb);
 	}
 
 	// ui
@@ -210,7 +203,7 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 			.ps = ps->bytecode,
 			.blend = {
 				.render_target[0] = rhi_blend_additive(),
-				.sample_mask = 0xFFFFFFFF,
+				.sample_mask      = 0xFFFFFFFF,
 			},
 			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
 			.render_target_count     = 1,
@@ -229,7 +222,7 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 			.ps = ps->bytecode,
 			.blend = {
 				.render_target[0] = rhi_blend_premul_alpha(),
-				.sample_mask                 = 0xFFFFFFFF,
+				.sample_mask      = 0xFFFFFFFF,
 			},
 			.rasterizer = {
 				.cull_mode     = RhiCullMode_back,
@@ -239,6 +232,12 @@ fn_local void r1_create_psos(uint32_t multisample_count)
 			.render_target_count     = 1,
 			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm_srgb,
 		});
+	}
+
+	// bloom blur passes
+	{
+		df_shader_info_t *ps = &df_shaders[DfShader_bloom_blur_ps];
+		r1->psos.bloom_blur = r1_create_fullscreen_pso(S("pso_bloom_blur"), ps->bytecode, PixelFormat_r16g16b16a16_float);
 	}
 }
 
@@ -251,6 +250,10 @@ void r1_init(void)
 
 	cvar_register(&cvar_r1_ui_heat_map);
 	cvar_register(&cvar_r1_ui_heat_map_scale);
+	cvar_register(&cvar_r1_bloom_downsample_steps);
+	cvar_register(&cvar_r1_bloom_upsample_steps);
+	cvar_register(&cvar_r1_bloom_amount);
+	cvar_register(&cvar_r1_bloom_preview);
 
 	//------------------------------------------------------------------------
 
@@ -455,7 +458,7 @@ void r1_update_window_resources(rhi_window_t window)
 		r1->window.height = desc->height;
 
 		rhi_recreate_texture(&r1->window.depth_stencil, &(rhi_create_texture_params_t){
-			.debug_name        = S("window_depth_buffer"),
+			.debug_name        = S("ds_main"),
 			.dimension         = RhiTextureDimension_2d,
 			.width             = r1->window.width,
 			.height            = r1->window.height,
@@ -465,7 +468,7 @@ void r1_update_window_resources(rhi_window_t window)
 		});
 
 		rhi_recreate_texture(&r1->window.rt_hdr, &(rhi_create_texture_params_t){
-			.debug_name        = S("window_hdr_target"),
+			.debug_name        = S("rt_hdr"),
 			.dimension         = RhiTextureDimension_2d,
 			.width             = r1->window.width,
 			.height            = r1->window.height,
@@ -474,16 +477,65 @@ void r1_update_window_resources(rhi_window_t window)
 			.format            = PixelFormat_r16g16b16a16_float,
 		});
 
-		rhi_recreate_texture(&r1->window.ui_heatmap_rt, &(rhi_create_texture_params_t){
-			.debug_name        = S("ui_heatmap_rt"),
+		rhi_recreate_texture(&r1->window.rt_hdr_resolved, &(rhi_create_texture_params_t){
+			.debug_name        = S("rt_hdr_resolved"),
 			.dimension         = RhiTextureDimension_2d,
 			.width             = r1->window.width,
 			.height            = r1->window.height,
-			.multisample_count = 1,
+			.usage             = RhiTextureUsage_render_target,
+			.format            = PixelFormat_r16g16b16a16_float,
+		});
+
+		rhi_recreate_texture(&r1->window.ui_heatmap_rt, &(rhi_create_texture_params_t){
+			.debug_name        = S("rt_ui_heatmap"),
+			.dimension         = RhiTextureDimension_2d,
+			.width             = r1->window.width,
+			.height            = r1->window.height,
 			.usage             = RhiTextureUsage_render_target,
 			.format            = PixelFormat_r8g8b8a8_unorm,
 		});
+
+		for (size_t i = 0; i < ARRAY_COUNT(r1->window.bloom_rts); i++)
+		{
+			uint32_t divisor = 2u << i;
+
+			uint32_t w = (r1->window.width  + divisor - 1) / divisor;
+			uint32_t h = (r1->window.height + divisor - 1) / divisor;
+
+			rhi_recreate_texture(&r1->window.bloom_rts[i], &(rhi_create_texture_params_t) {
+				.debug_name = Sf("rt_bloom[%zu]", i),
+				.dimension  = RhiTextureDimension_2d,
+				.width      = w,
+				.height     = h,
+				.usage      = RhiTextureUsage_render_target,
+				.format     = PixelFormat_r16g16b16a16_float,
+			});
+		}
 	}
+}
+
+rhi_pso_t r1_create_fullscreen_pso(string_t debug_name, rhi_shader_bytecode_t ps, pixel_format_t pf)
+{
+	df_shader_info_t *vs = &df_shaders[DfShader_fullscreen_triangle_vs];
+
+	rhi_pso_t result = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
+		.debug_name = debug_name,
+		.vs = vs->bytecode,
+		.ps = ps,
+		.blend = {
+			.render_target[0].write_mask = RhiColorWriteEnable_all,
+			.sample_mask                 = 0xFFFFFFFF,
+		},
+		.rasterizer = {
+			.cull_mode     = RhiCullMode_back,
+			.front_winding = RhiWinding_ccw,
+		},
+		.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
+		.render_target_count     = 1,
+		.rtv_formats[0]          = pf,
+	});
+
+	return result;
 }
 
 void r1_begin_frame(void)
@@ -786,11 +838,11 @@ void r1_render_debug_lines(rhi_command_list_t *list, rhi_texture_t rt, rhi_textu
 
 void r1_post_process(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_texture_t rt_result)
 {
-	R1_TIMED_REGION(list, S("Post Process"))
+	R1_TIMED_REGION(list, S("Resolve MSAA"))
 	{
-		rhi_simple_graphics_pass_begin(list, rt_result, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
+		rhi_simple_graphics_pass_begin(list, r1->window.rt_hdr_resolved, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
 		{
-			rhi_set_pso(list, r1->psos.post_process);
+			rhi_set_pso(list, r1->psos.resolve_msaa);
 
 			uint32_t blue_noise_index = r1->frame_index % ARRAY_COUNT(r1->blue_noise);
 
@@ -800,6 +852,98 @@ void r1_post_process(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_text
 				.shadow_map   = rhi_get_texture_srv(r1->shadow_map),
 				.blue_noise   = r1->blue_noise_srv[blue_noise_index],
 				.sample_count = r1->multisample_count,
+			};
+			shader_post_set_draw_params(list, &draw_parameters);
+
+			rhi_draw(list, 3, 0);
+		}
+		rhi_graphics_pass_end(list);
+	}
+
+	size_t downsample_steps = (size_t)cvar_read_i32(&cvar_r1_bloom_downsample_steps);
+	size_t upsample_steps   = (size_t)cvar_read_i32(&cvar_r1_bloom_upsample_steps);
+
+	R1_TIMED_REGION(list, S("Bloom Generation"))
+	{
+		rhi_texture_t bloom_in = r1->window.rt_hdr_resolved;
+
+		upsample_steps = MIN(upsample_steps, downsample_steps);
+
+		for (size_t i = 0; i < downsample_steps; i++)
+		{
+			rhi_texture_t bloom_rt = r1->window.bloom_rts[i];
+
+			const rhi_texture_desc_t *in_desc = rhi_get_texture_desc(bloom_in);
+
+			v2_t in_size     = make_v2((float)in_desc->width, (float)in_desc->height);
+			v2_t in_size_inv = div(1.0f, in_size);
+
+			rhi_simple_graphics_pass_begin(list, bloom_rt, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
+			{
+				rhi_set_pso(list, r1->psos.bloom_blur);
+
+				bloom_draw_parameters_t draw_parameters = {
+					.tex_color    = rhi_get_texture_srv(bloom_in),
+					.inv_tex_size = in_size_inv,
+				};
+				shader_bloom_set_draw_params(list, &draw_parameters);
+
+				rhi_draw(list, 3, 0);
+			}
+			rhi_graphics_pass_end(list);
+
+			bloom_in = bloom_rt;
+		}
+
+		for (size_t j = 0; j < upsample_steps; j++)
+		{
+			size_t i = downsample_steps - 1 - j;
+
+			rhi_texture_t bloom_rt = r1->window.bloom_rts[i];
+
+			const rhi_texture_desc_t *in_desc = rhi_get_texture_desc(bloom_in);
+
+			v2_t in_size     = make_v2((float)in_desc->width, (float)in_desc->height);
+			v2_t in_size_inv = div(1.0f, in_size);
+
+			rhi_simple_graphics_pass_begin(list, bloom_rt, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
+			{
+				rhi_set_pso(list, r1->psos.bloom_blur);
+
+				bloom_draw_parameters_t draw_parameters = {
+					.tex_color    = rhi_get_texture_srv(bloom_in),
+					.inv_tex_size = in_size_inv,
+				};
+				shader_bloom_set_draw_params(list, &draw_parameters);
+
+				rhi_draw(list, 3, 0);
+			}
+			rhi_graphics_pass_end(list);
+
+			bloom_in = bloom_rt;
+		}
+	}
+
+	R1_TIMED_REGION(list, S("Post Process"))
+	{
+		rhi_simple_graphics_pass_begin(list, rt_result, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
+		{
+			rhi_set_pso(list, r1->psos.post_process);
+
+			uint32_t blue_noise_index = r1->frame_index % ARRAY_COUNT(r1->blue_noise);
+
+			float bloom_amount = cvar_read_f32(&cvar_r1_bloom_amount);
+
+			if (cvar_read_bool(&cvar_r1_bloom_preview))
+			{
+				bloom_amount = 1.0;
+			}
+
+			post_draw_parameters_t draw_parameters = {
+				.blue_noise     = r1->blue_noise_srv[blue_noise_index],
+				.resolved_color = rhi_get_texture_srv(r1->window.rt_hdr_resolved),
+				.bloom0         = rhi_get_texture_srv(r1->window.bloom_rts[downsample_steps - upsample_steps]),
+				.bloom_amount   = bloom_amount,
 			};
 			shader_post_set_draw_params(list, &draw_parameters);
 

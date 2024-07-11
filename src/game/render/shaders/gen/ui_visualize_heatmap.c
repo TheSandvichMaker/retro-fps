@@ -2,7 +2,7 @@
 
 void shader_ui_visualize_heatmap_set_draw_params(rhi_command_list_t *list, ui_visualize_heatmap_draw_parameters_t *params)
 {
-	rhi_validate_texture_srv(params->heatmap, S("shader_ui_visualize_heatmap_set_draw_params"));
+	rhi_validate_texture_srv(params->heatmap, S("shader_ui_visualize_heatmap_set_draw_params:heatmap"), 0);
 	rhi_set_parameters(list, 0, params, sizeof(*params));
 }
 

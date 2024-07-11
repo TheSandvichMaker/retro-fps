@@ -3,6 +3,7 @@
 #pragma once
 
 #include "view.h"
+#include "bloom.h"
 #include "brush.h"
 #include "compute_test.h"
 #include "debug_lines.h"
@@ -16,6 +17,8 @@ typedef enum df_shader_ident_t
 {
 	DfShader_none,
 
+	DfShader_bloom_blur_ps, // src/shaders/bloom.metashader
+
 	DfShader_brush_ps, // src/shaders/brush.metashader
 	DfShader_brush_vs, // src/shaders/brush.metashader
 
@@ -27,6 +30,7 @@ typedef enum df_shader_ident_t
 	DfShader_fullscreen_triangle_vs, // src/shaders/fullscreen_triangle.metashader
 
 	DfShader_post_ps, // src/shaders/post.metashader
+	DfShader_resolve_msaa_ps, // src/shaders/post.metashader
 
 	DfShader_shadow_vs, // src/shaders/shadow.metashader
 

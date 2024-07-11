@@ -13,7 +13,7 @@
 #include "arena.h"
 #include "args_parser.h"
 #include "array.h"
-#include "atomics.h"
+// #include "atomics.h"
 #include "common.h"
 #include "core.h"
 #include "dynamic_string.h"

@@ -134,7 +134,15 @@ fn void              rhi_upload_texture_data    (rhi_texture_t texture, const rh
 fn bool              rhi_texture_upload_complete(rhi_texture_t texture);
 fn void              rhi_wait_on_texture_upload (rhi_texture_t texture);
 fn rhi_texture_srv_t rhi_get_texture_srv        (rhi_texture_t texture);
-fn void              rhi_validate_texture_srv   (rhi_texture_srv_t srv, string_t context); // tries to verify that this srv is valid
+
+typedef uint32_t rhi_validate_texture_srv_flags_t;
+typedef enum rhi_validate_texture_srv_flags_enum_t
+{
+	RhiValidateTextureSrv_is_msaa     = 0x1,
+	RhiValidateTextureSrv_may_be_null = 0x2,
+} rhi_validate_texture_srv_flags_enum_t;
+
+fn void rhi_validate_texture_srv(rhi_texture_srv_t srv, string_t context, rhi_validate_texture_srv_flags_t flags);
 
 typedef enum rhi_heap_kind_t
 {

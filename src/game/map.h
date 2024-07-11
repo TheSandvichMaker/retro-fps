@@ -164,9 +164,10 @@ typedef struct map_t
     } vertex;
 } map_t;
 
-map_t *load_map(arena_t *arena, string_t path);
+fn map_t *load_map(arena_t *arena, string_t path);
 
 fn bool     is_class         (map_t *map, map_entity_t *entity, string_t classname);
+fn bool     expect_class     (map_t *map, map_entity_t *entity, string_t expected_class);
 fn string_t value_from_key   (map_t *map, map_entity_t *entity, string_t key);
 fn int      int_from_key     (map_t *map, map_entity_t *entity, string_t key);
 fn float    float_from_key_or(map_t *map, map_entity_t *entity, string_t key, float default_value);

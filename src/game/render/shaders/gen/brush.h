@@ -9,6 +9,8 @@ typedef struct brush_draw_parameters_t
 	rhi_texture_srv_t lightmap;
 } brush_draw_parameters_t;
 
+static_assert(sizeof(brush_draw_parameters_t) <= sizeof(uint32_t)*60, "Draw parameters (which are passed as root constants) can't be larger than 60 uint32s");
+
 fn void shader_brush_set_draw_params(rhi_command_list_t *list, brush_draw_parameters_t *params);
 
 typedef struct brush_pass_parameters_t

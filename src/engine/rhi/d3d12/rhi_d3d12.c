@@ -443,11 +443,12 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 				.RegisterSpace    = 100,
 				.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
 			},
-			[4] = { // s_point_wrap
-				.Filter           = D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR,
-				.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-				.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-				.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+			[4] = { // s_linear_border
+				.Filter           = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+				.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+				.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+				.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+				.BorderColor      = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK,
 				.MipLODBias       = 0.0f,
 				.MinLOD           = 0.0f,
 				.MaxLOD           = D3D12_FLOAT32_MAX,
@@ -455,7 +456,19 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 				.RegisterSpace    = 100,
 				.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
 			},
-			[5] = { // s_point_clamped
+			[5] = { // s_point_wrap
+				.Filter           = D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR,
+				.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+				.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+				.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+				.MipLODBias       = 0.0f,
+				.MinLOD           = 0.0f,
+				.MaxLOD           = D3D12_FLOAT32_MAX,
+				.ShaderRegister   = 5,
+				.RegisterSpace    = 100,
+				.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
+			},
+			[6] = { // s_point_clamped
 				.Filter           = D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR,
 				.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
 				.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
@@ -463,7 +476,7 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 				.MipLODBias       = 0.0f,
 				.MinLOD           = 0.0f,
 				.MaxLOD           = D3D12_FLOAT32_MAX,
-				.ShaderRegister   = 5,
+				.ShaderRegister   = 6,
 				.RegisterSpace    = 100,
 				.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL,
 			},
@@ -1239,10 +1252,11 @@ rhi_texture_srv_t rhi_get_texture_srv(rhi_texture_t handle)
 	return result;
 }
 
-void rhi_validate_texture_srv(rhi_texture_srv_t srv, string_t context)
+void rhi_validate_texture_srv(rhi_texture_srv_t srv, string_t context, rhi_validate_texture_srv_flags_t flags)
 {
 	(void)srv;
 	(void)context;
+	(void)flags;
 
 #if DREAM_SLOW
 	d3d12_descriptor_heap_t *heap = &g_rhi.cbv_srv_uav;
@@ -1266,13 +1280,23 @@ void rhi_validate_texture_srv(rhi_texture_srv_t srv, string_t context)
 				{
 					log(RHI_D3D12, ValidationFailure, "SRV is associated with a texture, but that texture does not have an associated resource. (%cs)", context);
 				}
+
+				if (texture->desc.sample_count > 1 && !(flags & RhiValidateTextureSrv_is_msaa))
+				{
+					log(RHI_D3D12, ValidationFailure, "SRV is associated with a multisample texture, but no multisampling was expected. (%cs)", context);
+				}
+
+				if (texture->desc.sample_count <= 1 && (flags & RhiValidateTextureSrv_is_msaa))
+				{
+					log(RHI_D3D12, ValidationFailure, "SRV is not associated with a multisample texture, but multisampling was expected. (%cs)", context);
+				}
 			}
 			else
 			{
 				log(RHI_D3D12, ValidationFailure, "SRV is associated with a non-existent texture. (%cs)", context);
 			}
 		}
-		else
+		else if (!(flags & RhiValidateTextureSrv_may_be_null))
 		{
 			log(RHI_D3D12, ValidationFailure, "SRV is not associated with any texture. (%cs)", context);
 		}
@@ -2433,7 +2457,7 @@ rhi_shader_bytecode_t rhi_compile_shader(arena_t *arena, string_t shader_source,
 			L"-I", L"../src/shaders",
 			L"-WX", 
 			L"-Zi", 
-			// L"-no-legacy-cbuf-layout", can't get this to work, seemingly
+			// L"-no-legacy-cbuf-layout", why doesn't this work
 		};
 
 		HRESULT hr;

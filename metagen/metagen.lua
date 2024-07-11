@@ -2,7 +2,9 @@ require "io"
 require "os"
 require "metagen/metashader"
 require "metagen/emit"
+require "metagen/metac"
 
+src_directory         = "src"
 shader_directory      = "src/shaders/"
 output_directory_hlsl = "src/shaders/gen/"
 output_directory_c    = "src/game/render/shaders/gen/"
@@ -64,3 +66,5 @@ process_shaders({
 	output_directory_c    = output_directory_c, 
 	output_directory_hlsl = output_directory_hlsl,
 })
+
+process_c_file("src/game/entities.h")

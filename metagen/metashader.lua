@@ -22,7 +22,13 @@ function parse_metashader_block(shader_file_name, shader_text)
 
 		local the_table = string.sub(shader_text, table_start, table_end)
 
-		result = loadstring("return " .. the_table)()
+		local f, err = loadstring("return " .. the_table)
+
+		if not f then
+			error("Failed to parse @metashader block:\n" .. err);
+		end
+
+		result = f()
 
 		assert(result         ~= nil,     shader_file_name .. ": The metashader block failed to parse into a valid lua table!")
 		assert(type(result)   == "table", shader_file_name .. ": The metashader block failed to parse into a lua table, it parsed into a " .. type(result) .. " instead, WHAT!?")

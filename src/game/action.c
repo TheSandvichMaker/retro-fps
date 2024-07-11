@@ -48,6 +48,42 @@ action_system_t *get_action_system(void)
 	return g_actions;
 }
 
+void bind_key_console_command(keycode_t key, cvar_t *ccmd)
+{
+	if (key >= Key_COUNT)
+	{
+		log(ActionSystem, Error, "Passed invalid keycode (0x%X) to bind_key_console_command!", key);
+		return;
+	}
+
+	if (!ccmd)
+	{
+		unbind_key_console_command(key);
+		return;
+	}
+
+	if (ccmd->kind != CVarKind_command)
+	{
+		log(ActionSystem, Error, "Tried to bind cvar '%cs' to a key, but it's not a command!", ccmd->key);
+		return;
+	}
+
+	action_system_t *actions = get_action_system();
+	actions->key_to_ccmd[key] = ccmd;
+}
+
+void unbind_key_console_command(keycode_t key)
+{
+	if (key >= Key_COUNT)
+	{
+		log(ActionSystem, Error, "Passed invalid keycode (0x%X) to unbind_key_console_command!", key);
+		return;
+	}
+
+	action_system_t *actions = get_action_system();
+	actions->key_to_ccmd[key] = NULL;
+}
+
 void bind_key_action(action_t action, keycode_t key)
 {
 	action_system_t *actions = get_action_system();
@@ -80,8 +116,10 @@ void unbind_mouse_button_action(action_t action, mouse_button_t button)
 	actions->button_to_actions[button] &= ~action_bit(action);
 }
 
-void ingest_action_system_input(input_t *input)
+cmd_execution_list_t ingest_action_system_input(arena_t *arena, input_t *input)
 {
+	cmd_execution_list_t result = {0};
+
 	action_system_t *actions = get_action_system();
 
 	actions->mouse_p  = input->mouse_p;
@@ -97,34 +135,56 @@ void ingest_action_system_input(input_t *input)
 	{
 		if (event->kind == Event_key)
 		{
-			keycode_t keycode      = event->key.keycode;
-			uint64_t  actions_mask = actions->key_to_actions[keycode];
+			keycode_t keycode = event->key.keycode;
 
-			if (actions_mask)
+			cvar_t *cmd = actions->key_to_ccmd[keycode];
+
+			if (event->key.pressed && cmd)
 			{
-				// TODO: bit scan forward or something, maybe. Daniel Lemire has a blog post about quickly scanning bit vectors.
-				// here:      https://lemire.me/blog/2018/02/21/iterating-over-set-bits-quickly/
-				// also this: https://lemire.me/blog/2018/03/08/iterating-over-set-bits-quickly-simd-edition/
-				for (uint64_t action_index = 0; action_index < Action_COUNT; action_index++)
+				if (cmd->kind == CVarKind_command)
 				{
-					if (actions_mask & (1ull << action_index))
+					log(ActionSystem, Spam, "Triggered ccmd %cs with key %cs", cmd->key, keycode_to_string(keycode));
+
+					cmd_execution_node_t *node = m_alloc_struct_nozero(arena, cmd_execution_node_t);
+					node->cmd = cmd;
+
+					sll_push_back(result.head, result.tail, node);
+				}
+				else
+				{
+					log(ActionSystem, Error, "Somehow, a non-command cvar was bound to key %cs.", keycode_to_string(keycode));
+				}
+			}
+			else
+			{
+				uint64_t  actions_mask = actions->key_to_actions[keycode];
+
+				if (actions_mask)
+				{
+					// TODO: bit scan forward or something, maybe. Daniel Lemire has a blog post about quickly scanning bit vectors.
+					// here:      https://lemire.me/blog/2018/02/21/iterating-over-set-bits-quickly/
+					// also this: https://lemire.me/blog/2018/03/08/iterating-over-set-bits-quickly-simd-edition/
+					for (uint64_t action_index = 0; action_index < Action_COUNT; action_index++)
 					{
-						action_state_t *action_state = &actions->action_states[action_index];
-						if (event->key.pressed)
+						if (actions_mask & (1ull << action_index))
 						{
-							log(ActionSystem, SuperSpam, "Action '%s' triggered by key '%s'", 
-								get_action_name(action_index).data, keycode_to_string(keycode).data);
+							action_state_t *action_state = &actions->action_states[action_index];
+							if (event->key.pressed)
+							{
+								log(ActionSystem, SuperSpam, "Action '%s' triggered by key '%s'", 
+									get_action_name(action_index).data, keycode_to_string(keycode).data);
 
-							action_state->pressed  |= true;
-						}
-						else
-						{
-							log(ActionSystem, SuperSpam, "Action '%s' untriggered by key '%s'", 
-								get_action_name(action_index).data, keycode_to_string(keycode).data);
+								action_state->pressed  |= true;
+							}
+							else
+							{
+								log(ActionSystem, SuperSpam, "Action '%s' untriggered by key '%s'", 
+									get_action_name(action_index).data, keycode_to_string(keycode).data);
 
-							action_state->released |= true;
+								action_state->released |= true;
+							}
+							action_state->held = event->key.pressed;
 						}
-						action_state->held = event->key.pressed;
 					}
 				}
 			}
@@ -161,6 +221,8 @@ void ingest_action_system_input(input_t *input)
 			}
 		}
 	}
+
+	return result;
 }
 
 void suppress_actions(bool suppress)

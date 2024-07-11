@@ -59,10 +59,12 @@ typedef struct r1_state_t
 		rhi_pso_t sun_shadows;
 		rhi_pso_t map;
 		rhi_pso_t debug_lines;
+		rhi_pso_t resolve_msaa;
 		rhi_pso_t post_process;
 		rhi_pso_t ui;
 		rhi_pso_t ui_heatmap;
 		rhi_pso_t ui_visualize_heatmap;
+		rhi_pso_t bloom_blur;
 	} psos;
 
 	struct
@@ -71,7 +73,9 @@ typedef struct r1_state_t
 		uint32_t      height;
 		rhi_texture_t depth_stencil;
 		rhi_texture_t rt_hdr;
+		rhi_texture_t rt_hdr_resolved;
 		rhi_texture_t ui_heatmap_rt;
+		rhi_texture_t bloom_rts[8];
 	} window;
 
 	struct
@@ -86,6 +90,8 @@ typedef struct r1_state_t
 global r1_state_t *r1;
 
 fn void r1_init(void);
+
+fn rhi_pso_t r1_create_fullscreen_pso(string_t debug_name, rhi_shader_bytecode_t ps, pixel_format_t pf);
 
 fn void r1_begin_frame(void);
 fn void r1_finish_recording_draw_streams(void);

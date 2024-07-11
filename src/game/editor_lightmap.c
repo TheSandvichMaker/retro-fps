@@ -324,15 +324,17 @@ void editor_do_lightmap_window(editor_lightmap_state_t *lm_editor, editor_window
 		}
 	}
 
-    ui_row_header(&builder, S("Worldspawn"));
-
-    ui_row_color_picker_v3(&builder, S("Sun Color"), &worldspawn->sun_color);
-    ui_row_slider         (&builder, S("Sun Brightness"), &worldspawn->sun_brightness, 0.0f, 10.0f);
-    ui_row_slider         (&builder, S("Fog Absorption"), &worldspawn->fog_absorption, 0.0f, 0.1f);
-    ui_row_slider         (&builder, S("Fog Density"),    &worldspawn->fog_density, 0.0f, 0.1f);
-    ui_row_slider         (&builder, S("Fog Scattering"), &worldspawn->fog_scattering, 0.0f, 0.1f);
-    ui_row_slider         (&builder, S("Fog Phase"),      &worldspawn->fog_phase, -1.0f, 1.0f);
-    ui_row_color_picker_v3(&builder, S("Fog Ambient Inscattering"), &worldspawn->fog_ambient_inscattering);
+    static bool worldspawn_open = true;
+    if (ui_row_collapsable_region(&builder, S("Worldspawn"), &worldspawn_open))
+    {
+        ui_row_color_picker_v3(&builder, S("Sun Color"), &worldspawn->sun_color);
+        ui_row_slider         (&builder, S("Sun Brightness"), &worldspawn->sun_brightness, 0.0f, 10.0f);
+        ui_row_slider         (&builder, S("Fog Absorption"), &worldspawn->fog_absorption, 0.0f, 0.1f);
+        ui_row_slider         (&builder, S("Fog Density"),    &worldspawn->fog_density, 0.0f, 0.1f);
+        ui_row_slider         (&builder, S("Fog Scattering"), &worldspawn->fog_scattering, 0.0f, 0.1f);
+        ui_row_slider         (&builder, S("Fog Phase"),      &worldspawn->fog_phase, -1.0f, 1.0f);
+        ui_row_color_picker_v3(&builder, S("Fog Ambient Inscattering"), &worldspawn->fog_ambient_inscattering);
+    }
 
 	ui_scrollable_region_end(&window->scroll_region, builder.rect);
 }
