@@ -28,28 +28,9 @@
 		post_ps         = { target = "ps_6_6", entry = "post_ps" },
 	},
 
-	--// TODO: Generate PSOs based on these :)
 	psos = {
-		--// pso_resolve_msaa = pso_fullscreen("resolve_msaa_ps", "r16g16b16a16_float" ),
-		--// pso_post_process = pso_fullscreen("post_ps",         "r8g8b8a8_unorm_srgb"),
-
-		resolve_msaa = {
-			vs = "fullscreen_triangle_vs",
-			ps = "resolve_msaa_ps",
-			topology = "triangle",
-			render_targets = {
-				{ pf = "r16t16b16a16_float" }, --// it would be cool if we could get the format from a render graph thingmajig instead...
-			},
-		},
-
-		post_process = {
-			vs = "fullscreen_triangle_vs",
-			ps = "post_ps",
-			topology = "triangle",
-			render_targets = {
-				{ pf = "r8g8b8a8_unorm_srgb" },
-			},
-		},
+		resolve_msaa = pso_fullscreen("resolve_msaa_ps", "r16g16b16a16_float"),
+		post_process = pso_fullscreen("post_ps",         "r8g8b8a8_unorm_srgb"),
 	},
 }
 

@@ -27,6 +27,9 @@ typedef struct r1_state_t
 	rhi_texture_t     black_texture;
 	rhi_texture_srv_t black_texture_srv;
 
+	rhi_texture_t     missing_texture;
+	rhi_texture_srv_t missing_texture_srv;
+
 	rhi_texture_t     blue_noise[8];
 	rhi_texture_srv_t blue_noise_srv[8];
 
@@ -52,20 +55,7 @@ typedef struct r1_state_t
 
 	uint32_t frame_index;
 
-	//r1_ui_render_state_t ui;
-
-	struct
-	{
-		rhi_pso_t sun_shadows;
-		rhi_pso_t map;
-		rhi_pso_t debug_lines;
-		rhi_pso_t resolve_msaa;
-		rhi_pso_t post_process;
-		rhi_pso_t ui;
-		rhi_pso_t ui_heatmap;
-		rhi_pso_t ui_visualize_heatmap;
-		rhi_pso_t bloom_blur;
-	} psos;
+	rhi_pso_t psos[DfPso_COUNT];
 
 	struct
 	{

@@ -58,9 +58,28 @@ typedef enum df_pso_ident_t
 {
 	DfPso_none,
 
+	// src/shaders/bloom.metashader
+	DfPso_bloom_blur,
+
+	// src/shaders/brush.metashader
+	DfPso_brush,
+
+	// src/shaders/debug_lines.metashader
+	DfPso_debug_lines,
+
 	// src/shaders/post.metashader
 	DfPso_post_process,
 	DfPso_resolve_msaa,
+
+	// src/shaders/shadow.metashader
+	DfPso_sun_shadows,
+
+	// src/shaders/ui.metashader
+	DfPso_ui,
+	DfPso_ui_heatmap,
+
+	// src/shaders/ui_visualize_heatmap.metashader
+	DfPso_ui_visualize_heatmap,
 
 	DfPso_COUNT,
 } df_pso_ident_t;

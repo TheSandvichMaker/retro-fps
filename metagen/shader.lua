@@ -1,9 +1,8 @@
--- error on access of undefined globals, to avoid stupid silent bugs... or ultimate stringly typed...!!!
-
+-- a little evil: make all unknown identifiers be treated as strings
+-- so that I can make the syntax of metashader blocks look a bit nicer...
 setmetatable(_G, {
 	__index = function(table, key)
-		-- error("Unknown global value: " .. key)
-		return key -- oh... ohhhh....
+		return key
 	end
 })
 
@@ -133,3 +132,50 @@ function Texture2DMS(format, ex)
 	}
 end
 
+-- PSOs
+
+function pso_fullscreen(ps, pf)
+	return {
+		vs = "fullscreen_triangle_vs",
+		ps = ps,
+		render_targets = {
+			{ pf = pf },
+		},
+	}
+end
+
+function blend_alpha()
+	return {
+		blend_enable    = true,
+		src_blend       = "src_alpha",
+		dst_blend       = "inv_src_alpha",
+		blend_op        = "add",
+		src_blend_alpha = "inv_dest_alpha",
+		dst_blend_alpha = "one",
+		blend_op_alpha  = "add",
+	}
+end
+
+function blend_premul_alpha()
+	return {
+		blend_enable    = true,
+		src_blend       = "one",
+		dst_blend       = "inv_src_alpha",
+		blend_op        = "add",
+		src_blend_alpha = "inv_dest_alpha",
+		dst_blend_alpha = "one",
+		blend_op_alpha  = "add",
+	}
+end
+
+function blend_additive()
+	return {
+		blend_enable    = true,
+		src_blend       = "one",
+		dst_blend       = "one",
+		blend_op        = "add",
+		src_blend_alpha = "one",
+		dst_blend_alpha = "one",
+		blend_op_alpha  = "add",
+	}
+end

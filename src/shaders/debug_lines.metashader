@@ -18,6 +18,26 @@ struct LineVertex
 		debug_lines_vs = { target = "vs_6_6", entry = "MainVS" },
 		debug_lines_ps = { target = "ps_6_6", entry = "MainPS" },
 	},
+
+	psos = {
+		debug_lines = {
+			vs = "debug_lines_vs",
+			ps = "debug_lines_ps",
+
+			cull_mode   = "back",
+			multisample = true,
+
+			depth_test  = true,
+			depth_func  = "greater",
+			dsv_format  = "d24_unorm_s8_uint",
+
+			topology    = "line",
+
+			render_targets = {
+				{ pf = "r16g16b16a16_float" },
+			},
+		},
+	},
 }
 
 struct VS_OUT

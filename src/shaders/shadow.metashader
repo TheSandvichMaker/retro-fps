@@ -11,6 +11,21 @@
 	shaders = {
 		shadow_vs = { target = "vs_6_6", entry = "MainVS" },
 	},
+
+	psos = {
+		sun_shadows = { 
+			vs = "shadow_vs",
+
+			--// rasterizer
+			cull_mode = "back",
+
+			--// depth-stencil
+			depth_test  = true,
+			depth_write = true,
+			depth_func  = "greater",
+			dsv_format  = "d24_unorm_s8_uint",
+		},
+	},
 }
 
 struct VS_OUT

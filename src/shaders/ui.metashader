@@ -60,6 +60,32 @@ struct UIRect
 		ui_ps = { target = "ps_6_6", entry = "MainPS" },
 		ui_heatmap_ps = { target = "ps_6_6", entry = "UIHeatMapPS" },
 	},
+
+	psos = {
+		ui = {
+			vs = "ui_vs",
+			ps = "ui_ps",
+
+			render_targets = {
+				{
+					pf    = "r8g8b8a8_unorm_srgb",
+					blend = blend_alpha(),
+				},
+			},
+		},
+
+		ui_heatmap = {
+			vs = "ui_vs",
+			ps = "ui_heatmap_ps",
+
+			render_targets = {
+				{
+					pf    = "r8g8b8a8_unorm",
+					blend = blend_additive(),
+				},
+			},
+		},
+	},
 }
 
 struct VSOut

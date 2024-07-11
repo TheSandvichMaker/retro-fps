@@ -12,6 +12,20 @@
 	shaders = {
 		ui_visualize_heatmap_ps = { target = "ps_6_6", entry = "MainPS" },
 	},
+
+	psos = {
+		ui_visualize_heatmap = {
+			vs = "fullscreen_triangle_vs",
+			ps = "ui_visualize_heatmap_ps",
+
+			render_targets = {
+				{
+					pf    = "r8g8b8a8_unorm_srgb",
+					blend = blend_alpha(),
+				},
+			},
+		},
+	},
 }
 
 float4 MainPS(FullscreenTriangleOutVS IN) : SV_Target

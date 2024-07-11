@@ -440,9 +440,9 @@ function process_shaders(p)
 		local bundle_name = bundle_info.bundle.name
 		local bundle_path = bundle_info.path
 
-		local shaders = emit.table_to_sorted_array(bundle.shaders)
-
 		if bundle.shaders then
+			local shaders = emit.table_to_sorted_array(bundle.shaders)
+
 			for j, v in ipairs(shaders) do
 				local shader_name = v.k
 				local shader      = v.v
@@ -463,7 +463,241 @@ function process_shaders(p)
 		end
 	end
 
-	source:write("};\n")
+	source:write("};\n\n")
+
+	-- PSOs
+
+	source:write("df_pso_info_t df_psos[DfPso_COUNT] = {\n")
+
+	for i, bundle_info in ipairs(bundles) do
+		local bundle      = bundle_info.bundle
+		local bundle_name = bundle_info.bundle.name
+		local bundle_path = bundle_info.path
+
+		if bundle.psos then
+			local psos = emit.table_to_sorted_array(bundle.psos)
+
+			for j, v in ipairs(psos) do
+				local pso_name = v.k
+				local pso      = v.v
+				source:write("\t[DfPso_" .. pso_name .. "] = {\n")
+				source:write("\t\t.name = Sc(\"" .. pso_name .. "\"),\n")
+				source:write("\t\t.path = Sc(\"" .. bundle_path .. "\"),\n")
+				if pso.vs ~= nil then source:write("\t\t.vs_index = DfShader_" .. pso.vs .. ",\n") end
+				if pso.ps ~= nil then source:write("\t\t.ps_index = DfShader_" .. pso.ps .. ",\n") end
+				source:write("\t\t.params_without_bytecode = {\n")
+
+				-- params
+				source:write("\t\t\t.debug_name = Sc(\"pso_" .. pso_name ..  "\"),\n")
+
+				-- blend
+				if pso.alpha_to_coverage == true then
+					source:write("\t\t\t.blend.alpha_to_coverage_enable = true,\n")
+				end
+
+				if pso.independent_blend == true then
+					source:write("\t\t\t.blend.independent_blend_enable = true,\n")
+				end
+
+				if pso.sample_mask ~= nil then
+					source:write("\t\t\t.blend.sample_mask = " .. pso.sample_mask .. ",\n")
+				else
+					source:write("\t\t\t.blend.sample_mask = 0xFFFFFFFF,\n")
+				end
+
+				if pso.render_targets ~= nil then
+					local function emit_rt_blend(desc)
+						if desc.blend_enable == true then
+							source:write("\t\t\t\t.blend_enable = true,\n")
+						end
+
+						if desc.logic_op_enable == true then
+							source:write("\t\t\t\t.logic_op_enable = true,\n")
+						end
+
+						if desc.src_blend ~= nil then
+							source:write("\t\t\t\t.src_blend = RhiBlend_" .. desc.src_blend .. ",\n")
+						end
+
+						if desc.dst_blend ~= nil then
+							source:write("\t\t\t\t.dst_blend = RhiBlend_" .. desc.dst_blend .. ",\n")
+						end
+
+						if desc.blend_op ~= nil then
+							source:write("\t\t\t\t.blend_op = RhiBlendOp_" .. desc.blend_op .. ",\n")
+						end
+
+						if desc.src_blend_alpha ~= nil then
+							source:write("\t\t\t\t.src_blend_alpha = RhiBlend_" .. desc.src_blend_alpha .. ",\n")
+						end
+
+						if desc.dst_blend_alpha ~= nil then
+							source:write("\t\t\t\t.dst_blend_alpha = RhiBlend_" .. desc.dst_blend_alpha .. ",\n")
+						end
+
+						if desc.blend_op_alpha ~= nil then
+							source:write("\t\t\t\t.blend_op_alpha = RhiBlendOp_" .. desc.blend_op_alpha .. ",\n")
+						end
+						
+						if desc.logic_op ~= nil then
+							source:write("\t\t\t\t.logic_op = RhiLogicOp_" .. desc.logic_op .. ",\n")
+						end
+
+						-- TODO: Handle write mask properly
+						if desc.write_mask ~= nil then
+							source:write("\t\t\t\t.write_mask = RhiColorWriteEnable_" .. desc.write_mask .. ",\n")
+						else
+							source:write("\t\t\t\t.write_mask = RhiColorWriteEnable_all,\n")
+						end
+					end
+
+					for i, rt in ipairs(pso.render_targets) do
+						if rt.blend ~= nil then
+							source:write("\t\t\t.blend.render_target[" .. (i - 1) .. "] = {\n")
+							emit_rt_blend(rt.blend)
+							source:write("\t\t\t},\n")
+						else
+							source:write("\t\t\t.blend.render_target[" .. (i - 1) .. "].write_mask = RhiColorWriteEnable_all,\n")
+						end
+					end
+				end
+
+				-- rasterizer
+				if pso.fill_mode ~= nil then
+					source:write("\t\t\t.rasterizer.fill_mode = RhiFillMode_" .. pso.fill_mode .. ",\n")
+				end
+
+				if pso.cull_mode ~= nil then
+					source:write("\t\t\t.rasterizer.cull_mode = RhiCullMode_" .. pso.cull_mode .. ",\n")
+				end
+
+				if pso.front_winding ~= nil then
+					source:write("\t\t\t.rasterizer.front_winding = RhiFrontWinding_" .. pso.front_winding .. ",\n")
+				end
+
+				if pso.depth_clip == true then
+					source:write("\t\t\t.rasterizer.depth_clip_enable = true,\n")
+				end
+
+				if pso.multisample == true then
+					source:write("\t\t\t.rasterizer.multisample_enable = true,\n")
+				end
+
+				if pso.anti_aliased_lines == true then
+					source:write("\t\t\t.rasterizer.anti_aliased_line_enable = true,\n")
+				end
+
+				if pso.conservative_rasterization == true then
+					source:write("\t\t\t.rasterizer.conservative_rasterization = true,\n")
+				end
+
+				-- depth stencil
+				if pso.depth_test == true then
+					source:write("\t\t\t.depth_stencil.depth_test_enable = true,\n")
+				end
+
+				if pso.depth_write == true then
+					source:write("\t\t\t.depth_stencil.depth_write = true,\n")
+				end
+
+				if pso.depth_func ~= nil then
+					source:write("\t\t\t.depth_stencil.depth_func = RhiComparisonFunc_" .. pso.depth_func .. ",\n")
+				end
+
+				if pso.stencil_test == true then
+					source:write("\t\t\t.depth_stencil.stencil_test_enable = true,\n")
+				end
+
+				if pso.stencil_read_mask ~= nil then
+					source:write("\t\t\t.depth_stencil.stencil_read_mask = " .. pso.stencil_read_mask .. ",\n")
+				end
+
+				if pso.stencil_write_mask ~= nil then
+					source:write("\t\t\t.depth_stencil.stencil_write_mask = " .. pso.stencil_write_mask .. ",\n")
+				end
+
+				local function emit_depth_stencil_op_desc(desc)
+					if desc.fail_op ~= nil then
+						source:write("\t\t\t\t.stencil_fail_op = RhiStencilOp_" .. desc.fail_op .. ",\n")
+					end
+
+					if desc.depth_fail_op ~= nil then
+						source:write("\t\t\t\t.stencil_depth_fail_op = RhiStencilOp_" .. desc.depth_fail_op .. ",\n")
+					end
+
+					if desc.pass_op ~= nil then
+						source:write("\t\t\t\t.stencil_pass_op = RhiStencilOp_" .. desc.pass_op .. ",\n")
+					end
+
+					if desc.func ~= nil then
+						source:write("\t\t\t\t.stencil_func = RhiComparisonFunc_" .. desc.func .. ",\n")
+					end
+				end
+
+				if pso.stencil_front ~= nil then
+					source:write("\t\t\t.front = {\n")
+					emit_depth_stencil_op_desc(pso.stencil_front)
+				end
+
+				if pso.stencil_back ~= nil then
+					source:write("\t\t\t.back = {\n")
+					emit_depth_stencil_op_desc(pso.stencil_back)
+				end
+
+				--
+
+				if pso.topology ~= nil then
+					source:write("\t\t\t.primitive_topology_type = RhiPrimitiveTopologyType_" .. pso.topology .. ",\n")
+				else
+					source:write("\t\t\t.primitive_topology_type = RhiPrimitiveTopologyType_triangle,\n")
+				end
+
+				if pso.render_targets ~= nil then
+					local rt_count = #pso.render_targets
+
+					if rt_count == 0 then 
+						emit.error("A render targets array was specified, but there are no valid render targets.")
+					end
+
+					source:write("\t\t\t.render_target_count = " .. rt_count .. ",\n")
+					
+					source:write("\t\t\t.rtv_formats = {\n")
+
+					for i, rt in ipairs(pso.render_targets) do
+						if rt.pf == nil then
+							emit.error("A render target must specify its pixel format ('pf').")
+						end
+
+						source:write("\t\t\t\tPixelFormat_" .. rt.pf .. ",\n")
+					end
+
+					source:write("\t\t\t},\n")
+				end
+
+				if pso.dsv_format ~= nil then
+					source:write("\t\t\t.dsv_format = PixelFormat_" .. pso.dsv_format .. ",\n")
+				end
+
+				if pso.multisample_count ~= nil then
+					source:write("\t\t\t.multisample_count = " .. tostring(pso.multisample_count) .. ",\n")
+				else
+					source:write("\t\t\t.multisample_count = 1,\n")
+				end
+
+				if pso.multisample_quality ~= nil then
+					source:write("\t\t\t.multisample_quality = " .. tostring(pso.multisample_quality) .. ",\n")
+				end
+				
+				source:write("\t\t},\n")
+
+				--
+
+				source:write("\t},\n")
+			end
+		end
+	end
+
+	source:write("};\n\n")
 
 	source:close()
 end

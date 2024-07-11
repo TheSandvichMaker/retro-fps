@@ -389,8 +389,8 @@ typedef struct rhi_depth_stencil_op_desc_t
 
 typedef enum rhi_winding_t
 {
-	RhiWinding_cw  = 0,
-	RhiWinding_ccw = 1,
+	RhiWinding_ccw = 0,
+	RhiWinding_cw  = 1,
 	RhiWinding_COUNT,
 } rhi_winding_t;
 

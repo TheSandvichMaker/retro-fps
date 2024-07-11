@@ -12,6 +12,10 @@
 	shaders = {
 		bloom_blur_ps = { target = "ps_6_6", entry = "bloom_blur_ps" },
 	},
+
+	psos = {
+		bloom_blur = pso_fullscreen("bloom_blur_ps", "r16g16b16a16_float"),
+	},
 }
 
 float4 bloom_blur_ps(FullscreenTriangleOutVS IN) : SV_Target

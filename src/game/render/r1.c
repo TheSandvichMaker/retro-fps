@@ -9,6 +9,185 @@ CVAR_I32_EX(cvar_r1_bloom_upsample_steps,   "r1.bloom.filter_upsample_steps",   
 CVAR_F32_EX(cvar_r1_bloom_amount,           "r1.bloom.amount",                  0.05f, 0.0f, 1.0f);
 CVAR_BOOL  (cvar_r1_bloom_preview,          "r1.bloom.preview",                 false);
 
+fn_local void r1_load_all_shaders(void);
+fn_local void r1_load_all_psos(uint32_t multisample_count);
+fn_local void r1_set_pso(rhi_command_list_t *list, df_pso_ident_t pso)
+{
+	rhi_set_pso(list, r1->psos[pso]);
+}
+
+void r1_init(void)
+{
+	//------------------------------------------------------------------------
+	// Register CVars
+	//------------------------------------------------------------------------
+
+	cvar_register(&cvar_r1_ui_heat_map);
+	cvar_register(&cvar_r1_ui_heat_map_scale);
+	cvar_register(&cvar_r1_bloom_downsample_steps);
+	cvar_register(&cvar_r1_bloom_upsample_steps);
+	cvar_register(&cvar_r1_bloom_amount);
+	cvar_register(&cvar_r1_bloom_preview);
+
+	//------------------------------------------------------------------------
+	// Bootstrap
+	//------------------------------------------------------------------------
+
+	ASSERT(!r1);
+
+	r1 = m_bootstrap(r1_state_t, arena);
+	r1->debug_drawing_enabled = true;
+
+	r1->push_constants_arena = m_child_arena(&r1->arena, MB(2));
+
+	//------------------------------------------------------------------------
+	// Initialize Timestamps
+	//------------------------------------------------------------------------
+
+	const uint32_t max_timestamps = 2*R1MaxRegions; // one for region start, one for region end
+
+	rhi_init_timestamps(max_timestamps);
+	r1->timestamp_frequency = rhi_get_timestamp_frequency();
+
+	//------------------------------------------------------------------------
+	// Initialize Constants
+	//------------------------------------------------------------------------
+
+	r1->multisample_count = 8;
+	r1->unbounded_scissor_rect = (rect2i_t){ .min = { 0, 0 }, .max = { INT32_MAX, INT32_MAX } };
+	
+	//------------------------------------------------------------------------
+	// Load Shaders
+	//------------------------------------------------------------------------
+
+	r1_load_all_shaders();
+	r1_load_all_psos(r1->multisample_count);
+
+	//------------------------------------------------------------------------
+	// Built-in Textures
+	//------------------------------------------------------------------------
+
+	// White
+
+	uint32_t white_pixel = 0xFFFFFFFF;
+
+	r1->white_texture = rhi_create_texture(&(rhi_create_texture_params_t){
+	    .debug_name = S("tex_builtin_white"),
+		.dimension = RhiTextureDimension_2d,
+		.width     = 1,
+		.height    = 1,
+		.format    = PixelFormat_r8g8b8a8_unorm,
+		.initial_data = &(rhi_texture_data_t){
+			.subresources      = (uint32_t *[]) { &white_pixel },
+			.subresource_count = 1,
+			.row_stride        = sizeof(white_pixel),
+		},
+	});
+
+	r1->white_texture_srv = rhi_get_texture_srv(r1->white_texture);
+
+	// Black
+
+	uint32_t black_pixel = 0x0;
+
+	r1->black_texture = rhi_create_texture(&(rhi_create_texture_params_t){
+	    .debug_name = S("tex_builtin_black"),
+		.dimension = RhiTextureDimension_2d,
+		.width     = 1,
+		.height    = 1,
+		.format    = PixelFormat_r8g8b8a8_unorm,
+		.initial_data = &(rhi_texture_data_t){
+			.subresources      = (uint32_t *[]) { &black_pixel },
+			.subresource_count = 1,
+			.row_stride        = sizeof(black_pixel),
+		},
+	});
+
+	r1->black_texture_srv = rhi_get_texture_srv(r1->black_texture);
+
+	// Missing
+
+	uint32_t missing_texture_pixels[] = {
+		0xFFFF00FF, 0xFF000000,
+		0xFF000000, 0xFFFF00FF,
+	};
+
+	r1->missing_texture = rhi_create_texture(&(rhi_create_texture_params_t){
+	    .debug_name = S("tex_buitin_missing"),
+		.dimension = RhiTextureDimension_2d,
+		.width     = 2,
+		.height    = 2,
+		.format    = PixelFormat_r8g8b8a8_unorm,
+		.initial_data = &(rhi_texture_data_t){
+			.subresources      = (uint32_t *[]) { missing_texture_pixels },
+			.subresource_count = 1,
+			.row_stride        = sizeof(uint32_t)*2,
+		},
+	});
+
+	r1->missing_texture_srv = rhi_get_texture_srv(r1->missing_texture);
+
+	// Blue Noise
+
+	for (size_t i = 0; i < ARRAY_COUNT(r1->blue_noise); i++)
+	{
+		asset_hash_t   hash  = asset_hash_from_string(Sf("gamedata/textures/noise/LDR_RGBA_%zu.png", i));
+		asset_image_t *image = get_image_blocking(hash);
+
+		r1->blue_noise    [i] = image->rhi_texture;
+		r1->blue_noise_srv[i] = rhi_get_texture_srv(r1->blue_noise[i]);
+	}
+
+	//------------------------------------------------------------------------
+	// Make render targets and buffers
+	//------------------------------------------------------------------------
+
+	r1->shadow_map_resolution = 2048;
+	r1->shadow_map = rhi_create_texture(&(rhi_create_texture_params_t){
+	    .debug_name = S("sun_shadow_map"),
+		.dimension  = RhiTextureDimension_2d,
+		.width      = r1->shadow_map_resolution,
+		.height     = r1->shadow_map_resolution,
+		.usage      = RhiTextureUsage_depth_stencil,
+		.format     = PixelFormat_d24_unorm_s8_uint,
+	});
+
+	r1->ui_rects = rhi_create_buffer(&(rhi_create_buffer_params_t){
+		.debug_name = S("ui_rects"),
+		.desc = {
+			.first_element  = 0,
+			.element_count  = R1MaxUiRects,
+			.element_stride = sizeof(r_ui_rect_t),
+		},
+		.flags = RhiResourceFlag_dynamic,
+	});
+
+	r1->debug_lines = rhi_create_buffer(&(rhi_create_buffer_params_t){
+		.debug_name = S("debug_lines"),
+		.desc = {
+			.first_element  = 0,
+			.element_count  = (uint32_t)ARRAY_COUNT(debug_lines),
+			.element_stride = sizeof(debug_line_t),
+		},
+	});
+
+	r1->indirect_args_capacity = 8192;
+	r1->indirect_args_count    = 0;
+
+	r1->args = rhi_create_buffer(&(rhi_create_buffer_params_t){
+		.debug_name = S("indirect_args"),
+		.desc = {
+			.first_element = 0,
+			.element_count = r1->indirect_args_capacity,
+			.element_stride = sizeof(rhi_indirect_draw_t),
+		},
+		.heap  = RhiHeapKind_upload,
+		.flags = RhiResourceFlag_dynamic,
+	});
+}
+
+//------------------------------------------------------------------------
+
 fn_local uint32_t r1_begin_timed_region(rhi_command_list_t *list, string_t identifier)
 {
 	const uint32_t region_index       = r1->next_region_index++;
@@ -68,305 +247,6 @@ r1_stats_t r1_report_stats(arena_t *arena)
 	return result;
 }
 
-fn_local void r1_create_psos(uint32_t multisample_count)
-{
-	rhi_destroy_pso(r1->psos.map);
-	rhi_destroy_pso(r1->psos.sun_shadows);
-	rhi_destroy_pso(r1->psos.debug_lines);
-	rhi_destroy_pso(r1->psos.post_process);
-	rhi_destroy_pso(r1->psos.ui);
-
-	const bool multisample_enabled = multisample_count > 1;
-
-	// shadow
-	{
-		df_shader_info_t *vs = &df_shaders[DfShader_shadow_vs];
-
-		r1->psos.sun_shadows = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
-			.debug_name = S("pso_shadow_map"),
-			.vs = vs->bytecode,
-			.blend.sample_mask = 0xFFFFFFFF,
-			.rasterizer = {
-				.cull_mode     = RhiCullMode_back,
-				.front_winding = RhiWinding_ccw,
-			},
-			.depth_stencil = {
-				.depth_test_enable = true,
-				.depth_write       = true,
-				.depth_func        = RhiComparisonFunc_greater,
-			},
-			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
-			.dsv_format              = PixelFormat_d24_unorm_s8_uint,
-		});
-	}
-
-	// brush
-	{
-		df_shader_info_t *vs = &df_shaders[DfShader_brush_vs];
-		df_shader_info_t *ps = &df_shaders[DfShader_brush_ps];
-
-		r1->psos.map = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
-			.debug_name = S("pso_brush"),
-			.vs = vs->bytecode,
-			.ps = ps->bytecode,
-			.blend = {
-				.render_target[0].write_mask = RhiColorWriteEnable_all,
-				.sample_mask                 = 0xFFFFFFFF,
-			},
-			.rasterizer = {
-				.cull_mode          = RhiCullMode_back,
-				.front_winding      = RhiWinding_ccw,
-				.multisample_enable = multisample_enabled,
-			},
-			.depth_stencil = {
-				.depth_test_enable = true,
-				.depth_write       = true,
-				.depth_func        = RhiComparisonFunc_greater,
-			},
-			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
-			.render_target_count     = 1,
-			.multisample_count       = multisample_count,
-			.rtv_formats[0]          = PixelFormat_r16g16b16a16_float,
-			.dsv_format              = PixelFormat_d24_unorm_s8_uint,
-		});
-	}
-
-	// debug lines
-	{
-		df_shader_info_t *vs = &df_shaders[DfShader_debug_lines_vs];
-		df_shader_info_t *ps = &df_shaders[DfShader_debug_lines_ps];
-
-		r1->psos.debug_lines = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
-			.debug_name = S("pso_debug_lines"),
-			.vs = vs->bytecode,
-			.ps = ps->bytecode,
-			.blend = {
-				.render_target[0].write_mask = RhiColorWriteEnable_all,
-				.sample_mask                 = 0xFFFFFFFF,
-			},
-			.rasterizer = {
-				.cull_mode          = RhiCullMode_back,
-				.front_winding      = RhiWinding_ccw,
-				.multisample_enable = multisample_enabled,
-			},
-			.depth_stencil = {
-				.depth_test_enable = true,
-				.depth_func        = RhiComparisonFunc_greater,
-			},
-			.primitive_topology_type = RhiPrimitiveTopologyType_line,
-			.render_target_count     = 1,
-			.multisample_count       = multisample_count,
-			.rtv_formats[0]          = PixelFormat_r16g16b16a16_float,
-			.dsv_format              = PixelFormat_d24_unorm_s8_uint,
-		});
-	}
-
-	// resolve msaa
-	{
-		df_shader_info_t *ps = &df_shaders[DfShader_resolve_msaa_ps];
-		r1->psos.resolve_msaa = r1_create_fullscreen_pso(S("pso_resolve_msaa"), ps->bytecode, PixelFormat_r16g16b16a16_float);
-	}
-
-	// post process
-	{
-		df_shader_info_t *ps = &df_shaders[DfShader_post_ps];
-		r1->psos.post_process = r1_create_fullscreen_pso(S("pso_post_process"), ps->bytecode, PixelFormat_r8g8b8a8_unorm_srgb);
-	}
-
-	// ui
-	{
-		df_shader_info_t *vs = &df_shaders[DfShader_ui_vs];
-		df_shader_info_t *ps = &df_shaders[DfShader_ui_ps];
-
-		r1->psos.ui = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
-			.debug_name = S("pso_ui"),
-			.vs = vs->bytecode,
-			.ps = ps->bytecode,
-			.blend = {
-				.render_target[0] = rhi_blend_premul_alpha(),
-				.sample_mask = 0xFFFFFFFF,
-			},
-			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
-			.render_target_count     = 1,
-			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm_srgb,
-		});
-	}
-
-	// ui heatmap
-	{
-		df_shader_info_t *vs = &df_shaders[DfShader_ui_vs];
-		df_shader_info_t *ps = &df_shaders[DfShader_ui_heatmap_ps];
-
-		r1->psos.ui_heatmap = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
-			.debug_name = S("pso_ui_heatmap"),
-			.vs = vs->bytecode,
-			.ps = ps->bytecode,
-			.blend = {
-				.render_target[0] = rhi_blend_additive(),
-				.sample_mask      = 0xFFFFFFFF,
-			},
-			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
-			.render_target_count     = 1,
-			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm,
-		});
-	}
-
-	// visualize ui heatmap
-	{
-		df_shader_info_t *vs = &df_shaders[DfShader_fullscreen_triangle_vs];
-		df_shader_info_t *ps = &df_shaders[DfShader_ui_visualize_heatmap_ps];
-
-		r1->psos.ui_visualize_heatmap = rhi_create_graphics_pso(&(rhi_create_graphics_pso_params_t){
-			.debug_name = S("pso_ui_visualize_heatmap"),
-			.vs = vs->bytecode,
-			.ps = ps->bytecode,
-			.blend = {
-				.render_target[0] = rhi_blend_premul_alpha(),
-				.sample_mask      = 0xFFFFFFFF,
-			},
-			.rasterizer = {
-				.cull_mode     = RhiCullMode_back,
-				.front_winding = RhiWinding_ccw,
-			},
-			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
-			.render_target_count     = 1,
-			.rtv_formats[0]          = PixelFormat_r8g8b8a8_unorm_srgb,
-		});
-	}
-
-	// bloom blur passes
-	{
-		df_shader_info_t *ps = &df_shaders[DfShader_bloom_blur_ps];
-		r1->psos.bloom_blur = r1_create_fullscreen_pso(S("pso_bloom_blur"), ps->bytecode, PixelFormat_r16g16b16a16_float);
-	}
-}
-
-fn_local void r1_load_all_shaders(void);
-
-void r1_init(void)
-{
-	//------------------------------------------------------------------------
-	// register cvars
-
-	cvar_register(&cvar_r1_ui_heat_map);
-	cvar_register(&cvar_r1_ui_heat_map_scale);
-	cvar_register(&cvar_r1_bloom_downsample_steps);
-	cvar_register(&cvar_r1_bloom_upsample_steps);
-	cvar_register(&cvar_r1_bloom_amount);
-	cvar_register(&cvar_r1_bloom_preview);
-
-	//------------------------------------------------------------------------
-
-	ASSERT(!r1);
-
-	r1 = m_bootstrap(r1_state_t, arena);
-	r1->debug_drawing_enabled = true;
-
-	r1->push_constants_arena = m_child_arena(&r1->arena, MB(2));
-
-	r1_load_all_shaders();
-
-	const uint32_t max_timestamps = 2*R1MaxRegions; // one for region start, one for region end
-
-	// the RHI layer doesn't create the timestamp query/readback buffers automatically,
-	// because you might not care and you want to be able to specify the capacity in
-	// application logic I think
-	rhi_init_timestamps(max_timestamps);
-	r1->timestamp_frequency = rhi_get_timestamp_frequency();
-
-	r1->multisample_count = 8;
-
-	uint32_t white_pixel = 0xFFFFFFFF;
-
-	r1->white_texture = rhi_create_texture(&(rhi_create_texture_params_t){
-	    .debug_name = S("builtin_white_texture"),
-		.dimension = RhiTextureDimension_2d,
-		.width     = 1,
-		.height    = 1,
-		.format    = PixelFormat_r8g8b8a8_unorm,
-		.initial_data = &(rhi_texture_data_t){
-			.subresources      = (uint32_t *[]) { &white_pixel },
-			.subresource_count = 1,
-			.row_stride        = sizeof(white_pixel),
-		},
-	});
-
-	r1->white_texture_srv = rhi_get_texture_srv(r1->white_texture);
-
-	uint32_t black_pixel = 0x0;
-
-	r1->black_texture = rhi_create_texture(&(rhi_create_texture_params_t){
-	    .debug_name = S("builtin_black_texture"),
-		.dimension = RhiTextureDimension_2d,
-		.width     = 1,
-		.height    = 1,
-		.format    = PixelFormat_r8g8b8a8_unorm,
-		.initial_data = &(rhi_texture_data_t){
-			.subresources      = (uint32_t *[]) { &black_pixel },
-			.subresource_count = 1,
-			.row_stride        = sizeof(black_pixel),
-		},
-	});
-
-	r1->black_texture_srv = rhi_get_texture_srv(r1->black_texture);
-
-	for (size_t i = 0; i < ARRAY_COUNT(r1->blue_noise); i++)
-	{
-		asset_hash_t   hash  = asset_hash_from_string(Sf("gamedata/textures/noise/LDR_RGBA_%zu.png", i));
-		asset_image_t *image = get_image_blocking(hash);
-
-		r1->blue_noise    [i] = image->rhi_texture;
-		r1->blue_noise_srv[i] = rhi_get_texture_srv(r1->blue_noise[i]);
-	}
-
-	r1->shadow_map_resolution = 2048;
-	r1->shadow_map = rhi_create_texture(&(rhi_create_texture_params_t){
-	    .debug_name = S("sun_shadow_map"),
-		.dimension  = RhiTextureDimension_2d,
-		.width      = r1->shadow_map_resolution,
-		.height     = r1->shadow_map_resolution,
-		.usage      = RhiTextureUsage_depth_stencil,
-		.format     = PixelFormat_d24_unorm_s8_uint,
-	});
-
-	r1->unbounded_scissor_rect = (rect2i_t){ .min = { 0, 0 }, .max = { INT32_MAX, INT32_MAX } };
-
-	r1->ui_rects = rhi_create_buffer(&(rhi_create_buffer_params_t){
-		.debug_name = S("ui_rects"),
-		.desc = {
-			.first_element  = 0,
-			.element_count  = R1MaxUiRects,
-			.element_stride = sizeof(r_ui_rect_t),
-		},
-		.flags = RhiResourceFlag_dynamic,
-	});
-
-	r1->debug_lines = rhi_create_buffer(&(rhi_create_buffer_params_t){
-		.debug_name = S("debug_lines"),
-		.desc = {
-			.first_element  = 0,
-			.element_count  = (uint32_t)ARRAY_COUNT(debug_lines),
-			.element_stride = sizeof(debug_line_t),
-		},
-	});
-
-	r1_create_psos(r1->multisample_count);
-
-	r1->indirect_args_capacity = 8192;
-	r1->indirect_args_count    = 0;
-
-	r1->args = rhi_create_buffer(&(rhi_create_buffer_params_t){
-		.debug_name = S("indirect_args"),
-		.desc = {
-			.first_element = 0,
-			.element_count = r1->indirect_args_capacity,
-			.element_stride = sizeof(rhi_indirect_draw_t),
-		},
-		.heap  = RhiHeapKind_upload,
-		.flags = RhiResourceFlag_dynamic,
-	});
-}
-
 void r1_load_all_shaders(void)
 {
 	for (size_t i = 1; i < DfShader_COUNT; i++)
@@ -383,6 +263,30 @@ void r1_load_all_shaders(void)
 				info->loaded = true;
 			}
 		}
+	}
+}
+
+void r1_load_all_psos(uint32_t multisample_count)
+{
+	for (size_t i = 1; i < DfPso_COUNT; i++)
+	{
+		df_pso_info_t *info = &df_psos[i];
+
+		if (RESOURCE_HANDLE_VALID(r1->psos[i]))
+		{
+			rhi_destroy_pso(r1->psos[i]);
+		}
+
+		rhi_create_graphics_pso_params_t params = info->params_without_bytecode;
+		params.vs = df_shaders[info->vs_index].bytecode;
+		params.ps = df_shaders[info->ps_index].bytecode;
+
+		if (params.rasterizer.multisample_enable)
+		{
+			params.multisample_count = multisample_count;
+		}
+
+		r1->psos[i] = rhi_create_graphics_pso(&params);
 	}
 }
 
@@ -627,7 +531,7 @@ void r1_render_sun_shadows(rhi_command_list_t *list, map_t *map)
 		};
 		rhi_set_parameters(list, R1ParameterSlot_draw, &draw_parameters, sizeof(draw_parameters));
 
-		rhi_set_pso     (list, r1->psos.sun_shadows);
+		r1_set_pso      (list, DfPso_sun_shadows);
 		rhi_draw_indexed(list, r1->map.indices, map->index_count, 0, 0);
 
 		rhi_graphics_pass_end(list);
@@ -658,7 +562,7 @@ void r1_render_map(rhi_command_list_t *list, rhi_texture_t rt, map_t *map)
 			.scissor_rect = r1->unbounded_scissor_rect,
 		});
 
-		rhi_set_pso(list, r1->psos.map);
+		r1_set_pso(list, DfPso_brush);
 
 		brush_pass_parameters_t pass_parameters = {
 			.positions     = rhi_get_buffer_srv (r1->map.positions),
@@ -672,7 +576,11 @@ void r1_render_map(rhi_command_list_t *list, rhi_texture_t rt, map_t *map)
 		{
 			map_poly_t *poly = &map->polys[i];
 
-			rhi_texture_srv_t albedo_srv = r1->white_texture_srv;
+			// epic disaster!
+			// epic disaster!
+			// epic disaster!
+
+			rhi_texture_srv_t albedo_srv = r1->missing_texture_srv;
 
 			asset_image_t *albedo = get_image(poly->texture);
 
@@ -720,7 +628,7 @@ void r1_render_debug_lines(rhi_command_list_t *list, rhi_texture_t rt, rhi_textu
 		{
 			rhi_simple_graphics_pass_begin(list, rt, rt_depth, RhiPrimitiveTopology_linelist);
 			{
-				rhi_set_pso(list, r1->psos.debug_lines);
+				r1_set_pso(list, DfPso_debug_lines);
 
 				debug_lines_draw_parameters_t draw_parameters = {
 					.lines = rhi_get_buffer_srv(r1->debug_lines),
@@ -742,7 +650,7 @@ void r1_post_process(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_text
 	{
 		rhi_simple_graphics_pass_begin(list, r1->window.rt_hdr_resolved, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
 		{
-			rhi_set_pso(list, r1->psos.resolve_msaa);
+			r1_set_pso(list, DfPso_resolve_msaa);
 
 			uint32_t blue_noise_index = r1->frame_index % ARRAY_COUNT(r1->blue_noise);
 
@@ -780,7 +688,7 @@ void r1_post_process(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_text
 
 			rhi_simple_graphics_pass_begin(list, bloom_rt, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
 			{
-				rhi_set_pso(list, r1->psos.bloom_blur);
+				r1_set_pso(list, DfPso_bloom_blur);
 
 				bloom_draw_parameters_t draw_parameters = {
 					.tex_color    = rhi_get_texture_srv(bloom_in),
@@ -808,7 +716,7 @@ void r1_post_process(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_text
 
 			rhi_simple_graphics_pass_begin(list, bloom_rt, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
 			{
-				rhi_set_pso(list, r1->psos.bloom_blur);
+				r1_set_pso(list, DfPso_bloom_blur);
 
 				bloom_draw_parameters_t draw_parameters = {
 					.tex_color    = rhi_get_texture_srv(bloom_in),
@@ -828,7 +736,7 @@ void r1_post_process(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_text
 	{
 		rhi_simple_graphics_pass_begin(list, rt_result, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
 		{
-			rhi_set_pso(list, r1->psos.post_process);
+			r1_set_pso(list, DfPso_post_process);
 
 			uint32_t blue_noise_index = r1->frame_index % ARRAY_COUNT(r1->blue_noise);
 
@@ -883,7 +791,7 @@ void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, ui_render_command_
 	{
 		rhi_simple_graphics_pass_begin(list, rt, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglestrip);
 		{
-			rhi_set_pso(list, r1->psos.ui);
+			r1_set_pso(list, DfPso_ui);
 
 			ui_draw_parameters_t draw_parameters = {
 				.rects = rhi_get_buffer_srv(r1->ui_rects),
@@ -920,7 +828,7 @@ void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, ui_render_command_
 			},
 		});
 		{
-			rhi_set_pso(list, r1->psos.ui_heatmap);
+			r1_set_pso(list, DfPso_ui_heatmap);
 
 			ui_draw_parameters_t draw_parameters = {
 				.rects = rhi_get_buffer_srv(r1->ui_rects),
@@ -934,7 +842,7 @@ void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, ui_render_command_
 		// visualize heatmap
 		rhi_simple_graphics_pass_begin(list, rt, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
 		{
-			rhi_set_pso(list, r1->psos.ui_visualize_heatmap);
+			r1_set_pso(list, DfPso_ui_visualize_heatmap);
 
 			int32_t heat_map_scale = cvar_read_i32(&cvar_r1_ui_heat_map_scale);
 
@@ -1088,6 +996,8 @@ void draw_map(map_t *map, int view_count, view_t *views)
 			r1_draw_stream_t *stream = &view->buckets[is_water ? R1RenderBucket_translucent : R1RenderBucket_opaque];
 
 			// epic disaster!
+			// epic disaster!
+			// epic disaster!
 
 			rhi_texture_srv_t albedo_srv = r1->white_texture_srv;
 
@@ -1126,7 +1036,7 @@ void draw_map(map_t *map, int view_count, view_t *views)
 			uint32_t sort_key = 0;
 
 			rhi_draw_packet_t packet = {
-				.pso            = r1->psos.map,
+				.pso            = r1->psos[DfPso_brush], //r1->psos.map,
 				.args_buffer    = r1->args,
 				.args_offset    = 0, // r1_get_args_offset(args);
 				.index_buffer   = r1->map.indices,
