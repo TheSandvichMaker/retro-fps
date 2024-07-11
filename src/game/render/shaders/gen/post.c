@@ -20,6 +20,10 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"\n" \
 	"// TODO: Split resolve and post pass parameters up properly\n" \
 	"\n" \
+	"// 0: lerp\n" \
+	"// 1: screen\n" \
+	"#define BLOOM_BLEND 1\n" \
+	"\n" \
 	"struct post_draw_parameters_t\n" \
 	"{\n" \
 	"	df::Resource< Texture2D< float3 > > bloom0;\n" \
@@ -178,8 +182,14 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"\n" \
 	"	float3 bloom = draw.bloom0.Get().SampleLevel(df::s_linear_clamped, uv, 0);\n" \
 	"\n" \
+	"#if BLOOM_BLEND == 0\n" \
 	"	color = lerp(color, bloom, draw.bloom_amount);\n" \
 	"	color = 1.0 - exp(-color);\n" \
+	"#elif BLOOM_BLEND == 1\n" \
+	"	color = 1.0 - exp(-color);\n" \
+	"	bloom = 1.0 - exp(-bloom);\n" \
+	"	color = 1.0 - (1.0 - color)*(1.0 - draw.bloom_amount*bloom);\n" \
+	"#endif\n" \
 	"\n" \
 	"	float3 dither = RemapTriPDF(blue_noise.rgb) / 255.0;\n" \
 	"	color += dither;\n" \

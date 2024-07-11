@@ -2,12 +2,12 @@
 
 #include "shaders/gen/shaders.c"
 
-CVAR_BOOL  (cvar_r1_ui_heat_map,            "r1.ui.heat_map",            false);
-CVAR_I32_EX(cvar_r1_ui_heat_map_scale,      "r1.ui.heat_map_scale",      16, 1, 255);
+CVAR_BOOL  (cvar_r1_ui_heat_map,            "r1.ui.heat_map",                   false);
+CVAR_I32_EX(cvar_r1_ui_heat_map_scale,      "r1.ui.heat_map_scale",             16, 1, 255);
 CVAR_I32_EX(cvar_r1_bloom_downsample_steps, "r1.bloom.filter_downsample_steps", 8, 1, 8);
 CVAR_I32_EX(cvar_r1_bloom_upsample_steps,   "r1.bloom.filter_upsample_steps",   4, 1, 8);
-CVAR_F32_EX(cvar_r1_bloom_amount,           "r1.bloom.amount",           0.1f, 0.0f, 1.0f);
-CVAR_BOOL  (cvar_r1_bloom_preview,          "r1.bloom.preview",          false);
+CVAR_F32_EX(cvar_r1_bloom_amount,           "r1.bloom.amount",                  0.05f, 0.0f, 1.0f);
+CVAR_BOOL  (cvar_r1_bloom_preview,          "r1.bloom.preview",                 false);
 
 fn_local uint32_t r1_begin_timed_region(rhi_command_list_t *list, string_t identifier)
 {
@@ -634,106 +634,6 @@ void r1_render_sun_shadows(rhi_command_list_t *list, map_t *map)
 	}
 }
 
-typedef struct r1_draw_stream_t
-{
-	uint32_t           capacity;
-	uint32_t           count;
-	uint32_t          *sort_keys;
-	rhi_draw_packet_t *packets;
-} r1_draw_stream_t;
-
-fn void r1_push_draw_packet(r1_draw_stream_t *stream, rhi_draw_packet_t packet, uint32_t sort_key)
-{
-	if (ALWAYS(stream->count < stream->capacity))
-	{
-		uint32_t index = stream->count++;
-
-		stream->sort_keys[index] = sort_key;
-		stream->packets  [index] = packet;
-	}
-}
-
-typedef struct view_t
-{
-	uint32_t         params_offset;
-	r1_draw_stream_t buckets[R1RenderBucket_COUNT];
-} view_t;
-
-void draw_map(map_t *map, int view_count, view_t *views)
-{
-	rhi_parameters_t pass_alloc = rhi_alloc_parameters(sizeof(brush_pass_parameters_t));
-
-	brush_pass_parameters_t *pass = pass_alloc.host;
-	pass->positions     = rhi_get_buffer_srv (r1->map.positions);
-	pass->uvs           = rhi_get_buffer_srv (r1->map.uvs);
-	pass->lm_uvs        = rhi_get_buffer_srv (r1->map.lightmap_uvs);
-	pass->sun_shadowmap = rhi_get_texture_srv(r1->shadow_map);
-
-	for (size_t i = 0; i < map->poly_count; i++)
-	{
-		map_plane_t *plane = &map->planes[i];
-		map_poly_t  *poly  = &map->polys [i];
-
-		for (int view_index = 0; view_index < view_count; view_index++)
-		{
-			view_t *view = &views[view_index];
-
-			bool is_water = !!(plane->content_flags & MapContentFlag_water);
-
-			r1_draw_stream_t *stream = &view->buckets[is_water ? R1RenderBucket_translucent : R1RenderBucket_opaque];
-
-			// epic disaster!
-
-			rhi_texture_srv_t albedo_srv = r1->white_texture_srv;
-
-			asset_image_t *albedo = get_image(poly->texture);
-
-			if (albedo != &missing_image)
-			{
-				if (rhi_texture_upload_complete(albedo->rhi_texture))
-				{
-					albedo_srv = rhi_get_texture_srv(albedo->rhi_texture);
-				}
-			}
-
-			rhi_texture_srv_t lightmap_srv = r1->white_texture_srv;
-			v2_t lightmap_dim = { 1.0f, 1.0f };
-
-			if (RESOURCE_HANDLE_VALID(poly->lightmap_rhi))
-			{
-				lightmap_srv = rhi_get_texture_srv(poly->lightmap_rhi);
-
-				const rhi_texture_desc_t *desc = rhi_get_texture_desc(poly->lightmap_rhi);
-				lightmap_dim = make_v2((float)desc->width, (float)desc->height);
-			}
-
-			// ~~~
-
-			brush_draw_parameters_t *draw = m_alloc_struct_nozero(r1->push_constants_arena, brush_draw_parameters_t);
-			draw->albedo   = albedo_srv;
-			draw->lightmap = lightmap_srv;
-			draw->normal   = poly->normal;
-
-			rhi_indirect_draw_indexed_t *args = NULL; // r1_alloc_args();
-			args->index_count  = poly->index_count;
-			args->index_offset = poly->first_index;
-
-			uint32_t sort_key = 0;
-
-			rhi_draw_packet_t packet = {
-				.pso            = r1->psos.map,
-				.args_buffer    = r1->args,
-				.args_offset    = 0, // r1_get_args_offset(args);
-				.index_buffer   = r1->map.indices,
-				.push_constants = m_get_alloc_offset(r1->push_constants_arena, draw),
-				.params[R1ParameterSlot_view] = view->params_offset,
-				.params[R1ParameterSlot_pass] = pass_alloc.offset,
-			};
-			r1_push_draw_packet(stream, packet, sort_key);
-		}
-	}
-}
-
 void r1_render_map(rhi_command_list_t *list, rhi_texture_t rt, map_t *map)
 {
 	R1_TIMED_REGION(list, S("Map"))
@@ -999,6 +899,8 @@ void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, ui_render_command_
 	{
 		// render heatmap
 
+		rhi_begin_region(list, S("UI Heatmap"));
+
 		const rhi_texture_desc_t *rt_desc = rhi_get_texture_desc(r1->window.ui_heatmap_rt);
 
 		rhi_graphics_pass_begin(list, &(rhi_graphics_pass_params_t){
@@ -1045,6 +947,8 @@ void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, ui_render_command_
 			rhi_draw(list, 3, 0);
 		}
 		rhi_graphics_pass_end(list);
+
+		rhi_end_region(list);
 	}
 }
 
@@ -1130,4 +1034,107 @@ void draw_oriented_debug_cube(v3_t p, v3_t dim, quat_t rot, v4_t color)
     draw_debug_line(v100, v101, color, color);
     draw_debug_line(v010, v011, color, color);
     draw_debug_line(v110, v111, color, color);
+}
+
+//------------------------------------------------------------------------
+// Draw stream API sketch:
+
+typedef struct r1_draw_stream_t
+{
+	uint32_t           capacity;
+	uint32_t           count;
+	uint32_t          *sort_keys;
+	rhi_draw_packet_t *packets;
+} r1_draw_stream_t;
+
+fn void r1_push_draw_packet(r1_draw_stream_t *stream, rhi_draw_packet_t packet, uint32_t sort_key)
+{
+	if (ALWAYS(stream->count < stream->capacity))
+	{
+		uint32_t index = stream->count++;
+
+		stream->sort_keys[index] = sort_key;
+		stream->packets  [index] = packet;
+	}
+}
+
+typedef struct view_t
+{
+	uint32_t         params_offset;
+	r1_draw_stream_t buckets[R1RenderBucket_COUNT];
+} view_t;
+
+void draw_map(map_t *map, int view_count, view_t *views)
+{
+	rhi_parameters_t pass_alloc = rhi_alloc_parameters(sizeof(brush_pass_parameters_t));
+
+	brush_pass_parameters_t *pass = pass_alloc.host;
+	pass->positions     = rhi_get_buffer_srv (r1->map.positions);
+	pass->uvs           = rhi_get_buffer_srv (r1->map.uvs);
+	pass->lm_uvs        = rhi_get_buffer_srv (r1->map.lightmap_uvs);
+	pass->sun_shadowmap = rhi_get_texture_srv(r1->shadow_map);
+
+	for (size_t i = 0; i < map->poly_count; i++)
+	{
+		map_plane_t *plane = &map->planes[i];
+		map_poly_t  *poly  = &map->polys [i];
+
+		for (int view_index = 0; view_index < view_count; view_index++)
+		{
+			view_t *view = &views[view_index];
+
+			bool is_water = !!(plane->content_flags & MapContentFlag_water);
+
+			r1_draw_stream_t *stream = &view->buckets[is_water ? R1RenderBucket_translucent : R1RenderBucket_opaque];
+
+			// epic disaster!
+
+			rhi_texture_srv_t albedo_srv = r1->white_texture_srv;
+
+			asset_image_t *albedo = get_image(poly->texture);
+
+			if (albedo != &missing_image)
+			{
+				if (rhi_texture_upload_complete(albedo->rhi_texture))
+				{
+					albedo_srv = rhi_get_texture_srv(albedo->rhi_texture);
+				}
+			}
+
+			rhi_texture_srv_t lightmap_srv = r1->white_texture_srv;
+			v2_t lightmap_dim = { 1.0f, 1.0f };
+
+			if (RESOURCE_HANDLE_VALID(poly->lightmap_rhi))
+			{
+				lightmap_srv = rhi_get_texture_srv(poly->lightmap_rhi);
+
+				const rhi_texture_desc_t *desc = rhi_get_texture_desc(poly->lightmap_rhi);
+				lightmap_dim = make_v2((float)desc->width, (float)desc->height);
+			}
+
+			// ~~~
+
+			brush_draw_parameters_t *draw = m_alloc_struct_nozero(r1->push_constants_arena, brush_draw_parameters_t);
+			draw->albedo   = albedo_srv;
+			draw->lightmap = lightmap_srv;
+			draw->normal   = poly->normal;
+
+			rhi_indirect_draw_indexed_t *args = NULL; // r1_alloc_args();
+			args->index_count  = poly->index_count;
+			args->index_offset = poly->first_index;
+
+			uint32_t sort_key = 0;
+
+			rhi_draw_packet_t packet = {
+				.pso            = r1->psos.map,
+				.args_buffer    = r1->args,
+				.args_offset    = 0, // r1_get_args_offset(args);
+				.index_buffer   = r1->map.indices,
+				.push_constants = m_get_alloc_offset(r1->push_constants_arena, draw),
+				.params[R1ParameterSlot_view] = view->params_offset,
+				.params[R1ParameterSlot_pass] = pass_alloc.offset,
+			};
+			r1_push_draw_packet(stream, packet, sort_key);
+		}
+	}
 }

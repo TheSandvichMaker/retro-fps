@@ -11,7 +11,7 @@ struct LineVertex
 	name = "debug_lines",
 
 	draw_parameters = {
-		lines = StructuredBuffer("LineVertex"),
+		lines = StructuredBuffer(LineVertex),
 	},
 
 	shaders = {

@@ -1,23 +1,35 @@
--- error on access of undefined globals, to avoid stupid silent bugs
+-- error on access of undefined globals, to avoid stupid silent bugs... or ultimate stringly typed...!!!
 
 setmetatable(_G, {
 	__index = function(table, key)
-		error("Unknown global value: " .. key)
+		-- error("Unknown global value: " .. key)
+		return key -- oh... ohhhh....
 	end
 })
 
+shader_resource_mt = {}
+
+local function shader_resource(t)
+	setmetatable(t, shader_resource_mt)
+	return t
+end
+
+function is_shader_resource_type(t)
+	return getmetatable(t) == shader_resource_mt
+end
+
 -- shader type definitions
 
-int      = { resource_type = "primitive", size = 1,  align = 1, align_legacy = 1, c_name = "int32_t", hlsl_name = "int"     }
-uint     = { resource_type = "primitive", size = 1,  align = 1, align_legacy = 1, c_name = "uint32_t", hlsl_name = "uint"     }
-uint2    = { resource_type = "primitive", size = 2,  align = 1, align_legacy = 2, c_name = "v2u_t",    hlsl_name = "uint2"    }
-uint3    = { resource_type = "primitive", size = 3,  align = 1, align_legacy = 3, c_name = "v3u_t",    hlsl_name = "uint3"    }
-uint4    = { resource_type = "primitive", size = 4,  align = 1, align_legacy = 4, c_name = "v4u_t",    hlsl_name = "uint4"    }
-float    = { resource_type = "primitive", size = 1,  align = 1, align_legacy = 1, c_name = "float",    hlsl_name = "float"    }
-float2   = { resource_type = "primitive", size = 2,  align = 1, align_legacy = 2, c_name = "v2_t",     hlsl_name = "float2"   }
-float3   = { resource_type = "primitive", size = 3,  align = 1, align_legacy = 3, c_name = "v3_t",     hlsl_name = "float3"   }
-float4   = { resource_type = "primitive", size = 4,  align = 1, align_legacy = 4, c_name = "v4_t",     hlsl_name = "float4"   }
-float4x4 = { resource_type = "primitive", size = 16, align = 1, align_legacy = 4, c_name = "m4x4_t",   hlsl_name = "float4x4" }
+int      = shader_resource { resource_type = "primitive", size = 1,  align = 1, align_legacy = 1, c_name = "int32_t",  hlsl_name = "int"      }
+uint     = shader_resource { resource_type = "primitive", size = 1,  align = 1, align_legacy = 1, c_name = "uint32_t", hlsl_name = "uint"     }
+uint2    = shader_resource { resource_type = "primitive", size = 2,  align = 1, align_legacy = 2, c_name = "v2u_t",    hlsl_name = "uint2"    }
+uint3    = shader_resource { resource_type = "primitive", size = 3,  align = 1, align_legacy = 3, c_name = "v3u_t",    hlsl_name = "uint3"    }
+uint4    = shader_resource { resource_type = "primitive", size = 4,  align = 1, align_legacy = 4, c_name = "v4u_t",    hlsl_name = "uint4"    }
+float    = shader_resource { resource_type = "primitive", size = 1,  align = 1, align_legacy = 1, c_name = "float",    hlsl_name = "float"    }
+float2   = shader_resource { resource_type = "primitive", size = 2,  align = 1, align_legacy = 2, c_name = "v2_t",     hlsl_name = "float2"   }
+float3   = shader_resource { resource_type = "primitive", size = 3,  align = 1, align_legacy = 3, c_name = "v3_t",     hlsl_name = "float3"   }
+float4   = shader_resource { resource_type = "primitive", size = 4,  align = 1, align_legacy = 4, c_name = "v4_t",     hlsl_name = "float4"   }
+float4x4 = shader_resource { resource_type = "primitive", size = 16, align = 1, align_legacy = 4, c_name = "m4x4_t",   hlsl_name = "float4x4" }
 
 function StructuredBuffer(format)
 	assert(format, "You need to pass a type to StructuredBuffer")
@@ -30,7 +42,7 @@ function StructuredBuffer(format)
 		format_hlsl = format.hlsl_name
 	end
 
-	return {
+	return shader_resource {
 		resource_type = "buffer",
 		access        = "read",
 		size          = 1,
@@ -52,7 +64,7 @@ function RWStructuredBuffer(format)
 		format_hlsl = format.hlsl_name
 	end
 
-	return {
+	return shader_resource {
 		resource_type = "buffer",
 		access        = "readwrite",
 		size          = 1,
@@ -79,7 +91,7 @@ function Texture2D(format, ex)
 		end
 	end
 
-	return {
+	return shader_resource {
 		resource_type = "texture",
 		access        = "read",
 		multisample   = false,
@@ -108,7 +120,7 @@ function Texture2DMS(format, ex)
 		end
 	end
 
-	return {
+	return shader_resource {
 		resource_type = "texture",
 		access        = "read",
 		multisample   = true,

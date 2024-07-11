@@ -2,6 +2,8 @@
 
 #include "bindless.hlsli"
 
+#include "common.hlsli"
+
 struct shadow_draw_parameters_t
 {
 	df::Resource< StructuredBuffer< float3 > > positions;
@@ -10,8 +12,6 @@ struct shadow_draw_parameters_t
 ConstantBuffer< shadow_draw_parameters_t > draw : register(b0);
 
 
-
-#include "common.hlsli"
 
 struct VS_OUT
 {

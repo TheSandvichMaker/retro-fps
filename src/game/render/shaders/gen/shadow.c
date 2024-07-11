@@ -11,6 +11,8 @@ void shader_shadow_set_draw_params(rhi_command_list_t *list, shadow_draw_paramet
 	"\n" \
 	"#include \"bindless.hlsli\"\n" \
 	"\n" \
+	"#include \"common.hlsli\"\n" \
+	"\n" \
 	"struct shadow_draw_parameters_t\n" \
 	"{\n" \
 	"	df::Resource< StructuredBuffer< float3 > > positions;\n" \
@@ -19,8 +21,6 @@ void shader_shadow_set_draw_params(rhi_command_list_t *list, shadow_draw_paramet
 	"ConstantBuffer< shadow_draw_parameters_t > draw : register(b0);\n" \
 	"\n" \
 	"\n" \
-	"\n" \
-	"#include \"common.hlsli\"\n" \
 	"\n" \
 	"struct VS_OUT\n" \
 	"{\n" \

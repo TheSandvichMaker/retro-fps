@@ -1,3 +1,5 @@
+#include "common.hlsli"
+
 @metashader
 {
 	name = "shadow",
@@ -10,8 +12,6 @@
 		shadow_vs = { target = "vs_6_6", entry = "MainVS" },
 	},
 }
-
-#include "common.hlsli"
 
 struct VS_OUT
 {

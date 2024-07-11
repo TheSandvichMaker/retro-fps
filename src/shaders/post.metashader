@@ -2,6 +2,10 @@
 
 // TODO: Split resolve and post pass parameters up properly
 
+// 0: lerp
+// 1: screen
+#define BLOOM_BLEND 1
+
 @metashader
 {
 	name = "post",
@@ -186,8 +190,14 @@ float4 post_ps(FullscreenTriangleOutVS IN) : SV_Target
 
 	float3 bloom = draw.bloom0.Get().SampleLevel(df::s_linear_clamped, uv, 0);
 
+#if BLOOM_BLEND == 0
 	color = lerp(color, bloom, draw.bloom_amount);
 	color = 1.0 - exp(-color);
+#elif BLOOM_BLEND == 1
+	color = 1.0 - exp(-color);
+	bloom = 1.0 - exp(-bloom);
+	color = 1.0 - (1.0 - color)*(1.0 - draw.bloom_amount*bloom);
+#endif
 
 	float3 dither = RemapTriPDF(blue_noise.rgb) / 255.0;
 	color += dither;

@@ -6,6 +6,19 @@ local cbuf_packing_mode = "legacy"
 
 emit = {}
 
+local function error_context()
+	if emit.current_bundle_info ~= nil then
+		local bundle_file_name = emit.current_bundle_info.file_name
+		return "[" .. bundle_file_name .. ".metashader]: "
+	end
+
+	return ""
+end
+
+function emit.error(str)
+	error("\n" .. error_context() .. str)
+end
+
 function emit.sort_parameters(in_parameters, cbuffer_kind)
 	if cbuffer_kind == nil or (cbuffer_kind ~= "structured" and cbuffer_kind ~= "legacy") then 
 		error("You need to specify a cbuffer kind (valid options: 'structured', 'legacy'")
@@ -14,9 +27,13 @@ function emit.sort_parameters(in_parameters, cbuffer_kind)
 	local out_parameters = {}
 
 	for k, v in pairs(in_parameters) do
+		if not is_shader_resource_type(v) then
+			emit.error("The type of parameter '" .. k .. "': '" .. tostring(v) .. "' is not recognized as a valid shader input type")
+		end
+
 		table.insert(out_parameters, { name = k, definition = v })
 		if v == nil then
-			error("Parameter defined with unknown type: " .. name)
+			emit.error("Parameter defined with unknown type: " .. name)
 		end
 	end
 	
@@ -43,7 +60,7 @@ end
 
 function emit.pop_next_parameter_for_align(parameters, wanted_align, cbuffer_kind)
 	if cbuffer_kind == nil or (cbuffer_kind ~= "structured" and cbuffer_kind ~= "legacy") then 
-		error("You need to specify a cbuffer kind (valid options: 'structured', 'legacy'")
+		emit.error("You need to specify a cbuffer kind (valid options: 'structured', 'legacy'")
 	end
 
 	local result = nil
@@ -56,7 +73,7 @@ function emit.pop_next_parameter_for_align(parameters, wanted_align, cbuffer_kin
 		elseif cbuffer_kind == "legacy" then
 			parameter_align = v.definition.align_legacy
 		else
-			error("Invalid align")
+			emit.error("Invalid align")
 		end
 
 		if parameter_align <= wanted_align then
@@ -71,7 +88,7 @@ end
 
 function emit.create_packed_cbuffer(parameters, cbuffer_kind)
 	if cbuffer_kind == nil or (cbuffer_kind ~= "structured" and cbuffer_kind ~= "legacy") then 
-		error("You need to specify a cbuffer kind (valid options: 'structured', 'legacy'")
+		emit.error("You need to specify a cbuffer kind (valid options: 'structured', 'legacy'")
 	end
 
 	local result = {}
@@ -200,6 +217,8 @@ function emit.c_emit_parameter_set_function(function_name, params_name, slot, cb
 end
 
 function emit.emit_bundle(bundle_info, output_directory_c, output_directory_hlsl)
+	emit.current_bundle_info = bundle_info
+
 	local bundle           = bundle_info.bundle
 	local bundle_file_name = bundle_info.file_name
 
@@ -207,7 +226,7 @@ function emit.emit_bundle(bundle_info, output_directory_c, output_directory_hlsl
 	local draw = nil
 
 	if not bundle.name then
-		error(bundle_file_name .. ".metashader's metashader table did not provide a 'name' field - this is required because various type and function names are generated based on it")
+		emit.error(bundle_file_name .. ".metashader's metashader table did not provide a 'name' field - this is required because various type and function names are generated based on it")
 	end
 
 	print("Emitting shader parameters for '" .. bundle.name .. "'")
