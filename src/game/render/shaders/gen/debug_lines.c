@@ -2,7 +2,7 @@
 
 void shader_debug_lines_set_draw_params(rhi_command_list_t *list, debug_lines_draw_parameters_t *params)
 {
-	rhi_validate_buffer_srv(params->lines, S("shader_debug_lines_set_draw_params"));
+	rhi_validate_buffer_srv(params->lines, S("debug_lines_draw_parameters_t::lines"));
 	rhi_set_parameters(list, 0, params, sizeof(*params));
 }
 

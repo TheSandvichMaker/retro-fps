@@ -17,30 +17,53 @@ typedef enum df_shader_ident_t
 {
 	DfShader_none,
 
-	DfShader_bloom_blur_ps, // src/shaders/bloom.metashader
+	// src/shaders/bloom.metashader
+	DfShader_bloom_blur_ps,
 
-	DfShader_brush_ps, // src/shaders/brush.metashader
-	DfShader_brush_vs, // src/shaders/brush.metashader
+	// src/shaders/brush.metashader
+	DfShader_brush_ps,
+	DfShader_brush_vs,
 
-	DfShader_compute_test_cs, // src/shaders/compute_test.metashader
+	// src/shaders/compute_test.metashader
+	DfShader_compute_test_cs,
 
-	DfShader_debug_lines_ps, // src/shaders/debug_lines.metashader
-	DfShader_debug_lines_vs, // src/shaders/debug_lines.metashader
+	// src/shaders/debug_lines.metashader
+	DfShader_debug_lines_ps,
+	DfShader_debug_lines_vs,
 
-	DfShader_fullscreen_triangle_vs, // src/shaders/fullscreen_triangle.metashader
+	// src/shaders/fullscreen_triangle.metashader
+	DfShader_fullscreen_triangle_vs,
 
-	DfShader_post_ps, // src/shaders/post.metashader
-	DfShader_resolve_msaa_ps, // src/shaders/post.metashader
+	// src/shaders/post.metashader
+	DfShader_post_ps,
+	DfShader_resolve_msaa_ps,
 
-	DfShader_shadow_vs, // src/shaders/shadow.metashader
+	// src/shaders/shadow.metashader
+	DfShader_shadow_vs,
 
-	DfShader_ui_heatmap_ps, // src/shaders/ui.metashader
-	DfShader_ui_ps, // src/shaders/ui.metashader
-	DfShader_ui_vs, // src/shaders/ui.metashader
+	// src/shaders/ui.metashader
+	DfShader_ui_heatmap_ps,
+	DfShader_ui_ps,
+	DfShader_ui_vs,
 
-	DfShader_ui_visualize_heatmap_ps, // src/shaders/ui_visualize_heatmap.metashader
+	// src/shaders/ui_visualize_heatmap.metashader
+	DfShader_ui_visualize_heatmap_ps,
 
 	DfShader_COUNT,
 } df_shader_ident_t;
 
 global df_shader_info_t df_shaders[DfShader_COUNT];
+
+typedef enum df_pso_ident_t
+{
+	DfPso_none,
+
+	// src/shaders/post.metashader
+	DfPso_post_process,
+	DfPso_resolve_msaa,
+
+	DfPso_COUNT,
+} df_pso_ident_t;
+
+global df_pso_info_t df_psos[DfPso_COUNT];
+

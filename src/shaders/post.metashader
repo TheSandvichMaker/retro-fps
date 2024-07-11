@@ -7,12 +7,13 @@
 	name = "post",
 
 	draw_parameters = {
+		--// resolve
 		hdr_color      = Texture2DMS(float3, { may_be_null = true }),
 		depth_buffer   = Texture2DMS(float,  { may_be_null = true }),
 		shadow_map     = Texture2D  (float,  { may_be_null = true }),
 		blue_noise     = Texture2D  (float4),
 		sample_count   = int,
-
+		--// post process
 		resolved_color = Texture2D(float3, { may_be_null = true }),
 		bloom0         = Texture2D(float3, { may_be_null = true }),
 		bloom_amount   = float,
@@ -21,6 +22,30 @@
 	shaders = {
 		resolve_msaa_ps = { target = "ps_6_6", entry = "resolve_msaa_ps" },
 		post_ps         = { target = "ps_6_6", entry = "post_ps" },
+	},
+
+	--// TODO: Generate PSOs based on these :)
+	psos = {
+		--// pso_resolve_msaa = pso_fullscreen("resolve_msaa_ps", "r16g16b16a16_float" ),
+		--// pso_post_process = pso_fullscreen("post_ps",         "r8g8b8a8_unorm_srgb"),
+
+		resolve_msaa = {
+			vs = "fullscreen_triangle_vs",
+			ps = "resolve_msaa_ps",
+			topology = "triangle",
+			render_targets = {
+				{ pf = "r16t16b16a16_float" }, --// it would be cool if we could get the format from a render graph thingmajig instead...
+			},
+		},
+
+		post_process = {
+			vs = "fullscreen_triangle_vs",
+			ps = "post_ps",
+			topology = "triangle",
+			render_targets = {
+				{ pf = "r8g8b8a8_unorm_srgb" },
+			},
+		},
 	},
 }
 

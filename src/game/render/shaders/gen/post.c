@@ -2,12 +2,12 @@
 
 void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_t *params)
 {
-	rhi_validate_texture_srv(params->bloom0, S("shader_post_set_draw_params:bloom0"), RhiValidateTextureSrv_may_be_null);
-	rhi_validate_texture_srv(params->blue_noise, S("shader_post_set_draw_params:blue_noise"), 0);
-	rhi_validate_texture_srv(params->depth_buffer, S("shader_post_set_draw_params:depth_buffer"), RhiValidateTextureSrv_is_msaa|RhiValidateTextureSrv_may_be_null);
-	rhi_validate_texture_srv(params->hdr_color, S("shader_post_set_draw_params:hdr_color"), RhiValidateTextureSrv_is_msaa|RhiValidateTextureSrv_may_be_null);
-	rhi_validate_texture_srv(params->resolved_color, S("shader_post_set_draw_params:resolved_color"), RhiValidateTextureSrv_may_be_null);
-	rhi_validate_texture_srv(params->shadow_map, S("shader_post_set_draw_params:shadow_map"), RhiValidateTextureSrv_may_be_null);
+	rhi_validate_texture_srv(params->bloom0, S("post_draw_parameters_t::bloom0"), RhiValidateTextureSrv_may_be_null);
+	rhi_validate_texture_srv(params->blue_noise, S("post_draw_parameters_t::blue_noise"), 0);
+	rhi_validate_texture_srv(params->depth_buffer, S("post_draw_parameters_t::depth_buffer"), RhiValidateTextureSrv_is_msaa|RhiValidateTextureSrv_may_be_null);
+	rhi_validate_texture_srv(params->hdr_color, S("post_draw_parameters_t::hdr_color"), RhiValidateTextureSrv_is_msaa|RhiValidateTextureSrv_may_be_null);
+	rhi_validate_texture_srv(params->resolved_color, S("post_draw_parameters_t::resolved_color"), RhiValidateTextureSrv_may_be_null);
+	rhi_validate_texture_srv(params->shadow_map, S("post_draw_parameters_t::shadow_map"), RhiValidateTextureSrv_may_be_null);
 	rhi_set_parameters(list, 0, params, sizeof(*params));
 }
 

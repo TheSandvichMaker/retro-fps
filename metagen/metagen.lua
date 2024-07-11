@@ -10,6 +10,10 @@ output_directory_hlsl = "src/shaders/gen/"
 output_directory_c    = "src/game/render/shaders/gen/"
 
 -- @PlatformSpecific
+os.execute("rmdir \"" .. output_directory_hlsl .. "\" /S /Q")
+os.execute("rmdir \"" .. output_directory_c    .. "\" /S /Q")
+
+-- @PlatformSpecific
 os.execute("if not exist \"" .. output_directory_hlsl .. "\" mkdir \"" .. output_directory_hlsl .. "\"")
 os.execute("if not exist \"" .. output_directory_c    .. "\" mkdir \"" .. output_directory_c    .. "\"")
 

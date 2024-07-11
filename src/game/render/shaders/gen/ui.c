@@ -2,7 +2,7 @@
 
 void shader_ui_set_draw_params(rhi_command_list_t *list, ui_draw_parameters_t *params)
 {
-	rhi_validate_buffer_srv(params->rects, S("shader_ui_set_draw_params"));
+	rhi_validate_buffer_srv(params->rects, S("ui_draw_parameters_t::rects"));
 	rhi_set_parameters(list, 0, params, sizeof(*params));
 }
 

@@ -2,7 +2,7 @@
 
 void shader_bloom_set_draw_params(rhi_command_list_t *list, bloom_draw_parameters_t *params)
 {
-	rhi_validate_texture_srv(params->tex_color, S("shader_bloom_set_draw_params:tex_color"), 0);
+	rhi_validate_texture_srv(params->tex_color, S("bloom_draw_parameters_t::tex_color"), 0);
 	rhi_set_parameters(list, 0, params, sizeof(*params));
 }
 

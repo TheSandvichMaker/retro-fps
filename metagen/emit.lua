@@ -183,7 +183,7 @@ function emit.c_emit_parameter_set_function(function_name, params_name, slot, cb
 
 		if definition.resource_type == "buffer" then
 			if definition.access == "read" then
-				io.write("\trhi_validate_buffer_srv(params->" .. name .. ", S(\"" .. function_name .. "\"));\n")
+				io.write("\trhi_validate_buffer_srv(params->" .. name .. ", S(\"" .. params_name .. "::" .. name .. "\"));\n")
 			end
 		elseif definition.resource_type == "texture" then
 			local flags = "0";
@@ -191,7 +191,7 @@ function emit.c_emit_parameter_set_function(function_name, params_name, slot, cb
 			flags = add_flag(flags, "RhiValidateTextureSrv_is_msaa", definition.multisample)
 			flags = add_flag(flags, "RhiValidateTextureSrv_may_be_null", definition.may_be_null)
 
-			io.write("\trhi_validate_texture_srv(params->" .. name .. ", S(\"" .. function_name .. ":" .. name .. "\"), " .. flags .. ");\n")
+			io.write("\trhi_validate_texture_srv(params->" .. name .. ", S(\"" .. params_name .. "::" .. name .. "\"), " .. flags .. ");\n")
 		end
 	end
 
@@ -324,6 +324,8 @@ function process_shaders(p)
 
 	-- emit shaders.h
 
+	-- shaders
+
 	local header = io.open(output_directory_c .. "shaders.h", "w")
 	assert(header)
 
@@ -350,10 +352,11 @@ function process_shaders(p)
 		if bundle.shaders then
 			local shaders = emit.table_to_sorted_array(bundle.shaders)
 
+			header:write("\t// " .. bundle_path .. "\n")
 			for i, v in ipairs(shaders) do
 				local shader_name = v.k
 				local shader      = v.v
-				header:write("\tDfShader_" .. shader_name .. ", // " .. bundle_path .. "\n")
+				header:write("\tDfShader_" .. shader_name .. ",\n")
 			end
 		end
 
@@ -363,7 +366,35 @@ function process_shaders(p)
 	header:write("\tDfShader_COUNT,\n")
 	header:write("} df_shader_ident_t;\n\n")
 
-	header:write("global df_shader_info_t df_shaders[DfShader_COUNT];\n")
+	header:write("global df_shader_info_t df_shaders[DfShader_COUNT];\n\n")
+
+	-- PSOs
+
+	header:write("typedef enum df_pso_ident_t\n{\n\tDfPso_none,\n\n")
+
+	for _, bundle_info in ipairs(bundles) do
+		local bundle      = bundle_info.bundle
+		local bundle_name = bundle.name
+		local bundle_path = bundle_info.path
+
+		if bundle.psos then
+			local psos = emit.table_to_sorted_array(bundle.psos)
+
+			header:write("\t// " .. bundle_path .. "\n")
+			for i, v in ipairs(psos) do
+				local pso_name = v.k
+				local pso      = v.v
+				header:write("\tDfPso_" .. pso_name .. ",\n")
+			end
+
+			header:write("\n")
+		end
+	end
+
+	header:write("\tDfPso_COUNT,\n")
+	header:write("} df_pso_ident_t;\n\n")
+
+	header:write("global df_pso_info_t df_psos[DfPso_COUNT];\n\n")
 
 	header:close()
 

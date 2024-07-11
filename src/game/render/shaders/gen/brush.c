@@ -2,17 +2,17 @@
 
 void shader_brush_set_draw_params(rhi_command_list_t *list, brush_draw_parameters_t *params)
 {
-	rhi_validate_texture_srv(params->albedo, S("shader_brush_set_draw_params:albedo"), 0);
-	rhi_validate_texture_srv(params->lightmap, S("shader_brush_set_draw_params:lightmap"), 0);
+	rhi_validate_texture_srv(params->albedo, S("brush_draw_parameters_t::albedo"), 0);
+	rhi_validate_texture_srv(params->lightmap, S("brush_draw_parameters_t::lightmap"), 0);
 	rhi_set_parameters(list, 0, params, sizeof(*params));
 }
 
 void shader_brush_set_pass_params(rhi_command_list_t *list, brush_pass_parameters_t *params)
 {
-	rhi_validate_buffer_srv(params->lm_uvs, S("shader_brush_set_pass_params"));
-	rhi_validate_buffer_srv(params->positions, S("shader_brush_set_pass_params"));
-	rhi_validate_texture_srv(params->sun_shadowmap, S("shader_brush_set_pass_params:sun_shadowmap"), 0);
-	rhi_validate_buffer_srv(params->uvs, S("shader_brush_set_pass_params"));
+	rhi_validate_buffer_srv(params->lm_uvs, S("brush_pass_parameters_t::lm_uvs"));
+	rhi_validate_buffer_srv(params->positions, S("brush_pass_parameters_t::positions"));
+	rhi_validate_texture_srv(params->sun_shadowmap, S("brush_pass_parameters_t::sun_shadowmap"), 0);
+	rhi_validate_buffer_srv(params->uvs, S("brush_pass_parameters_t::uvs"));
 	rhi_set_parameters(list, 1, params, sizeof(*params));
 }
 

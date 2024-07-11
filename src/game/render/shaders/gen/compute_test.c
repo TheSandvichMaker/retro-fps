@@ -2,7 +2,7 @@
 
 void shader_compute_test_set_draw_params(rhi_command_list_t *list, compute_test_draw_parameters_t *params)
 {
-	rhi_validate_buffer_srv(params->input_buffer, S("shader_compute_test_set_draw_params"));
+	rhi_validate_buffer_srv(params->input_buffer, S("compute_test_draw_parameters_t::input_buffer"));
 	rhi_set_parameters(list, 0, params, sizeof(*params));
 }
 
