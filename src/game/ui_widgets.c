@@ -63,7 +63,7 @@ rect2_t ui_scrollable_region_begin_ex(ui_scrollable_region_t *state, rect2_t sta
 	
 	rect2_t result_rect = rect2_add_offset(start_rect, offset.xy);
 
-	if (state->scroll_zone.y != 0.0f && (flags & UiScrollableRegionFlags_draw_scroll_bar))
+	if ((state->scroll_zone.y || (flags & UiScrollableRegionFlags_always_draw_vertical_scroll_bar)) && (flags & UiScrollableRegionFlags_draw_scroll_bar))
 	{
 		rect2_cut_from_right(result_rect, ui_sz_pix(ui_scalar(UiScalar_scroll_tray_width)), NULL, &result_rect);
 		rect2_cut_from_right(result_rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)), NULL, &result_rect);
@@ -143,7 +143,7 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 
 	ui_scrollable_region_flags_t flags = state->flags;
 
-	if (state->scroll_zone.y && (flags & UiScrollableRegionFlags_draw_scroll_bar))
+	if ((state->scroll_zone.y || (flags & UiScrollableRegionFlags_always_draw_vertical_scroll_bar)) && (flags & UiScrollableRegionFlags_draw_scroll_bar))
 	{
 		ui_id_t handle_id = ui_child_id(id, S("handle"));
 

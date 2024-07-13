@@ -8,6 +8,7 @@ extern __declspec(dllexport) const uint32_t D3D12SDKVersion = 613;
 extern __declspec(dllexport) const char    *D3D12SDKPath    = u8".\\D3D12\\";
 
 #include "dxc.h"
+#include "rhi_d3d12.h"
 
 #include "d3d12_helpers.c"
 #include "d3d12_buffer_arena.c"
@@ -922,12 +923,15 @@ void rhi_set_window_fullscreen(rhi_window_t handle, bool fullscreen)
 
 const rhi_texture_desc_t *rhi_get_texture_desc(rhi_texture_t handle)
 {
-	const rhi_texture_desc_t *result = NULL;
+	rhi_texture_desc_t *result = NULL;
 
 	d3d12_texture_t *texture = pool_get(&g_rhi.textures, handle);
 	if (texture)
 	{
 		result = &texture->desc;
+
+		// TODO: This is bad... don't do this
+		result->debug_name = d3d12_get_debug_name(m_get_temp(NULL, 0), (ID3D12Object *)texture->resource);
 	}
 
 	return result;
@@ -1040,11 +1044,172 @@ void rhi_wait_on_texture_upload(rhi_texture_t handle)
 	ID3D12Fence_SetEventOnCompletion(g_rhi.upload_ring_buffer.fence, texture->upload_fence_value, NULL);
 }
 
+d3d12_transient_heap_node_t *d3d12_create_transient_heap_node(void)
+{
+	if (!g_rhi.first_free_transient_heap_node)
+	{
+		d3d12_transient_heap_node_t *node = m_alloc_struct_nozero(&g_rhi.arena, d3d12_transient_heap_node_t);
+
+		ID3D12Heap *heap = NULL;
+
+		HRESULT hr = ID3D12Device_CreateHeap(
+			g_rhi.device,
+			(&(D3D12_HEAP_DESC){
+				.SizeInBytes = RhiTransientHeapNodeSize,
+				.Alignment   = D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT,
+				.Properties = {
+					.Type = D3D12_HEAP_TYPE_DEFAULT,
+				},
+				.Flags = D3D12_HEAP_FLAG_ALLOW_SHADER_ATOMICS,
+			}),
+			&IID_ID3D12Heap,
+			&heap);
+
+		ASSERT(SUCCEEDED(hr));
+
+		node->heap     = heap;
+		node->capacity = RhiTransientHeapNodeSize;
+
+		g_rhi.first_free_transient_heap_node = node;
+		g_rhi.first_free_transient_heap_node->next = NULL;
+	}
+
+	d3d12_transient_heap_node_t *result = sll_pop(g_rhi.first_free_transient_heap_node);
+	result->used = 0;
+
+	return result;
+}
+
+fn_local bool d3d12_transient_heap_node_can_fit_allocation(
+	d3d12_transient_heap_node_t *node, D3D12_RESOURCE_ALLOCATION_INFO info)
+{
+	if (!node)
+	{
+		return false;
+	}
+
+	uint64_t offset_aligned = align_forward(node->used, info.Alignment);
+	uint64_t capacity_left  = node->capacity - offset_aligned;
+
+	return capacity_left >= info.SizeInBytes;
+}
+
+d3d12_heap_allocation_t d3d12_allocate_transient_memory(
+	d3d12_transient_heap_allocator_t *allocator, D3D12_RESOURCE_ALLOCATION_INFO info)
+{
+	PROFILE_FUNC_BEGIN;
+
+	if (!d3d12_transient_heap_node_can_fit_allocation(allocator->tail_node, info))
+	{
+		d3d12_transient_heap_node_t *node = d3d12_create_transient_heap_node();
+		sll_push_back(allocator->head_node, allocator->tail_node, node);
+	}
+
+	d3d12_transient_heap_node_t *node = allocator->tail_node;
+	uint64_t offset         = node->used;
+	uint64_t offset_aligned = align_forward(offset, info.Alignment);
+
+	ASSERT(node->capacity - offset_aligned >= info.SizeInBytes);
+	node->used = offset_aligned + info.SizeInBytes;
+
+	allocator->total_used += (offset_aligned - offset) + info.SizeInBytes;
+
+	PROFILE_FUNC_END;
+
+	return (d3d12_heap_allocation_t){
+		.heap   = node->heap,
+		.offset = offset_aligned,
+	};
+}
+
+void d3d12_free_transient_memory(d3d12_transient_heap_allocator_t *allocator)
+{
+	if (allocator->tail_node)
+	{
+		allocator->tail_node->next = g_rhi.first_free_transient_heap_node;
+		g_rhi.first_free_transient_heap_node = allocator->head_node;
+
+		allocator->head_node = NULL;
+		allocator->tail_node = NULL;
+
+		allocator->total_used = 0;
+	}
+}
+
+fn_local ID3D12Resource *d3d12_create_resource(
+	rhi_resource_lifetime_t lifetime, 
+	D3D12_RESOURCE_DESC    *desc,
+	D3D12_RESOURCE_STATES   initial_state,
+	D3D12_CLEAR_VALUE      *clear_value)
+{
+	ID3D12Resource *resource = NULL;
+
+	if (lifetime == RhiResourceLifetime_persistent)
+	{
+		HRESULT hr = ID3D12Device_CreateCommittedResource(
+			g_rhi.device,
+			(&(D3D12_HEAP_PROPERTIES){
+				.Type = D3D12_HEAP_TYPE_DEFAULT,
+			}),
+			0,
+			desc,
+			initial_state,
+			clear_value,
+			&IID_ID3D12Resource,
+			&resource);
+
+		ASSERT(SUCCEEDED(hr));
+	}
+	else if (lifetime == RhiResourceLifetime_one_frame)
+	{
+		PROFILE_BEGIN(d3d12_create_transient_resource);
+
+		d3d12_frame_state_t *frame = d3d12_get_frame_state(g_rhi.frame_index);
+
+		D3D12_RESOURCE_ALLOCATION_INFO alloc_info;
+		ID3D12Device_GetResourceAllocationInfo(g_rhi.device, &alloc_info, 0, 1, desc);
+
+		d3d12_heap_allocation_t alloc = d3d12_allocate_transient_memory(&frame->transient_resource_allocator, alloc_info);
+
+		PROFILE_BEGIN(ID3D12Device_CreatePlacedResource);
+
+		HRESULT hr = ID3D12Device_CreatePlacedResource(
+			g_rhi.device,
+			alloc.heap,
+			alloc.offset,
+			desc,
+			initial_state,
+			clear_value,
+			&IID_ID3D12Resource,
+			&resource);
+
+		PROFILE_END(ID3D12Device_CreatePlacedResource);
+
+		ASSERT(SUCCEEDED(hr));
+
+		PROFILE_END(d3d12_create_transient_resource);
+	}
+	else
+	{
+		INVALID_CODE_PATH;
+	}
+
+	return resource;
+}
+
 rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 {
 	ASSERT_MSG(params, "Called rhi_create_texture without any parameters!");
 
 	rhi_texture_t result = {0};
+
+	if (params->width  == 0 &&
+		params->height == 0 &&
+		params->depth  == 0)
+	{
+		log(RHI_D3D12, Error, "Tried to create 0x0x0 texture. That's illegal!");
+		return result;
+	}
 
 	m_scoped_temp
 	{
@@ -1066,8 +1231,6 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 		if (params->usage & RhiTextureUsage_depth_stencil) resource_flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 		if (params->usage & RhiTextureUsage_uav)           resource_flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 		if (params->usage & RhiTextureUsage_deny_srv)      resource_flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
-
-		ID3D12Resource *resource = NULL;
 
 		D3D12_RESOURCE_STATES natural_state = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
 
@@ -1095,13 +1258,9 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 			}
 		}
 
-		HRESULT hr = ID3D12Device_CreateCommittedResource(
-			g_rhi.device,
-			(&(D3D12_HEAP_PROPERTIES){
-				.Type = D3D12_HEAP_TYPE_DEFAULT,
-			}),
-			0,
-			(&(D3D12_RESOURCE_DESC){
+		ID3D12Resource *resource = d3d12_create_resource(
+			params->lifetime,
+			&(D3D12_RESOURCE_DESC){
 				.Dimension        = dimension,
 				.Width            = params->width,
 				.Height           = params->height,
@@ -1111,19 +1270,26 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 				.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN,
 				.Flags            = resource_flags,
 				.SampleDesc       = { .Count = MAX(1, params->multisample_count) },
-			}),
+			},
 			initial_state,
-			wants_clear_value ? &clear_value : NULL,
-			&IID_ID3D12Resource,
-			&resource);
+			wants_clear_value ? &clear_value : NULL);
 
-		if (SUCCEEDED(hr))
+		if (resource)
 		{
 			d3d12_texture_t *texture = pool_add(&g_rhi.textures);
 			texture->state    = initial_state;
 			texture->resource = resource;
 
 			result = CAST_HANDLE(rhi_texture_t, pool_get_handle(&g_rhi.textures, texture));
+
+			if (params->lifetime == RhiResourceLifetime_one_frame)
+			{
+				// This will destroy the handle on the next beginframe
+				if (ALWAYS(g_rhi.textures_to_release_count < ARRAY_COUNT(g_rhi.textures_to_release)))
+				{
+					g_rhi.textures_to_release[g_rhi.textures_to_release_count++] = result;
+				}
+			}
 
 			D3D12_RESOURCE_DESC desc;
 			ID3D12Resource_GetDesc(texture->resource, &desc);
@@ -1207,7 +1373,6 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 					uav_index,
 					srv_index));
 
-
 			rhi_texture_data_t *initial_data = params->initial_data;
 
 			if (initial_data)
@@ -1220,6 +1385,27 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 	}
 
 	return result;
+}
+
+void rhi_destroy_buffer(rhi_buffer_t handle)
+{
+	if (RESOURCE_HANDLE_VALID(handle))
+	{
+		d3d12_buffer_t *buffer = pool_get(&g_rhi.buffers, handle);
+		ASSERT(buffer);
+
+		uint32_t count = (buffer->flags & RhiResourceFlag_dynamic) ? g_rhi.frame_latency : 1;
+
+		for (size_t i = 0; i < count; i++)
+		{
+			d3d12_deferred_release((IUnknown *)buffer->resources[i]);
+
+			d3d12_free_descriptor_persistent(&g_rhi.cbv_srv_uav, buffer->srvs[i].index);
+			d3d12_free_descriptor_persistent(&g_rhi.cbv_srv_uav, buffer->uavs[i].index);
+		}
+
+		pool_rem_item(&g_rhi.buffers, buffer);
+	}
 }
 
 void rhi_destroy_texture(rhi_texture_t handle)
@@ -1464,6 +1650,11 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 
 	rhi_buffer_t result = {0};
 
+	if (params->desc.element_count == 0)
+	{
+		return result;
+	}
+
 	size_t size = 0;
 
 	bool is_raw = !!(params->desc.flags & RhiBufferFlag_raw);
@@ -1479,6 +1670,7 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 
 	m_scoped_temp
 	{
+		/*
 		D3D12_HEAP_TYPE heap_type = D3D12_HEAP_TYPE_DEFAULT;
 
 		switch (params->heap)
@@ -1492,6 +1684,7 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 				log(RHI_D3D12, Error, "Invalid heap kind passed to rhi_create_buffer: 0x%X", params->heap);
 			} break;
 		}
+		*/
 
 		UINT flags = 0;
 
@@ -1499,10 +1692,6 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 		{
 			flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 		}
-
-		D3D12_HEAP_PROPERTIES heap_properties = {
-			.Type = heap_type,
-		};
 
 		D3D12_RESOURCE_DESC desc = {
 			.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER,
@@ -1518,31 +1707,42 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 
 		uint32_t count = (params->flags & RhiResourceFlag_dynamic) ? g_rhi.frame_latency : 1;
 
-		HRESULT hr;
+		if (params->lifetime == RhiResourceLifetime_one_frame)
+		{
+			ASSERT(count == 1);
+		}
 
 		bool succeeded = true;
 
 		ID3D12Resource *resources[RhiMaxFrameLatency] = {0};
 		for (size_t i = 0; i < count; i++)
 		{
-			hr = ID3D12Device_CreateCommittedResource(g_rhi.device,
-													  &heap_properties,
-													  D3D12_HEAP_FLAG_NONE,
-													  &desc,
-													  D3D12_RESOURCE_STATE_COMMON,
-													  NULL,
-													  &IID_ID3D12Resource,
-													  &resources[i]);
-			if (FAILED(hr))
-			{
-				succeeded = false;
-			}
+			resources[i] = d3d12_create_resource(
+				params->lifetime,
+				&desc,
+				D3D12_RESOURCE_STATE_COMMON,
+				NULL);
 		}
 
 		if (succeeded)
 		{
 			d3d12_buffer_t *buffer = pool_add(&g_rhi.buffers);
 			result = CAST_HANDLE(rhi_buffer_t, pool_get_handle(&g_rhi.buffers, buffer));
+
+			buffer->desc = (rhi_buffer_desc_t){
+				.lifetime = params->lifetime,
+				.layout   = params->desc,
+				.usage    = params->usage,
+				.flags    = params->flags,
+			};
+
+			if (params->lifetime == RhiResourceLifetime_one_frame)
+			{
+				if (ALWAYS(g_rhi.buffers_to_release_count < ARRAY_COUNT(g_rhi.buffers_to_release)))
+				{
+					g_rhi.buffers_to_release[g_rhi.buffers_to_release_count++] = result;
+				}
+			}
 
 			buffer->flags = params->flags;
 
@@ -1652,6 +1852,21 @@ rhi_buffer_t rhi_create_buffer(const rhi_create_buffer_params_t *params)
 	return result;
 }
 
+const rhi_buffer_desc_t *rhi_get_buffer_desc(rhi_buffer_t handle)
+{
+	d3d12_buffer_t *buffer = pool_get(&g_rhi.buffers, handle);
+
+	rhi_buffer_desc_t *result = NULL;
+
+	if (buffer)
+	{
+		result = &buffer->desc;
+		result->debug_name = d3d12_get_debug_name(m_get_temp(NULL, 0), (ID3D12Object*)buffer->resources[0]);
+	}
+
+	return result;
+}
+
 rhi_buffer_srv_t rhi_get_buffer_srv(rhi_buffer_t handle)
 {
 	rhi_buffer_srv_t result = {0};
@@ -1741,6 +1956,11 @@ void rhi_begin_frame(void)
 	d3d12_descriptor_heap_flush_pending_frees(&g_rhi.rtv, frame->fence_value);
 	d3d12_descriptor_heap_flush_pending_frees(&g_rhi.dsv, frame->fence_value);
 	d3d12_flush_deferred_release_queue(frame->fence_value);
+	d3d12_free_transient_memory(&frame->transient_resource_allocator);
+	m_reset(&frame->scratch_arena);
+
+	// This isn't really necessary for anything, but it makes the debug print-out of ring buffer usage a lot easier to understand.
+	d3d12_retire_ring_buffer_entries();
 
 	for (pool_iter_t it = pool_iter(&g_rhi.windows);
 		 pool_iter_valid(&it);
@@ -2371,6 +2591,18 @@ void rhi_dispatch(rhi_command_list_t *list, int dispatch_x, int dispatch_y, int 
 
 void rhi_end_frame(void)
 {
+	for (size_t i = 0; i < g_rhi.textures_to_release_count; i++)
+	{
+		rhi_destroy_texture(g_rhi.textures_to_release[i]);
+	}
+	g_rhi.textures_to_release_count = 0;
+
+	for (size_t i = 0; i < g_rhi.buffers_to_release_count; i++)
+	{
+		rhi_destroy_buffer(g_rhi.buffers_to_release[i]);
+	}
+	g_rhi.buffers_to_release_count = 0;
+
 	d3d12_frame_state_t *frame = d3d12_get_frame_state(g_rhi.frame_index);
 
 	// submit frame copies
@@ -2443,6 +2675,53 @@ void rhi_end_frame(void)
 	ID3D12CommandQueue_EndEvent(g_rhi.direct_queue);
 
 	g_rhi.frame_index += 1;
+
+	//------------------------------------------------------------------------
+	// Update allocation stats
+
+	{
+		rhi_allocation_stats_t *stats = &g_rhi.allocation_stats;
+		stats->transient_memory_used_bytes = frame->transient_resource_allocator.total_used;
+		stats->transient_nodes_size = RhiTransientHeapNodeSize;
+
+		uint64_t nodes_used = 0;
+		for (d3d12_transient_heap_node_t *node = frame->transient_resource_allocator.head_node;
+			node;
+			node = node->next)
+		{
+			nodes_used += 1;
+		}
+
+		stats->transient_nodes_used = nodes_used;
+
+		uint64_t free_nodes = 0;
+		for (d3d12_transient_heap_node_t *node = g_rhi.first_free_transient_heap_node;
+			node;
+			node = node->next)
+		{
+			free_nodes += 1;
+		}
+
+		stats->free_transient_nodes = free_nodes;
+
+		stats->scratch_arena_used_bytes = m_size_used(&frame->scratch_arena);
+		stats->upload_arena_used_bytes  = frame->upload_arena.at;
+
+		stats->ring_buffer_slots_used     = g_rhi.upload_ring_buffer.submission_head - g_rhi.upload_ring_buffer.submission_tail;
+		stats->ring_buffer_slots_capacity = ARRAY_COUNT(g_rhi.upload_ring_buffer.submissions);
+
+		stats->ring_buffer_bytes_used     = g_rhi.upload_ring_buffer.head - g_rhi.upload_ring_buffer.tail;
+		stats->ring_buffer_bytes_capacity = g_rhi.upload_ring_buffer.capacity;
+
+		stats->persistent_cbv_srv_uav_count = g_rhi.cbv_srv_uav.used;
+		stats->persistent_rtv_count = g_rhi.rtv.used;
+		stats->persistent_dsv_count = g_rhi.dsv.used;
+	}
+}
+
+void rhi_get_allocation_stats(rhi_allocation_stats_t *stats)
+{
+	*stats = g_rhi.allocation_stats;
 }
 
 rhi_shader_bytecode_t rhi_compile_shader(arena_t *arena, string_t shader_source, string_t file_name, string_t entry_point, string_t shader_model)
@@ -2656,6 +2935,7 @@ void rhi_flush_everything(void)
 global bool initialized_test_stuff;
 global rhi_buffer_t args_buffer;
 
+	/*
 void rhi_do_test_stuff(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_texture_t rt, rhi_pso_t pso)
 {
 	if (!initialized_test_stuff)
@@ -2667,7 +2947,7 @@ void rhi_do_test_stuff(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_te
 				.element_count  = 4096,
 				.element_stride = sizeof(rhi_indirect_draw_t),
 			},
-			.heap  = RhiHeapKind_upload,
+			// .heap  = RhiHeapKind_upload,
 			.flags = RhiResourceFlag_dynamic,
 		});
 
@@ -2709,4 +2989,15 @@ void rhi_do_test_stuff(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_te
 			0);
 	}
 	rhi_graphics_pass_end(list);
+}
+	*/
+
+pool_iter_t rhi_texture_iter(void)
+{
+	return pool_iter(&g_rhi.textures);
+}
+
+pool_iter_t rhi_buffer_iter(void)
+{
+	return pool_iter(&g_rhi.buffers);
 }

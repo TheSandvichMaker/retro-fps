@@ -636,7 +636,7 @@ fn_local void tick_ui(platform_tick_io_t *io, app_state_t *app, input_t *input, 
 	unequip_ui();
 }
 
-fn_local void render_game(/*r1_t *r1, */gamestate_t *game, rhi_window_t window)
+fn_local void render_game(gamestate_t *game, rhi_window_t window, ui_render_command_list_t *ui_list)
 {
 	// @Globals
 	// equip_r1(r1);
@@ -666,34 +666,42 @@ fn_local void render_game(/*r1_t *r1, */gamestate_t *game, rhi_window_t window)
 			.max = { (float)desc->width, (float)desc->height },
 		};
 
-		r_view_t view = {0};
-		init_view_for_camera(camera, viewport, &view);
+		// TODO: Replace fully with r1_view_t
+		r_view_t old_view = {0};
+		init_view_for_camera(camera, viewport, &old_view);
 
-		r_scene_parameters_t *scene = &view.scene;
+		r1_view_t view = r1_create_view(window);
+		view.no_shadows      = old_view.no_shadows;
+		view.no_post_process = old_view.no_post_process;
+		view.camera_p        = old_view.camera_p;
+		view.view_matrix     = old_view.view_matrix;
+		view.proj_matrix     = old_view.proj_matrix;
+		view.clip_rect       = old_view.clip_rect;
 
-		worldspawn_t *worldspawn = map->worldspawn;
+		r1_scene_parameters_t *scene = &view.scene;
+		{
+			worldspawn_t *worldspawn = map->worldspawn;
 
-		float sun_brightness = worldspawn->sun_brightness;
-		v3_t  sun_color      = worldspawn->sun_color;
-			  sun_color      = mul(sun_brightness, sun_color);
+			float sun_brightness = worldspawn->sun_brightness;
+			v3_t  sun_color      = worldspawn->sun_color;
+			      sun_color      = mul(sun_brightness, sun_color);
 
-		// scene->skybox = skybox;
-		scene->sun_direction   = normalize(make_v3(0.25f, 0.75f, 1));
-		scene->sun_color       = sun_color;
+			scene->sun_direction = normalize(make_v3(0.25f, 0.75f, 1));
+			scene->sun_color     = sun_color;
 
-		scene->fogmap                   = map->fogmap;
-		scene->fog_offset               = rect3_center(map->bounds);
-		scene->fog_dim                  = rect3_dim(map->bounds);
-		scene->fog_absorption           = worldspawn->fog_absorption;
-		scene->fog_density              = worldspawn->fog_density;
-		scene->fog_scattering           = worldspawn->fog_scattering;
-		scene->fog_phase_k              = worldspawn->fog_phase;
-        scene->fog_ambient_inscattering = worldspawn->fog_ambient_inscattering;
+			// scene->fogmap                   = map->fogmap;
+			scene->fog_offset               = rect3_center(map->bounds);
+			scene->fog_dim                  = rect3_dim(map->bounds);
+			scene->fog_absorption           = worldspawn->fog_absorption;
+			scene->fog_density              = worldspawn->fog_density;
+			scene->fog_scattering           = worldspawn->fog_scattering;
+			scene->fog_phase_k              = worldspawn->fog_phase;
+			scene->fog_ambient_inscattering = worldspawn->fog_ambient_inscattering;
+		}
 
-		r1_update_window_resources(window);
-		r1_render_game_view(list, backbuffer, &view, map);
+		r1_render_game_view(list, &view, map);
+		r1_render_ui(list, &view, ui_list);
 	}
-
 	// unequip_r1();
 }
 
@@ -764,11 +772,8 @@ fn_local void app_tick(platform_tick_io_t *io)
     PROFILE_BEGIN(render_game);
 
 	rhi_begin_frame();
-
 	r1_begin_frame();
-	render_game(game, window);
-	r1_render_ui(rhi_get_command_list(), rhi_get_current_backbuffer(window), &the_ui->render_commands);
-
+	render_game(game, window, &the_ui->render_commands);
 	rhi_end_frame();
 
     PROFILE_END(render_game);

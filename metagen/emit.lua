@@ -307,7 +307,7 @@ function emit.emit_bundle(bundle_info, output_directory_c, output_directory_hlsl
 	end
 end
 
-function process_shaders(p)
+local function process_shaders_internal(p)
 	local bundles               = p.bundles
 	local view_parameters       = p.view_parameters
 	local output_directory_c    = p.output_directory_c
@@ -700,4 +700,23 @@ function process_shaders(p)
 	source:write("};\n\n")
 
 	source:close()
+end
+
+function process_shaders(p)
+	local bundles = p.bundles
+
+	local bundles_filtered = {}
+
+	for _, bundle_info in ipairs(bundles) do
+		local bundle = bundle_info.bundle
+		assert(bundle)
+
+		if bundle.disabled ~= true then
+			table.insert(bundles_filtered, bundle_info)
+		end
+	end
+
+	p.bundles = bundles_filtered
+
+	process_shaders_internal(p)
 end

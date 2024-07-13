@@ -53,8 +53,37 @@ typedef struct rhi_command_list_t
 	} compute;
 } rhi_command_list_t;
 
+typedef struct d3d12_transient_heap_node_t
+{
+	struct d3d12_transient_heap_node_t *next;
+
+	ID3D12Heap *heap;
+	uint64_t    capacity;
+	uint64_t    used;
+} d3d12_transient_heap_node_t;
+
+fn d3d12_transient_heap_node_t *d3d12_create_transient_heap_node(void); 
+
+typedef struct d3d12_transient_heap_allocator_t
+{
+	d3d12_transient_heap_node_t *head_node;
+	d3d12_transient_heap_node_t *tail_node;
+	uint64_t                     total_used;
+} d3d12_transient_heap_allocator_t;
+
+typedef struct d3d12_heap_allocation_t
+{
+	ID3D12Heap *heap;
+	uint64_t    offset;
+} d3d12_heap_allocation_t;
+
+fn d3d12_heap_allocation_t d3d12_allocate_transient_memory(d3d12_transient_heap_allocator_t *allocator, D3D12_RESOURCE_ALLOCATION_INFO info);
+fn void d3d12_free_transient_memory(d3d12_transient_heap_allocator_t *allocator);
+
 typedef struct d3d12_frame_state_t
 {
+	arena_t scratch_arena;
+
 	ID3D12CommandAllocator *direct_allocator;
 	ID3D12CommandAllocator *copy_allocator;
 
@@ -63,7 +92,8 @@ typedef struct d3d12_frame_state_t
 
 	uint64_t fence_value;
 
-	d3d12_buffer_arena_t upload_arena;
+	d3d12_buffer_arena_t             upload_arena;
+	d3d12_transient_heap_allocator_t transient_resource_allocator;
 } d3d12_frame_state_t;
 
 typedef struct rhi_state_d3d12_t
@@ -92,6 +122,8 @@ typedef struct rhi_state_d3d12_t
 
 	d3d12_upload_ring_buffer_t upload_ring_buffer;
 
+	d3d12_transient_heap_node_t *first_free_transient_heap_node;
+
 	d3d12_frame_state_t *frames[RhiMaxFrameLatency];
 	uint32_t frame_latency;
 	uint64_t frame_index;
@@ -111,12 +143,20 @@ typedef struct rhi_state_d3d12_t
 	d3d12_descriptor_heap_t rtv;
 	d3d12_descriptor_heap_t dsv;
 
+	uint32_t     buffers_to_release_count;
+	rhi_buffer_t buffers_to_release[2048];
+
+	uint32_t      textures_to_release_count;
+	rhi_texture_t textures_to_release[2048];
+
 	d3d12_deferred_release_queue_t deferred_release_queue;
 
 	pool_t windows;
 	pool_t buffers;
 	pool_t textures;
 	pool_t psos;
+
+	rhi_allocation_stats_t allocation_stats;
 } rhi_state_d3d12_t;
 
 global rhi_state_d3d12_t g_rhi;
@@ -170,6 +210,8 @@ typedef struct d3d12_buffer_t
 	} upload;
 
 	uint64_t upload_fence_value;
+
+	rhi_buffer_desc_t desc;
 } d3d12_buffer_t;
 
 typedef struct d3d12_texture_t

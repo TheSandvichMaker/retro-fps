@@ -16,6 +16,8 @@ typedef enum ui_scrollable_region_flags_t
 	UiScrollableRegionFlags_scroll_vertical   = 0x2,
 	UiScrollableRegionFlags_scroll_both       = UiScrollableRegionFlags_scroll_horizontal|UiScrollableRegionFlags_scroll_vertical,
 	UiScrollableRegionFlags_draw_scroll_bar   = 0x4,
+	UiScrollableRegionFlags_always_draw_horizontal_scroll_bar = 0x10,
+	UiScrollableRegionFlags_always_draw_vertical_scroll_bar   = 0x20,
 } ui_scrollable_region_flags_t;
 
 typedef struct ui_scrollable_region_t

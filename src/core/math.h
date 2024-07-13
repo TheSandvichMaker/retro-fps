@@ -1485,6 +1485,15 @@ fn_local rect2_t rect2_from_min_dim(v2_t min, v2_t dim)
     return result;
 }
 
+fn_local rect2_t make_rect2_max_dim(v2_t max, v2_t dim)
+{
+	rect2_t result = {
+		.min = sub(max, dim),
+		.max = max,
+	};
+	return result;
+}
+
 fn_local rect2_t rect2_center_radius(v2_t center, v2_t radius)
 {
     rect2_t result = {
@@ -1621,6 +1630,25 @@ fn_local rect2_t rect2_reposition_min(rect2_t rect, v2_t p)
 {
     v2_t dim = rect2_dim(rect);
     return rect2_from_min_dim(p, dim);
+}
+
+fn_local rect2_t rect2_clamp_height(rect2_t rect, float min_height, float max_height)
+{
+	float w = rect2_width (rect);
+	float h = rect2_height(rect);
+	float aspect = w / h;
+
+	float h_clamped = flt_clamp(h, min_height, max_height);
+
+	if (h != h_clamped)
+	{
+		h = h_clamped;
+		w = aspect*h;
+
+		rect = rect2_from_min_dim(rect.min, make_v2(w, h));
+	}
+
+	return rect;
 }
 
 //

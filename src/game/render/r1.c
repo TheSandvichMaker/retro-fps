@@ -152,16 +152,6 @@ void r1_init(void)
 		.format     = PixelFormat_d24_unorm_s8_uint,
 	});
 
-	r1->ui_rects = rhi_create_buffer(&(rhi_create_buffer_params_t){
-		.debug_name = S("ui_rects"),
-		.desc = {
-			.first_element  = 0,
-			.element_count  = R1MaxUiRects,
-			.element_stride = sizeof(r_ui_rect_t),
-		},
-		.flags = RhiResourceFlag_dynamic,
-	});
-
 	r1->debug_lines = rhi_create_buffer(&(rhi_create_buffer_params_t){
 		.debug_name = S("debug_lines"),
 		.desc = {
@@ -171,6 +161,7 @@ void r1_init(void)
 		},
 	});
 
+	/*
 	r1->indirect_args_capacity = 8192;
 	r1->indirect_args_count    = 0;
 
@@ -184,6 +175,7 @@ void r1_init(void)
 		.heap  = RhiHeapKind_upload,
 		.flags = RhiResourceFlag_dynamic,
 	});
+	*/
 }
 
 //------------------------------------------------------------------------
@@ -290,6 +282,75 @@ void r1_load_all_psos(uint32_t multisample_count)
 	}
 }
 
+r1_view_t r1_create_view(rhi_window_t window)
+{
+	PROFILE_FUNC_BEGIN;
+
+	r1_view_t                 view = {0};
+	r1_view_render_targets_t *rts  = &view.targets;
+
+	rts->rt_window = rhi_get_current_backbuffer(window);
+
+	const rhi_texture_desc_t *desc = rhi_get_texture_desc(rts->rt_window);
+
+	uint32_t w = view.render_w = desc->width;
+	uint32_t h = view.render_h = desc->height;
+
+	rts->depth_stencil = rhi_create_texture(&(rhi_create_texture_params_t){
+		.debug_name        = S("ds_main"),
+		.lifetime          = RhiResourceLifetime_one_frame,
+		.dimension         = RhiTextureDimension_2d,
+		.width             = w,
+		.height            = h,
+		.multisample_count = r1->multisample_count,
+		.usage             = RhiTextureUsage_depth_stencil,
+		.format            = PixelFormat_d24_unorm_s8_uint,
+	});
+
+	rts->rt_hdr = rhi_create_texture(&(rhi_create_texture_params_t){
+		.debug_name        = S("rt_hdr"),
+		.lifetime          = RhiResourceLifetime_one_frame,
+		.dimension         = RhiTextureDimension_2d,
+		.width             = w,
+		.height            = h,
+		.multisample_count = r1->multisample_count,
+		.usage             = RhiTextureUsage_render_target,
+		.format            = PixelFormat_r16g16b16a16_float,
+	});
+
+	rts->rt_hdr_resolved = rhi_create_texture(&(rhi_create_texture_params_t){
+		.debug_name        = S("rt_hdr_resolved"),
+		.lifetime          = RhiResourceLifetime_one_frame,
+		.dimension         = RhiTextureDimension_2d,
+		.width             = w,
+		.height            = h,
+		.usage             = RhiTextureUsage_render_target,
+		.format            = PixelFormat_r16g16b16a16_float,
+	});
+
+	for (size_t i = 0; i < ARRAY_COUNT(rts->bloom_targets); i++)
+	{
+		uint32_t divisor = 2u << i;
+
+		uint32_t rt_w = (w + divisor - 1) / divisor;
+		uint32_t rt_h = (h + divisor - 1) / divisor;
+
+		rts->bloom_targets[i] = rhi_create_texture(&(rhi_create_texture_params_t){
+			.debug_name = Sf("rt_bloom[%zu]", i),
+			.lifetime   = RhiResourceLifetime_one_frame,
+			.dimension  = RhiTextureDimension_2d,
+			.width      = rt_w,
+			.height     = rt_h,
+			.usage      = RhiTextureUsage_render_target,
+			.format     = PixelFormat_r16g16b16a16_float,
+		});
+	}
+
+	PROFILE_FUNC_END;
+
+	return view;
+}
+
 void r1_init_map_resources(map_t *map)
 {
 	uint32_t positions_size = (uint32_t)(sizeof(map->vertex.positions[0])*map->vertex_count);
@@ -351,6 +412,8 @@ void r1_init_map_resources(map_t *map)
 
 void r1_update_window_resources(rhi_window_t window)
 {
+	(void)window;
+#if 0
 	rhi_texture_t rt = rhi_get_current_backbuffer(window);
 
 	const rhi_texture_desc_t *desc = rhi_get_texture_desc(rt);
@@ -361,7 +424,9 @@ void r1_update_window_resources(rhi_window_t window)
 		r1->window.width  = desc->width;
 		r1->window.height = desc->height;
 
-		rhi_recreate_texture(&r1->window.depth_stencil, &(rhi_create_texture_params_t){
+		r1_view_render_targets_t *rts = &r1->window.rts;
+
+		rhi_recreate_texture(&rts->depth_stencil, &(rhi_create_texture_params_t){
 			.debug_name        = S("ds_main"),
 			.dimension         = RhiTextureDimension_2d,
 			.width             = r1->window.width,
@@ -371,7 +436,7 @@ void r1_update_window_resources(rhi_window_t window)
 			.format            = PixelFormat_d24_unorm_s8_uint,
 		});
 
-		rhi_recreate_texture(&r1->window.rt_hdr, &(rhi_create_texture_params_t){
+		rhi_recreate_texture(&rts->rt_hdr, &(rhi_create_texture_params_t){
 			.debug_name        = S("rt_hdr"),
 			.dimension         = RhiTextureDimension_2d,
 			.width             = r1->window.width,
@@ -381,7 +446,7 @@ void r1_update_window_resources(rhi_window_t window)
 			.format            = PixelFormat_r16g16b16a16_float,
 		});
 
-		rhi_recreate_texture(&r1->window.rt_hdr_resolved, &(rhi_create_texture_params_t){
+		rhi_recreate_texture(&rts->rt_hdr_resolved, &(rhi_create_texture_params_t){
 			.debug_name        = S("rt_hdr_resolved"),
 			.dimension         = RhiTextureDimension_2d,
 			.width             = r1->window.width,
@@ -390,7 +455,8 @@ void r1_update_window_resources(rhi_window_t window)
 			.format            = PixelFormat_r16g16b16a16_float,
 		});
 
-		rhi_recreate_texture(&r1->window.ui_heatmap_rt, &(rhi_create_texture_params_t){
+		/*
+		rhi_recreate_texture(&rts->rt_ui_heatmap, &(rhi_create_texture_params_t){
 			.debug_name        = S("rt_ui_heatmap"),
 			.dimension         = RhiTextureDimension_2d,
 			.width             = r1->window.width,
@@ -398,15 +464,16 @@ void r1_update_window_resources(rhi_window_t window)
 			.usage             = RhiTextureUsage_render_target,
 			.format            = PixelFormat_r8g8b8a8_unorm,
 		});
+		*/
 
-		for (size_t i = 0; i < ARRAY_COUNT(r1->window.bloom_rts); i++)
+		for (size_t i = 0; i < ARRAY_COUNT(rts->bloom_rts); i++)
 		{
 			uint32_t divisor = 2u << i;
 
 			uint32_t w = (r1->window.width  + divisor - 1) / divisor;
 			uint32_t h = (r1->window.height + divisor - 1) / divisor;
 
-			rhi_recreate_texture(&r1->window.bloom_rts[i], &(rhi_create_texture_params_t) {
+			rhi_recreate_texture(&rts->bloom_rts[i], &(rhi_create_texture_params_t) {
 				.debug_name = Sf("rt_bloom[%zu]", i),
 				.dimension  = RhiTextureDimension_2d,
 				.width      = w,
@@ -416,6 +483,7 @@ void r1_update_window_resources(rhi_window_t window)
 			});
 		}
 	}
+#endif
 }
 
 rhi_pso_t r1_create_fullscreen_pso(string_t debug_name, rhi_shader_bytecode_t ps, pixel_format_t pf)
@@ -454,56 +522,55 @@ void r1_finish_recording_draw_streams(void)
 }
 
 fn_local void r1_render_sun_shadows(rhi_command_list_t *list, map_t *map);
-fn_local void r1_render_map        (rhi_command_list_t *list, rhi_texture_t rt, map_t *map);
-fn_local void r1_post_process      (rhi_command_list_t *list, rhi_texture_t color_hdr, rhi_texture_t rt_result);
-fn_local void r1_render_debug_lines(rhi_command_list_t *list, rhi_texture_t rt, rhi_texture_t rt_depth);
+fn_local void r1_render_map        (rhi_command_list_t *list, r1_view_t *view, map_t *map);
+fn_local void r1_post_process      (rhi_command_list_t *list, r1_view_t *view);
+fn_local void r1_render_debug_lines(rhi_command_list_t *list, r1_view_t *view);
 
-void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t backbuffer, r_view_t *view, map_t *map)
+void r1_render_game_view(rhi_command_list_t *list, r1_view_t *view, map_t *map)
 {
-//	R1_TIMED_REGION(list, S("Game View"))
+	m4x4_t world_to_clip = mul(view->proj_matrix, view->view_matrix);
+
+	v3_t sun_direction = view->scene.sun_direction;
+
+	v3_t   sun_view_origin    = add(make_v3(0, 0, 0), mul(-256.0f, sun_direction));
+	v3_t   sun_view_direction = negate(sun_direction);
+	m4x4_t sun_view           = make_view_matrix(sun_view_origin, sun_view_direction, make_v3(0, 0, 1));
+	m4x4_t sun_proj           = make_orthographic_matrix(2048, 2048, 512);
+	m4x4_t sun_matrix         = mul(sun_proj, sun_view);
+
+	const rhi_texture_desc_t *backbuffer_desc = rhi_get_texture_desc(view->targets.rt_window);
+
+	set_view_parameters(list, &(view_parameters_t) {
+		.world_to_clip            = world_to_clip,
+		.view_to_clip             = view->proj_matrix,
+		.world_to_view            = view->view_matrix,
+		.sun_matrix               = sun_matrix,
+		.sun_direction            = sun_direction,
+		.sun_color                = view->scene.sun_color,
+		.view_size                = make_v2((float)backbuffer_desc->width, (float)backbuffer_desc->height),
+		.fog_density              = view->scene.fog_density,
+		.fog_absorption           = view->scene.fog_absorption,
+		.fog_scattering           = view->scene.fog_scattering,
+		.fog_phase_k              = view->scene.fog_phase_k,
+		.fog_ambient_inscattering = view->scene.fog_ambient_inscattering,
+	});
+
+	if (map)
 	{
-		m4x4_t world_to_clip = mul(view->proj_matrix, view->view_matrix);
+		r1_render_sun_shadows(list, map);
+		r1_render_map        (list, view, map);
 
-		v3_t sun_direction = view->scene.sun_direction;
-
-		v3_t   sun_view_origin    = add(make_v3(0, 0, 0), mul(-256.0f, sun_direction));
-		v3_t   sun_view_direction = negate(sun_direction);
-		m4x4_t sun_view           = make_view_matrix(sun_view_origin, sun_view_direction, make_v3(0, 0, 1));
-		m4x4_t sun_proj           = make_orthographic_matrix(2048, 2048, 512);
-		m4x4_t sun_matrix         = mul(sun_proj, sun_view);
-
-		const rhi_texture_desc_t *backbuffer_desc = rhi_get_texture_desc(backbuffer);
-
-		set_view_parameters(list, &(view_parameters_t) {
-			.world_to_clip            = world_to_clip,
-			.view_to_clip             = view->proj_matrix,
-			.world_to_view            = view->view_matrix,
-			.sun_matrix               = sun_matrix,
-			.sun_direction            = sun_direction,
-			.sun_color                = view->scene.sun_color,
-			.view_size                = make_v2((float)backbuffer_desc->width, (float)backbuffer_desc->height),
-			.fog_density              = view->scene.fog_density,
-			.fog_absorption           = view->scene.fog_absorption,
-			.fog_scattering           = view->scene.fog_scattering,
-			.fog_phase_k              = view->scene.fog_phase_k,
-            .fog_ambient_inscattering = view->scene.fog_ambient_inscattering,
-		});
-
-		rhi_texture_t rt_hdr = r1->window.rt_hdr;
-
-		if (map)
+		if (r1->debug_drawing_enabled)
 		{
-			r1_render_sun_shadows(list, map);
-			r1_render_map        (list, rt_hdr, map);
-
-			if (r1->debug_drawing_enabled)
-			{
-				r1_render_debug_lines(list, rt_hdr, r1->window.depth_stencil);
-			}
+			r1_render_debug_lines(list, view);
 		}
-
-		r1_post_process(list, rt_hdr, backbuffer);
 	}
+	else
+	{
+		log(Renderer, Warning, "No map passed to r1_render_game_view");
+	}
+
+	r1_post_process(list, view);
 }
 
 void r1_render_sun_shadows(rhi_command_list_t *list, map_t *map)
@@ -538,10 +605,12 @@ void r1_render_sun_shadows(rhi_command_list_t *list, map_t *map)
 	}
 }
 
-void r1_render_map(rhi_command_list_t *list, rhi_texture_t rt, map_t *map)
+void r1_render_map(rhi_command_list_t *list, r1_view_t *view, map_t *map)
 {
 	R1_TIMED_REGION(list, S("Map"))
 	{
+		rhi_texture_t rt = view->targets.rt_hdr;
+
 		const rhi_texture_desc_t *rt_desc = rhi_get_texture_desc(rt);
 		const float w = (float)rt_desc->width;
 		const float h = (float)rt_desc->height;
@@ -553,7 +622,7 @@ void r1_render_map(rhi_command_list_t *list, rhi_texture_t rt, map_t *map)
 				.clear_color = make_v4(0.05f, 0.15f, 0.05f, 1.0f),
 			},
 			.depth_stencil = {
-				.texture     = r1->window.depth_stencil,
+				.texture     = view->targets.depth_stencil,
 				.op          = RhiPassOp_clear,
 				.clear_value = 0.0f,
 			},
@@ -617,7 +686,7 @@ void r1_render_map(rhi_command_list_t *list, rhi_texture_t rt, map_t *map)
 	}
 }
 
-void r1_render_debug_lines(rhi_command_list_t *list, rhi_texture_t rt, rhi_texture_t rt_depth)
+void r1_render_debug_lines(rhi_command_list_t *list, r1_view_t *view)
 {
 	if (debug_line_count > 0)
 	{
@@ -626,7 +695,7 @@ void r1_render_debug_lines(rhi_command_list_t *list, rhi_texture_t rt, rhi_textu
 
 		R1_TIMED_REGION(list, S("Draw Debug Lines"))
 		{
-			rhi_simple_graphics_pass_begin(list, rt, rt_depth, RhiPrimitiveTopology_linelist);
+			rhi_simple_graphics_pass_begin(list, view->targets.rt_hdr, view->targets.depth_stencil, RhiPrimitiveTopology_linelist);
 			{
 				r1_set_pso(list, DfPso_debug_lines);
 
@@ -644,19 +713,19 @@ void r1_render_debug_lines(rhi_command_list_t *list, rhi_texture_t rt, rhi_textu
 	debug_line_count = 0;
 }
 
-void r1_post_process(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_texture_t rt_result)
+void r1_post_process(rhi_command_list_t *list, r1_view_t *view)
 {
 	R1_TIMED_REGION(list, S("Resolve MSAA"))
 	{
-		rhi_simple_graphics_pass_begin(list, r1->window.rt_hdr_resolved, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
+		rhi_simple_graphics_pass_begin(list, view->targets.rt_hdr_resolved, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
 		{
 			r1_set_pso(list, DfPso_resolve_msaa);
 
 			uint32_t blue_noise_index = r1->frame_index % ARRAY_COUNT(r1->blue_noise);
 
 			post_draw_parameters_t draw_parameters = {
-				.hdr_color    = rhi_get_texture_srv(hdr_color),
-				.depth_buffer = rhi_get_texture_srv(r1->window.depth_stencil),
+				.hdr_color    = rhi_get_texture_srv(view->targets.rt_hdr),
+				.depth_buffer = rhi_get_texture_srv(view->targets.depth_stencil),
 				.shadow_map   = rhi_get_texture_srv(r1->shadow_map),
 				.blue_noise   = r1->blue_noise_srv[blue_noise_index],
 				.sample_count = r1->multisample_count,
@@ -673,13 +742,13 @@ void r1_post_process(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_text
 
 	R1_TIMED_REGION(list, S("Bloom Generation"))
 	{
-		rhi_texture_t bloom_in = r1->window.rt_hdr_resolved;
+		rhi_texture_t bloom_in = view->targets.rt_hdr_resolved;
 
 		upsample_steps = MIN(upsample_steps, downsample_steps);
 
 		for (size_t i = 0; i < downsample_steps; i++)
 		{
-			rhi_texture_t bloom_rt = r1->window.bloom_rts[i];
+			rhi_texture_t bloom_rt = view->targets.bloom_targets[i];
 
 			const rhi_texture_desc_t *in_desc = rhi_get_texture_desc(bloom_in);
 
@@ -707,7 +776,7 @@ void r1_post_process(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_text
 		{
 			size_t i = downsample_steps - 1 - j;
 
-			rhi_texture_t bloom_rt = r1->window.bloom_rts[i];
+			rhi_texture_t bloom_rt = view->targets.bloom_targets[i];
 
 			const rhi_texture_desc_t *in_desc = rhi_get_texture_desc(bloom_in);
 
@@ -734,7 +803,7 @@ void r1_post_process(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_text
 
 	R1_TIMED_REGION(list, S("Post Process"))
 	{
-		rhi_simple_graphics_pass_begin(list, rt_result, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
+		rhi_simple_graphics_pass_begin(list, view->targets.rt_window, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
 		{
 			r1_set_pso(list, DfPso_post_process);
 
@@ -749,8 +818,8 @@ void r1_post_process(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_text
 
 			post_draw_parameters_t draw_parameters = {
 				.blue_noise     = r1->blue_noise_srv[blue_noise_index],
-				.resolved_color = rhi_get_texture_srv(r1->window.rt_hdr_resolved),
-				.bloom0         = rhi_get_texture_srv(r1->window.bloom_rts[downsample_steps - upsample_steps]),
+				.resolved_color = rhi_get_texture_srv(view->targets.rt_hdr_resolved),
+				.bloom0         = rhi_get_texture_srv(view->targets.bloom_targets[downsample_steps - upsample_steps]),
 				.bloom_amount   = bloom_amount,
 			};
 			shader_post_set_draw_params(list, &draw_parameters);
@@ -761,13 +830,28 @@ void r1_post_process(rhi_command_list_t *list, rhi_texture_t hdr_color, rhi_text
 	}
 }
 
-void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, ui_render_command_list_t *ui_list)
+void r1_render_ui(rhi_command_list_t *list, r1_view_t *view, ui_render_command_list_t *ui_list)
 {
+	if (ui_list->count == 0)
+	{
+		return;
+	}
+
+	rhi_buffer_t ui_rects = rhi_create_buffer(&(rhi_create_buffer_params_t){
+		.debug_name = S("ui_rects"),
+		.lifetime   = RhiResourceLifetime_one_frame,
+		.desc = {
+			.first_element  = 0,
+			.element_count  = ui_list->count,
+			.element_stride = sizeof(r_ui_rect_t),
+		},
+	});
+
 	size_t upload_size = sizeof(r_ui_rect_t) * ui_list->count;
 
 	if (upload_size > 0)
 	{
-		r_ui_rect_t *rects = rhi_begin_buffer_upload(r1->ui_rects, 0, upload_size, RhiUploadFreq_frame);
+		r_ui_rect_t *rects = rhi_begin_buffer_upload(ui_rects, 0, upload_size, RhiUploadFreq_frame);
 		{
 			for (size_t key_index = 0; key_index < ui_list->count; key_index++)
 			{
@@ -784,17 +868,17 @@ void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, ui_render_command_
 				}
 			}
 		}
-		rhi_end_buffer_upload(r1->ui_rects);
+		rhi_end_buffer_upload(ui_rects);
 	}
 
 	R1_TIMED_REGION(list, S("Draw UI"))
 	{
-		rhi_simple_graphics_pass_begin(list, rt, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglestrip);
+		rhi_simple_graphics_pass_begin(list, view->targets.rt_window, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglestrip);
 		{
 			r1_set_pso(list, DfPso_ui);
 
 			ui_draw_parameters_t draw_parameters = {
-				.rects = rhi_get_buffer_srv(r1->ui_rects),
+				.rects = rhi_get_buffer_srv(ui_rects),
 			};
 			shader_ui_set_draw_params(list, &draw_parameters);
 
@@ -807,13 +891,23 @@ void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, ui_render_command_
 	{
 		// render heatmap
 
+		rhi_texture_t rt_heatmap = rhi_create_texture(&(rhi_create_texture_params_t){
+			.debug_name        = S("rt_ui_heatmap"),
+			.lifetime          = RhiResourceLifetime_one_frame,
+			.dimension         = RhiTextureDimension_2d,
+			.width             = view->render_w,
+			.height            = view->render_h,
+			.usage             = RhiTextureUsage_render_target,
+			.format            = PixelFormat_r8g8b8a8_unorm,
+		});
+
 		rhi_begin_region(list, S("UI Heatmap"));
 
-		const rhi_texture_desc_t *rt_desc = rhi_get_texture_desc(r1->window.ui_heatmap_rt);
+		const rhi_texture_desc_t *rt_desc = rhi_get_texture_desc(rt_heatmap);
 
 		rhi_graphics_pass_begin(list, &(rhi_graphics_pass_params_t){
 			.render_targets[0] = { 
-				.texture = r1->window.ui_heatmap_rt,
+				.texture = rt_heatmap,
 				.op = RhiPassOp_clear,
 			},
 			.topology = RhiPrimitiveTopology_trianglestrip,
@@ -831,7 +925,7 @@ void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, ui_render_command_
 			r1_set_pso(list, DfPso_ui_heatmap);
 
 			ui_draw_parameters_t draw_parameters = {
-				.rects = rhi_get_buffer_srv(r1->ui_rects),
+				.rects = rhi_get_buffer_srv(ui_rects),
 			};
 			shader_ui_set_draw_params(list, &draw_parameters);
 
@@ -840,14 +934,14 @@ void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, ui_render_command_
 		rhi_graphics_pass_end(list);
 
 		// visualize heatmap
-		rhi_simple_graphics_pass_begin(list, rt, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
+		rhi_simple_graphics_pass_begin(list, view->targets.rt_window, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
 		{
 			r1_set_pso(list, DfPso_ui_visualize_heatmap);
 
 			int32_t heat_map_scale = cvar_read_i32(&cvar_r1_ui_heat_map_scale);
 
 			ui_visualize_heatmap_draw_parameters_t draw_parameters = {
-				.heatmap = rhi_get_texture_srv(r1->window.ui_heatmap_rt),
+				.heatmap = rhi_get_texture_srv(rt_heatmap),
 				.scale   = 255.0f / (float)heat_map_scale,
 			};
 			shader_ui_visualize_heatmap_set_draw_params(list, &draw_parameters);

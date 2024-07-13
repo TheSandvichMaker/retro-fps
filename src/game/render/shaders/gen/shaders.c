@@ -8,6 +8,7 @@
 #include "fullscreen_triangle.c"
 #include "post.c"
 #include "shadow.c"
+#include "texture_viewer.c"
 #include "ui.c"
 #include "ui_visualize_heatmap.c"
 
@@ -97,6 +98,15 @@ df_shader_info_t df_shaders[DfShader_COUNT] = {
 		.hlsl_source = Sc(DF_SHADER_SHADOW_SOURCE_CODE),
 		.path_hlsl   = Sc("src/shaders/gen/shadow.hlsl"),
 		.path_dfs    = Sc("src/shaders/shadow.metashader"),
+	},
+
+	[DfShader_texture_viewer_ps] = {
+		.name        = Sc("texture_viewer_ps"),
+		.entry_point = Sc("texture_viewer_ps"),
+		.target      = Sc("ps_6_6"),
+		.hlsl_source = Sc(DF_SHADER_TEXTURE_VIEWER_SOURCE_CODE),
+		.path_hlsl   = Sc("src/shaders/gen/texture_viewer.hlsl"),
+		.path_dfs    = Sc("src/shaders/texture_viewer.metashader"),
 	},
 
 	[DfShader_ui_heatmap_ps] = {
@@ -243,6 +253,32 @@ df_pso_info_t df_psos[DfPso_COUNT] = {
 			.depth_stencil.depth_func = RhiComparisonFunc_greater,
 			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
 			.dsv_format = PixelFormat_d24_unorm_s8_uint,
+			.multisample_count = 1,
+		},
+	},
+	[DfPso_texture_viewer] = {
+		.name = Sc("texture_viewer"),
+		.path = Sc("src/shaders/texture_viewer.metashader"),
+		.vs_index = DfShader_fullscreen_triangle_vs,
+		.ps_index = DfShader_texture_viewer_ps,
+		.params_without_bytecode = {
+			.debug_name = Sc("pso_texture_viewer"),
+			.blend.sample_mask = 0xFFFFFFFF,
+			.blend.render_target[0] = {
+				.blend_enable = true,
+				.src_blend = RhiBlend_src_alpha,
+				.dst_blend = RhiBlend_inv_src_alpha,
+				.blend_op = RhiBlendOp_add,
+				.src_blend_alpha = RhiBlend_inv_dest_alpha,
+				.dst_blend_alpha = RhiBlend_one,
+				.blend_op_alpha = RhiBlendOp_add,
+				.write_mask = RhiColorWriteEnable_all,
+			},
+			.primitive_topology_type = RhiPrimitiveTopologyType_triangle,
+			.render_target_count = 1,
+			.rtv_formats = {
+				PixelFormat_r8g8b8a8_unorm_srgb,
+			},
 			.multisample_count = 1,
 		},
 	},

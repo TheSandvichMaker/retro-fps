@@ -14,7 +14,7 @@ ConstantBuffer< bloom_draw_parameters_t > draw : register(b0);
 
 
 
-float4 bloom_blur_ps(FullscreenTriangleOutVS IN) : SV_Target
+float4 bloom_blur_ps(fullscreen_triangle_vs_out_t IN) : SV_Target
 {
 	Texture2D<float3> tex_color    = draw.tex_color.Get();
 	float2            inv_tex_size = draw.inv_tex_size;

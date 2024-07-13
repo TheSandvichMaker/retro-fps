@@ -1,6 +1,6 @@
 @echo off
 
-if "%1"=="clean" rmdir build /S /Q
+if /I "%1"=="clean" rmdir build /S /Q
 
 if not exist build mkdir build
 
@@ -18,6 +18,8 @@ tools\luajit metagen\metagen.lua > metagen.log
 if %ERRORLEVEL% neq 0 goto bail
 
 pushd build
+
+if /I "%1"=="release" goto release
 
 rem ========================================================================================================================
 
@@ -39,7 +41,11 @@ if %last_error% neq 0 goto bail
 rem copy build artifacts
 robocopy . ..\run *_debug.exe *_debug.dll *_debug.pdb /S > NUL
 
+if /I "%1"=="debug" goto bail
+
 rem ========================================================================================================================
+
+:release
 
 echo]
 echo =========================

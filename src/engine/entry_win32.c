@@ -424,6 +424,15 @@ fn_local LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 			};
 
 			push_event(context, &event);
+
+			if (pressed)
+			{
+				SetCapture(hwnd);
+			}
+			else
+			{
+				ReleaseCapture();
+			}
 		} break;
 
 		case WM_CHAR:

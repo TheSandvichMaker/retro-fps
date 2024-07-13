@@ -763,3 +763,34 @@ size_t find_substring_backwards(string_t text, string_t pattern, string_match_fl
 
     return STRING_NPOS;
 }
+
+string_t string_format_human_readable_bytes(arena_t *arena, uint64_t bytes)
+{
+    size_t log = 0;
+    for (size_t x = bytes / 1024; x > 0; x /= 1024) log += 1;
+
+    string_t string = {0};
+
+    if (log == 0)
+    {
+        string = string_format(arena, "%zuB", bytes);
+    }
+    else if (log == 1)
+    {
+        string = string_format(arena, "%zuKiB", bytes / 1024);
+    }
+    else if (log == 2)
+    {
+        string = string_format(arena, "%zuMiB", bytes / 1024 / 1024);
+    }
+    else if (log == 3)
+    {
+        string = string_format(arena, "%zuGiB", bytes / 1024 / 1024 / 1024);
+    }
+    else if (log >= 4)
+    {
+        string = string_format(arena, "%zuTiB", bytes / 1024 / 1024 / 1024 / 1024);
+    }
+
+    return string;
+}

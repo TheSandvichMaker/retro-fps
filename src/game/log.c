@@ -37,7 +37,7 @@ typedef struct log_context_t
 } log_context_t;
 
 global thread_local log_context_t log_ctx = {
-	.log_level_disabled[LogLevel_SuperSpam] = false,
+	.log_level_disabled[LogLevel_SuperSpam] = true,
 };
 
 void set_log_filter_for_thread(log_level_t level, bool enabled)

@@ -384,6 +384,8 @@ fn rect2_t         ui_get_clip_rect        (void);
 fn void            ui_push_clip_rect       (rect2_t rect, bool intersect_with_old_clip_rect);
 fn void            ui_pop_clip_rect        (void);
 
+fn rect2_t ui_fit_popup_rect(rect2_t area_bounds, rect2_t rect);
+
 #define UI_ClipRect(rect, interesct_with_old_clip_rect) \
 	DEFER_LOOP(ui_push_clip_rect(rect, interesct_with_old_clip_rect), ui_pop_clip_rect())
 
@@ -405,6 +407,7 @@ fn void    ui_draw_rect_outline            (rect2_t rect, v4_t color, float outl
 fn void    ui_draw_circle                  (v2_t p, float r, v4_t color);
 fn void    ui_draw_debug_rect              (rect2_t rect, v4_t color);
 fn void    ui_draw_focus_indicator         (rect2_t rect);
+fn void    ui_draw_image                   (rect2_t rect, rhi_texture_srv_t texture);
 
 //
 // Widget Building Utilities
@@ -547,6 +550,9 @@ typedef struct ui_t
 
 	bool has_focus;
 	bool hovered;
+
+	rhi_texture_t     checkerboard_texture;
+	rhi_texture_srv_t checkerboard_texture_srv;
 
 	hires_time_t init_time;
 	hires_time_t current_time;

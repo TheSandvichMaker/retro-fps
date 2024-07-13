@@ -74,6 +74,7 @@ typedef struct d3d12_descriptor_heap_t
 
 	uint32_t capacity;
 	uint32_t stride;
+	uint32_t used;
 
 	mutex_t mutex;
 } d3d12_descriptor_heap_t;

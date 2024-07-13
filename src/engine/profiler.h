@@ -86,8 +86,8 @@ extern profiler_slot_t  profiler_slots_read[];
 
 #define PROFILE_BEGIN_BANDWIDTH(variable, bytes) PROFILE_BEGIN_INTERNAL(variable, STRINGIFY(variable), PROF__ID, bytes)
 #define PROFILE_BEGIN(variable)                  PROFILE_BEGIN_INTERNAL(variable, STRINGIFY(variable), PROF__ID, 0)
-#define PROFILE_BEGIN_FUNC                       PROFILE_BEGIN_INTERNAL(Func, __FUNCTION__, PROF__ID, 0)
-#define PROFILE_END_FUNC                         PROFILE_END(Func)
+#define PROFILE_FUNC_BEGIN                       PROFILE_BEGIN_INTERNAL(Func, __FUNCTION__, PROF__ID, 0)
+#define PROFILE_FUNC_END                         PROFILE_END(Func)
 
 #else
 
@@ -98,8 +98,8 @@ extern profiler_slot_t  profiler_slots_read[];
 
 #define PROFILE_BEGIN_BANDWIDTH(...)
 #define PROFILE_BEGIN(...)
-#define PROFILE_BEGIN_FUNC
-#define PROFILE_END_FUNC
+#define PROFILE_FUNC_BEGIN
+#define PROFILE_FUNC_END
 
 #endif
 

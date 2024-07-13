@@ -6,7 +6,30 @@
 
 #include "rhi_formats.h"
 
-enum { RhiMaxRenderTargetCount = 8 };
+enum { RhiMaxRenderTargetCount  = 8       };
+enum { RhiTransientHeapNodeSize = MB(256) }; // needs to be quite big to support MSAA render targets... :( think on that
+
+typedef struct rhi_allocation_stats_t
+{
+	uint64_t transient_memory_used_bytes;
+	uint64_t transient_nodes_size;
+	uint64_t transient_nodes_used;
+	uint64_t free_transient_nodes;
+
+	uint64_t scratch_arena_used_bytes;
+	uint64_t upload_arena_used_bytes;
+
+	uint64_t ring_buffer_slots_capacity;
+	uint64_t ring_buffer_slots_used;
+	uint64_t ring_buffer_bytes_capacity;
+	uint64_t ring_buffer_bytes_used;
+
+	uint64_t persistent_cbv_srv_uav_count;
+	uint64_t persistent_rtv_count;
+	uint64_t persistent_dsv_count;
+} rhi_allocation_stats_t;
+
+fn void rhi_get_allocation_stats(rhi_allocation_stats_t *stats);
 
 typedef struct rhi_init_params_t
 {
@@ -77,6 +100,7 @@ typedef enum rhi_texture_dimension_t
 
 typedef struct rhi_texture_desc_t
 {
+	string_t                debug_name;
 	rhi_texture_dimension_t dimension;
 	uint32_t                width;
 	uint32_t                height;
@@ -101,9 +125,18 @@ typedef enum rhi_resource_flags_t
 	RhiResourceFlag_dynamic = 0x1, // that is - can be updated dynamically while rendering. causes the resource to be double/triple buffered
 } rhi_resource_flags_t;
 
+typedef enum rhi_resource_lifetime_t
+{
+	RhiResourceLifetime_persistent,
+	RhiResourceLifetime_one_frame,
+	RhiResourceLifetime_COUNT,
+} rhi_resource_lifetime_t;
+
 typedef struct rhi_create_texture_params_t
 {
 	string_t                debug_name;
+	rhi_resource_lifetime_t lifetime;
+
 	rhi_texture_dimension_t dimension;
 
 	uint32_t                width;
@@ -173,30 +206,43 @@ typedef enum rhi_buffer_usage_enum_t
 	RhiBufferUsage_deny_srv      = 0x8, // srv is allowed by default :)
 } rhi_buffer_usage_enum_t;
 
-typedef struct rhi_buffer_desc_t
+typedef struct rhi_buffer_layout_t
 {
 	uint64_t           first_element;
 	uint64_t           element_count;
 	uint64_t           element_stride;
 	uint64_t           counter_offset_in_bytes;
 	rhi_buffer_flags_t flags;
-} rhi_buffer_desc_t;
+} rhi_buffer_layout_t;
 
 typedef struct rhi_create_buffer_params_t
 {
-	string_t             debug_name;
-	rhi_buffer_desc_t    desc;
-	rhi_heap_kind_t      heap;
-	rhi_buffer_usage_t   usage;
-	rhi_resource_flags_t flags;
-	rhi_buffer_data_t    initial_data;
+	string_t                debug_name;
+	rhi_resource_lifetime_t lifetime;
+	rhi_buffer_layout_t     desc;
+	// rhi_heap_kind_t         heap;
+	rhi_buffer_usage_t      usage;
+	rhi_resource_flags_t    flags;
+	rhi_buffer_data_t       initial_data;
 } rhi_create_buffer_params_t;
+
+typedef struct rhi_buffer_desc_t
+{
+	string_t                debug_name;
+	rhi_resource_lifetime_t lifetime;
+	rhi_buffer_layout_t     layout;
+	// rhi_heap_kind_t         heap;
+	rhi_buffer_usage_t      usage;
+	rhi_resource_flags_t    flags;
+} rhi_buffer_desc_t;
 
 fn rhi_buffer_t     rhi_create_buffer(const rhi_create_buffer_params_t *params);
 fn void             rhi_upload_buffer_data(rhi_buffer_t buffer, size_t dst_offset, const void *src, size_t src_size, rhi_upload_frequency_t frequency);
 fn rhi_buffer_srv_t rhi_get_buffer_srv(rhi_buffer_t buffer);
 fn rhi_buffer_uav_t rhi_get_buffer_uav(rhi_buffer_t handle);
 fn void             rhi_validate_buffer_srv(rhi_buffer_srv_t srv, string_t context); // tries to verify that this srv is valid
+fn void             rhi_destroy_buffer(rhi_buffer_t handle);
+fn const rhi_buffer_desc_t *rhi_get_buffer_desc(rhi_buffer_t buffer);
 
 fn void *rhi_begin_buffer_upload  (rhi_buffer_t buffer, size_t offset, size_t size, rhi_upload_frequency_t frequency);
 fn void  rhi_end_buffer_upload    (rhi_buffer_t buffer);
@@ -594,4 +640,7 @@ typedef struct rhi_draw_stream_params_t
 
 fn void rhi_draw_stream(const rhi_draw_stream_t *stream, const rhi_draw_stream_params_t *params);
 
-fn void rhi_do_test_stuff(rhi_command_list_t *list, rhi_texture_t color_hdr, rhi_texture_t rt, rhi_pso_t pso);
+// fn void rhi_do_test_stuff(rhi_command_list_t *list, rhi_texture_t color_hdr, rhi_texture_t rt, rhi_pso_t pso);
+
+fn pool_iter_t rhi_texture_iter(void);
+fn pool_iter_t rhi_buffer_iter(void);

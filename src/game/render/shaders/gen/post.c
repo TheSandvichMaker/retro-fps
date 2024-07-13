@@ -130,7 +130,7 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"	return color*rcp(1 - max(color.r, max(color.g, color.b)));\n" \
 	"}\n" \
 	"\n" \
-	"float4 resolve_msaa_ps(FullscreenTriangleOutVS IN) : SV_Target\n" \
+	"float4 resolve_msaa_ps(fullscreen_triangle_vs_out_t IN) : SV_Target\n" \
 	"{\n" \
 	"	float2 uv = IN.uv;\n" \
 	"	uint2  co = uint2(IN.pos.xy);\n" \
@@ -169,7 +169,7 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"	return float4(sum.rgb, 1.0);\n" \
 	"}\n" \
 	"\n" \
-	"float4 post_ps(FullscreenTriangleOutVS IN) : SV_Target\n" \
+	"float4 post_ps(fullscreen_triangle_vs_out_t IN) : SV_Target\n" \
 	"{\n" \
 	"	float2 uv = IN.uv;\n" \
 	"	uint2  co = uint2(IN.pos.xy);\n" \

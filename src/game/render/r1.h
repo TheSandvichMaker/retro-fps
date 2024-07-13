@@ -14,6 +14,53 @@ typedef enum r_parameter_slot_t
 enum { R1MaxUiRects = 16 << 10 }; // TODO: Transient GPU allocator with CreatePlacedResource
 enum { R1MaxRegions = 512  };
 
+typedef struct r1_view_render_targets_t
+{
+	rhi_texture_t depth_stencil;
+	rhi_texture_t rt_hdr;
+	rhi_texture_t rt_hdr_resolved;
+	// rhi_texture_t rt_ui_heatmap;
+	rhi_texture_t bloom_targets[8];
+	rhi_texture_t rt_window;
+} r1_view_render_targets_t;
+
+typedef struct r1_scene_parameters_t
+{
+    v3_t              sun_direction;
+    v3_t              sun_color;
+
+    v3_t              fog_offset;
+    v3_t              fog_dim;
+    float             fog_density;
+    float             fog_absorption;
+    float             fog_scattering;
+    float             fog_phase_k;
+    v3_t              fog_ambient_inscattering;
+} r1_scene_parameters_t;
+
+typedef struct r1_view_t
+{
+	uint32_t render_w;
+	uint32_t render_h;
+
+	r1_view_render_targets_t targets;
+
+	// TODO: Either honor or remove these
+    bool no_shadows      : 1;
+    bool no_post_process : 1;
+
+    v3_t camera_p;
+
+    m4x4_t view_matrix;
+    m4x4_t proj_matrix;
+
+    rect2_t clip_rect;
+
+    r1_scene_parameters_t scene;
+} r1_view_t;
+
+fn r1_view_t r1_create_view(rhi_window_t window);
+
 typedef struct r1_state_t
 {
 	arena_t arena;
@@ -40,7 +87,7 @@ typedef struct r1_state_t
 
 	uint32_t          multisample_count;
 
-	rhi_buffer_t      ui_rects;
+	// rhi_buffer_t      ui_rects;
 	rhi_buffer_t      debug_lines;
 
 	uint32_t indirect_args_capacity;
@@ -56,17 +103,6 @@ typedef struct r1_state_t
 	uint32_t frame_index;
 
 	rhi_pso_t psos[DfPso_COUNT];
-
-	struct
-	{
-		uint32_t      width;
-		uint32_t      height;
-		rhi_texture_t depth_stencil;
-		rhi_texture_t rt_hdr;
-		rhi_texture_t rt_hdr_resolved;
-		rhi_texture_t ui_heatmap_rt;
-		rhi_texture_t bloom_rts[8];
-	} window;
 
 	struct
 	{
@@ -86,8 +122,8 @@ fn rhi_pso_t r1_create_fullscreen_pso(string_t debug_name, rhi_shader_bytecode_t
 fn void r1_begin_frame(void);
 fn void r1_finish_recording_draw_streams(void);
 fn void r1_update_window_resources(rhi_window_t window);
-fn void r1_render_game_view(rhi_command_list_t *list, rhi_texture_t rt, r_view_t *view, struct map_t *map);
-fn void r1_render_ui(rhi_command_list_t *list, rhi_texture_t rt, struct ui_render_command_list_t *ui_list);
+fn void r1_render_game_view(rhi_command_list_t *list, r1_view_t *view, map_t *map);
+fn void r1_render_ui(rhi_command_list_t *list, r1_view_t *view, ui_render_command_list_t *ui_list);
 
 typedef struct r1_timing_t
 {

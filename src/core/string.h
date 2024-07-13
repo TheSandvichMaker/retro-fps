@@ -145,3 +145,5 @@ typedef struct string_storage_overlay_t
 
 fn void string_storage_append_impl(string_storage_overlay_t *storage, size_t capacity, string_t string);
 #define string_storage_append(storage, string) (string_storage_append_impl((string_storage_overlay_t *)(storage), ARRAY_COUNT((storage)->data), string))
+
+fn string_t string_format_human_readable_bytes(arena_t *arena, uint64_t bytes);

@@ -6,9 +6,9 @@
 
 #include "common.hlsli"
 
-FullscreenTriangleOutVS MainVS(uint id : SV_VertexID)
+fullscreen_triangle_vs_out_t MainVS(uint id : SV_VertexID)
 {
-	FullscreenTriangleOutVS OUT;
+	fullscreen_triangle_vs_out_t OUT;
 	OUT.uv  = uint2(id, id << 1) & 2;
 	OUT.pos = float4(lerp(float2(-1, 1), float2(1, -1), OUT.uv), 0, 1);
 	return OUT;

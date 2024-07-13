@@ -58,9 +58,9 @@ typedef struct d3d12_deferred_release_queue_t
 
 	uint32_t frame_index;
 
-	d3d12_deferred_release_t queue[RhiMaxDeferredReleaseCount];
-	uint32_t head;
-	uint32_t tail;
+	alignas(CACHE_LINE_SIZE) d3d12_deferred_release_t queue[RhiMaxDeferredReleaseCount];
+	alignas(CACHE_LINE_SIZE) uint32_t head;
+	alignas(CACHE_LINE_SIZE) uint32_t tail;
 } d3d12_deferred_release_queue_t;
 
 fn void d3d12_deferred_release(IUnknown *resource);

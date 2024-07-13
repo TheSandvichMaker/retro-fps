@@ -62,13 +62,57 @@ bool d3d12_upload_ring_buffer_init(ID3D12Device *device, d3d12_upload_ring_buffe
 	return true;
 }
 
-//------------------------------------------------------------------------
-//------------------------------------------------------------------------
-//------------------------------------------------------------------------
-// ALERT: WRAPPING THE RING BUFFER DOESN'T WORK - PLEASE FIX
-//------------------------------------------------------------------------
-//------------------------------------------------------------------------
-//------------------------------------------------------------------------
+fn_local bool d3d12_retire_one_upload_submission(bool wait_if_needed)
+{
+	d3d12_upload_ring_buffer_t *ring_buffer = &g_rhi.upload_ring_buffer;
+
+	size_t retired_submission_index = ring_buffer->submission_tail % ARRAY_COUNT(ring_buffer->submissions);
+	d3d12_upload_submission_t *retired_submission = &ring_buffer->submissions[retired_submission_index];
+
+	uint64_t fence_value = ID3D12Fence_GetCompletedValue(ring_buffer->fence);
+
+	if (fence_value < retired_submission->fence_value)
+	{
+		if (!wait_if_needed)
+		{
+			return false;
+		}
+
+		log(RHI_D3D12, SuperSpam, "Waiting for ring buffer submission %zu to finish", retired_submission_index);
+		ID3D12Fence_SetEventOnCompletion(ring_buffer->fence, retired_submission->fence_value, NULL);
+	}
+
+	log(RHI_D3D12, SuperSpam, "Retired ring buffer submission %zu", retired_submission_index);
+
+	ring_buffer->submission_tail += 1;
+	ring_buffer->tail             = retired_submission->head;
+
+	return true;
+}
+
+void d3d12_retire_ring_buffer_entries(void)
+{
+	d3d12_upload_ring_buffer_t *ring_buffer = &g_rhi.upload_ring_buffer;
+
+	mutex_lock(&ring_buffer->mutex);
+
+	for (;;)
+	{
+		size_t submissions_used = ring_buffer->submission_head - ring_buffer->submission_tail;
+
+		if (submissions_used == 0)
+		{
+			break;
+		}
+
+		if (!d3d12_retire_one_upload_submission(false))
+		{
+			break;
+		}
+	}
+
+	mutex_unlock(&ring_buffer->mutex);
+}
 
 d3d12_upload_context_t d3d12_upload_begin(size_t size, size_t align)
 {
@@ -145,21 +189,8 @@ d3d12_upload_context_t d3d12_upload_begin(size_t size, size_t align)
 
 				log(RHI_D3D12, SuperSpam, "Could not get a free ring buffer submission, attempting to retire");
 
-				size_t retired_submission_index = ring_buffer->submission_tail % ARRAY_COUNT(ring_buffer->submissions);
-				d3d12_upload_submission_t *retired_submission = &ring_buffer->submissions[retired_submission_index];
-
-				uint64_t fence_value = ID3D12Fence_GetCompletedValue(ring_buffer->fence);
-
-				if (fence_value < retired_submission->fence_value)
-				{
-					log(RHI_D3D12, SuperSpam, "Waiting for ring buffer submission %zu to finish", retired_submission_index);
-					ID3D12Fence_SetEventOnCompletion(ring_buffer->fence, retired_submission->fence_value, NULL);
-				}
-
-				log(RHI_D3D12, SuperSpam, "Retired ring buffer submission %zu", retired_submission_index);
-
-				ring_buffer->submission_tail += 1;
-				ring_buffer->tail             = retired_submission->head;
+				bool result = d3d12_retire_one_upload_submission(true);
+				ASSERT(result);
 			}
 
 			try_count += 1;

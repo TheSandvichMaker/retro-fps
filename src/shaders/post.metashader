@@ -119,7 +119,7 @@ float3 reversible_tonemap_inverse(float3 color)
 	return color*rcp(1 - max(color.r, max(color.g, color.b)));
 }
 
-float4 resolve_msaa_ps(FullscreenTriangleOutVS IN) : SV_Target
+float4 resolve_msaa_ps(fullscreen_triangle_vs_out_t IN) : SV_Target
 {
 	float2 uv = IN.uv;
 	uint2  co = uint2(IN.pos.xy);
@@ -158,7 +158,7 @@ float4 resolve_msaa_ps(FullscreenTriangleOutVS IN) : SV_Target
 	return float4(sum.rgb, 1.0);
 }
 
-float4 post_ps(FullscreenTriangleOutVS IN) : SV_Target
+float4 post_ps(fullscreen_triangle_vs_out_t IN) : SV_Target
 {
 	float2 uv = IN.uv;
 	uint2  co = uint2(IN.pos.xy);

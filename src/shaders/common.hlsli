@@ -5,7 +5,13 @@
 
 #define PI (3.1415926535898)
 
-struct FullscreenTriangleOutVS
+struct quad_vs_out_t
+{
+	float4 pos : SV_POSITION;
+	float2 uv  : TEXCOORD;
+};
+
+struct fullscreen_triangle_vs_out_t
 {
 	float4 pos : SV_POSITION;
 	float2 uv  : TEXCOORD;

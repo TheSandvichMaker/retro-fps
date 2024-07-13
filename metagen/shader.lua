@@ -78,7 +78,7 @@ function Texture2D(format, ex)
 	local format_hlsl = "float4"
 
 	if format then 
-		assert(format.hlsl_name, "Invalid type passed to Texture2DMS")
+		assert(format.hlsl_name, "Invalid type passed to Texture2D")
 		format_hlsl = format.hlsl_name
 	end
 

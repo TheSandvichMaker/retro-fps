@@ -10,6 +10,7 @@ typedef enum ui_row_builder_flags_enum_t
 typedef struct ui_row_builder_t
 {
 	rect2_t  rect;
+	rect2_t  covered_rect;
 	rect2_t  last_row;
 	uint32_t row_index;
 	ui_row_builder_flags_t flags;
@@ -33,6 +34,7 @@ fn void ui_row_error_widget      (ui_row_builder_t *builder, string_t widget_nam
 fn bool ui_row_collapsable_region(ui_row_builder_t *builder, string_t label, bool *open);
 fn void ui_row_header            (ui_row_builder_t *builder, string_t label);
 fn void ui_row_label             (ui_row_builder_t *builder, string_t label);
+fn void ui_row_labels2           (ui_row_builder_t *builder, string_t k, string_t v);
 fn void ui_row_progress_bar      (ui_row_builder_t *builder, string_t label, float progress);
 fn bool ui_row_button            (ui_row_builder_t *builder, string_t label);
 fn bool ui_row_radio_buttons     (ui_row_builder_t *builder, string_t label, int *state, string_t *labels, int count);

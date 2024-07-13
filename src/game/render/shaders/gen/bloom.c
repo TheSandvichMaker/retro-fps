@@ -23,7 +23,7 @@ void shader_bloom_set_draw_params(rhi_command_list_t *list, bloom_draw_parameter
 	"\n" \
 	"\n" \
 	"\n" \
-	"float4 bloom_blur_ps(FullscreenTriangleOutVS IN) : SV_Target\n" \
+	"float4 bloom_blur_ps(fullscreen_triangle_vs_out_t IN) : SV_Target\n" \
 	"{\n" \
 	"	Texture2D<float3> tex_color    = draw.tex_color.Get();\n" \
 	"	float2            inv_tex_size = draw.inv_tex_size;\n" \

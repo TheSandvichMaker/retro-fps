@@ -1,0 +1,71 @@
+#include "common.hlsli"
+
+@metashader
+{
+	name = "texture_viewer",
+
+--//	export = {
+--//		flags(texture_viewer_flags_t, {
+--//			TextureViewer_apply_tonemap = 0x1,
+--//		}),
+--//	},
+
+	draw_parameters = {
+		texture      = Texture2D(float4),
+		texture_dim  = float2,
+		sample_count = int,
+		flags        = uint,
+		hdr_range    = float,
+	},
+
+	shaders = {
+		texture_viewer_ps = { target = "ps_6_6", entry = "texture_viewer_ps" },
+	},
+
+	psos = {
+		texture_viewer = {
+			vs = "fullscreen_triangle_vs",
+			ps = "texture_viewer_ps",
+
+			render_targets = {
+				{ pf = "r8g8b8a8_unorm_srgb", blend = blend_alpha() },
+			},
+		},
+	},
+}
+
+float4 texture_viewer_ps(fullscreen_triangle_vs_out_t IN) : SV_Target
+{
+	float2 uv = IN.uv;
+	uint2  co = floor(uv*draw.texture_dim);
+
+	int sample_count = draw.sample_count;
+
+	float4 color = 0.0;
+
+	if (sample_count > 1)
+	{
+		Texture2DMS<float4> texture = draw.texture.GetAs< Texture2DMS<float4> >();
+
+		for (int i = 0; i < sample_count; i++)
+		{
+			color += texture.Load(co, i);
+		}
+
+		color /= (float)sample_count;
+	}
+	else
+	{
+		Texture2D<float4> texture = draw.texture.Get();
+		color = texture.Sample(df::s_linear_border, uv);
+	}
+
+	color.rgb *= draw.hdr_range;
+
+	if (draw.flags & 0x1)
+	{
+		color.rgb = 1.0 - exp(-color.rgb);
+	}
+
+	return color;
+}

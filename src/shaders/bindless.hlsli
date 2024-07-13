@@ -18,18 +18,30 @@ struct Resource
 	{
 		return ResourceDescriptorHeap[NonUniformResourceIndex(index)];
 	}
+
+	template <typename Q>
+	Q GetAs()
+	{
+		return ResourceDescriptorHeap[index];
+	}
+
+	template <typename Q>
+	Q GetNonUniformAs()
+	{
+		return ResourceDescriptorHeap[NonUniformResourceIndex(index)];
+	}
 };
 
 struct Sampler
 {
 	uint index;
 
-	sampler Get()
+	SamplerState Get()
 	{
 		return SamplerDescriptorHeap[index];
 	}
 
-	sampler GetNonUniform()
+	SamplerState GetNonUniform()
 	{
 		return SamplerDescriptorHeap[NonUniformResourceIndex(index)];
 	}

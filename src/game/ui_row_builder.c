@@ -2,6 +2,7 @@ ui_row_builder_t ui_make_row_builder_ex(rect2_t rect, const ui_row_builder_param
 {
 	ui_row_builder_t result = {
 		.rect  = rect,
+		.covered_rect = rect2_inverted_infinity(),
 		.flags = params->flags,
 	};
 
@@ -43,6 +44,8 @@ rect2_t ui_row_ex(ui_row_builder_t *builder, float height, bool draw_background)
 
 	builder->row_index += 1;
 	builder->last_row = result;
+
+	builder->covered_rect = rect2_union(builder->covered_rect, row);
 
 	return result;
 }
@@ -103,6 +106,15 @@ void ui_row_label(ui_row_builder_t *builder, string_t label)
 {
 	rect2_t rect = ui_row(builder);
 	ui_label(rect, label);
+}
+
+void ui_row_labels2(ui_row_builder_t *builder, string_t k, string_t v)
+{
+	rect2_t l, r;
+	ui_row_split(builder, &l, &r);
+
+	ui_label(l, k);
+	ui_label(r, v);
 }
 
 void ui_row_progress_bar(ui_row_builder_t *builder, string_t label, float progress)

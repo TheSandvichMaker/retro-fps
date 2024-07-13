@@ -174,6 +174,7 @@ d3d12_descriptor_t d3d12_allocate_descriptor_persistent(d3d12_descriptor_heap_t 
 	mutex_lock(&heap->mutex);
 
 	uint32_t index = heap->free_indices[--heap->free_count];
+	heap->used += 1;
 
 	mutex_unlock(&heap->mutex);
 
@@ -248,6 +249,8 @@ void d3d12_free_descriptor_persistent(d3d12_descriptor_heap_t *heap, uint32_t in
 		NULLIFY_HANDLE(&heap->debug_buffer_map [index]);
 		NULLIFY_HANDLE(&heap->debug_texture_map[index]);
 #endif
+
+		heap->used -= 1;
 
 		mutex_unlock(&heap->mutex);
 	}

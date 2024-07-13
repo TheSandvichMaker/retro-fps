@@ -23,7 +23,7 @@ void shader_ui_visualize_heatmap_set_draw_params(rhi_command_list_t *list, ui_vi
 	"\n" \
 	"\n" \
 	"\n" \
-	"float4 MainPS(FullscreenTriangleOutVS IN) : SV_Target\n" \
+	"float4 MainPS(fullscreen_triangle_vs_out_t IN) : SV_Target\n" \
 	"{\n" \
 	"	uint2 co = uint2(IN.pos.xy);\n" \
 	"\n" \

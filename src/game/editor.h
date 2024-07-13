@@ -4,6 +4,7 @@
 #include "editor_lightmap.h"
 #include "editor_ui_test.h"
 #include "editor_console.h"
+#include "editor_texture_viewer.h"
 
 typedef enum editor_window_kind_t
 {
@@ -13,6 +14,7 @@ typedef enum editor_window_kind_t
 	EditorWindow_convex_hull,
 	EditorWindow_ui_test,
 	EditorWindow_cvars,
+	EditorWindow_texture_viewer,
 
 	EditorWindow_COUNT,
 } editor_window_kind_t;
@@ -23,13 +25,6 @@ typedef struct editor_window_t
 	struct editor_window_t *prev;
 
 	string_storage_t(256) title;
-	/*rect2_t rect;
-
-	bool open;
-	bool hovered;
-	bool focused;
-	*/
-
 	ui_window_t window;
 
 	ui_scrollable_region_t scroll_region;
@@ -53,6 +48,7 @@ typedef struct editor_t
 	editor_convex_hull_debugger_t convex_hull;
 	editor_ui_test_state_t        ui_test;
 	cvar_window_state_t           cvar_window_state;
+	editor_texture_viewer_t       texture_viewer;
 } editor_t;
 
 fn void editor_init(editor_t *editor);

@@ -1,0 +1,17 @@
+#include "common.hlsli"
+
+@metashader
+{
+	disabled = true,
+
+	name = "quad",
+
+	draw_parameters = {
+		vertices = float2,
+	},
+
+	shaders = {
+		quad_vs = { target = "vs_6_6", entry = "quad_vs" },
+	},
+}
+

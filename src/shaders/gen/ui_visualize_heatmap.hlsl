@@ -14,7 +14,7 @@ ConstantBuffer< ui_visualize_heatmap_draw_parameters_t > draw : register(b0);
 
 
 
-float4 MainPS(FullscreenTriangleOutVS IN) : SV_Target
+float4 MainPS(fullscreen_triangle_vs_out_t IN) : SV_Target
 {
 	uint2 co = uint2(IN.pos.xy);
 

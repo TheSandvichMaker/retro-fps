@@ -9,8 +9,8 @@ enum { TABLE_UNUSED_KEY_VALUE = 0 };
 enum { TABLE_RESERVE_CAPACITY = 1 << 20, TABLE_HALF_CAPACITY = 1 << 19 }; // up to ~500k entries
 enum { TABLE_SECONDARY_BUFFER = 1 << 0, TABLE_EXTERNAL_MEMORY = 1 << 1 };
 
-#define   TABLE_TAG_POINTER(pointer, tags) (void *)((uintptr_t)(pointer)|(tags))
-#define TABLE_UNTAG_POINTER(pointer)       (void *)((uintptr_t)(pointer) & ~(alignof(table_entry_t) - 1))
+#define TABLE_TAG_POINTER(pointer, tags)      (void *)((uintptr_t)(pointer)|(tags))
+#define TABLE_UNTAG_POINTER(pointer)          (void *)((uintptr_t)(pointer) & ~(alignof(table_entry_t) - 1))
 #define TABLE_POINTER_HAS_TAGS(pointer, tags) !!((uintptr_t)(pointer) & tags)
 
 typedef struct table_entry_t
@@ -25,6 +25,22 @@ typedef struct table_t
     uint32_t load;
     table_entry_t *entries;
 } table_t;
+
+fn_local uint64_t hash_u64(uint64_t x)
+{
+	x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ull;
+	x = (x ^ (x >> 27)) * 0x94d049bb133111ebull;
+	x = x ^ (x >> 31);
+	return x;
+}
+
+fn_local uint64_t unhash_u64(uint64_t x)
+{
+	x = (x ^ (x >> 31) ^ (x >> 62)) * 0x319642b2d24d8ec3ull;
+	x = (x ^ (x >> 27) ^ (x >> 54)) * 0x96de1b173f119089ull;
+	x = x ^ (x >> 30) ^ (x >> 60);
+	return x;
+}
 
 fn bool table_find_entry    (const table_t *table, uint64_t key, uint64_t **value);
 fn bool table_find          (const table_t *table, uint64_t key, uint64_t  *value);

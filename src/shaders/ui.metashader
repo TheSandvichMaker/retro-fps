@@ -56,8 +56,8 @@ struct UIRect
 	},
 
 	shaders = {
-		ui_vs = { target = "vs_6_6", entry = "MainVS" },
-		ui_ps = { target = "ps_6_6", entry = "MainPS" },
+		ui_vs         = { target = "vs_6_6", entry = "MainVS" },
+		ui_ps         = { target = "ps_6_6", entry = "MainPS" },
 		ui_heatmap_ps = { target = "ps_6_6", entry = "UIHeatMapPS" },
 	},
 
@@ -67,10 +67,7 @@ struct UIRect
 			ps = "ui_ps",
 
 			render_targets = {
-				{
-					pf    = "r8g8b8a8_unorm_srgb",
-					blend = blend_alpha(),
-				},
+				{ pf = "r8g8b8a8_unorm_srgb", blend = blend_alpha() },
 			},
 		},
 
@@ -79,10 +76,7 @@ struct UIRect
 			ps = "ui_heatmap_ps",
 
 			render_targets = {
-				{
-					pf    = "r8g8b8a8_unorm",
-					blend = blend_additive(),
-				},
+				{ pf = "r8g8b8a8_unorm", blend = blend_additive() },
 			},
 		},
 	},

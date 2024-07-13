@@ -10,6 +10,7 @@
 #include "fullscreen_triangle.h"
 #include "post.h"
 #include "shadow.h"
+#include "texture_viewer.h"
 #include "ui.h"
 #include "ui_visualize_heatmap.h"
 
@@ -40,6 +41,9 @@ typedef enum df_shader_ident_t
 
 	// src/shaders/shadow.metashader
 	DfShader_shadow_vs,
+
+	// src/shaders/texture_viewer.metashader
+	DfShader_texture_viewer_ps,
 
 	// src/shaders/ui.metashader
 	DfShader_ui_heatmap_ps,
@@ -73,6 +77,9 @@ typedef enum df_pso_ident_t
 
 	// src/shaders/shadow.metashader
 	DfPso_sun_shadows,
+
+	// src/shaders/texture_viewer.metashader
+	DfPso_texture_viewer,
 
 	// src/shaders/ui.metashader
 	DfPso_ui,

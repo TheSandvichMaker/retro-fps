@@ -415,7 +415,7 @@ float ui_default_row_height(void)
 
 ui_anim_t *ui_get_anim(ui_id_t id, v4_t target)
 {
-	PROFILE_BEGIN_FUNC;
+	PROFILE_FUNC_BEGIN;
 
 	ui_anim_list_t *list = &ui->anim_list;
 
@@ -517,7 +517,7 @@ ui_anim_t *ui_get_anim(ui_id_t id, v4_t target)
 	result->c_v                      = ui_scalar(UiScalar_animation_dampen);
 	result->t_target                 = target;
 
-	PROFILE_END_FUNC;
+	PROFILE_FUNC_END;
 
 	return result;
 }
@@ -558,7 +558,7 @@ v4_t ui_set_v4(ui_id_t id, v4_t target)
 
 fn_local void ui_tick_animations(ui_anim_list_t *list, float dt)
 {
-	PROFILE_BEGIN_FUNC;
+	PROFILE_FUNC_BEGIN;
 
 	ui_id_t          *restrict active_ids = list->active_ids;
 	ui_id_t          *restrict sleepy_ids = list->sleepy_ids;
@@ -659,7 +659,7 @@ fn_local void ui_tick_animations(ui_anim_list_t *list, float dt)
 	list->active_count = active_count;
 	list->sleepy_count = sleepy_count;
 
-	PROFILE_END_FUNC;
+	PROFILE_FUNC_END;
 }
 
 //
@@ -781,7 +781,7 @@ rect2_t ui_get_clip_rect(void)
 
 rect2_t ui_text_op(font_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t op)
 {
-    PROFILE_BEGIN_FUNC;
+    PROFILE_FUNC_BEGIN;
 
 	rect2_t result = rect2_inverted_infinity();
 
@@ -829,7 +829,7 @@ rect2_t ui_text_op(font_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t
 		}
 	}
 
-    PROFILE_END_FUNC;
+    PROFILE_FUNC_END;
 
 	return result;
 }
@@ -1117,6 +1117,24 @@ void ui_draw_circle(v2_t p, float radius, v4_t color)
 		.color_10    = color_packed,
 		.color_11    = color_packed,
 		.color_01    = color_packed,
+	});
+}
+
+void ui_draw_image(rect2_t rect, rhi_texture_srv_t texture)
+{
+	uint32_t color_packed = 0xFFFFFFFF;
+
+	ui_do_rect((r_ui_rect_t){
+		.rect = rect,
+		.tex_coords = (rect2_t){
+			.min = { 0, 1 },
+			.max = { 1, 0 },
+		},
+		.color_00 = color_packed,
+		.color_10 = color_packed,
+		.color_11 = color_packed,
+		.color_01 = color_packed,
+		.texture  = texture,
 	});
 }
 
@@ -1588,6 +1606,44 @@ static void ui_initialize(void)
 	ui->render_commands.keys     = m_alloc_array_nozero(&ui->arena, ui->render_commands.capacity, ui_render_command_key_t);
 	ui->render_commands.commands = m_alloc_array_nozero(&ui->arena, ui->render_commands.capacity, ui_render_command_t);
 
+	m_scoped_temp
+	{
+		uint32_t *checkerboard_pixels = m_alloc_array_nozero(temp, 64*64, uint32_t);
+
+		for (size_t y = 0; y < 64; y++)
+		for (size_t x = 0; x < 64; x++)
+		{
+			bool check_x = (x / 8) % 2;
+			bool check_y = (y / 8) % 2;
+			bool check   = check_x ^ check_y;
+
+			if (check)
+			{
+				checkerboard_pixels[x + y*64] = 0xFF444444;
+			}
+			else
+			{
+				checkerboard_pixels[x + y*64] = 0xFF666666;
+			}
+		}
+
+		ui->checkerboard_texture = rhi_create_texture(&(rhi_create_texture_params_t){
+			.debug_name = S("tex_ui_checkerboard"),
+			.dimension  = RhiTextureDimension_2d,
+			.width      = 64,
+			.height     = 64,
+			.mip_levels = 1,
+			.format     = PixelFormat_r8g8b8a8_unorm_srgb,
+			.initial_data = &(rhi_texture_data_t){
+				.subresources      = (void *[]) { checkerboard_pixels },
+				.subresource_count = 1,
+				.row_stride        = sizeof(uint32_t)*64,
+			}
+		});
+
+		ui->checkerboard_texture_srv = rhi_get_texture_srv(ui->checkerboard_texture);
+	}
+
 	ui->initialized = true;
 }
 
@@ -1894,4 +1950,33 @@ void ui_pop_sub_layer(void)
 	{
 		ui->current_layer.sub_layer -= 1;
 	}
+}
+
+rect2_t ui_fit_popup_rect(rect2_t area_bounds, rect2_t rect)
+{
+	if (rect.min.x < area_bounds.min.x)
+	{
+		float x = area_bounds.min.x - rect.min.x;
+		rect = rect2_add_offset(rect, make_v2(x, 0.0f));
+	}
+
+	if (rect.max.x > area_bounds.max.x)
+	{
+		float x = area_bounds.max.x - rect.max.x;
+		rect = rect2_add_offset(rect, make_v2(x, 0.0f));
+	}
+
+	if (rect.min.y < area_bounds.min.y)
+	{
+		float x = area_bounds.min.y - rect.min.y;
+		rect = rect2_add_offset(rect, make_v2(0.0f, x));
+	}
+
+	if (rect.max.y > area_bounds.max.y)
+	{
+		float x = area_bounds.max.y - rect.max.y;
+		rect = rect2_add_offset(rect, make_v2(0.0f, x));
+	}
+
+	return rect;
 }

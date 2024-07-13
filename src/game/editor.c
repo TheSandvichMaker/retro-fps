@@ -1,6 +1,7 @@
 #include "editor_lightmap.c"
 #include "editor_convex_hull.c"
 #include "editor_ui_test.c"
+#include "editor_texture_viewer.c"
 
 void editor_add_window(editor_t *editor, editor_window_t *window)
 {
@@ -102,6 +103,11 @@ void editor_process_windows(editor_t *editor)
 				{
 					editor_do_cvar_window(&editor->cvar_window_state, window);
 				} break;
+
+				case EditorWindow_texture_viewer:
+				{
+					editor_texture_viewer_ui(&editor->texture_viewer, window->window.rect);
+				} break;
 			}
 
 			ui_window_end(window_id, &window->window);
@@ -129,19 +135,16 @@ void editor_init(editor_t *editor)
 	{
 		editor_add_window(editor, &editor->windows[i]);
 		editor->windows[i].window.rect = rect2_from_min_dim(at, make_v2(512, 512));
+		editor->windows[i].kind = (editor_window_kind_t)i;
 
 		at = add(at, make_v2(32, 32));
 	}
 
-	string_into_storage(editor->windows[EditorWindow_lightmap].title,    S("Lightmap Editor"));
-	string_into_storage(editor->windows[EditorWindow_convex_hull].title, S("Convex Hull Debugger"));
-	string_into_storage(editor->windows[EditorWindow_ui_test].title,     S("UI Test Window"));
-	string_into_storage(editor->windows[EditorWindow_cvars].title,       S("Console Variables"));
-
-	editor->windows[EditorWindow_lightmap].kind    = EditorWindow_lightmap;
-	editor->windows[EditorWindow_convex_hull].kind = EditorWindow_convex_hull;
-	editor->windows[EditorWindow_ui_test].kind     = EditorWindow_ui_test;
-	editor->windows[EditorWindow_cvars].kind       = EditorWindow_cvars;
+	string_into_storage(editor->windows[EditorWindow_lightmap].title,       S("Lightmap Editor"));
+	string_into_storage(editor->windows[EditorWindow_convex_hull].title,    S("Convex Hull Debugger"));
+	string_into_storage(editor->windows[EditorWindow_ui_test].title,        S("UI Test Window"));
+	string_into_storage(editor->windows[EditorWindow_cvars].title,          S("Console Variables"));
+	string_into_storage(editor->windows[EditorWindow_texture_viewer].title, S("Texture Viewer"));
 
 	editor_init_lightmap_stuff(&editor->lightmap);
 	editor_init_convex_hull_debugger(&editor->convex_hull);
@@ -162,15 +165,21 @@ void editor_show_timings(editor_t *editor)
 
     float one_third = ui_size_to_width(full_area, ui_sz_pct(0.33333f));
 
+	rect2_t background_area = rect2_inverted_infinity();
+
+	//------------------------------------------------------------------------
+
     rect2_t gpu_area;
     rect2_cut_from_left(full_area, ui_sz_pix(one_third), &gpu_area, &full_area);
 
     {
         ui_row_builder_t builder = ui_make_row_builder(gpu_area);
 
+		ui_push_sub_layer();
+
         ui_row_header(&builder, S("GPU Timings"));
 
-        UI_Scalar(UiScalar_label_align_x, 0.5f)
+        // UI_Scalar(UiScalar_label_align_x, 0.5f)
         {
             double total = 0.0f;
 
@@ -178,13 +187,19 @@ void editor_show_timings(editor_t *editor)
             {
                 r1_timing_t *timing = &stats.timings[i];
 
-                ui_row_label(&builder, Sf("%.*s: %.02fms", Sx(timing->identifier), 1000.0*timing->inclusive_time));
+                ui_row_labels2(&builder, Sf("%cs:", timing->identifier), Sf("%.02fms", 1000.0*timing->inclusive_time));
                 total += timing->exclusive_time;
             }
 
             ui_row_label(&builder, Sf("total: %.02fms", 1000.0*total));
         }
+
+		ui_pop_sub_layer();
+
+		background_area = rect2_union(background_area, builder.covered_rect);
     }
+
+	//------------------------------------------------------------------------
 
     rect2_t cpu_area;
     rect2_cut_from_left(full_area, ui_sz_pix(one_third), &cpu_area, &full_area);
@@ -215,9 +230,10 @@ void editor_show_timings(editor_t *editor)
 
         ui_row_builder_t builder = ui_make_row_builder(cpu_area);
 
+		ui_push_sub_layer();
+
         ui_row_header(&builder, S("CPU Timings"));
 
-        UI_Scalar(UiScalar_label_align_x, 0.5f)
 		for (size_t i = 1; i < profiler_slots_count; i++)
 		{
 			//uint64_t key = sort_keys[j];
@@ -230,9 +246,49 @@ void editor_show_timings(editor_t *editor)
 			double exclusive_pct = 0.0; //100.0*(exclusive_ms / total_time_ms);
 			double inclusive_pct = 0.0; //100.0*(inclusive_ms / total_time_ms);
 
-			ui_row_label(&builder, Sf("%-24s %.2f/%.2fms (%.2f/%.2f%%, %zu hits)", slot->tag, exclusive_ms, inclusive_ms, exclusive_pct, inclusive_pct, slot->hit_count));
+			ui_row_labels2(&builder, Sf("%s", slot->tag), Sf("%.2f/%.2fms (%.2f/%.2f%%, %zu hits)", exclusive_ms, inclusive_ms, exclusive_pct, inclusive_pct, slot->hit_count));
 		}
+
+		ui_pop_sub_layer();
+
+		background_area = rect2_union(background_area, builder.covered_rect);
 	}
+
+	//------------------------------------------------------------------------
+
+    rect2_t gpu_alloc_area;
+    rect2_cut_from_left(full_area, ui_sz_pix(one_third), &gpu_alloc_area, &full_area);
+
+    {
+        ui_row_builder_t builder = ui_make_row_builder(gpu_alloc_area);
+
+		ui_push_sub_layer();
+
+        ui_row_header(&builder, S("GPU Allocations"));
+
+		rhi_allocation_stats_t alloc_stats;
+		rhi_get_allocation_stats(&alloc_stats);
+
+		ui_row_labels2(&builder, S("Transient Memory Used:"), string_format_human_readable_bytes(temp, alloc_stats.transient_memory_used_bytes));
+		ui_row_labels2(&builder, S("Transient Nodes Size:"), string_format_human_readable_bytes(temp, alloc_stats.transient_nodes_size));
+		ui_row_labels2(&builder, S("Transient Nodes Used:"), Sf("%llu", alloc_stats.transient_nodes_used));
+		ui_row_labels2(&builder, S("Free Transient Nodes:"), Sf("%llu", alloc_stats.free_transient_nodes));
+		ui_row_labels2(&builder, S("Scratch Arena Used:"), string_format_human_readable_bytes(temp, alloc_stats.scratch_arena_used_bytes));
+		ui_row_labels2(&builder, S("Upload Arena Used:"), string_format_human_readable_bytes(temp, alloc_stats.upload_arena_used_bytes));
+		ui_row_labels2(&builder, S("Ring Buffer Slots Used:"), Sf("%llu/%llu", alloc_stats.ring_buffer_slots_used, alloc_stats.ring_buffer_slots_capacity));
+		ui_row_labels2(&builder, S("Ring Buffer Bytes Used:"), Sf("%cs/%cs", string_format_human_readable_bytes(temp, alloc_stats.ring_buffer_bytes_used), string_format_human_readable_bytes(temp, alloc_stats.ring_buffer_bytes_capacity)));
+		ui_row_labels2(&builder, S("CBV/SRV/UAV Descriptors Used:"), Sf("%llu", alloc_stats.persistent_cbv_srv_uav_count));
+		ui_row_labels2(&builder, S("RTV Descriptors Used:"), Sf("%llu", alloc_stats.persistent_rtv_count));
+		ui_row_labels2(&builder, S("DSV Descriptors Used:"), Sf("%llu", alloc_stats.persistent_dsv_count));
+
+		ui_pop_sub_layer();
+
+		background_area = rect2_union(background_area, builder.covered_rect);
+    }
+
+	//------------------------------------------------------------------------
+
+	ui_draw_rect(background_area, make_v4(0, 0, 0, 0.5f));
 
     m_scope_end(temp);
 }
@@ -264,10 +320,16 @@ void editor_update_and_render(editor_t *editor)
 		editor_toggle_window_openness(editor, &editor->windows[EditorWindow_cvars]);
 	}
 
+    if (ui_key_pressed(Key_f6, true))
+	{
+		editor_toggle_window_openness(editor, &editor->windows[EditorWindow_texture_viewer]);
+	}
+
     if (editor->show_timings)
     {
         editor_show_timings(editor);
     }
 
 	editor_process_windows(editor);
+	editor_texture_viewer_render(&editor->texture_viewer, NULL);
 }
