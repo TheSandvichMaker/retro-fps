@@ -19,6 +19,34 @@ extern __declspec(dllexport) const char    *D3D12SDKPath    = u8".\\D3D12\\";
 CVAR_BOOL(cvar_d3d12_force_heavy_synchronization, "rhi.d3d12.force_heavy_synchronization", false);
 CVAR_BOOL(cvar_d3d12_timestamp_queries_enabled,   "rhi.d3d12.timestamp_queries_enabled",   true);
 
+CVAR_COMMAND(ccmd_d3d12_report_live_objects, "rhi.d3d12.report_live_objects")
+{
+	if (g_rhi.debug_layer_enabled)
+	{
+		if (g_rhi.debug_device)
+		{
+			string_t first_argument = string_split_word(&arguments);
+
+			if (string_match_nocase(first_argument, S("detailed")))
+			{
+				ID3D12DebugDevice_ReportLiveDeviceObjects(g_rhi.debug_device, D3D12_RLDO_DETAIL);
+			}
+			else
+			{
+				ID3D12DebugDevice_ReportLiveDeviceObjects(g_rhi.debug_device, D3D12_RLDO_SUMMARY);
+			}
+		}
+		else
+		{
+			log(RHI_D3D12, Warning, "Can't report live objects - debug device failed to be created");
+		}
+	}
+	else
+	{
+		log(RHI_D3D12, Warning, "Can't report live objects - debug layer not enabled");
+	}
+}
+
 fn_local d3d12_frame_state_t *d3d12_get_frame_state(uint32_t frame_index)
 {
 	return g_rhi.frames[frame_index % g_rhi.frame_latency];
@@ -89,6 +117,7 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 
 	cvar_register(&cvar_d3d12_force_heavy_synchronization);
 	cvar_register(&cvar_d3d12_timestamp_queries_enabled);
+	cvar_register(&ccmd_d3d12_report_live_objects);
 
 	// initialize pools
 
@@ -252,7 +281,7 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
         {
             ID3D12InfoQueue_SetBreakOnSeverity(info_queue, D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
             ID3D12InfoQueue_SetBreakOnSeverity(info_queue, D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
-            ID3D12InfoQueue_SetBreakOnSeverity(info_queue, D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
+            ID3D12InfoQueue_SetBreakOnSeverity(info_queue, D3D12_MESSAGE_SEVERITY_WARNING, FALSE);
 
             D3D12_MESSAGE_SEVERITY severities[] = {
                 D3D12_MESSAGE_SEVERITY_INFO,
@@ -597,6 +626,14 @@ bool rhi_init_d3d12(const rhi_init_params_d3d12_t *params)
 		};
 		hr = ID3D12Device_CreateCommandSignature(device, &desc, NULL, &IID_ID3D12CommandSignature, &g_rhi.draw_indexed_command_signature);
 		D3D12_CHECK_HR(hr, goto bail);
+	}
+
+	if (g_rhi.debug_layer_enabled)
+	{
+		ID3D12Device_QueryInterface(
+			device,
+			&IID_ID3D12DebugDevice,
+			&g_rhi.debug_device);
 	}
 
 	//
@@ -1380,7 +1417,7 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 				d3d12_upload_texture_data(texture, initial_data);
 			}
 
-			log(RHI_D3D12, Spam, "Added new texture '%.*s' (index: %u, generation: %u)", Sx(params->debug_name), result.index, result.generation);
+			log(RHI_D3D12, SuperSpam, "Added new texture '%.*s' (index: %u, generation: %u)", Sx(params->debug_name), result.index, result.generation);
 		}
 	}
 

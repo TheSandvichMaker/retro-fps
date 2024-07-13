@@ -139,10 +139,12 @@ void d3d12_flush_deferred_release_queue(uint64_t frame_index)
 
 	while (tail < head)
 	{
-		d3d12_deferred_release_t *release = &queue->queue[tail++ % ARRAY_COUNT(queue->queue)];
+		d3d12_deferred_release_t *release = &queue->queue[tail % ARRAY_COUNT(queue->queue)];
 
 		if (release->frame_index <= frame_index)
 		{
+			tail += 1;
+
 			log(RHI_D3D12, SuperSpam, "Deferred-freeing resource with frame index %llu at frame index %llu", release->frame_index, frame_index);
 			COM_SAFE_RELEASE(release->resource);
 		}

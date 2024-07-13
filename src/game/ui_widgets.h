@@ -164,11 +164,18 @@ typedef struct ui_text_edit_state_t
 {
 	int selection_start;
 	int cursor;
+
+	bool                  clear;
+	string_storage_t(256) storage;
+	dynamic_string_t      string;
 } ui_text_edit_state_t;
 
 typedef struct ui_text_edit_params_t
 {
-	bool     numeric_only;
+	bool auto_storage       : 1;
+	bool clear_after_commit : 1;
+	bool numeric_only       : 1;
+
 	string_t preview_text;
 	float    align_x;
 } ui_text_edit_params_t;

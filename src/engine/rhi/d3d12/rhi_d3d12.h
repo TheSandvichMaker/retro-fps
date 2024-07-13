@@ -106,9 +106,12 @@ typedef struct rhi_state_d3d12_t
 
 	uint64_t qpc_freq;
 
-	IDXGIFactory6 *dxgi_factory;
-	IDXGIAdapter1 *dxgi_adapter;
-	ID3D12Device  *device;
+	IDXGIFactory6     *dxgi_factory;
+	IDXGIAdapter1     *dxgi_adapter;
+	ID3D12Device      *device;
+
+	IDXGIDebug        *dxgi_debug;
+	ID3D12DebugDevice *debug_device;
 
 	uint64_t     fence_value;
 	ID3D12Fence *fence;

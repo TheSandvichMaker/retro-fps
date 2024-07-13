@@ -860,7 +860,7 @@ void r1_render_ui(rhi_command_list_t *list, r1_view_t *view, ui_render_command_l
 				const size_t command_index = key->command_index;
 				const ui_render_command_t *command = &ui_list->commands[command_index];
 
-				memcpy(&rects[key_index], &command->rect, sizeof(command->rect));
+				copy_memory(&rects[key_index], &command->rect, sizeof(command->rect));
 
 				if (command->rect.texture.index == 0)
 				{

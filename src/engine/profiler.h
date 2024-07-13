@@ -42,10 +42,11 @@ extern uint64_t         profiler_slots_count;
 extern profiler_slot_t  profiler_slots[];
 extern profiler_slot_t  profiler_slots_read[];
 
-#define CREATE_PROFILER_TABLE                             \
-    profiler_slot_t profiler_slots     [__COUNTER__ + 1]; \
-    profiler_slot_t profiler_slots_read[__COUNTER__];     \
-    uint64_t profiler_slots_count = __COUNTER__ - 1;
+#define CREATE_PROFILER_TABLE                               \
+	enum { ProfilerSlotCount = __COUNTER__ + 1 };           \
+    profiler_slot_t profiler_slots     [ProfilerSlotCount]; \
+    profiler_slot_t profiler_slots_read[ProfilerSlotCount]; \
+    uint64_t profiler_slots_count = ProfilerSlotCount;
 
 #define PROF__VAR(var) PASTE(Prof__, var)
 #define PROF__ID (__COUNTER__ + 1)

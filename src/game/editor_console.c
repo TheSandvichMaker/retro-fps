@@ -242,6 +242,8 @@ void editor_do_cvar_window(cvar_window_state_t *state, editor_window_t *window)
 			}
 		}
 
+		ui_push_id(ui_id(cvar->key));
+
 		rect2_t row = ui_row(&builder);
 
 		rect2_t reset_rect;
@@ -284,9 +286,16 @@ void editor_do_cvar_window(cvar_window_state_t *state, editor_window_t *window)
 
 			case CVarKind_command:
 			{
-				if (ui_button(widget_rect, S("Run")))
+				rect2_t text_rect, button_rect;
+				rect2_cut_from_left(widget_rect, ui_sz_pct(0.75f), &text_rect, &button_rect);
+
+				dynamic_string_t text = {0};
+				ui_text_edit_result_t result = ui_text_edit_ex(text_rect, &text, &(ui_text_edit_params_t){ .auto_storage = true, .clear_after_commit = true });
+
+				if (result == UiTextEditResult_committed ||
+				    ui_button(button_rect, S("Run")))
 				{
-					cvar_execute_command(cvar, S(""));
+					cvar_execute_command(cvar, text.string);
 				}
 			} break;
 
@@ -298,15 +307,13 @@ void editor_do_cvar_window(cvar_window_state_t *state, editor_window_t *window)
 
 		if (!cvar_is_default(cvar))
 		{
-			ui_push_id(ui_id(cvar->key));
-
 			if (ui_button(reset_rect, S("X")))
 			{
 				cvar_reset_to_default(cvar);
 			}
-
-			ui_pop_id();
 		}
+
+		ui_pop_id();
 	}
 
 	ui_pop_color(UiColor_text);

@@ -204,6 +204,8 @@ void editor_show_timings(editor_t *editor)
     rect2_t cpu_area;
     rect2_cut_from_left(full_area, ui_sz_pix(one_third), &cpu_area, &full_area);
 
+	static int stupid = 0;
+
 	{
 		/*
 		uint64_t *sort_keys = m_alloc_array_nozero(temp, profiler_slots_count, uint64_t);
@@ -234,6 +236,11 @@ void editor_show_timings(editor_t *editor)
 
         ui_row_header(&builder, S("CPU Timings"));
 
+		if (!editor->profiler_stats)
+		{
+			editor->profiler_stats = m_alloc_array(&editor->arena, profiler_slots_count, profiler_stat_t);
+		}
+
 		for (size_t i = 1; i < profiler_slots_count; i++)
 		{
 			//uint64_t key = sort_keys[j];
@@ -241,18 +248,26 @@ void editor_show_timings(editor_t *editor)
 			//size_t i = key & 0xFFFF;
 			profiler_slot_t *slot = &profiler_slots_read[i];
 
-			double exclusive_ms  = tsc_to_ms(slot->exclusive_tsc, cpu_freq);
-			double inclusive_ms  = tsc_to_ms(slot->inclusive_tsc, cpu_freq);
+			profiler_stat_t *stat = &editor->profiler_stats[i];
+
+			double exclusive_ms = tsc_to_ms(slot->exclusive_tsc, cpu_freq);
+			double inclusive_ms = tsc_to_ms(slot->inclusive_tsc, cpu_freq);
+
+			stat->exclusive_ms = 0.99*stat->exclusive_ms + 0.01*exclusive_ms;
+			stat->inclusive_ms = 0.99*stat->inclusive_ms + 0.01*inclusive_ms;
+
 			double exclusive_pct = 0.0; //100.0*(exclusive_ms / total_time_ms);
 			double inclusive_pct = 0.0; //100.0*(inclusive_ms / total_time_ms);
 
-			ui_row_labels2(&builder, Sf("%s", slot->tag), Sf("%.2f/%.2fms (%.2f/%.2f%%, %zu hits)", exclusive_ms, inclusive_ms, exclusive_pct, inclusive_pct, slot->hit_count));
+			ui_row_labels2(&builder, Sf("%s", slot->tag), Sf("%.2f/%.2fms (%.2f/%.2f%%, %zu hits)", stat->exclusive_ms, stat->inclusive_ms, exclusive_pct, inclusive_pct, slot->hit_count));
 		}
 
 		ui_pop_sub_layer();
 
 		background_area = rect2_union(background_area, builder.covered_rect);
 	}
+
+	stupid += 1;
 
 	//------------------------------------------------------------------------
 

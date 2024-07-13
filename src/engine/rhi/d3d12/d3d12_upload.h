@@ -1,6 +1,6 @@
 #pragma once
 
-enum { RhiMaxUploadSubmissions = 128 };               // must be pow2
+enum { RhiMaxUploadSubmissions = 32 };                // must be pow2
 enum { RhiUploadRingBufferSize = 64u * 1024 * 1024 }; // must be pow2
 
 typedef struct d3d12_upload_submission_t

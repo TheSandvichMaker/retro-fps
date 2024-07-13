@@ -32,6 +32,12 @@ typedef struct editor_window_t
 	editor_window_kind_t kind;
 } editor_window_t;
 
+typedef struct profiler_stat_t
+{
+	double exclusive_ms;
+	double inclusive_ms;
+} profiler_stat_t;
+
 typedef struct editor_t
 {
 	arena_t arena;
@@ -49,6 +55,8 @@ typedef struct editor_t
 	editor_ui_test_state_t        ui_test;
 	cvar_window_state_t           cvar_window_state;
 	editor_texture_viewer_t       texture_viewer;
+
+	profiler_stat_t *profiler_stats;
 } editor_t;
 
 fn void editor_init(editor_t *editor);

@@ -1236,9 +1236,35 @@ fn_local float ui_text_edit__get_caret_x(prepared_glyphs_t *prep, size_t index)
 	return result;
 }
 
-ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *buffer, const ui_text_edit_params_t *params)
+ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *in_buffer, const ui_text_edit_params_t *params)
 {
 	ui_text_edit_result_t result = 0;
+
+	arena_t *temp = m_get_temp(NULL, 0);
+	m_scope_begin(temp);
+
+	dynamic_string_t *buffer = in_buffer;
+
+	ui_id_t id = ui_id_pointer(buffer);
+	ui_validate_widget(id);
+
+	bool first_touch;
+	ui_text_edit_state_t *state = ui_get_state(id, &first_touch, ui_text_edit_state_t);
+
+	if (params->auto_storage)
+	{
+		DEBUG_ASSERT(buffer->capacity == 0);
+
+		if (first_touch || state->clear)
+		{
+			state->string.count = 0;
+			state->clear        = false;
+		}
+
+		buffer = &state->string;
+		buffer->capacity = string_storage_size(state->storage);
+		buffer->data     = state->storage.data;
+	}
 
 	if (buffer->count > INT32_MAX)
 	{
@@ -1246,19 +1272,10 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *buffer, co
 		return result;
 	}
 
-	arena_t *temp = m_get_temp(NULL, 0);
-	m_scope_begin(temp);
-
-	ui_id_t id = ui_id_pointer(buffer);
-	ui_validate_widget(id);
-
 	ui_gain_tab_focus(id);
-
-	ui_push_id(id);
-
 	ui_hoverable(id, rect);
 
-	ui_text_edit_state_t *state = ui_get_state(id, NULL, ui_text_edit_state_t);
+	ui_push_id(id);
 
 	ui_interaction_t interaction = ui_default_widget_behaviour(id, rect);
 
@@ -1371,6 +1388,11 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *buffer, co
 							case Key_return:
 							{
 								result |= UiTextEditResult_committed;
+
+								if (params->clear_after_commit)
+								{
+									state->clear = true;
+								}
 							} break;
 
 							// @UiInput: dedicated UI keycodes?
@@ -1550,6 +1572,11 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *buffer, co
 	ui_pop_id();
 
 	m_scope_end(temp);
+
+	if (params->auto_storage)
+	{
+		*in_buffer = *buffer;
+	}
 
 	return result;
 }
