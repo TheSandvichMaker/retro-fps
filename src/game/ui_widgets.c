@@ -1293,7 +1293,42 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *in_buffer,
 		state->cursor = (int)buffer->count;
 	}
 
-	if (has_focus)
+	if (has_focus && !state->actively_editing)
+	{
+		if (ui_key_pressed(Key_return, true) ||
+			ui_key_pressed(Key_space, true))
+		{
+			state->actively_editing = true;
+		}
+
+		for (ui_event_t *event = ui_iterate_events();
+			 event;
+			 event = ui_event_next(event))
+		{
+			switch (event->kind)
+			{
+				case UiEvent_text:
+				{
+					if (event->text.data[0] != '\t')
+					{
+						state->actively_editing = true;
+					}
+
+					break;
+				} break;
+			}
+		}
+
+		if (ui_key_pressed(Key_delete, true))
+		{
+			buffer->count  = 0;
+			state ->cursor = 0;
+		}
+	}
+
+	bool actively_editing = has_focus && state->actively_editing;
+
+	if (actively_editing)
 	{
 		for (ui_event_t *event = ui_iterate_events();
 			 event;
@@ -1377,12 +1412,15 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *in_buffer,
 							{
 								result |= UiTextEditResult_terminated;
 
-								if (buffer->count == 0 && ui_id_has_focus(id))
+								if (state->actively_editing)
 								{
-									ui->focused_id = UI_ID_NULL;
+									state->actively_editing = false;
 								}
-
-								ui_consume_event(event);
+								else
+								{
+									ui_remove_from_responder_chain(id);
+									ui_consume_event(event);
+								}
 							} break;
 
 							case Key_return:
@@ -1517,7 +1555,7 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *in_buffer,
 	v4_t caret_color = ui_color(UiColor_text);
 	caret_color.w = 0.5f + 0.25f*(float)sin(1.7 * PI64 * ui->current_time_s);
 
-	if (has_focus)
+	if (actively_editing)
 	{
 		prepared_glyphs_t prep = font_prepare_glyphs(font, temp, string);
 
@@ -1567,6 +1605,15 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *in_buffer,
 
 			ui_draw_rect_roundedness(caret_rect, caret_color, v4_from_scalar(0.0f));
 		}
+	}
+	else if (has_focus)
+	{
+		ui_draw_focus_indicator(rect);
+	}
+
+	if (state->actively_editing && !has_focus)
+	{
+		state->actively_editing = false;
 	}
 
 	ui_pop_id();

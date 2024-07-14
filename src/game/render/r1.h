@@ -113,17 +113,19 @@ typedef struct r1_state_t
 	} map;
 } r1_state_t;
 
-global r1_state_t *r1;
+global thread_local r1_state_t *r1;
+fn void r1_equip  (r1_state_t *state);
+fn void r1_unequip(void);
 
-fn void r1_init(void);
+fn r1_state_t *r1_make(void);
 
 fn rhi_pso_t r1_create_fullscreen_pso(string_t debug_name, rhi_shader_bytecode_t ps, pixel_format_t pf);
 
 fn void r1_begin_frame(void);
 fn void r1_finish_recording_draw_streams(void);
-fn void r1_update_window_resources(rhi_window_t window);
 fn void r1_render_game_view(rhi_command_list_t *list, r1_view_t *view, map_t *map);
 fn void r1_render_ui(rhi_command_list_t *list, r1_view_t *view, ui_render_command_list_t *ui_list);
+fn void r1_set_pso(rhi_command_list_t *list, df_pso_ident_t pso);
 
 typedef struct r1_timing_t
 {

@@ -127,6 +127,8 @@ void d3d12_deferred_release(IUnknown *resource)
 
 void d3d12_flush_deferred_release_queue(uint64_t frame_index)
 {
+	PROFILE_FUNC_BEGIN;
+
 	d3d12_deferred_release_queue_t *queue = &g_rhi.deferred_release_queue;
 
 	mutex_lock(&queue->mutex);
@@ -155,6 +157,8 @@ void d3d12_flush_deferred_release_queue(uint64_t frame_index)
 	}
 
 	queue->tail = tail;
+
+	PROFILE_FUNC_END;
 }
 
 uint32_t d3d12_resource_index(rhi_resource_flags_t flags)

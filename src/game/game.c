@@ -53,6 +53,7 @@ typedef struct app_state_t
 	editor_t        *editor;
 	console_t       *console;
 	ui_t            *ui;
+	r1_state_t      *r1;
 
 	bitmap_font_t   debug_font;
 } app_state_t;
@@ -487,8 +488,11 @@ void app_init(platform_init_io_t *io)
 	// R1
 	//
 
-	r1_init();
+	app->r1 = r1_make();
+
+	r1_equip(app->r1);
 	r1_init_map_resources(map);
+	r1_unequip();
 
 	//
 	//
@@ -638,6 +642,8 @@ fn_local void tick_ui(platform_tick_io_t *io, app_state_t *app, input_t *input, 
 
 fn_local void render_game(gamestate_t *game, rhi_window_t window, ui_render_command_list_t *ui_list)
 {
+	PROFILE_FUNC_BEGIN;
+
 	// @Globals
 	// equip_r1(r1);
 
@@ -702,7 +708,8 @@ fn_local void render_game(gamestate_t *game, rhi_window_t window, ui_render_comm
 		r1_render_game_view(list, &view, map);
 		r1_render_ui(list, &view, ui_list);
 	}
-	// unequip_r1();
+
+	PROFILE_FUNC_END;
 }
 
 fn_local void app_tick(platform_tick_io_t *io)
@@ -714,9 +721,9 @@ fn_local void app_tick(platform_tick_io_t *io)
 	//r1_state_t       *r1             = app->r1;
 
 	equip_action_system(action_system);
-	cmd_execution_list_t cmd_list = ingest_action_system_input(m_get_temp(NULL, 0), io->input);
-
 	suppress_actions(!io->has_focus || the_ui->has_focus);
+
+	cmd_execution_list_t cmd_list = ingest_action_system_input(m_get_temp(NULL, 0), io->input);
 
 	const double sim_rate = 240.0;
 	const double dt       = 1.0 / sim_rate;
@@ -733,17 +740,15 @@ fn_local void app_tick(platform_tick_io_t *io)
 
 	equip_gamestate(app->game);
 
+	for (cmd_execution_node_t *node = cmd_list.head; node; node = node->next)
+	{
+		node->cmd->as.command(node->arguments);
+	}
+
 	bool first_iteration = true;
 	while (app->accumulator >= dt)
 	{
         PROFILE_BEGIN(tick_game);
-
-		for (cmd_execution_node_t *node = cmd_list.head; node; node = node->next)
-		{
-			node->cmd->as.command((string_t){0});
-		}
-
-		cmd_list.head = cmd_list.tail = NULL;
 
 		tick_game(game, (float)dt);
 		app->accumulator -= dt;
@@ -765,69 +770,30 @@ fn_local void app_tick(platform_tick_io_t *io)
 
     PROFILE_BEGIN(tick_ui);
 
-	tick_ui(io, app, io->input, client_size, (float)frame_time);
+	// needed for r1_report_stats
+	r1_equip(app->r1);
+	{
+		tick_ui(io, app, io->input, client_size, (float)frame_time);
+	}
+	r1_unequip();
 
     PROFILE_END(tick_ui);
 
-    PROFILE_BEGIN(render_game);
-
 	rhi_begin_frame();
-	r1_begin_frame();
-	render_game(game, window, &the_ui->render_commands);
-	rhi_end_frame();
 
-    PROFILE_END(render_game);
+	r1_equip(app->r1);
+	{
+		r1_begin_frame();
+		render_game(game, window, &the_ui->render_commands);
+	}
+	r1_unequip();
+
+	rhi_end_frame();
 
 	process_asset_changes();
 
 	io->cursor_locked = !the_ui->has_focus;
 }
-
-#if 0
-typedef struct transform_t
-{
-	v3_t   translation;
-	quat_t rotation;
-	v3_t   scale;
-} transform_t;
-
-typedef struct render_entity_t
-{
-	struct render_entity_t *next;
-
-	transform_t transform;
-
-	// I don't care what's in here right now
-	int dummy;
-} render_entity_t;
-
-typedef struct debug_line_block_t
-{
-	struct debug_line_block_t *next;
-	struct debug_line_block_t *prev;
-
-	uint32_t     simulation_step_index;
-	uint32_t     count;
-	debug_line_t lines[512];
-} debug_line_block_t;
-
-typedef struct render_frame_t
-{
-	arena_t *arena;
-
-	// per-frame render state:
-	debug_line_block_t *head_debug_line_block;
-	debug_line_block_t *tail_debug_line_block;
-
-	// static render state:
-	map_t *map;
-} render_frame_t;
-
-typedef struct render_world_t
-{
-	// sim render state (can be interpolated):
-} render_world_t;
-#endif
 
 static void app_mix_audio(platform_audio_io_t *io)
 {

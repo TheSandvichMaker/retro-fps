@@ -269,3 +269,19 @@ fn_local string_t pixel_format_to_string(pixel_format_t pf)
 
 	return result;
 }
+
+fn_local bool pixel_format_is_hdr(pixel_format_t pf)
+{
+	bool result = false;
+
+	switch (pf)
+	{
+		case PixelFormat_r32g32b32a32_float: result = true; break;
+		case PixelFormat_r32g32b32_float   : result = true; break;
+		case PixelFormat_r16g16b16a16_float: result = true; break;
+		case PixelFormat_r32g32_float      : result = true; break;
+		case PixelFormat_r11g11b10_float   : result = true; break;
+	}
+
+	return result;
+}

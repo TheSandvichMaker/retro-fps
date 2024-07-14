@@ -790,41 +790,71 @@ rect2_t ui_text_op(font_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t
 	p.x = roundf(p.x);
 	p.y = roundf(p.y);
 
-	m_scoped_temp
+	float w = (float)font->texture_w;
+	float h = (float)font->texture_h;
+
+	v2_t at = p;
+	at.y -= 0.5f*font->descent;
+
+	at.y = roundf(at.y);
+
+	for (size_t i = 0; i < text.count; i++)
 	{
-		prepared_glyphs_t prep = font_prepare_glyphs(font, temp, text);
-		result = rect2_add_offset(prep.bounds, p);
+		char c = text.data[i];
 
-		if (op == UI_TEXT_OP_DRAW)
+		if (is_newline(c))
 		{
-			for (size_t i = 0; i < prep.count; i++)
+			at.x  = p.x;
+			at.y -= font->y_advance;
+		}
+		else
+		{
+			font_glyph_t *glyph = font_get_glyph(font, c);
+
+			float cw = (float)(glyph->max_x - glyph->min_x);
+			float ch = (float)(glyph->max_y - glyph->min_y);
+
+			cw /= (float)font->oversampling_x;
+			ch /= (float)font->oversampling_y;
+
+			v2_t point = at;
+			point.x += glyph->x_offset;
+			point.y += glyph->y_offset;
+
+			rect2_t rect = rect2_from_min_dim(point, make_v2(cw, ch));
+			result = rect2_union(result, rect);
+
+			if (op == UI_TEXT_OP_DRAW)
 			{
-				prepared_glyph_t *glyph = &prep.glyphs[i];
-
-				rect2_t rect    = glyph->rect;
-				rect2_t rect_uv = glyph->rect_uv;
-
-				rect = rect2_add_offset(rect, p);
-
-                ui_push_command(
+				ui_push_command(
 					(ui_render_command_key_t){
 						.layer = ui->current_layer,
 					},
-
 					&(ui_render_command_t){
 						.rect = {
 							.rect       = rect,
-							.tex_coords = rect_uv,
+							.tex_coords = {
+								.x0 = (float)glyph->min_x / w,
+								.y0 = (float)glyph->max_y / h,
+								.x1 = (float)glyph->max_x / w,
+								.y1 = (float)glyph->min_y / h,
+							},
 							.color_00   = color_packed,
 							.color_10   = color_packed,
 							.color_11   = color_packed,
 							.color_01   = color_packed,
 							.flags      = R_UI_RECT_BLEND_TEXT,
 							.clip_rect  = ui_get_clip_rect_fixed(),
-							.texture    = rhi_get_texture_srv(font->texture),
+							.texture    = font->texture_srv,
 						},
 					}
-                );
+				);
+			}
+
+			if (i + 1 < text.count)
+			{
+				char c_next = text.data[i + 1];
+				at.x += font_get_advance(font, c, c_next);
 			}
 		}
 	}
@@ -952,7 +982,11 @@ void ui_push_command(ui_render_command_key_t key, const ui_render_command_t *com
 
 void ui_sort_render_commands(void)
 {
+	PROFILE_FUNC_BEGIN;
+
 	radix_sort_u32(&ui->render_commands.keys[0].u32, ui->render_commands.count);
+
+	PROFILE_FUNC_END;
 }
 
 // TODO: remove... silly function
@@ -1070,7 +1104,15 @@ void ui_draw_debug_rect(rect2_t rect, v4_t color)
 void ui_draw_focus_indicator(rect2_t rect)
 {
 	ui_push_clip_rect(ui->ui_area, false);
-	ui_draw_rect_outline(rect2_add_radius(rect, v2s(2.0f)), ui_color(UiColor_focus_indicator), 2.0);
+
+	ui_layer_t old_layer = ui_get_layer();
+	ui_layer_t new_layer = { .layer = old_layer.layer, .sub_layer = 255 };
+	ui_set_layer(new_layer);
+	{
+		ui_draw_rect_outline(rect2_add_radius(rect, v2s(2.0f)), ui_color(UiColor_focus_indicator), 2.0);
+	}
+	ui_set_layer(old_layer);
+
 	ui_pop_clip_rect();
 }
 
@@ -1120,9 +1162,16 @@ void ui_draw_circle(v2_t p, float radius, v4_t color)
 	});
 }
 
-void ui_draw_image(rect2_t rect, rhi_texture_srv_t texture)
+void ui_draw_image_ex(rect2_t rect, rhi_texture_srv_t texture, ui_draw_image_flags_t flags)
 {
 	uint32_t color_packed = 0xFFFFFFFF;
+
+	uint32_t rect_flags = 0;
+
+	if (flags & UiDrawImage_tonemap)
+	{
+		rect_flags |= R_UI_RECT_TONEMAP;
+	}
 
 	ui_do_rect((r_ui_rect_t){
 		.rect = rect,
@@ -1135,7 +1184,13 @@ void ui_draw_image(rect2_t rect, rhi_texture_srv_t texture)
 		.color_11 = color_packed,
 		.color_01 = color_packed,
 		.texture  = texture,
+		.flags    = rect_flags,
 	});
+}
+
+void ui_draw_image(rect2_t rect, rhi_texture_srv_t texture)
+{
+	ui_draw_image_ex(rect, texture, 0);
 }
 
 //
@@ -1803,6 +1858,8 @@ void ui_end(void)
 		{
 			stack_pop(ui->responder_chain);
 		}
+
+		ui->has_focus = !stack_empty(ui->responder_chain);
 	}
 
 	// If at this point a button was pressed and it wasn't consumed by anyone, we must've clicked on nothingness
@@ -1810,9 +1867,13 @@ void ui_end(void)
 	if (ui_button_pressed(UiButton_any, true))
 	{
 		stack_reset(ui->responder_chain);
+		ui->has_focus = false;
 	}
 
-	ui->has_focus = !stack_empty(ui->responder_chain);
+	if (ui_key_pressed(Key_tab, true))
+	{
+		ui->has_focus = !ui->has_focus;
+	}
 
 	ASSERT(ui->id_stack.at == 0);
 

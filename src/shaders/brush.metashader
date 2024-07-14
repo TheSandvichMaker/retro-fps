@@ -29,6 +29,7 @@
 
 			multisample = true,
 
+			cull_mode = "back",
 			depth_test  = true,
 			depth_write = true,
 			depth_func  = "greater",

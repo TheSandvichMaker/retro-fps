@@ -54,6 +54,8 @@ fn_local d3d12_frame_state_t *d3d12_get_frame_state(uint32_t frame_index)
 
 fn_local void d3d12_wait_for_frame(uint64_t fence_value)
 {
+	PROFILE_FUNC_BEGIN;
+
 	uint64_t completed = ID3D12Fence_GetCompletedValue(g_rhi.fence);
 	if (completed < fence_value)
 	{
@@ -64,6 +66,8 @@ fn_local void d3d12_wait_for_frame(uint64_t fence_value)
 		}
 		WaitForSingleObject(g_rhi.fence_event, INFINITE);
 	}
+
+	PROFILE_FUNC_END;
 }
 
 fn_local bool d3d12_transition_state(ID3D12Resource *resource, 
@@ -1985,6 +1989,8 @@ fn_local void d3d12_resolve_timestamp_queries(ID3D12GraphicsCommandList *list);
 
 void rhi_begin_frame(void)
 {
+	PROFILE_FUNC_BEGIN;
+
 	d3d12_frame_state_t *frame = d3d12_get_frame_state(g_rhi.frame_index);
 
 	d3d12_wait_for_frame(frame->fence_value);
@@ -2024,6 +2030,8 @@ void rhi_begin_frame(void)
 	frame->direct_command_list.index_buffer        = (rhi_buffer_t){0};
 	frame->direct_command_list.render_target_count = 0;
 	frame->direct_command_list.current_pso         = (rhi_pso_t){0};
+
+	PROFILE_FUNC_END;
 }
 
 fn_local D3D12_RENDER_TARGET_BLEND_DESC to_d3d12_rt_blend_desc(const rhi_render_target_blend_t *desc)
@@ -2628,6 +2636,8 @@ void rhi_dispatch(rhi_command_list_t *list, int dispatch_x, int dispatch_y, int 
 
 void rhi_end_frame(void)
 {
+	PROFILE_FUNC_BEGIN;
+
 	for (size_t i = 0; i < g_rhi.textures_to_release_count; i++)
 	{
 		rhi_destroy_texture(g_rhi.textures_to_release[i]);
@@ -2754,6 +2764,8 @@ void rhi_end_frame(void)
 		stats->persistent_rtv_count = g_rhi.rtv.used;
 		stats->persistent_dsv_count = g_rhi.dsv.used;
 	}
+
+	PROFILE_FUNC_END;
 }
 
 void rhi_get_allocation_stats(rhi_allocation_stats_t *stats)
@@ -2773,6 +2785,11 @@ rhi_shader_bytecode_t rhi_compile_shader(arena_t *arena, string_t shader_source,
 			L"-I", L"../src/shaders",
 			L"-WX", 
 			L"-Zi", 
+#if DREAM_DEBUG
+			L"-DDREAM_DEBUG=1",
+#else
+			L"-DDREAM_DEBUG=0",
+#endif
 			// L"-no-legacy-cbuf-layout", why doesn't this work
 		};
 

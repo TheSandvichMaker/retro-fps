@@ -139,13 +139,13 @@ cmd_execution_list_t ingest_action_system_input(arena_t *arena, input_t *input)
 
 			cvar_t *cmd = actions->key_to_ccmd[keycode];
 
-			if (event->key.pressed && cmd)
+			if (event->key.pressed && cmd && !actions->suppressed)
 			{
 				if (cmd->kind == CVarKind_command)
 				{
 					log(ActionSystem, Spam, "Triggered ccmd %cs with key %cs", cmd->key, keycode_to_string(keycode));
 
-					cmd_execution_node_t *node = m_alloc_struct_nozero(arena, cmd_execution_node_t);
+					cmd_execution_node_t *node = m_alloc_struct(arena, cmd_execution_node_t);
 					node->cmd = cmd;
 
 					sll_push_back(result.head, result.tail, node);

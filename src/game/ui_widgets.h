@@ -162,6 +162,8 @@ fn bool ui_draw_int   (rect2_t rect, int32_t *v);
 
 typedef struct ui_text_edit_state_t
 {
+	bool actively_editing;
+
 	int selection_start;
 	int cursor;
 

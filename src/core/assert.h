@@ -44,7 +44,7 @@ typedef struct debug_break_state_t
 
 // TODO: This could have the debug break register itself to some global table
 // so that the triggered state of them could be reset / inhibited through UI.
-#define DEBUG_BREAK_ONCE(out_debug_break_state)                       \
+#define DEBUG_BREAK_ONCE()                                            \
 	do                                                                \
 	{                                                                 \
 		static debug_break_state_t MACRO_IDENT(debug_break_state);    \
@@ -52,10 +52,6 @@ typedef struct debug_break_state_t
 		{                                                             \
 			DEBUG_BREAK();                                            \
 			MACRO_IDENT(debug_break_state).triggered = true;          \
-		}                                                             \
-		if (out_debug_break_state)                                    \
-		{                                                             \
-			*out_debug_break_state = &MACRO_IDENT(debug_break_state); \
 		}                                                             \
 	} while (false)
 

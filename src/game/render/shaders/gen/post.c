@@ -59,6 +59,13 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"\n" \
 	"float4 integrate_fog(float2 uv, uint2 co, float dither, int sample_index)\n" \
 	"{\n" \
+	"    float density = view.fog_density;\n" \
+	"\n" \
+	"	if (density <= 0.0)\n" \
+	"	{\n" \
+	"		return float4(0, 0, 0, 1);\n" \
+	"	}\n" \
+	"\n" \
 	"	float3 o, d;\n" \
 	"	camera_ray(uv, o, d);\n" \
 	"\n" \
@@ -71,7 +78,6 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"\n" \
 	"	float stop_distance = min(depth, max_march_distance);\n" \
 	"\n" \
-	"    float density    = view.fog_density;\n" \
 	"    float absorption = view.fog_absorption;\n" \
 	"    float scattering = view.fog_scattering;\n" \
 	"    float extinction = absorption + scattering;\n" \
@@ -180,15 +186,51 @@ void shader_post_set_draw_params(rhi_command_list_t *list, post_draw_parameters_
 	"	float3 color      = tex_color     .Load(uint3(co, 0));\n" \
 	"	float4 blue_noise = tex_blue_noise.Load(uint3(co % 64, 0));\n" \
 	"\n" \
-	"	float3 bloom = draw.bloom0.Get().SampleLevel(df::s_linear_clamped, uv, 0);\n" \
+	"	[branch]\n" \
+	"	if (draw.bloom_amount > 0.0)\n" \
+	"	{\n" \
+	"		float3 bloom = draw.bloom0.Get().SampleLevel(df::s_linear_clamped, uv, 0);\n" \
 	"\n" \
 	"#if BLOOM_BLEND == 0\n" \
-	"	color = lerp(color, bloom, draw.bloom_amount);\n" \
-	"	color = 1.0 - exp(-color);\n" \
+	"		color = lerp(color, bloom, draw.bloom_amount);\n" \
+	"		color = 1.0 - exp(-color);\n" \
 	"#elif BLOOM_BLEND == 1\n" \
-	"	color = 1.0 - exp(-color);\n" \
-	"	bloom = 1.0 - exp(-bloom);\n" \
-	"	color = 1.0 - (1.0 - color)*(1.0 - draw.bloom_amount*bloom);\n" \
+	"		color = 1.0 - exp(-color);\n" \
+	"		bloom = 1.0 - exp(-bloom);\n" \
+	"		color = 1.0 - (1.0 - color)*(1.0 - draw.bloom_amount*bloom);\n" \
+	"#endif\n" \
+	"	}\n" \
+	"\n" \
+	"#if DREAM_DEBUG\n" \
+	"	if (any(isnan(color)))\n" \
+	"	{\n" \
+	"		static const uint NaN[2*8*8] = {\n" \
+	"			0, 0, 0, 0, 0, 0, 0, 0,\n" \
+	"			0, 1, 0, 0, 0, 0, 1, 0,\n" \
+	"			0, 1, 1, 0, 0, 0, 1, 0,\n" \
+	"			0, 1, 0, 1, 0, 0, 1, 0,\n" \
+	"			0, 1, 0, 0, 1, 0, 1, 0,\n" \
+	"			0, 1, 0, 0, 0, 1, 1, 0,\n" \
+	"			0, 1, 0, 0, 0, 0, 1, 0,\n" \
+	"			0, 0, 0, 0, 0, 0, 0, 0,\n" \
+	"\n" \
+	"			0, 0, 0, 0, 0, 0, 0, 0,\n" \
+	"			0, 0, 0, 0, 0, 0, 0, 0,\n" \
+	"			0, 0, 1, 1, 1, 1, 0, 0,\n" \
+	"			0, 1, 0, 0, 0, 1, 0, 0,\n" \
+	"			0, 1, 0, 0, 0, 1, 0, 0,\n" \
+	"			0, 1, 0, 0, 0, 1, 0, 0,\n" \
+	"			0, 0, 1, 1, 1, 0, 1, 0,\n" \
+	"			0, 0, 0, 0, 0, 0, 0, 0,\n" \
+	"		};\n" \
+	"\n" \
+	"		uint x = co.x % 8;\n" \
+	"		uint y = co.y % 8;\n" \
+	"		uint n = (co.x / 8) % 2;\n" \
+	"		uint i = n*8*8 + y*8 + x;\n" \
+	"\n" \
+	"		color = NaN[i] ? float3(1, 0, 0) : float3(0, 0, 0);\n" \
+	"	}\n" \
 	"#endif\n" \
 	"\n" \
 	"	float3 dither = RemapTriPDF(blue_noise.rgb) / 255.0;\n" \

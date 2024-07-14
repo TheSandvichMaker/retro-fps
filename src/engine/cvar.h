@@ -60,6 +60,19 @@ typedef struct cvar_t
 	} max;
 } cvar_t;
 
+typedef struct cmd_execution_node_t
+{
+	struct cmd_execution_node_t *next;
+	cvar_t  *cmd;
+	string_t arguments;
+} cmd_execution_node_t;
+
+typedef struct cmd_execution_list_t
+{
+	cmd_execution_node_t *head;
+	cmd_execution_node_t *tail;
+} cmd_execution_list_t;
+
 typedef struct cvar_state_t
 {
 	bool initialized;

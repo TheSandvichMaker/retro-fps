@@ -385,7 +385,7 @@ fn_local v3_t rgb_from_hsv(v3_t hsv)
 
 // https://registry.khronos.org/OpenGL/extensions/EXT/EXT_packed_float.txt
 
-fn_local unsigned pack_float11(float value)
+fn_local uint32_t pack_float11(float value)
 {
 	// This does not handle NaN or infinity.
 
@@ -406,7 +406,11 @@ fn_local unsigned pack_float11(float value)
     int exponent = ((u.i >> 23) & 0xFF) - 127;
     int mantissa = u.i & MASK_BITS(22);
 
-    return (((exponent + 15) << 6) | (mantissa >> (23 - 6))) & MASK_BITS(11);
+	int out_exponent = CLAMP(exponent + 15, 0, 31); // convert to 5 bit biased exponent
+	int out_mantissa = mantissa >> 17;              // convert to 6 bit mantissa
+
+	uint32_t result = (out_exponent << 6)|out_mantissa;
+	return result;
 }
 
 fn_local unsigned pack_float10(float value)
@@ -430,7 +434,11 @@ fn_local unsigned pack_float10(float value)
     int exponent = ((u.i >> 23) & 0xFF) - 127;
     int mantissa = u.i & MASK_BITS(22);
 
-    return (((exponent + 15) << 5) | (mantissa >> (23 - 5))) & MASK_BITS(10);
+	int out_exponent = CLAMP(exponent + 15, 0, 31); // convert to 5 bit biased exponent
+	int out_mantissa = mantissa >> 18;              // convert to 5 bit mantissa
+
+	uint32_t result = (out_exponent << 5)|out_mantissa;
+	return result;
 }
 
 fn_local uint32_t pack_r11g11b10f(v3_t color)

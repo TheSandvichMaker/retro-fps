@@ -92,6 +92,8 @@ fn_local bool d3d12_retire_one_upload_submission(bool wait_if_needed)
 
 void d3d12_retire_ring_buffer_entries(void)
 {
+	PROFILE_FUNC_BEGIN;
+
 	d3d12_upload_ring_buffer_t *ring_buffer = &g_rhi.upload_ring_buffer;
 
 	mutex_lock(&ring_buffer->mutex);
@@ -112,6 +114,8 @@ void d3d12_retire_ring_buffer_entries(void)
 	}
 
 	mutex_unlock(&ring_buffer->mutex);
+
+	PROFILE_FUNC_END;
 }
 
 d3d12_upload_context_t d3d12_upload_begin(size_t size, size_t align)

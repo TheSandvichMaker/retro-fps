@@ -16,6 +16,7 @@ void shader_ui_set_draw_params(rhi_command_list_t *list, ui_draw_parameters_t *p
 	"#define R_UI_RECT_BLEND_TEXT     (1 << 0)\n" \
 	"#define R_UI_RECT_HUE_PICKER     (1 << 1)\n" \
 	"#define R_UI_RECT_SAT_VAL_PICKER (1 << 2)\n" \
+	"#define R_UI_RECT_TONEMAP        (1 << 3)\n" \
 	"\n" \
 	"struct Rect2\n" \
 	"{\n" \
@@ -181,6 +182,12 @@ void shader_ui_set_draw_params(rhi_command_list_t *list, ui_draw_parameters_t *p
 	"	if (all(uv >= uv_min) && all(uv <= uv_max))\n" \
 	"	{\n" \
 	"		float4 tex_col = rect.texture.Get().SampleLevel(df::s_linear_clamped, uv, 0);\n" \
+	"\n" \
+	"		if (rect.flags & R_UI_RECT_TONEMAP)\n" \
+	"		{\n" \
+	"			tex_col.rgb = 1.0 - exp(-tex_col.rgb);\n" \
+	"		}\n" \
+	"\n" \
 	"		if (rect.flags & R_UI_RECT_BLEND_TEXT)\n" \
 	"		{\n" \
 	"			color *= sqrt(tex_col.r);\n" \
@@ -189,6 +196,21 @@ void shader_ui_set_draw_params(rhi_command_list_t *list, ui_draw_parameters_t *p
 	"		{\n" \
 	"			color *= tex_col;\n" \
 	"			color.a *= aa;\n" \
+	"		}\n" \
+	"\n" \
+	"		bool nan = any(isnan(tex_col));\n" \
+	"		bool inf = any(isinf(tex_col));\n" \
+	"\n" \
+	"		if (nan || inf)\n" \
+	"		{\n" \
+	"			uint2 co = uint2(pos);\n" \
+	"\n" \
+	"			float3 blink_color = \n" \
+	"				nan ? float3(1, 0, 0) :\n" \
+	"				inf ? float3(0, 1, 0) : float3(0, 0, 0);\n" \
+	"			\n" \
+	"			bool x = ((2*view.frame_index / view.refresh_rate) % 2 == 0);\n" \
+	"			color = x ? float4(blink_color, 1) : float4(0, 0, 0, 1);\n" \
 	"		}\n" \
 	"	}\n" \
 	"	else\n" \

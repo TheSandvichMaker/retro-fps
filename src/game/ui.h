@@ -407,7 +407,15 @@ fn void    ui_draw_rect_outline            (rect2_t rect, v4_t color, float outl
 fn void    ui_draw_circle                  (v2_t p, float r, v4_t color);
 fn void    ui_draw_debug_rect              (rect2_t rect, v4_t color);
 fn void    ui_draw_focus_indicator         (rect2_t rect);
-fn void    ui_draw_image                   (rect2_t rect, rhi_texture_srv_t texture);
+
+typedef uint32_t ui_draw_image_flags_t;
+typedef enum ui_draw_image_flags_enum_t
+{
+	UiDrawImage_tonemap = 0x1,
+} ui_draw_image_flags_enum_t;
+
+fn void ui_draw_image_ex(rect2_t rect, rhi_texture_srv_t texture, ui_draw_image_flags_t flags);
+fn void ui_draw_image   (rect2_t rect, rhi_texture_srv_t texture);
 
 //
 // Widget Building Utilities
@@ -504,7 +512,7 @@ typedef struct ui_render_command_t
 } ui_render_command_t;
 
 #define UI_CLIP_RECT_STACK_COUNT (32)
-#define UI_RENDER_COMMANDS_CAPACITY (8192)
+#define UI_RENDER_COMMANDS_CAPACITY (1 << 16)
 
 typedef struct ui_render_command_list_t
 {

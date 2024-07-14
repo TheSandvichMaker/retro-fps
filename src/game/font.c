@@ -151,6 +151,8 @@ font_t *make_font_from_memory(string_t cosmetic_name, string_t font_data, size_t
 			},
 		});
 
+		result->texture_srv = rhi_get_texture_srv(result->texture);
+
 		result->initialized = true;
 	}
 

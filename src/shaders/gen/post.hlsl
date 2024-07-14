@@ -45,6 +45,13 @@ float henyey_greenstein(float3 v, float3 l, float k)
 
 float4 integrate_fog(float2 uv, uint2 co, float dither, int sample_index)
 {
+    float density = view.fog_density;
+
+	if (density <= 0.0)
+	{
+		return float4(0, 0, 0, 1);
+	}
+
 	float3 o, d;
 	camera_ray(uv, o, d);
 
@@ -57,7 +64,6 @@ float4 integrate_fog(float2 uv, uint2 co, float dither, int sample_index)
 
 	float stop_distance = min(depth, max_march_distance);
 
-    float density    = view.fog_density;
     float absorption = view.fog_absorption;
     float scattering = view.fog_scattering;
     float extinction = absorption + scattering;
@@ -166,15 +172,51 @@ float4 post_ps(fullscreen_triangle_vs_out_t IN) : SV_Target
 	float3 color      = tex_color     .Load(uint3(co, 0));
 	float4 blue_noise = tex_blue_noise.Load(uint3(co % 64, 0));
 
-	float3 bloom = draw.bloom0.Get().SampleLevel(df::s_linear_clamped, uv, 0);
+	[branch]
+	if (draw.bloom_amount > 0.0)
+	{
+		float3 bloom = draw.bloom0.Get().SampleLevel(df::s_linear_clamped, uv, 0);
 
 #if BLOOM_BLEND == 0
-	color = lerp(color, bloom, draw.bloom_amount);
-	color = 1.0 - exp(-color);
+		color = lerp(color, bloom, draw.bloom_amount);
+		color = 1.0 - exp(-color);
 #elif BLOOM_BLEND == 1
-	color = 1.0 - exp(-color);
-	bloom = 1.0 - exp(-bloom);
-	color = 1.0 - (1.0 - color)*(1.0 - draw.bloom_amount*bloom);
+		color = 1.0 - exp(-color);
+		bloom = 1.0 - exp(-bloom);
+		color = 1.0 - (1.0 - color)*(1.0 - draw.bloom_amount*bloom);
+#endif
+	}
+
+#if DREAM_DEBUG
+	if (any(isnan(color)))
+	{
+		static const uint NaN[2*8*8] = {
+			0, 0, 0, 0, 0, 0, 0, 0,
+			0, 1, 0, 0, 0, 0, 1, 0,
+			0, 1, 1, 0, 0, 0, 1, 0,
+			0, 1, 0, 1, 0, 0, 1, 0,
+			0, 1, 0, 0, 1, 0, 1, 0,
+			0, 1, 0, 0, 0, 1, 1, 0,
+			0, 1, 0, 0, 0, 0, 1, 0,
+			0, 0, 0, 0, 0, 0, 0, 0,
+
+			0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 0, 0, 0, 0, 0, 0,
+			0, 0, 1, 1, 1, 1, 0, 0,
+			0, 1, 0, 0, 0, 1, 0, 0,
+			0, 1, 0, 0, 0, 1, 0, 0,
+			0, 1, 0, 0, 0, 1, 0, 0,
+			0, 0, 1, 1, 1, 0, 1, 0,
+			0, 0, 0, 0, 0, 0, 0, 0,
+		};
+
+		uint x = co.x % 8;
+		uint y = co.y % 8;
+		uint n = (co.x / 8) % 2;
+		uint i = n*8*8 + y*8 + x;
+
+		color = NaN[i] ? float3(1, 0, 0) : float3(0, 0, 0);
+	}
 #endif
 
 	float3 dither = RemapTriPDF(blue_noise.rgb) / 255.0;

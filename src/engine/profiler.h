@@ -20,11 +20,13 @@ global profiler_state_t profiler;
 
 typedef struct profiler_slot_t
 {
-	const char *tag;           // 8
-	uint64_t hit_count;        // 16
-	uint64_t exclusive_tsc;    // 24
-	uint64_t inclusive_tsc;    // 32
-	uint64_t bytes_processed;  // 40
+	const char *tag;               // 8
+	uint64_t hit_count;            // 16
+	uint64_t exclusive_tsc;        // 24
+	uint64_t inclusive_tsc;        // 32
+	uint64_t bytes_processed;      // 40
+	double   display_exclusive_ms; // 48
+	double   display_inclusive_ms; // 56
 } profiler_slot_t;
 
 typedef struct profiler_block_t
@@ -116,6 +118,34 @@ fn_local double tsc_to_ms(uint64_t tsc, uint64_t freq)
 
 fn_local void profiler_begin_frame(void)
 {
+	static uint64_t cpu_freq = 0;
+
+	if (!cpu_freq)
+	{
+		cpu_freq = os_estimate_cpu_timer_frequency(200);
+	}
+
     copy_array(profiler_slots_read, profiler_slots, profiler_slots_count);
-	zero_array(profiler_slots, profiler_slots_count);
+
+	for (size_t i = 1; i < profiler_slots_count; i++)
+	{
+		profiler_slot_t *slot = &profiler_slots[i];
+
+		double exclusive_ms = tsc_to_ms(slot->exclusive_tsc, cpu_freq);
+		double inclusive_ms = tsc_to_ms(slot->inclusive_tsc, cpu_freq);
+
+		slot->display_exclusive_ms = 0.99*slot->display_exclusive_ms + 0.01*exclusive_ms;
+		slot->display_inclusive_ms = 0.99*slot->display_inclusive_ms + 0.01*inclusive_ms;
+
+		slot->hit_count       = 0;
+		slot->exclusive_tsc   = 0;
+		slot->inclusive_tsc   = 0;
+		slot->bytes_processed = 0;
+	}
+}
+
+fn_local size_t slot_index_from_slot(profiler_slot_t *table, profiler_slot_t *slot)
+{
+	ASSERT(slot >= table && slot < table + profiler_slots_count);
+	return (size_t)(slot - table);
 }

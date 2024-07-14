@@ -32,7 +32,9 @@ typedef struct font_t
 
 	uint32_t texture_w;
 	uint32_t texture_h;
-	rhi_texture_t texture;
+
+	rhi_texture_t     texture;
+	rhi_texture_srv_t texture_srv;
 
 	font_glyph_t  null_glyph;
 

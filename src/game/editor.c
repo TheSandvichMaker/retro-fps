@@ -151,6 +151,16 @@ void editor_init(editor_t *editor)
 	editor_init_cvar_window(&editor->cvar_window_state);
 }
 
+fn_local int sort_profile_slots(const void *l, const void *r, void *user_data)
+{
+	(void)user_data;
+
+	const profiler_slot_t *slot_l = *(profiler_slot_t **)l;
+	const profiler_slot_t *slot_r = *(profiler_slot_t **)r;
+
+	return slot_l->display_exclusive_ms < slot_r->display_exclusive_ms;
+}
+
 void editor_show_timings(editor_t *editor)
 {
     (void)editor;
@@ -162,10 +172,11 @@ void editor_show_timings(editor_t *editor)
     ui_set_layer((ui_layer_t){ .layer = 255 });
 
     rect2_t full_area = ui->ui_area;
+	rect2_cut_from_top(full_area, ui_sz_pct(0.333f), &full_area, NULL);
+
+	ui_draw_rect(full_area, make_v4(0, 0, 0, 0.75f));
 
     float one_third = ui_size_to_width(full_area, ui_sz_pct(0.33333f));
-
-	rect2_t background_area = rect2_inverted_infinity();
 
 	//------------------------------------------------------------------------
 
@@ -173,30 +184,25 @@ void editor_show_timings(editor_t *editor)
     rect2_cut_from_left(full_area, ui_sz_pix(one_third), &gpu_area, &full_area);
 
     {
-        ui_row_builder_t builder = ui_make_row_builder(gpu_area);
-
+        ui_row_builder_t builder = ui_make_row_builder(ui_scrollable_region_begin_ex(&editor->gpu_stats_scroll_region, gpu_area, UiScrollableRegionFlags_scroll_vertical));
 		ui_push_sub_layer();
 
         ui_row_header(&builder, S("GPU Timings"));
 
-        // UI_Scalar(UiScalar_label_align_x, 0.5f)
-        {
-            double total = 0.0f;
+		double total = 0.0f;
 
-            for (size_t i = 0; i < stats.timings_count; i++)
-            {
-                r1_timing_t *timing = &stats.timings[i];
+		for (size_t i = 0; i < stats.timings_count; i++)
+		{
+			r1_timing_t *timing = &stats.timings[i];
 
-                ui_row_labels2(&builder, Sf("%cs:", timing->identifier), Sf("%.02fms", 1000.0*timing->inclusive_time));
-                total += timing->exclusive_time;
-            }
+			ui_row_labels2(&builder, Sf("%cs:", timing->identifier), Sf("%.02fms", 1000.0*timing->inclusive_time));
+			total += timing->exclusive_time;
+		}
 
-            ui_row_label(&builder, Sf("total: %.02fms", 1000.0*total));
-        }
+		ui_row_labels2(&builder, S("total:"), Sf("%.02fms", 1000.0*total));
 
 		ui_pop_sub_layer();
-
-		background_area = rect2_union(background_area, builder.covered_rect);
+		ui_scrollable_region_end(&editor->gpu_stats_scroll_region, builder.rect);
     }
 
 	//------------------------------------------------------------------------
@@ -207,21 +213,15 @@ void editor_show_timings(editor_t *editor)
 	static int stupid = 0;
 
 	{
-		/*
-		uint64_t *sort_keys = m_alloc_array_nozero(temp, profiler_slots_count, uint64_t);
+		profiler_slot_t **sorted_slots = m_alloc_array_nozero(temp, profiler_slots_count - 1, profiler_slot_t *);
 
 		for (size_t i = 1; i < profiler_slots_count; i += 1)
 		{
-			profiler_slot_t *slot = &profiler_slots[i];
-
-			uint64_t key = i & 0xFFFF;          // low 16 bits is the index
-			key |= (slot->exclusive_tsc) << 16; // uppwer 48 bits is tsc
-
-			sort_keys[i - 1] = key;
+			sorted_slots[i - 1] = &profiler_slots_read[i];
 		}
 
-		radix_sort_u64(sort_keys, profiler_slots_count - 1);
-		*/
+		// Sorting makes things too jittery...
+		// merge_sort_array(sorted_slots, profiler_slots_count - 1, sort_profile_slots, NULL);
 
         static uint64_t cpu_freq = 0;
 
@@ -230,8 +230,7 @@ void editor_show_timings(editor_t *editor)
             cpu_freq = os_estimate_cpu_timer_frequency(100);
         }
 
-        ui_row_builder_t builder = ui_make_row_builder(cpu_area);
-
+        ui_row_builder_t builder = ui_make_row_builder(ui_scrollable_region_begin_ex(&editor->cpu_stats_scroll_region, cpu_area, UiScrollableRegionFlags_scroll_vertical));
 		ui_push_sub_layer();
 
         ui_row_header(&builder, S("CPU Timings"));
@@ -241,30 +240,21 @@ void editor_show_timings(editor_t *editor)
 			editor->profiler_stats = m_alloc_array(&editor->arena, profiler_slots_count, profiler_stat_t);
 		}
 
-		for (size_t i = 1; i < profiler_slots_count; i++)
+		for (size_t i = 0; i < profiler_slots_count - 1; i++)
 		{
-			//uint64_t key = sort_keys[j];
+			profiler_slot_t *slot = sorted_slots[i];
+			// profiler_stat_t *stat = &editor->profiler_stats[slot_index_from_slot(profiler_slots_read, slot)];
 
-			//size_t i = key & 0xFFFF;
-			profiler_slot_t *slot = &profiler_slots_read[i];
-
-			profiler_stat_t *stat = &editor->profiler_stats[i];
-
-			double exclusive_ms = tsc_to_ms(slot->exclusive_tsc, cpu_freq);
-			double inclusive_ms = tsc_to_ms(slot->inclusive_tsc, cpu_freq);
-
-			stat->exclusive_ms = 0.99*stat->exclusive_ms + 0.01*exclusive_ms;
-			stat->inclusive_ms = 0.99*stat->inclusive_ms + 0.01*inclusive_ms;
-
+			double exclusive_ms  = slot->display_exclusive_ms;
+			double inclusive_ms  = slot->display_inclusive_ms;
 			double exclusive_pct = 0.0; //100.0*(exclusive_ms / total_time_ms);
 			double inclusive_pct = 0.0; //100.0*(inclusive_ms / total_time_ms);
 
-			ui_row_labels2(&builder, Sf("%s", slot->tag), Sf("%.2f/%.2fms (%.2f/%.2f%%, %zu hits)", stat->exclusive_ms, stat->inclusive_ms, exclusive_pct, inclusive_pct, slot->hit_count));
+			ui_row_labels2(&builder, Sf("%s", slot->tag), Sf("%.2f/%.2fms (%.2f/%.2f%%, %zu hits)", exclusive_ms, inclusive_ms, exclusive_pct, inclusive_pct, slot->hit_count));
 		}
 
 		ui_pop_sub_layer();
-
-		background_area = rect2_union(background_area, builder.covered_rect);
+		ui_scrollable_region_end(&editor->cpu_stats_scroll_region, builder.rect);
 	}
 
 	stupid += 1;
@@ -275,8 +265,7 @@ void editor_show_timings(editor_t *editor)
     rect2_cut_from_left(full_area, ui_sz_pix(one_third), &gpu_alloc_area, &full_area);
 
     {
-        ui_row_builder_t builder = ui_make_row_builder(gpu_alloc_area);
-
+        ui_row_builder_t builder = ui_make_row_builder(ui_scrollable_region_begin_ex(&editor->gpu_alloc_stats_scroll_region, gpu_alloc_area, UiScrollableRegionFlags_scroll_vertical));
 		ui_push_sub_layer();
 
         ui_row_header(&builder, S("GPU Allocations"));
@@ -297,13 +286,10 @@ void editor_show_timings(editor_t *editor)
 		ui_row_labels2(&builder, S("DSV Descriptors Used:"), Sf("%llu", alloc_stats.persistent_dsv_count));
 
 		ui_pop_sub_layer();
-
-		background_area = rect2_union(background_area, builder.covered_rect);
+		ui_scrollable_region_end(&editor->gpu_alloc_stats_scroll_region, builder.rect);
     }
 
 	//------------------------------------------------------------------------
-
-	ui_draw_rect(background_area, make_v4(0, 0, 0, 0.5f));
 
     m_scope_end(temp);
 }

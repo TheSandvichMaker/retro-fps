@@ -46,7 +46,7 @@ static v3_t evaluate_lighting(lum_thread_context_t *thread, lum_params_t *params
         v3_t light_p = random_point_on_light(&thread->entropy, light);
 
         v3_t  light_vector   = sub(light_p, hit_p);
-        float light_distance = vlen(light_vector);
+        float light_distance = flt_max(0.0001f, vlen(light_vector));
         v3_t light_direction = div(light_vector, light_distance);
         float light_ndotl    = dot(hit_n, light_direction);
 
@@ -68,7 +68,7 @@ static v3_t evaluate_lighting(lum_thread_context_t *thread, lum_params_t *params
                 v3_t contribution = light->color;
 
                 contribution = mul(contribution, light_ndotl);
-                contribution = mul(contribution, 1.0f / (light_distance*light_distance));
+                contribution = mul(contribution, 1.0f / (1.0f + light_distance*light_distance));
 
                 lighting = add(lighting, contribution);
 
@@ -146,6 +146,13 @@ static v3_t pathtrace_recursively(lum_thread_context_t *thread, lum_params_t *pa
     path->vertex_count++;
     dll_push_back(path->first_vertex, path->last_vertex, path_vertex);
 
+	bool ignore_sun = false;
+
+	if (vlen(params->sun_color) <= 0.0001)
+	{
+		ignore_sun = true;
+	}
+
     intersect_result_t hit;
     if (intersect_map(map, &intersect_params, &hit))
     {
@@ -185,7 +192,7 @@ static v3_t pathtrace_recursively(lum_thread_context_t *thread, lum_params_t *pa
 
         v3_t hit_p = add(intersect_params.o, mul(hit.t, intersect_params.d));
 
-        v3_t lighting = evaluate_lighting(thread, params, path_vertex, hit_p, n, false);
+        v3_t lighting = evaluate_lighting(thread, params, path_vertex, hit_p, n, ignore_sun);
 
         v2_t sample = random_unilateral2(entropy);
         v3_t unrotated_dir = map_to_cosine_weighted_hemisphere(sample);
@@ -211,6 +218,11 @@ static v3_t pathtrace_recursively(lum_thread_context_t *thread, lum_params_t *pa
         path_vertex->o            = add(prev_vertex->o, intersect_params.d);
         path_vertex->contribution = color;
     }
+
+	if (v3_contains_nan(color))
+	{
+		DEBUG_BREAK_ONCE();
+	}
 
     return color;
 }
@@ -348,7 +360,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
 	if (atomic_load(&state->flags) & LumStateFlag_cancel)
         goto done;
 
-#if  1
+#if  0
     for (int k = 0; k < 32 / LIGHTMAP_SCALE; k++)
     {
         for (int y = 0; y < h; y++)
@@ -400,6 +412,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
 	if (atomic_load(&state->flags) & LumStateFlag_cancel)
         goto done;
 
+#if 0
     for (int k = 0; k < 1; k++)
     {
         for (int y = 0; y < h; y++)
@@ -446,6 +459,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
             direct_lighting_pixels[y*w + x] = color;
         }
     }
+#endif
 
 	if (atomic_load(&state->flags) & LumStateFlag_cancel)
         goto done;
@@ -459,12 +473,22 @@ static void lum_job(job_context_t *job_context, void *userdata)
 	if (atomic_load(&state->flags) & LumStateFlag_cancel)
         goto done;
 
+#if 1
     uint32_t *packed = m_alloc_array(temp, w*h, uint32_t);
 
     for (int i = 0; i < w*h; i++)
     {
         packed[i] = pack_r11g11b10f(direct_lighting_pixels[i]);
     }
+#else
+    v4_t *packed = m_alloc_array(temp, w*h, v4_t);
+
+    for (int i = 0; i < w*h; i++)
+    {
+		v3_t c = direct_lighting_pixels[i];
+        packed[i] = make_v4(c.x, c.y, c.z, 1.0f);
+    }
+#endif
 
     if (RESOURCE_HANDLE_VALID(poly->lightmap_rhi))
     {
@@ -480,7 +504,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
 		.initial_data = &(rhi_texture_data_t){
 			.subresources      = &packed,
 			.subresource_count = 1,
-			.row_stride        = sizeof(uint32_t)*w,
+			.row_stride        = sizeof(packed[0])*w,
 		},
 	});
 

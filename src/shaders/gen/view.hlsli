@@ -15,6 +15,7 @@ struct view_parameters_t
 	float2 view_size;
 	float fog_scattering;
 	uint frame_index;
+	uint refresh_rate;
 };
 
 ConstantBuffer< view_parameters_t > view : register(b2);

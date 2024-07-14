@@ -282,6 +282,7 @@ typedef enum r_ui_rect_flags_t
     R_UI_RECT_BLEND_TEXT     = 1 << 0,
 	R_UI_RECT_HUE_PICKER     = 1 << 1,
 	R_UI_RECT_SAT_VAL_PICKER = 1 << 2,
+	R_UI_RECT_TONEMAP        = 1 << 3,
 } r_ui_rect_flags_t;
 
 typedef struct r_ui_rect_t

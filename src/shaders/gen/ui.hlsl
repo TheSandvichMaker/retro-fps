@@ -7,6 +7,7 @@
 #define R_UI_RECT_BLEND_TEXT     (1 << 0)
 #define R_UI_RECT_HUE_PICKER     (1 << 1)
 #define R_UI_RECT_SAT_VAL_PICKER (1 << 2)
+#define R_UI_RECT_TONEMAP        (1 << 3)
 
 struct Rect2
 {
@@ -172,6 +173,12 @@ float4 MainPS(VSOut IN) : SV_Target
 	if (all(uv >= uv_min) && all(uv <= uv_max))
 	{
 		float4 tex_col = rect.texture.Get().SampleLevel(df::s_linear_clamped, uv, 0);
+
+		if (rect.flags & R_UI_RECT_TONEMAP)
+		{
+			tex_col.rgb = 1.0 - exp(-tex_col.rgb);
+		}
+
 		if (rect.flags & R_UI_RECT_BLEND_TEXT)
 		{
 			color *= sqrt(tex_col.r);
@@ -180,6 +187,21 @@ float4 MainPS(VSOut IN) : SV_Target
 		{
 			color *= tex_col;
 			color.a *= aa;
+		}
+
+		bool nan = any(isnan(tex_col));
+		bool inf = any(isinf(tex_col));
+
+		if (nan || inf)
+		{
+			uint2 co = uint2(pos);
+
+			float3 blink_color = 
+				nan ? float3(1, 0, 0) :
+				inf ? float3(0, 1, 0) : float3(0, 0, 0);
+			
+			bool x = ((2*view.frame_index / view.refresh_rate) % 2 == 0);
+			color = x ? float4(blink_color, 1) : float4(0, 0, 0, 1);
 		}
 	}
 	else

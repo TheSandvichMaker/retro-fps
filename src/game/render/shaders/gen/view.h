@@ -17,6 +17,7 @@ typedef struct view_parameters_t
 	v2_t view_size;
 	float fog_scattering;
 	uint32_t frame_index;
+	uint32_t refresh_rate;
 } view_parameters_t;
 
 fn void set_view_parameters(rhi_command_list_t *list, view_parameters_t *params);

@@ -13,6 +13,10 @@ output_directory_c    = "src/game/render/shaders/gen/"
 os.execute("rmdir \"" .. output_directory_hlsl .. "\" /S /Q")
 os.execute("rmdir \"" .. output_directory_c    .. "\" /S /Q")
 
+if arg[1] == "clean" then
+	os.exit(0)
+end
+
 -- @PlatformSpecific
 os.execute("if not exist \"" .. output_directory_hlsl .. "\" mkdir \"" .. output_directory_hlsl .. "\"")
 os.execute("if not exist \"" .. output_directory_c    .. "\" mkdir \"" .. output_directory_c    .. "\"")
@@ -62,6 +66,7 @@ local view_parameters = {
     fog_phase_k              = float,
     fog_ambient_inscattering = float3,
     frame_index              = uint,
+	refresh_rate             = uint,
 }
 
 process_shaders({

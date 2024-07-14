@@ -141,6 +141,8 @@ void d3d12_descriptor_heap_release(d3d12_descriptor_heap_t *heap)
 
 void d3d12_descriptor_heap_flush_pending_frees(d3d12_descriptor_heap_t *heap, uint32_t frame_index)
 {
+	PROFILE_FUNC_BEGIN;
+
 	mutex_lock(&heap->mutex);
 
 	uint32_t new_free_count = heap->free_count;
@@ -167,6 +169,8 @@ void d3d12_descriptor_heap_flush_pending_frees(d3d12_descriptor_heap_t *heap, ui
 	heap->free_count  = new_free_count;
 
 	mutex_unlock(&heap->mutex);
+
+	PROFILE_FUNC_END;
 }
 
 d3d12_descriptor_t d3d12_allocate_descriptor_persistent(d3d12_descriptor_heap_t *heap)

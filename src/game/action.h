@@ -77,18 +77,6 @@ typedef struct action_system_t
 	action_state_t action_states    [Action_COUNT];
 } action_system_t;
 
-typedef struct cmd_execution_node_t
-{
-	struct cmd_execution_node_t *next;
-	cvar_t *cmd;
-} cmd_execution_node_t;
-
-typedef struct cmd_execution_list_t
-{
-	cmd_execution_node_t *head;
-	cmd_execution_node_t *tail;
-} cmd_execution_list_t;
-
 global thread_local action_system_t *g_actions = NULL;
 
 fn void equip_action_system  (action_system_t *action_system);

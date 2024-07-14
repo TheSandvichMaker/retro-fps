@@ -52,8 +52,8 @@ void editor_texture_viewer_ui(editor_texture_viewer_t *viewer, rect2_t rect)
 
 					texture_rect = rect2_cut_margins(texture_rect, ui_sz_pix(2.0f));
 
-					ui_draw_image(texture_rect, ui->checkerboard_texture_srv);
-					ui_draw_image(texture_rect, texture_srv);
+					ui_draw_image   (texture_rect, ui->checkerboard_texture_srv);
+					ui_draw_image_ex(texture_rect, texture_srv, pixel_format_is_hdr(desc->format) ? UiDrawImage_tonemap : 0);
 
 					ui_id_t id = ui_id_u64(texture_handle.value);
 
@@ -161,7 +161,7 @@ void editor_texture_viewer_render(editor_texture_viewer_t *viewer, r1_view_t *vi
 				ui_draw_rect(texture_view_rect, COLORF_BLACK);
 			}
 
-			ui_draw_image(texture_view_rect, texture_srv);
+			ui_draw_image_ex(texture_view_rect, texture_srv, pixel_format_is_hdr(desc->format) ? UiDrawImage_tonemap : 0);
 
 			ui_pop_clip_rect();
 			ui_pop_sub_layer();

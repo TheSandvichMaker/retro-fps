@@ -56,6 +56,10 @@ typedef struct editor_t
 	cvar_window_state_t           cvar_window_state;
 	editor_texture_viewer_t       texture_viewer;
 
+	ui_scrollable_region_t gpu_stats_scroll_region;
+	ui_scrollable_region_t cpu_stats_scroll_region;
+	ui_scrollable_region_t gpu_alloc_stats_scroll_region;
+
 	profiler_stat_t *profiler_stats;
 } editor_t;
 

@@ -171,6 +171,7 @@ df_pso_info_t df_psos[DfPso_COUNT] = {
 			.debug_name = Sc("pso_brush"),
 			.blend.sample_mask = 0xFFFFFFFF,
 			.blend.render_target[0].write_mask = RhiColorWriteEnable_all,
+			.rasterizer.cull_mode = RhiCullMode_back,
 			.rasterizer.multisample_enable = true,
 			.depth_stencil.depth_test_enable = true,
 			.depth_stencil.depth_write = true,
