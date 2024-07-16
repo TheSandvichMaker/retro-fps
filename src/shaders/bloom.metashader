@@ -2,15 +2,17 @@
 
 @metashader
 {
-	name = "bloom",
-
-	draw_parameters = {
-		tex_color      = Texture2D(float3),
-		inv_tex_size   = float2,
+	exports = {
+		bloom_draw_parameters_t = cbuffer {
+			tex_color      = Texture2D(float3),
+			inv_tex_size   = float2,
+		},
 	},
 
+	draw_parameters = bloom_draw_parameters_t,
+
 	shaders = {
-		bloom_blur_ps = { target = "ps_6_6", entry = "bloom_blur_ps" },
+		bloom_blur_ps = { target = "ps_6_6" },
 	},
 
 	psos = {

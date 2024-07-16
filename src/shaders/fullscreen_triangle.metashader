@@ -1,15 +1,13 @@
 @metashader
 {
-	name = "fullscreen_triangle",
-
 	shaders = {
-		fullscreen_triangle_vs = { target = "vs_6_6", entry = "MainVS" },
+		fullscreen_triangle_vs = { target = "vs_6_6" },
 	},
 }
 
 #include "common.hlsli"
 
-fullscreen_triangle_vs_out_t MainVS(uint id : SV_VertexID)
+fullscreen_triangle_vs_out_t fullscreen_triangle_vs(uint id : SV_VertexID)
 {
 	fullscreen_triangle_vs_out_t OUT;
 	OUT.uv  = uint2(id, id << 1) & 2;

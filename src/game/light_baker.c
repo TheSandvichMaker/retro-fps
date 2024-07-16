@@ -360,7 +360,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
 	if (atomic_load(&state->flags) & LumStateFlag_cancel)
         goto done;
 
-#if  0
+#if  1
     for (int k = 0; k < 32 / LIGHTMAP_SCALE; k++)
     {
         for (int y = 0; y < h; y++)
@@ -412,7 +412,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
 	if (atomic_load(&state->flags) & LumStateFlag_cancel)
         goto done;
 
-#if 0
+#if 1
     for (int k = 0; k < 1; k++)
     {
         for (int y = 0; y < h; y++)
@@ -473,22 +473,12 @@ static void lum_job(job_context_t *job_context, void *userdata)
 	if (atomic_load(&state->flags) & LumStateFlag_cancel)
         goto done;
 
-#if 1
     uint32_t *packed = m_alloc_array(temp, w*h, uint32_t);
 
     for (int i = 0; i < w*h; i++)
     {
         packed[i] = pack_r11g11b10f(direct_lighting_pixels[i]);
     }
-#else
-    v4_t *packed = m_alloc_array(temp, w*h, v4_t);
-
-    for (int i = 0; i < w*h; i++)
-    {
-		v3_t c = direct_lighting_pixels[i];
-        packed[i] = make_v4(c.x, c.y, c.z, 1.0f);
-    }
-#endif
 
     if (RESOURCE_HANDLE_VALID(poly->lightmap_rhi))
     {

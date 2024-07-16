@@ -25,7 +25,7 @@ function parse_metashader_block(shader_file_name, shader_text)
 		local f, err = loadstring("return " .. the_table)
 
 		if not f then
-			error("Failed to parse @metashader block:\n" .. err);
+			error(shader_file_name .. ": Failed to parse @metashader block:\n" .. err);
 		end
 
 		result = f()

@@ -2783,14 +2783,14 @@ rhi_shader_bytecode_t rhi_compile_shader(arena_t *arena, string_t shader_source,
 			L"-E", utf16_from_utf8(temp, entry_point).data, 
 			L"-T", utf16_from_utf8(temp, shader_model).data, 
 			L"-I", L"../src/shaders",
-			L"-WX", 
-			L"-Zi", 
-#if DREAM_DEBUG
-			L"-DDREAM_DEBUG=1",
+			// L"-no-legacy-cbuf-layout", // why doesn't this work
+			L"-WX",
+			L"-Zi",
+#if DREAM_DEVELOPMENT
+			L"-DDREAM_DEVELOPMENT=1",
 #else
-			L"-DDREAM_DEBUG=0",
+			L"-DDREAM_DEVELOPMENT=0",
 #endif
-			// L"-no-legacy-cbuf-layout", why doesn't this work
 		};
 
 		HRESULT hr;

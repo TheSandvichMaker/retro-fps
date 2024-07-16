@@ -10,6 +10,4 @@ typedef struct ui_visualize_heatmap_draw_parameters_t
 
 static_assert(sizeof(ui_visualize_heatmap_draw_parameters_t) <= sizeof(uint32_t)*60, "Draw parameters (which are passed as root constants) can't be larger than 60 uint32s");
 
-fn void shader_ui_visualize_heatmap_set_draw_params(rhi_command_list_t *list, ui_visualize_heatmap_draw_parameters_t *params);
-
-global string_t ui_visualize_heatmap_source_code;
+fn void shader_set_params__ui_visualize_heatmap_draw_parameters_t(rhi_command_list_t *list, uint32_t slot, ui_visualize_heatmap_draw_parameters_t *parameters);global string_t ui_visualize_heatmap_source_code;

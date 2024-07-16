@@ -473,7 +473,7 @@ void r1_render_game_view(rhi_command_list_t *list, r1_view_t *view, map_t *map)
 
 	const rhi_texture_desc_t *backbuffer_desc = rhi_get_texture_desc(view->targets.rt_window);
 
-	set_view_parameters(list, &(view_parameters_t) {
+	view_parameters_t view_params = (view_parameters_t){
 		.world_to_clip            = world_to_clip,
 		.view_to_clip             = view->proj_matrix,
 		.world_to_view            = view->view_matrix,
@@ -488,7 +488,8 @@ void r1_render_game_view(rhi_command_list_t *list, r1_view_t *view, map_t *map)
 		.fog_ambient_inscattering = view->scene.fog_ambient_inscattering,
 		.frame_index              = r1->frame_index,
 		.refresh_rate             = 240, // TODO: don't hardcore
-	});
+	};
+	r1_set_view_params(list, &view_params);
 
 	if (map)
 	{
@@ -535,7 +536,7 @@ void r1_render_sun_shadows(rhi_command_list_t *list, map_t *map)
 		shadow_draw_parameters_t draw_parameters = {
 			.positions = rhi_get_buffer_srv(r1->map.positions),
 		};
-		rhi_set_parameters(list, R1ParameterSlot_draw, &draw_parameters, sizeof(draw_parameters));
+		r1_set_draw_params(list, &draw_parameters);
 
 		r1_set_pso      (list, DfPso_sun_shadows);
 		rhi_draw_indexed(list, r1->map.indices, map->index_count, 0, 0);
@@ -580,7 +581,7 @@ void r1_render_map(rhi_command_list_t *list, r1_view_t *view, map_t *map)
 			.lm_uvs        = rhi_get_buffer_srv (r1->map.lightmap_uvs),
 			.sun_shadowmap = rhi_get_texture_srv(r1->shadow_map),
 		};
-		shader_brush_set_pass_params(list, &pass_parameters);
+		r1_set_pass_params(list, &pass_parameters);
 
 		for (size_t i = 0; i < map->poly_count; i++)
 		{
@@ -602,6 +603,8 @@ void r1_render_map(rhi_command_list_t *list, r1_view_t *view, map_t *map)
 				}
 			}
 
+			v2_t albedo_dim = make_v2((float)albedo->w, (float)albedo->h);
+
 			rhi_texture_srv_t lightmap_srv = r1->white_texture_srv;
 			v2_t lightmap_dim = { 1.0f, 1.0f };
 
@@ -615,10 +618,12 @@ void r1_render_map(rhi_command_list_t *list, r1_view_t *view, map_t *map)
 
 			brush_draw_parameters_t draw_parameters = {
 				.albedo        = albedo_srv,
+				.albedo_dim    = albedo_dim,
 				.lightmap      = lightmap_srv,
+				.lightmap_dim  = lightmap_dim,
 				.normal        = poly->normal,
 			};
-			shader_brush_set_draw_params(list, &draw_parameters);
+			r1_set_draw_params(list, &draw_parameters);
 
 			rhi_draw_indexed(list, r1->map.indices, poly->index_count, poly->first_index, 0);
 		}
@@ -647,7 +652,7 @@ void r1_render_debug_lines(rhi_command_list_t *list, r1_view_t *view)
 				debug_lines_draw_parameters_t draw_parameters = {
 					.lines = rhi_get_buffer_srv(r1->debug_lines),
 				};
-				shader_debug_lines_set_draw_params(list, &draw_parameters);
+				r1_set_draw_params(list, &draw_parameters);
 
 				rhi_draw(list, 2*debug_line_count, 0);
 			}
@@ -679,7 +684,7 @@ void r1_post_process(rhi_command_list_t *list, r1_view_t *view)
 				.blue_noise   = r1->blue_noise_srv[blue_noise_index],
 				.sample_count = r1->multisample_count,
 			};
-			shader_post_set_draw_params(list, &draw_parameters);
+			r1_set_draw_params(list, &draw_parameters);
 
 			rhi_draw(list, 3, 0);
 		}
@@ -712,7 +717,7 @@ void r1_post_process(rhi_command_list_t *list, r1_view_t *view)
 					.tex_color    = rhi_get_texture_srv(bloom_in),
 					.inv_tex_size = in_size_inv,
 				};
-				shader_bloom_set_draw_params(list, &draw_parameters);
+				r1_set_draw_params(list, &draw_parameters);
 
 				rhi_draw(list, 3, 0);
 			}
@@ -740,7 +745,7 @@ void r1_post_process(rhi_command_list_t *list, r1_view_t *view)
 					.tex_color    = rhi_get_texture_srv(bloom_in),
 					.inv_tex_size = in_size_inv,
 				};
-				shader_bloom_set_draw_params(list, &draw_parameters);
+				r1_set_draw_params(list, &draw_parameters);
 
 				rhi_draw(list, 3, 0);
 			}
@@ -771,7 +776,7 @@ void r1_post_process(rhi_command_list_t *list, r1_view_t *view)
 				.bloom0         = rhi_get_texture_srv(view->targets.bloom_targets[downsample_steps - upsample_steps]),
 				.bloom_amount   = bloom_amount,
 			};
-			shader_post_set_draw_params(list, &draw_parameters);
+			r1_set_draw_params(list, &draw_parameters);
 
 			rhi_draw(list, 3, 0);
 		}
@@ -833,7 +838,7 @@ void r1_render_ui(rhi_command_list_t *list, r1_view_t *view, ui_render_command_l
 			ui_draw_parameters_t draw_parameters = {
 				.rects = rhi_get_buffer_srv(ui_rects),
 			};
-			shader_ui_set_draw_params(list, &draw_parameters);
+			r1_set_draw_params(list, &draw_parameters);
 
 			rhi_draw_instanced(list, 4, 0, (uint32_t)ui_list->count, 0);
 		}
@@ -880,7 +885,7 @@ void r1_render_ui(rhi_command_list_t *list, r1_view_t *view, ui_render_command_l
 			ui_draw_parameters_t draw_parameters = {
 				.rects = rhi_get_buffer_srv(ui_rects),
 			};
-			shader_ui_set_draw_params(list, &draw_parameters);
+			r1_set_draw_params(list, &draw_parameters);
 
 			rhi_draw_instanced(list, 4, 0, (uint32_t)ui_list->count, 0);
 		}
@@ -897,7 +902,7 @@ void r1_render_ui(rhi_command_list_t *list, r1_view_t *view, ui_render_command_l
 				.heatmap = rhi_get_texture_srv(rt_heatmap),
 				.scale   = 255.0f / (float)heat_map_scale,
 			};
-			shader_ui_visualize_heatmap_set_draw_params(list, &draw_parameters);
+			r1_set_draw_params(list, &draw_parameters);
 
 			rhi_draw(list, 3, 0);
 		}

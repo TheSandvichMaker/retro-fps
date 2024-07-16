@@ -51,27 +51,8 @@ table.sort(metashaders, function(a, b)
 	return a.file_name < b.file_name
 end)
 
--- TODO: Put this somewhere better
-local view_parameters = {
-	world_to_clip            = float4x4, -- also known as "view-projection matrix"
-	view_to_clip             = float4x4, -- also known as "projection matrix"
-	world_to_view            = float4x4, -- also known as "view matrix"
-	sun_matrix               = float4x4,
-	sun_direction            = float3,
-	sun_color                = float3,
-	view_size                = float2,
-    fog_density              = float,
-    fog_absorption           = float,
-    fog_scattering           = float,
-    fog_phase_k              = float,
-    fog_ambient_inscattering = float3,
-    frame_index              = uint,
-	refresh_rate             = uint,
-}
-
 process_shaders({
 	bundles               = metashaders, 
-	view_parameters       = view_parameters,
 	output_directory_c    = output_directory_c, 
 	output_directory_hlsl = output_directory_hlsl,
 })

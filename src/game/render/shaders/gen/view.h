@@ -20,4 +20,4 @@ typedef struct view_parameters_t
 	uint32_t refresh_rate;
 } view_parameters_t;
 
-fn void set_view_parameters(rhi_command_list_t *list, view_parameters_t *params);
+fn void shader_set_params__view_parameters_t(rhi_command_list_t *list, uint32_t slot, view_parameters_t *parameters);global string_t view_source_code;

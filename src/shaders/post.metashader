@@ -8,24 +8,26 @@
 
 @metashader
 {
-	name = "post",
-
-	draw_parameters = {
-		--// resolve
-		hdr_color      = Texture2DMS(float3, { may_be_null = true }),
-		depth_buffer   = Texture2DMS(float,  { may_be_null = true }),
-		shadow_map     = Texture2D  (float,  { may_be_null = true }),
-		blue_noise     = Texture2D  (float4),
-		sample_count   = int,
-		--// post process
-		resolved_color = Texture2D(float3, { may_be_null = true }),
-		bloom0         = Texture2D(float3, { may_be_null = true }),
-		bloom_amount   = float,
+	exports = {
+		post_draw_parameters_t = cbuffer {
+			--// resolve
+			hdr_color      = Texture2DMS(float3, { may_be_null = true }),
+			depth_buffer   = Texture2DMS(float,  { may_be_null = true }),
+			shadow_map     = Texture2D  (float,  { may_be_null = true }),
+			blue_noise     = Texture2D  (float4),
+			sample_count   = int,
+			--// post process
+			resolved_color = Texture2D(float3, { may_be_null = true }),
+			bloom0         = Texture2D(float3, { may_be_null = true }),
+			bloom_amount   = float,
+		},
 	},
 
+	draw_parameters = post_draw_parameters_t,
+
 	shaders = {
-		resolve_msaa_ps = { target = "ps_6_6", entry = "resolve_msaa_ps" },
-		post_ps         = { target = "ps_6_6", entry = "post_ps" },
+		resolve_msaa_ps = { target = "ps_6_6" },
+		post_ps         = { target = "ps_6_6" },
 	},
 
 	psos = {
@@ -190,7 +192,7 @@ float4 post_ps(fullscreen_triangle_vs_out_t IN) : SV_Target
 #endif
 	}
 
-#if DREAM_DEBUG
+#if DREAM_DEVELOPMENT
 	if (any(isnan(color)))
 	{
 		static const uint NaN[2*8*8] = {

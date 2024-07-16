@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "view.h"
 #include "bloom.h"
 #include "brush.h"
 #include "compute_test.h"
@@ -10,9 +9,9 @@
 #include "fullscreen_triangle.h"
 #include "post.h"
 #include "shadow.h"
-#include "texture_viewer.h"
 #include "ui.h"
 #include "ui_visualize_heatmap.h"
+#include "view.h"
 
 typedef enum df_shader_ident_t
 {
@@ -42,9 +41,6 @@ typedef enum df_shader_ident_t
 	// src/shaders/shadow.metashader
 	DfShader_shadow_vs,
 
-	// src/shaders/texture_viewer.metashader
-	DfShader_texture_viewer_ps,
-
 	// src/shaders/ui.metashader
 	DfShader_ui_heatmap_ps,
 	DfShader_ui_ps,
@@ -52,6 +48,7 @@ typedef enum df_shader_ident_t
 
 	// src/shaders/ui_visualize_heatmap.metashader
 	DfShader_ui_visualize_heatmap_ps,
+
 
 	DfShader_COUNT,
 } df_shader_ident_t;
@@ -78,9 +75,6 @@ typedef enum df_pso_ident_t
 	// src/shaders/shadow.metashader
 	DfPso_sun_shadows,
 
-	// src/shaders/texture_viewer.metashader
-	DfPso_texture_viewer,
-
 	// src/shaders/ui.metashader
 	DfPso_ui,
 	DfPso_ui_heatmap,
@@ -92,4 +86,18 @@ typedef enum df_pso_ident_t
 } df_pso_ident_t;
 
 global df_pso_info_t df_psos[DfPso_COUNT];
+
+#define shader_set_params(list, slot, params) \
+	_Generic(*(params), \
+		bloom_draw_parameters_t: shader_set_params__bloom_draw_parameters_t, \
+		brush_draw_parameters_t: shader_set_params__brush_draw_parameters_t, \
+		brush_pass_parameters_t: shader_set_params__brush_pass_parameters_t, \
+		compute_test_draw_parameters_t: shader_set_params__compute_test_draw_parameters_t, \
+		debug_lines_draw_parameters_t: shader_set_params__debug_lines_draw_parameters_t, \
+		post_draw_parameters_t: shader_set_params__post_draw_parameters_t, \
+		shadow_draw_parameters_t: shader_set_params__shadow_draw_parameters_t, \
+		ui_draw_parameters_t: shader_set_params__ui_draw_parameters_t, \
+		ui_visualize_heatmap_draw_parameters_t: shader_set_params__ui_visualize_heatmap_draw_parameters_t, \
+		view_parameters_t: shader_set_params__view_parameters_t  \
+	)(list, slot, params)
 

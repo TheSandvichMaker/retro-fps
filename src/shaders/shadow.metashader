@@ -2,14 +2,16 @@
 
 @metashader
 {
-	name = "shadow",
-
-	draw_parameters = {
-		positions = StructuredBuffer(float3),
+	exports = {
+		shadow_draw_parameters_t = cbuffer {
+			positions = StructuredBuffer(float3),
+		},
 	},
 
+	draw_parameters = shadow_draw_parameters_t,
+
 	shaders = {
-		shadow_vs = { target = "vs_6_6", entry = "MainVS" },
+		shadow_vs = { target = "vs_6_6" },
 	},
 
 	psos = {
@@ -33,7 +35,7 @@ struct VS_OUT
 	float4 position : SV_Position;
 };
 
-VS_OUT MainVS(uint vertex_index : SV_VertexID)
+VS_OUT shadow_vs(uint vertex_index : SV_VertexID)
 {
 	float3 position = draw.positions.Get().Load(vertex_index);
 

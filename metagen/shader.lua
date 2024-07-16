@@ -179,3 +179,21 @@ function blend_additive()
 		blend_op_alpha  = "add",
 	}
 end
+
+-- cbuffer
+
+cbuffer_mt = {}
+
+function cbuffer(t)
+	setmetatable(t, cbuffer_mt)
+	return t
+end
+
+-- flags
+
+flags_mt = {}
+
+function flags(t)
+	setmetatable(t, flags_mt)
+	return t
+end

@@ -8,15 +8,17 @@ struct LineVertex
 
 @metashader
 {
-	name = "debug_lines",
-
-	draw_parameters = {
-		lines = StructuredBuffer(LineVertex),
+	exports = {
+		debug_lines_draw_parameters_t = cbuffer {
+			lines = StructuredBuffer(LineVertex),
+		},
 	},
 
+	draw_parameters = debug_lines_draw_parameters_t,
+
 	shaders = {
-		debug_lines_vs = { target = "vs_6_6", entry = "MainVS" },
-		debug_lines_ps = { target = "ps_6_6", entry = "MainPS" },
+		debug_lines_vs = { target = "vs_6_6" },
+		debug_lines_ps = { target = "ps_6_6" },
 	},
 
 	psos = {
@@ -46,7 +48,7 @@ struct VS_OUT
 	float4 color    : COLOR;
 };
 
-VS_OUT MainVS(uint vertex_index : SV_VertexID)
+VS_OUT debug_lines_vs(uint vertex_index : SV_VertexID)
 {
 	LineVertex vertex = draw.lines.Get().Load(vertex_index);
 
@@ -56,7 +58,7 @@ VS_OUT MainVS(uint vertex_index : SV_VertexID)
 	return OUT;
 }
 
-float4 MainPS(VS_OUT IN) : SV_Target
+float4 debug_lines_ps(VS_OUT IN) : SV_Target
 {
 	return IN.color;
 }

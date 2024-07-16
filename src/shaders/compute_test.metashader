@@ -1,19 +1,21 @@
 @metashader
 {
-	name = "compute_test",
-
-	draw_parameters = {
-		input_buffer  = StructuredBuffer(float),
-		output_buffer = RWStructuredBuffer(float),
+	exports = {
+		compute_test_draw_parameters_t = cbuffer {
+			input_buffer  = StructuredBuffer(float),
+			output_buffer = RWStructuredBuffer(float),
+		},
 	},
 
+	draw_parameters = compute_test_draw_parameters_t,
+
 	shaders = {
-		compute_test_cs = { target = "cs_6_6", entry = "MainCS" }
+		compute_test_cs = { target = "cs_6_6" }
 	},
 }
 
 [numthreads(128, 1, 1)]
-void MainCS(int id : SV_DispatchThreadID)
+void compute_test_cs(int id : SV_DispatchThreadID)
 {
 	StructuredBuffer<float>   input_buffer  = draw.input_buffer .Get();
 	RWStructuredBuffer<float> output_buffer = draw.output_buffer.Get();

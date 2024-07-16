@@ -2,6 +2,9 @@
 
 #include "bindless.hlsli"
 #include "gen/view.hlsli"
+ 
+// TODO: Remove
+ConstantBuffer< view_parameters_t > view : register(b2);
 
 #define PI (3.1415926535898)
 

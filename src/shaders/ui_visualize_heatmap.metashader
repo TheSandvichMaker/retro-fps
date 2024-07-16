@@ -2,15 +2,17 @@
 
 @metashader
 {
-	name = "ui_visualize_heatmap",
-
-	draw_parameters = {
-		heatmap = Texture2D(),
-		scale   = float,
+	exports = {
+		ui_visualize_heatmap_draw_parameters_t = cbuffer {
+			heatmap = Texture2D(),
+			scale   = float,
+		},
 	},
 
+	draw_parameters = ui_visualize_heatmap_draw_parameters_t,
+
 	shaders = {
-		ui_visualize_heatmap_ps = { target = "ps_6_6", entry = "MainPS" },
+		ui_visualize_heatmap_ps = { target = "ps_6_6" },
 	},
 
 	psos = {
@@ -28,7 +30,7 @@
 	},
 }
 
-float4 MainPS(fullscreen_triangle_vs_out_t IN) : SV_Target
+float4 ui_visualize_heatmap_ps(fullscreen_triangle_vs_out_t IN) : SV_Target
 {
 	uint2 co = uint2(IN.pos.xy);
 

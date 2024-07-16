@@ -2,24 +2,29 @@
 
 @metashader
 {
-	name = "brush",
+	exports = {
+		brush_pass_parameters_t = cbuffer {
+			positions     = StructuredBuffer(float3),
+			uvs           = StructuredBuffer(float2),
+			lm_uvs        = StructuredBuffer(float2),
+			sun_shadowmap = Texture2D(float),
+		},
 
-	pass_parameters = {
-		positions     = StructuredBuffer(float3),
-		uvs           = StructuredBuffer(float2),
-		lm_uvs        = StructuredBuffer(float2),
-		sun_shadowmap = Texture2D(float),
+		brush_draw_parameters_t = cbuffer {
+			albedo       = Texture2D(float3),
+			albedo_dim   = float2,
+			lightmap     = Texture2D(float3),
+			lightmap_dim = float2,
+			normal       = float3,
+		},
 	},
 
-	draw_parameters = {
-		albedo       = Texture2D(float3),
-		lightmap     = Texture2D(float3),
-		normal       = float3,
-	},
+	pass_parameters = brush_pass_parameters_t,
+	draw_parameters = brush_draw_parameters_t,
 
 	shaders = {
-		brush_vs = { target = "vs_6_6", entry = "brush_vs" },
-		brush_ps = { target = "ps_6_6", entry = "brush_ps" },
+		brush_vs = { target = "vs_6_6" },
+		brush_ps = { target = "ps_6_6" },
 	},
 
 	psos = {
@@ -66,38 +71,30 @@ VS_OUT brush_vs(uint vertex_index : SV_VertexID)
 
 float4 brush_ps(VS_OUT IN) : SV_Target
 {
-	Texture2D<float3> albedo = draw.albedo.Get();
+	Texture2D<float3> tex_albedo   = draw.albedo  .Get();
+	Texture2D<float3> tex_lightmap = draw.lightmap.Get();
+	float2            albedo_dim   = draw.albedo_dim;
+	float2            lightmap_dim = draw.lightmap_dim;
 
-	float2 albedo_dim;
-	albedo.GetDimensions(albedo_dim.x, albedo_dim.y);
-
-	float3 color = albedo.Sample(df::s_aniso_wrap, FatPixel(albedo_dim, IN.uv)).rgb;
-
-	Texture2D<float3> lightmap = draw.lightmap.Get();
-
-	float2 lightmap_dim;
-	lightmap.GetDimensions(lightmap_dim.x, lightmap_dim.y);
-
-	float3 light = lightmap.Sample(df::s_aniso_clamped, IN.lightmap_uv/*FatPixel(lightmap_dim, IN.lightmap_uv)*/).rgb;
+	float3 albedo = tex_albedo  .Sample(df::s_aniso_wrap, FatPixel(albedo_dim, IN.uv)).rgb;
+	float3 light  = tex_lightmap.Sample(df::s_aniso_clamped, IN.lightmap_uv/*FatPixel(lightmap_dim, IN.lightmap_uv)*/).rgb;
 
 	const float3 shadow_test_pos   = IN.shadowmap_position.xyz / IN.shadowmap_position.w;
 	const float2 shadow_test_uv    = 0.5 + float2(0.5, -0.5)*shadow_test_pos.xy;
 	const float  shadow_test_depth = shadow_test_pos.z;
 
-	float shadow_factor = 1.0;
+	const float bias = max(0.025*(1.0 - max(0, dot(draw.normal, view.sun_direction))), 0.010);
+	const float biased_depth = shadow_test_depth + bias;
 
-	if (shadow_test_depth >= 0.0 && shadow_test_depth <= 1.0)
-	{
-		const float bias = max(0.025*(1.0 - max(0, dot(draw.normal, view.sun_direction))), 0.010);
-		const float biased_depth = shadow_test_depth + bias;
+	float2 shadowmap_dim;
+	pass.sun_shadowmap.Get().GetDimensions(shadowmap_dim.x, shadowmap_dim.y);
 
-		float2 shadowmap_dim;
-		pass.sun_shadowmap.Get().GetDimensions(shadowmap_dim.x, shadowmap_dim.y);
+	float shadow_factor = SampleShadowPCF3x3(pass.sun_shadowmap.Get(), shadowmap_dim, shadow_test_uv, biased_depth);
 
-		shadow_factor = SampleShadowPCF3x3(pass.sun_shadowmap.Get(), shadowmap_dim, shadow_test_uv, biased_depth);
-	}
+	float n_dot_l = dot(draw.normal, view.sun_direction);
+	light += shadow_factor*(view.sun_color*max(0.0f, n_dot_l));
 
-	light += shadow_factor*(view.sun_color*saturate(dot(draw.normal, view.sun_direction)));
+	float3 result = albedo*light;
 
-	return float4(color*light, 1);
+	return float4(result, 1);
 }
