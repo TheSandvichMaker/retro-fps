@@ -549,7 +549,7 @@ fn_local void tick_ui(platform_tick_io_t *io, app_state_t *app, input_t *input, 
 		{
 			case Event_mouse_move:
 			{
-				ui_push_input_event(&(ui_event_t){
+				ui_queue_event(&(ui_event_t){
 					.kind    = UiEvent_mouse_move,
 					.mouse_p = event->mouse_move.mouse_p,
 					.ctrl    = event->ctrl,
@@ -560,7 +560,7 @@ fn_local void tick_ui(platform_tick_io_t *io, app_state_t *app, input_t *input, 
 
 			case Event_mouse_wheel:
 			{
-				ui_push_input_event(&(ui_event_t){
+				ui_queue_event(&(ui_event_t){
 					.kind        = UiEvent_mouse_wheel,
 					.mouse_wheel = event->mouse_wheel.wheel,
 					.mouse_p     = event->mouse_wheel.mouse_p,
@@ -584,7 +584,7 @@ fn_local void tick_ui(platform_tick_io_t *io, app_state_t *app, input_t *input, 
 					INVALID_DEFAULT_CASE;
 				}
 
-				ui_push_input_event(&(ui_event_t){
+				ui_queue_event(&(ui_event_t){
 					.kind    = UiEvent_mouse_button,
 					.mouse_p = event->mouse_button.mouse_p,
 					.pressed = event->mouse_button.pressed,
@@ -597,7 +597,7 @@ fn_local void tick_ui(platform_tick_io_t *io, app_state_t *app, input_t *input, 
 
 			case Event_key:
 			{
-				ui_push_input_event(&(ui_event_t){
+				ui_queue_event(&(ui_event_t){
 					.kind    = UiEvent_key,
 					.keycode = event->key.keycode,
 					.pressed = event->key.pressed,
@@ -617,7 +617,7 @@ fn_local void tick_ui(platform_tick_io_t *io, app_state_t *app, input_t *input, 
 				};
 				string_into_storage(ui_event.text, string_from_storage(event->text.text));
 
-				ui_push_input_event(&ui_event);
+				ui_queue_event(&ui_event);
 			} break;
 		}
 	}

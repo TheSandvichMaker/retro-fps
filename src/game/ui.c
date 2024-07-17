@@ -199,25 +199,20 @@ void ui__trickle_input(ui_input_t *input, ui_event_queue_t *queue)
 					goto loop_exit;
 				}
 
+				ui_buttons_t button_mask = ui_button_to_mask(event->button);
+
 				if (event->pressed)
 				{
 					// = instead of |= because due to the aggressive trickling rule, only one can be pressed in one frame
-					input->buttons_pressed = event->button;
-					input->buttons_held   |= event->button;
-
-					// TODO: use enums more smartly
-					switch (event->button)
-					{
-						case UiButton_left:   input->mouse_p_on_lmb = event->mouse_p; break;
-						case UiButton_middle: input->mouse_p_on_mmb = event->mouse_p; break;
-						case UiButton_right:  input->mouse_p_on_rmb = event->mouse_p; break;
-					}
+					input->buttons_pressed = button_mask;
+					input->buttons_held   |= button_mask;
+					input->mouse_p_on_button[event->button] = event->mouse_p;
 				}
 				else
 				{
 					// = instead of |= because due to the aggressive trickling rule, only one can be released in one frame
-					input->buttons_released =  event->button;
-					input->buttons_held    &= ~event->button;
+					input->buttons_released =  button_mask;
+					input->buttons_held    &= ~button_mask;
 
 					// TODO: maybe clear the mouse_p_on_xxx values to something obvious like -1, -1?
 				}
@@ -288,7 +283,7 @@ void ui_consume_event(ui_event_t *event)
 	event->consumed = true;
 }
 
-void ui_push_input_event(const ui_event_t *in_event)
+void ui_queue_event(const ui_event_t *in_event)
 {
 	if (!ui->first_free_event)
 	{
@@ -300,6 +295,20 @@ void ui_push_input_event(const ui_event_t *in_event)
 	copy_struct(event, in_event);
 
 	ui__enqueue_event(&ui->queued_input, event);
+}
+
+void ui_push_event(const ui_event_t *in_event)
+{
+	if (!ui->first_free_event)
+	{
+		ui->first_free_event = m_alloc_struct_nozero(&ui->arena, ui_event_t);
+		ui->first_free_event->next = NULL;
+	}
+
+	ui_event_t *event = sll_pop(ui->first_free_event);
+	copy_struct(event, in_event);
+
+	ui__enqueue_event(&ui->input.events, event);
 }
 
 fn_local bool ui__check_for_key(keycode_t key, bool pressed, bool consume)
@@ -333,6 +342,21 @@ bool ui_key_pressed(keycode_t key, bool consume)
 	return ui__check_for_key(key, true, consume);
 }
 
+bool ui_key_type_pressed(ui_key_type_t type, bool consume)
+{
+	bool result = false;
+
+	switch (type)
+	{
+		case UiKeyType_activate:
+		{
+			result = ui_key_pressed(Key_return, consume) || ui_key_pressed(Key_space, consume);
+		} break;
+	}
+
+	return result;
+}
+
 bool ui_key_released(keycode_t key, bool consume)
 {
 	return ui__check_for_key(key, false, consume);
@@ -350,13 +374,14 @@ bool ui_key_held(keycode_t key, bool consume)
 	return result;
 }
 
-bool ui_button_pressed(ui_buttons_t button, bool consume)
+bool ui_button_pressed(ui_button_t button, bool consume)
 {
-	bool result = !!(ui->input.buttons_pressed & button);
+	ui_buttons_t mask = ui_button_to_mask(button);
+	bool result = !!(ui->input.buttons_pressed & mask);
 
 	if (consume)
 	{
-		ui->input.buttons_pressed &= ~button;
+		ui->input.buttons_pressed &= ~mask;
 	}
 
 	return result;
@@ -364,11 +389,12 @@ bool ui_button_pressed(ui_buttons_t button, bool consume)
 
 bool ui_button_released(ui_buttons_t button, bool consume)
 {
-	bool result = !!(ui->input.buttons_released & button);
+	ui_buttons_t mask = ui_button_to_mask(button);
+	bool result = !!(ui->input.buttons_released & mask);
 
 	if (consume)
 	{
-		ui->input.buttons_released &= ~button;
+		ui->input.buttons_released &= ~mask;
 	}
 
 	return result;
@@ -376,11 +402,12 @@ bool ui_button_released(ui_buttons_t button, bool consume)
 
 bool ui_button_held(ui_buttons_t button, bool consume)
 {
-	bool result = !!(ui->input.buttons_held & button);
+	ui_buttons_t mask = ui_button_to_mask(button);
+	bool result = !!(ui->input.buttons_held & mask);
 
 	if (consume)
 	{
-		ui->input.buttons_held &= ~button;
+		ui->input.buttons_held &= ~mask;
 	}
 
 	return result;
@@ -1103,17 +1130,14 @@ void ui_draw_debug_rect(rect2_t rect, v4_t color)
 
 void ui_draw_focus_indicator(rect2_t rect)
 {
-	ui_push_clip_rect(ui->ui_area, false);
-
 	ui_layer_t old_layer = ui_get_layer();
 	ui_layer_t new_layer = { .layer = old_layer.layer, .sub_layer = 255 };
 	ui_set_layer(new_layer);
 	{
+		UI_Scalar(UiScalar_roundedness, ui_scalar(UiScalar_roundedness) + 2.0)
 		ui_draw_rect_outline(rect2_add_radius(rect, v2s(2.0f)), ui_color(UiColor_focus_indicator), 2.0);
 	}
 	ui_set_layer(old_layer);
-
-	ui_pop_clip_rect();
 }
 
 void ui_draw_rect_outline(rect2_t rect, v4_t color, float width)
@@ -1361,11 +1385,6 @@ bool ui_is_active(ui_id_t id)
 	return ui->active.value == id.value;
 }
 
-bool ui_is_hovered_panel(ui_id_t id)
-{
-	return ui->hovered_panel.value == id.value;
-}
-
 void ui_set_hot(ui_id_t id)
 {
 	if (!ui->active.value)
@@ -1411,15 +1430,21 @@ bool ui_has_focus(void)
 
 bool ui_id_has_focus(ui_id_t id)
 {
-	return ui->has_focus && ui->focused_id.value == id.value;
+	bool is_top_responder = !stack_empty(ui->responder_chain) && stack_top(ui->responder_chain).id.value == id.value;
+	return ui->has_focus && is_top_responder; // ui->focused_id.value == id.value;
+}
+
+void ui_push_responder_stack_ex(ui_id_t id, ui_responder_flags_t flags)
+{
+	if (ALWAYS(!stack_full(ui->responder_stack)))
+	{
+		stack_push(ui->responder_stack, ((ui_responder_t){ .id = id, .flags = flags }));
+	}
 }
 
 void ui_push_responder_stack(ui_id_t id)
 {
-	if (ALWAYS(!stack_full(ui->responder_stack)))
-	{
-		stack_push(ui->responder_stack, id);
-	}
+	ui_push_responder_stack_ex(id, 0);
 }
 
 void ui_pop_responder_stack(void)
@@ -1441,7 +1466,7 @@ void ui_gain_focus(ui_id_t id)
 	{
 		if (ALWAYS(!stack_full(ui->responder_chain)))
 		{
-			stack_push(ui->responder_chain, id);
+			stack_push(ui->responder_chain, (ui_responder_t){ .id = id });
 		}
 	}
 }
@@ -1452,7 +1477,7 @@ bool ui_in_responder_chain(ui_id_t id)
 
 	for (size_t i = 0; i < stack_count(ui->responder_chain); i++)
 	{
-		if (ui_id_equal(ui->responder_chain.values[i], id))
+		if (ui_id_equal(ui->responder_chain.values[i].id, id))
 		{
 			result = true;
 			break;
@@ -1466,7 +1491,7 @@ void ui_remove_from_responder_chain(ui_id_t id)
 {
 	for (size_t i = 0; i < stack_count(ui->responder_chain); i++)
 	{
-		if (ui_id_equal(ui->responder_chain.values[i], id))
+		if (ui_id_equal(ui->responder_chain.values[i].id, id))
 		{
 			ui->responder_chain.at = i;
 			break;
@@ -1474,9 +1499,39 @@ void ui_remove_from_responder_chain(ui_id_t id)
 	}
 }
 
-void ui_gain_tab_focus(ui_id_t id)
+void ui_gain_tab_focus(ui_id_t id, rect2_t rect)
 {
-	if (!ui->suppress_next_tab_focus)
+	bool suppress_tab_focus = ui->suppress_next_tab_focus;
+
+	// This implementation seems goofy... But the behavior is correct.
+	for (size_t i = 0; i < stack_count(ui->responder_chain); i++)
+	{
+		ui_responder_t *responder = &ui->responder_chain.values[i];
+
+		if (responder->flags & UiResponderFlags_create_tab_cycle)
+		{
+			bool responder_present_in_stack = false;
+
+			for (size_t j = 0; j < stack_count(ui->responder_stack); j++)
+			{
+				ui_responder_t *test_responder = &ui->responder_stack.values[j];
+
+				if (test_responder->id.value == responder->id.value)
+				{
+					responder_present_in_stack = true;
+					break;
+				}
+			}
+
+			if (!responder_present_in_stack)
+			{
+				suppress_tab_focus = true;
+				break;
+			}
+		}
+	}
+
+	if (!suppress_tab_focus)
 	{
 		if (ui->tab_focus_id.value == id.value || ui->focus_on_next)
 		{
@@ -1484,6 +1539,11 @@ void ui_gain_tab_focus(ui_id_t id)
 			ui->tab_focus_id  = UI_ID_NULL;
 			ui->focus_on_next = false;
 			ui->selection_index = 0;
+
+			ui_push_event(&(ui_event_t){
+				.kind = UiEvent_focus_rectangle,
+				.rect = rect,
+			});
 		}
 
 		if (ui_id_has_focus(id) && ui_key_pressed(Key_tab, true))
@@ -1752,7 +1812,6 @@ bool ui_begin(float dt, rect2_t ui_area)
 		}
 
 		ui->hot                   = ui->next_hot;
-		ui->hovered_panel         = ui->next_hovered_panel;
 		ui->hovered_widget        = ui->next_hovered_widget;
 		ui->hovered_scroll_region = ui->next_hovered_scroll_region;
 	}
@@ -1765,7 +1824,6 @@ bool ui_begin(float dt, rect2_t ui_area)
 	}
 
 	ui->next_hot                   = UI_ID_NULL;
-	ui->next_hovered_panel         = UI_ID_NULL;
 	ui->next_hovered_widget        = UI_ID_NULL;
 	ui->next_hovered_scroll_region = UI_ID_NULL;
 

@@ -101,6 +101,8 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 	ui_pop_sub_layer();
 	ui_pop_clip_rect();
 
+	rect2_t start_rect = state->start_rect;
+
 	float scrolling_zone_height = 0.0f;
 
 	// TODO: Horizontal
@@ -126,6 +128,8 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 		}
 	}
 
+	bool suppress_scrollbar_animation = false;
+
 	if (ui_in_responder_chain(id))
 	{
 		if (ui_key_pressed(Key_pagedown, true))
@@ -139,6 +143,38 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 			state->scroll_offset.y -= 0.66f*scrolling_zone_height;
 			state->scroll_offset.y  = MAX(state->scroll_offset.y, 0.0f);
 		}
+
+		for (ui_event_t *event = ui_iterate_events(); event; event = ui_event_next(event))
+		{
+			if (event->kind == UiEvent_focus_rectangle)
+			{
+				rect2_t rect = event->rect;
+
+				float margin = 1.5f*ui_default_row_height();
+				float top    = start_rect.max.y - margin;
+				float bot    = start_rect.min.y + margin;
+
+				float scroll_delta_y = 0.0f;
+
+				if (rect.max.y > top)
+				{
+					scroll_delta_y = top - rect.max.y;
+				}
+
+				if (rect.min.y < bot)
+				{
+					scroll_delta_y = bot - rect.min.y;
+				}
+
+				state->scroll_offset.y += scroll_delta_y;
+				state->scroll_offset.y  = flt_clamp(state->scroll_offset.y, 0, scrolling_zone_height);
+
+				suppress_scrollbar_animation = true;
+				ui_set_v4(ui_child_id(id, S("offset")), make_v4(state->scroll_offset.x, state->scroll_offset.y, 0, 0));
+
+				ui_consume_event(event);
+			}
+		}
 	}
 
 	ui_scrollable_region_flags_t flags = state->flags;
@@ -150,8 +186,7 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 		//------------------------------------------------------------------------
 		// Figure out rectangles
 
-		rect2_t start_rect     = state->start_rect;
-		float   visible_height = rect2_height(start_rect);
+		float visible_height = rect2_height(start_rect);
 
 		float total_content_height = start_rect.max.y - (final_rect.max.y - state->interpolated_scroll_offset.y);
 		float scrolling_zone_ratio = visible_height / total_content_height;
@@ -172,7 +207,7 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 		float scrollbar_offset   = scroll_pct*scrollbar_movement;
 		
 		// A bit manual, I'd rather suppress the animation at the site where we're dealing with interaction
-		if (!ui_is_active(handle_id))
+		if (!ui_is_active(handle_id) && !suppress_scrollbar_animation)
 		{
 			scrollbar_offset = ui_interpolate_f32(ui_child_id(id, S("scrollbar")), scrollbar_offset);
 		}
@@ -350,7 +385,7 @@ bool ui_button(rect2_t rect, string_t label)
 
 	bool result = false;
 
-	ui_gain_tab_focus(id);
+	ui_gain_tab_focus(id, rect);
 
 	// @UiHoverable
 	ui_hoverable(id, rect);
@@ -444,7 +479,7 @@ bool ui_checkbox(rect2_t rect, bool *result_value)
 	ui_id_t id = ui_id_pointer(result_value);
 	ui_validate_widget(id);
 
-	ui_gain_tab_focus(id);
+	ui_gain_tab_focus(id, rect);
 
 	bool result = false;
 
@@ -546,7 +581,7 @@ fn_local void ui_slider_old_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p
 	if (NEVER(!ui->initialized)) 
 		return;
 
-	ui_gain_tab_focus(id);
+	ui_gain_tab_focus(id, rect);
 
 	ui_push_id(id);
 
@@ -909,7 +944,7 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 	//------------------------------------------------------------------------
 	// Interaction
 
-	ui_gain_tab_focus(id);
+	ui_gain_tab_focus(id, rect);
 
 	if (ui_mouse_in_rect(rect))
 	{
@@ -1272,7 +1307,7 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *in_buffer,
 		return result;
 	}
 
-	ui_gain_tab_focus(id);
+	ui_gain_tab_focus(id, rect);
 	ui_hoverable(id, rect);
 
 	ui_push_id(id);
@@ -1419,8 +1454,9 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *in_buffer,
 								else
 								{
 									ui_remove_from_responder_chain(id);
-									ui_consume_event(event);
 								}
+
+								ui_consume_event(event);
 							} break;
 
 							case Key_return:
@@ -1652,7 +1688,7 @@ void ui_hue_picker(rect2_t rect, float *hue)
 	ui_id_t id = ui_id_pointer(hue);
 	ui_validate_widget(id);
 
-	ui_gain_tab_focus(id);
+	ui_gain_tab_focus(id, rect);
 
 	if (ui_mouse_in_rect(rect))
 	{
@@ -1664,6 +1700,33 @@ void ui_hue_picker(rect2_t rect, float *hue)
 		if (ui_button_pressed(UiButton_left, true))
 		{
 			ui_set_active(id);
+		}
+	}
+
+	if (ui_in_responder_chain(id))
+	{
+		float delta = 128.0f / 255.0f;
+
+		if (ui_key_held(Key_control, false))
+		{
+			delta *= 2.5f;
+		}
+
+		if (ui_key_held(Key_shift, false))
+		{
+			delta = 16.0f / 255.0f;
+		}
+
+		delta *= ui->dt;
+
+		if (ui_key_held(Key_down, false))
+		{
+			*hue = flt_saturate(*hue - delta);
+		}
+
+		if (ui_key_held(Key_up, false))
+		{
+			*hue = flt_saturate(*hue + delta);
 		}
 	}
 
@@ -1717,6 +1780,11 @@ void ui_hue_picker(rect2_t rect, float *hue)
 
 	// UI_Scalar(UiScalar_roundedness, 0.0f)
 	ui_draw_rect(indicator_rect, make_v4(1, 1, 1, 1));
+
+	if (ui_id_has_focus(id))
+	{
+		ui_draw_focus_indicator(rect);
+	}
 }
 
 void ui_sat_val_picker(rect2_t rect, float hue, float *sat, float *val)
@@ -1730,7 +1798,7 @@ void ui_sat_val_picker(rect2_t rect, float hue, float *sat, float *val)
 	ui_id_t id = ui_combine_ids(ui_id_pointer(sat), ui_id_pointer(val));
 	ui_validate_widget(id);
 
-	ui_gain_tab_focus(id);
+	ui_gain_tab_focus(id, rect);
 
 	if (ui_mouse_in_rect(rect))
 	{
@@ -1742,6 +1810,44 @@ void ui_sat_val_picker(rect2_t rect, float hue, float *sat, float *val)
 		if (ui_button_pressed(UiButton_left, true))
 		{
 			ui_set_active(id);
+		}
+	}
+
+	if (ui_in_responder_chain(id))
+	{
+
+		float delta = 128.0f / 255.0f;
+
+		if (ui_key_held(Key_control, false))
+		{
+			delta *= 2.5f;
+		}
+
+		if (ui_key_held(Key_shift, false))
+		{
+			delta = 16.0f / 255.0f;
+		}
+
+		delta *= ui->dt;
+
+		if (ui_key_held(Key_down, false))
+		{
+			*val = flt_saturate(*val - delta);
+		}
+
+		if (ui_key_held(Key_up, false))
+		{
+			*val = flt_saturate(*val + delta);
+		}
+
+		if (ui_key_held(Key_left, false))
+		{
+			*sat = flt_saturate(*sat - delta);
+		}
+
+		if (ui_key_held(Key_right, false))
+		{
+			*sat = flt_saturate(*sat + delta);
 		}
 	}
 
@@ -1795,6 +1901,11 @@ void ui_sat_val_picker(rect2_t rect, float hue, float *sat, float *val)
 	{
 		ui_draw_rect_outline(rect2_add_radius(indicator, make_v2(1, 1)), ui_color(UiColor_widget_shadow), 2.5f);
 		ui_draw_rect_outline(indicator, make_v4(1, 1, 1, 1), 1.5f);
+	}
+
+	if (ui_id_has_focus(id))
+	{
+		ui_draw_focus_indicator(rect);
 	}
 }
 

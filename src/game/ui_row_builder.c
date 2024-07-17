@@ -144,7 +144,7 @@ bool ui_row_radio_buttons(ui_row_builder_t *builder, string_t label, int *state,
 	ui_id_t id = ui_id(label);
 	ui_validate_widget(id);
 
-	ui_gain_tab_focus(id);
+	ui_gain_tab_focus(id, label_rect);
 
 	int keyboard_activated = -1;
 
@@ -319,8 +319,13 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 		return;
 	}
 
+	ui_push_responder_stack(id);
+	ui_push_id(id);
+
 	rect2_t label_rect, widget_rect;
 	ui_row_split(builder, &label_rect, &widget_rect);
+
+	ui_gain_tab_focus(id, widget_rect);
 
 	ui_label(label_rect, label); 
 
@@ -354,16 +359,24 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 
 	bool popup_opened_this_frame = false;
 
-	if (ui_is_hot(id))
-	{
-		if (ui_button_pressed(UiButton_left, true))
-		{
-			popup_opened_this_frame = true;
+	ui_id_t popup_id = ui_id(S("popup"));
 
-			state->popup_open           = true;
-			state->popup_position       = ui->input.mouse_p;
-			state->color_before_editing = *color;
-		}
+	// This code is evidence that we need some input handling unification
+	if ((ui_is_hot(id) && ui_button_pressed(UiButton_left, true)) ||
+		(ui_in_responder_chain(id) && ui_key_type_pressed(UiKeyType_activate, true)))
+	{
+		popup_opened_this_frame = true;
+
+		state->popup_open           = true;
+		state->popup_position       = widget_rect.min;
+		state->color_before_editing = *color;
+
+		ui_gain_focus(popup_id);
+	}
+
+	if (ui_id_has_focus(id))
+	{
+		ui_draw_focus_indicator(widget_rect);
 	}
 
 	float popup_openness = ui_interpolate_f32(ui_child_id(id, S("openness")), state->popup_open);
@@ -371,6 +384,7 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 	if (popup_opened_this_frame || popup_openness > 0.001f)
 	{
 		ui_push_sub_layer();
+		ui_push_responder_stack_ex(popup_id, UiResponderFlags_create_tab_cycle);
 
 		if (state->popup_open)
 		{
@@ -378,10 +392,14 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 			{
 				state->popup_open = false;
 				*color = state->color_before_editing;
+
+				ui_remove_from_responder_chain(popup_id);
 			}
 			else if (ui_key_pressed(Key_return, true))
 			{
 				state->popup_open = false;
+
+				ui_remove_from_responder_chain(popup_id);
 			}
 		}
 
@@ -418,8 +436,8 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 
 		ui_label(label_rect, label);
 
-		ui_hue_picker    (hue_picker_rect,     &state->hue);
 		ui_sat_val_picker(sat_val_picker_rect,  state->hue, &state->sat, &state->val);
+		ui_hue_picker    (hue_picker_rect,     &state->hue);
 
 		v3_t rgb = rgb_from_hsv((v3_t){state->hue, state->sat, state->val});
 
@@ -436,8 +454,12 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 
 		ui_pop_clip_rect();
 
+		ui_pop_responder_stack();
 		ui_pop_sub_layer();
 	}
+
+	ui_pop_id();
+	ui_pop_responder_stack();
 
 	state->cached_color = *color;
 }
