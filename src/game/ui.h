@@ -193,8 +193,14 @@ fn bool        ui_button_held    (ui_button_t button, bool consume);
 fn float       ui_mouse_wheel    (bool consume);
 
 /* external use */
+
+// ui_queue_event goes through the input trickling path and should be used for all
+// external inputs, or events that need to be delayed until next frame
 fn void ui_queue_event(const ui_event_t *event);
-fn void ui_push_event (const ui_event_t *event); // ?
+// ui_push_event puts the event directly into the current event queue and will be processed within
+// the same frame by any widgets that follow. if the event reaches the end of frame unprocessed,
+// it is lost.
+fn void ui_push_event (const ui_event_t *event);
 
 // layout helpers
 fn float   ui_widget_padding    (void);
