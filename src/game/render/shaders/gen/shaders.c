@@ -6,6 +6,7 @@
 #include "debug_lines.c"
 #include "fullscreen_triangle.c"
 #include "post.c"
+#include "resolve.c"
 #include "shadow.c"
 #include "ui.c"
 #include "ui_visualize_heatmap.c"
@@ -81,13 +82,14 @@ df_shader_info_t df_shaders[DfShader_COUNT] = {
 		.path_hlsl   = Sc("src/shaders/gen/post.hlsl"),
 		.path_dfs    = Sc("src/shaders/post.metashader"),
 	},
+
 	[DfShader_resolve_msaa_ps] = {
 		.name        = Sc("resolve_msaa_ps"),
 		.entry_point = Sc("resolve_msaa_ps"),
 		.target      = Sc("ps_6_6"),
-		.hlsl_source = Sc(DF_SHADER_POST_SOURCE_CODE),
-		.path_hlsl   = Sc("src/shaders/gen/post.hlsl"),
-		.path_dfs    = Sc("src/shaders/post.metashader"),
+		.hlsl_source = Sc(DF_SHADER_RESOLVE_SOURCE_CODE),
+		.path_hlsl   = Sc("src/shaders/gen/resolve.hlsl"),
+		.path_dfs    = Sc("src/shaders/resolve.metashader"),
 	},
 
 	[DfShader_shadow_vs] = {
@@ -217,7 +219,7 @@ df_pso_info_t df_psos[DfPso_COUNT] = {
 	},
 	[DfPso_resolve_msaa] = {
 		.name = Sc("resolve_msaa"),
-		.path = Sc("src/shaders/post.metashader"),
+		.path = Sc("src/shaders/resolve.metashader"),
 		.vs_index = DfShader_fullscreen_triangle_vs,
 		.ps_index = DfShader_resolve_msaa_ps,
 		.params_without_bytecode = {

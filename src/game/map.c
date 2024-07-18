@@ -837,8 +837,8 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
 
 			NULLIFY_HANDLE(&poly->lightmap_rhi);
 
-            float texscale_x = R_MISSING_TEXTURE_SIZE;
-            float texscale_y = R_MISSING_TEXTURE_SIZE;
+            float texscale_x = 64;
+            float texscale_y = 64;
 
             // load texture
 
@@ -894,6 +894,15 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
                 float t_offset = plane->t.w;
 
                 uint32_t triangulated_vertex_count = sb_count(plane_indices); // See note above, the index count is the vertex count (for the triangulated geometry).
+
+				typedef struct r_vertex_brush_t
+				{
+					v3_t pos;
+					v2_t tex;
+					v2_t tex_lightmap;
+					v3_t normal;
+				} r_vertex_brush_t;
+
                 r_vertex_brush_t *triangulated_vertices = m_alloc_array_nozero(arena, triangulated_vertex_count, r_vertex_brush_t);
 
                 for (size_t vertex_index = 0; vertex_index < triangulated_vertex_count; vertex_index++)

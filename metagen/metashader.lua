@@ -22,7 +22,7 @@ function parse_metashader_block(shader_file_name, shader_text)
 
 		local the_table = string.sub(shader_text, table_start, table_end)
 
-		local f, err = loadstring("return " .. the_table)
+		local f, err = loadstring("shader_environment.file_name = \"" .. shader_file_name .. "\"\nreturn " .. the_table)
 
 		if not f then
 			error(shader_file_name .. ": Failed to parse @metashader block:\n" .. err);

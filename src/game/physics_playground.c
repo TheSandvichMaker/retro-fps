@@ -197,6 +197,7 @@ fn_local void initialize_phys_scene(phys_scene_t *scene, gamestate_t *game)
     g_phys_scene_initialized = true;
 }
 
+/*
 void update_and_render_physics_playground(r_context_t *rc, gamestate_t *game, float dt)
 {
     phys_scene_t *scene = &g_phys_scene;
@@ -302,3 +303,4 @@ void update_and_render_physics_playground(r_context_t *rc, gamestate_t *game, fl
         }
     }
 }
+	*/

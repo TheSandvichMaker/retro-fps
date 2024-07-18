@@ -1472,6 +1472,42 @@ fn_local v2i_t rect2i_get_dim(rect2i_t rect)
 }
 
 //
+// rect2_fixed
+// TODO: figure out wtf this is about
+//
+
+fn_local rect2_fixed_t rect2_to_fixed(rect2_t rect)
+{
+	rect2_fixed_t result;
+	result.min_x = (uint16_t)flt_clamp(roundf(rect.min.x), 0.0f, (float)UINT16_MAX);
+	result.min_y = (uint16_t)flt_clamp(roundf(rect.min.y), 0.0f, (float)UINT16_MAX);
+	result.max_x = (uint16_t)flt_clamp(roundf(rect.max.x), 0.0f, (float)UINT16_MAX);
+	result.max_y = (uint16_t)flt_clamp(roundf(rect.max.y), 0.0f, (float)UINT16_MAX);
+	return result;
+}
+
+fn_local rect2_t rect2_from_fixed(rect2_fixed_t rect)
+{
+	rect2_t result = {
+		.min.x = (float)rect.min_x,
+		.min.y = (float)rect.min_y,
+		.max.x = (float)rect.max_x,
+		.max.y = (float)rect.max_y,
+	};
+	return result;
+}
+
+fn_local rect2_fixed_t rect2_fixed_intersect(rect2_fixed_t a, rect2_fixed_t b)
+{
+	rect2_fixed_t result;
+	result.min_x = MAX(a.min_x, b.min_x);
+	result.min_y = MAX(a.min_y, b.min_y);
+	result.max_x = MIN(a.max_x, b.max_x);
+	result.max_y = MIN(a.max_y, b.max_y);
+	return result;
+}
+
+//
 // rect2
 //
 

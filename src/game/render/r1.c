@@ -487,7 +487,7 @@ void r1_render_game_view(rhi_command_list_t *list, r1_view_t *view, map_t *map)
 		.fog_phase_k              = view->scene.fog_phase_k,
 		.fog_ambient_inscattering = view->scene.fog_ambient_inscattering,
 		.frame_index              = r1->frame_index,
-		.refresh_rate             = 240, // TODO: don't hardcore
+		.refresh_rate             = 60, // TODO: don't hardcore
 	};
 	r1_set_view_params(list, &view_params);
 
@@ -677,7 +677,7 @@ void r1_post_process(rhi_command_list_t *list, r1_view_t *view)
 
 			uint32_t blue_noise_index = r1->frame_index % ARRAY_COUNT(r1->blue_noise);
 
-			post_draw_parameters_t draw_parameters = {
+			resolve_draw_parameters_t draw_parameters = {
 				.hdr_color    = rhi_get_texture_srv(view->targets.rt_hdr),
 				.depth_buffer = rhi_get_texture_srv(view->targets.depth_stencil),
 				.shadow_map   = rhi_get_texture_srv(r1->shadow_map),

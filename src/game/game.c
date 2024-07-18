@@ -34,9 +34,6 @@ static float g_next_frame_delay_ms = 0.0f;
 #include "map.c"
 #include "mesh.c"
 #include "physics_playground.c"
-#include "render.c"
-#include "render_backend.c"
-#include "render_helpers.c"
 #include "ui.c"
 #include "ui_row_builder.c"
 #include "ui_widgets.c"
@@ -61,8 +58,6 @@ typedef struct app_state_t
 	console_t       *console;
 	ui_t            *ui;
 	r1_state_t      *r1;
-
-	bitmap_font_t   debug_font;
 } app_state_t;
 
 v3_t player_view_origin(player_t *player)
@@ -375,22 +370,19 @@ void player_movement(map_t *map, player_t *player, float dt)
     camera->p = player_view_origin(player);
 }
 
-fn void init_view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view)
+void get_camera_matrices(camera_t *camera, rect2_t viewport, m4x4_t *view, m4x4_t *proj)
 {
-    view->clip_rect = viewport;
-    view->camera_p  = camera->p;
-
     v3_t p = camera->p;
     v3_t d = negate(camera->computed_z);
 
     v3_t up = { 0, 0, 1 };
-    view->view_matrix = make_view_matrix(p, d, up);
+	*view = make_view_matrix(p, d, up);
 
     float w = viewport.max.x - viewport.min.x;
     float h = viewport.max.y - viewport.min.y;
 
     float aspect = w / h;
-    view->proj_matrix = make_perspective_matrix(camera->vfov, aspect, 1.0f);
+	*proj = make_perspective_matrix(camera->vfov, aspect, 1.0f);
 }
 
 //
@@ -446,14 +438,6 @@ void app_init(platform_init_io_t *io)
     });
 
 	// pack_assets(S("../sources"));
-
-    {
-		asset_image_t *font_image = get_image_from_string(S("gamedata/textures/font.png"));
-        app->debug_font.w = font_image->w;
-        app->debug_font.h = font_image->h;
-        app->debug_font.cw = 10;
-        app->debug_font.ch = 12;
-    }
 
 	gamestate_t *game = app->game = m_bootstrap(gamestate_t, arena);
 	equip_gamestate(game);
@@ -679,17 +663,10 @@ fn_local void render_game(gamestate_t *game, rhi_window_t window, ui_render_comm
 			.max = { (float)desc->width, (float)desc->height },
 		};
 
-		// TODO: Replace fully with r1_view_t
-		r_view_t old_view = {0};
-		init_view_for_camera(camera, viewport, &old_view);
-
 		r1_view_t view = r1_create_view(window);
-		view.no_shadows      = old_view.no_shadows;
-		view.no_post_process = old_view.no_post_process;
-		view.camera_p        = old_view.camera_p;
-		view.view_matrix     = old_view.view_matrix;
-		view.proj_matrix     = old_view.proj_matrix;
-		view.clip_rect       = old_view.clip_rect;
+		view.camera_p  = camera->p;
+		view.clip_rect = viewport;
+		get_camera_matrices(camera, viewport, &view.view_matrix, &view.proj_matrix);
 
 		r1_scene_parameters_t *scene = &view.scene;
 		{

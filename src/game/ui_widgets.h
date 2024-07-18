@@ -24,7 +24,6 @@ typedef struct ui_scrollable_region_t
 {
 	ui_scrollable_region_flags_t flags;
 	rect2_t start_rect;
-	v2_t    interpolated_scroll_offset;
 	v2_t    scroll_zone;
 	v2_t    scroll_offset;
 	size_t  render_commands_start_index;

@@ -315,8 +315,6 @@ fn_local bool ui__check_for_key(keycode_t key, bool pressed, bool consume)
 {
 	bool result = false;
 
-	// Maybe iterating events all the time is bad, but actually it's probably super fine. There's going to be
-	// a very small amount of these per frame
 	for (ui_event_t *event = ui_iterate_events();
 		 event;
 		 event = ui_event_next(event))
@@ -425,10 +423,7 @@ float ui_mouse_wheel(bool consume)
 	return result;
 }
 
-//
-// Panel
-//
-
+// mildly dodgy?
 float ui_default_row_height(void)
 {
 	float margin     = 2.0f*ui_scalar(UiScalar_text_margin);
@@ -565,6 +560,22 @@ float ui_set_f32(ui_id_t id, float target)
 	return anim->t_current.x;
 }
 
+v2_t ui_interpolate_v2(ui_id_t id, v2_t target)
+{
+	ui_anim_t *anim = ui_get_anim(id, (v4_t){ .xy = target });
+	return anim->t_current.xy;
+}
+
+v2_t ui_set_v2(ui_id_t id, v2_t target)
+{
+	ui_anim_t *anim = ui_get_anim(id, (v4_t){ .xy = target });
+	anim->t_target  .xy = target;
+	anim->t_current .xy = target;
+	anim->t_velocity.xy = (v2_t){ 0, 0 };
+
+	return anim->t_current.xy;
+}
+
 v4_t ui_interpolate_v4(ui_id_t id, v4_t target)
 {
 	ui_anim_t *anim = ui_get_anim(id, target);
@@ -696,7 +707,7 @@ fn_local void ui_tick_animations(ui_anim_list_t *list, float dt)
 float ui_scalar(ui_style_scalar_t scalar)
 {
 	if (stack_empty(ui->style.scalars[scalar])) return ui->style.base_scalars[scalar];
-	else                                       return stack_top(ui->style.scalars[scalar]);
+	else                                        return stack_top(ui->style.scalars[scalar]);
 }
 
 void ui_push_scalar(ui_style_scalar_t scalar, float value)
@@ -712,7 +723,7 @@ float ui_pop_scalar(ui_style_scalar_t scalar)
 v4_t ui_color(ui_style_color_t color)
 {
 	if (stack_empty(ui->style.colors[color])) return ui->style.base_colors[color];
-	else                                     return stack_top(ui->style.colors[color]);
+	else                                      return stack_top(ui->style.colors[color]);
 }
 
 void ui_push_color(ui_style_color_t color, v4_t value)
@@ -768,7 +779,7 @@ void ui_push_clip_rect_ex(rect2_t rect, ui_clip_rect_flags_t flags)
 {
 	if (ALWAYS(!stack_full(ui->clip_rect_stack)))
 	{
-		r_rect2_fixed_t fixed = rect2_to_fixed(rect);
+		rect2_fixed_t fixed = rect2_to_fixed(rect);
 
 		if (!(flags & UiClipRectFlag_absolute))
 		{
@@ -823,9 +834,9 @@ void ui_pop_clip_rect(void)
 	}
 }
 
-r_rect2_fixed_t ui_get_clip_rect_fixed(void)
+rect2_fixed_t ui_get_clip_rect_fixed(void)
 {
-	r_rect2_fixed_t clip_rect = {
+	rect2_fixed_t clip_rect = {
 		0, 0, UINT16_MAX, UINT16_MAX,
 	};
 
@@ -906,7 +917,7 @@ rect2_t ui_text_op(font_t *font, v2_t p, string_t text, v4_t color, ui_text_op_t
 							.color_10   = color_packed,
 							.color_11   = color_packed,
 							.color_01   = color_packed,
-							.flags      = R_UI_RECT_BLEND_TEXT,
+							.flags      = UiRectFlags_blend_text,
 							.clip_rect  = ui_get_clip_rect_fixed(),
 							.texture    = font->texture_srv,
 						},
@@ -1057,9 +1068,9 @@ fn_local void ui_do_rect(r_ui_rect_t rect)
 {
 	rect.clip_rect = ui_get_clip_rect_fixed();
 
-	rect2_t clip_rect    = rect2_from_fixed(rect.clip_rect);
-	rect2_t clipped_rect = rect2_intersect(rect.rect, clip_rect);
-	if (!rect2_is_inside_out(clipped_rect) && rect2_area(clipped_rect) > 0.0f)
+	// rect2_t clip_rect    = rect2_from_fixed(rect.clip_rect);
+	// rect2_t clipped_rect = rect2_intersect(rect.rect, clip_rect);
+	// if (!rect2_is_inside_out(clipped_rect) && rect2_area(clipped_rect) > 0.0f)
 	{
 		// v2_t  dim             = rect2_dim(rect.rect);
 		// float max_roundedness = mul(0.5f, min(dim.x, dim.y));
@@ -1078,10 +1089,10 @@ fn_local void ui_do_rect(r_ui_rect_t rect)
 			}
 		);
 	}
-	else
-	{
-		ui->culled_rect_count += 1;
-	}
+	// else
+	// {
+	// 	ui->culled_rect_count += 1;
+	// }
 }
 
 void ui_draw_rect(rect2_t rect, v4_t color)
@@ -1230,7 +1241,7 @@ void ui_draw_image_ex(rect2_t rect, rhi_texture_srv_t texture, ui_draw_image_fla
 
 	if (flags & UiDrawImage_tonemap)
 	{
-		rect_flags |= R_UI_RECT_TONEMAP;
+		rect_flags |= UiRectFlags_tonemap;
 	}
 
 	ui_do_rect((r_ui_rect_t){
@@ -1259,7 +1270,7 @@ void ui_draw_image(rect2_t rect, rhi_texture_srv_t texture)
 
 bool ui_mouse_in_rect(rect2_t rect)
 {
-	r_rect2_fixed_t interact_clip_rect = rect2_to_fixed(ui->ui_area);
+	rect2_fixed_t interact_clip_rect = rect2_to_fixed(ui->ui_area);
 
 	if (!stack_empty(ui->interaction_clip_rect_stack))
 	{

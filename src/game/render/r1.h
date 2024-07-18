@@ -174,3 +174,4 @@ typedef struct r1_push_constants_t
 #define r1_set_draw_params(list, params) shader_set_params(list, R1ParameterSlot_draw, params)
 #define r1_set_pass_params(list, params) shader_set_params(list, R1ParameterSlot_pass, params)
 #define r1_set_view_params(list, params) shader_set_params(list, R1ParameterSlot_view, params)
+

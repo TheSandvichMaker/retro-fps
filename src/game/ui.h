@@ -370,6 +370,8 @@ typedef struct ui_style_t
 fn ui_anim_t *ui_get_anim  (ui_id_t id, v4_t init_value);
 fn float ui_interpolate_f32(ui_id_t id, float target);
 fn float ui_set_f32        (ui_id_t id, float target);
+fn v2_t  ui_interpolate_v2 (ui_id_t id, v2_t  target);
+fn v2_t  ui_set_v2         (ui_id_t id, v2_t  target);
 fn v4_t  ui_interpolate_v4 (ui_id_t id, v4_t  target);
 fn v4_t  ui_set_v4         (ui_id_t id, v4_t  target);
 
@@ -426,7 +428,7 @@ typedef enum ui_clip_rect_flags_enum_t
 	UiClipRectFlag_visual_only      = 0x4,
 } ui_clip_rect_flags_enum_t;
 
-fn r_rect2_fixed_t ui_get_clip_rect_fixed(void);
+fn rect2_fixed_t ui_get_clip_rect_fixed(void);
 fn rect2_t         ui_get_clip_rect      (void);
 fn void            ui_push_clip_rect_ex  (rect2_t rect, ui_clip_rect_flags_t flags);
 fn void            ui_push_clip_rect     (rect2_t rect);
@@ -549,6 +551,23 @@ typedef struct ui_render_command_key_t
 		uint32_t u32;
 	};
 } ui_render_command_key_t;
+
+typedef struct r_ui_rect_t
+{
+	rect2_t  rect;              // 16
+    rect2_t  tex_coords;        // 32
+	v4_t     roundedness;       // 48
+	uint32_t color_00;          // 52
+	uint32_t color_10;          // 58
+	uint32_t color_11;          // 64
+	uint32_t color_01;          // 68
+	float    shadow_radius;     // 74
+	float    shadow_amount;     // 80
+	float    inner_radius;      // 84
+	uint32_t flags;             // 88
+	rect2_fixed_t clip_rect;
+	rhi_texture_srv_t texture;
+} r_ui_rect_t;
 
 typedef struct ui_render_command_t
 {
@@ -696,8 +715,8 @@ typedef struct ui_t
 	debug_notif_t *first_debug_notif;
 	uint64_t next_notif_id;
 
-	stack_t(r_rect2_fixed_t,      UI_CLIP_RECT_STACK_COUNT) clip_rect_stack;
-	stack_t(r_rect2_fixed_t,      UI_CLIP_RECT_STACK_COUNT) interaction_clip_rect_stack;
+	stack_t(rect2_fixed_t,      UI_CLIP_RECT_STACK_COUNT) clip_rect_stack;
+	stack_t(rect2_fixed_t,      UI_CLIP_RECT_STACK_COUNT) interaction_clip_rect_stack;
 	stack_t(ui_clip_rect_flags_t, UI_CLIP_RECT_STACK_COUNT) clip_rect_flags_stack;
     ui_render_command_list_t render_commands;
 

@@ -385,6 +385,14 @@ typedef union rect2_t
     };
 } rect2_t;
 
+typedef struct rect2_fixed_t
+{
+    uint16_t min_x; // 14:2 fixed point
+    uint16_t min_y; // 14:2 fixed point
+    uint16_t max_x; // 14:2 fixed point
+    uint16_t max_y; // 14:2 fixed point
+} rect2_fixed_t;
+
 typedef union rect2i_t
 {
     struct

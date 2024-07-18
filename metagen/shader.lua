@@ -1,3 +1,5 @@
+require "debug"
+
 -- a little evil: make all unknown identifiers be treated as strings
 -- so that I can make the syntax of metashader blocks look a bit nicer...
 setmetatable(_G, {
@@ -5,6 +7,14 @@ setmetatable(_G, {
 		return key
 	end
 })
+
+shader_environment = {
+	file_name = "none", -- will be filled out for each shader
+}
+
+function shader_error(error_message)
+	error("\n[error in @metashader block \"" .. shader_environment.file_name .. "\"]: " .. error_message)
+end
 
 shader_resource_mt = {}
 
@@ -186,6 +196,17 @@ cbuffer_mt = {}
 
 function cbuffer(t)
 	setmetatable(t, cbuffer_mt)
+
+	if #t ~= 0 then
+		shader_error("cbuffer definitions can't have array members")
+	end
+
+	for k, v in pairs(t) do
+		if getmetatable(v) ~= shader_resource_mt then
+			shader_error("cbuffer member '" .. k .. "' has an unexpected type '" .. v .. "'")
+		end
+	end
+
 	return t
 end
 
@@ -195,5 +216,16 @@ flags_mt = {}
 
 function flags(t)
 	setmetatable(t, flags_mt)
+
+	if #t ~= 0 then
+		shader_error("flags definitions can't have array members")
+	end
+
+	for k, v in pairs(t) do
+		if type(v) ~= "number" then
+			shader_error("unexpected value assigned to flag of type " .. type(v))
+		end
+	end
+
 	return t
 end

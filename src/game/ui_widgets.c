@@ -55,30 +55,14 @@ rect2_t ui_scrollable_region_begin_ex(ui_scrollable_region_t *state, rect2_t sta
 	ui_push_clip_rect_ex(start_rect,  UiClipRectFlag_interaction_only);
 	ui_push_clip_rect_ex(ui->ui_area, UiClipRectFlag_visual_only|UiClipRectFlag_absolute);
 
-	v4_t offset = {0};
-	offset.xy = state->scroll_offset;
-
-// 	ui_id_t handle_id = ui_child_id(id, S("handle"));
-
-	/*
-	// GARBAGE ALERT
-	if (!ui_is_active(handle_id))
-	{
-		offset = ui_interpolate_v4(ui_child_id(id, S("offset")), offset);
-	}
-		*/
-
-	state->interpolated_scroll_offset = offset.xy;
-	
-	rect2_t result_rect = rect2_add_offset(start_rect, offset.xy);
+	v2_t    offset      = state->scroll_offset;
+	rect2_t result_rect = rect2_add_offset(start_rect, offset);
 
 	if ((state->scroll_zone.y || (flags & UiScrollableRegionFlags_always_draw_vertical_scroll_bar)) && (flags & UiScrollableRegionFlags_draw_scroll_bar))
 	{
 		rect2_cut_from_right(result_rect, ui_sz_pix(ui_scalar(UiScalar_scroll_tray_width)), NULL, &result_rect);
 		rect2_cut_from_right(result_rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)), NULL, &result_rect);
 	}
-
-	ui_push_responder_stack(id);
 
 	if (ui_mouse_in_rect(start_rect))
 	{
@@ -93,6 +77,7 @@ rect2_t ui_scrollable_region_begin_ex(ui_scrollable_region_t *state, rect2_t sta
 		}
 	}
 
+	ui_push_responder_stack(id);
 	ui_push_sub_layer();
 
 	state->render_commands_start_index = ui_next_render_command_index();
@@ -103,6 +88,7 @@ rect2_t ui_scrollable_region_begin_ex(ui_scrollable_region_t *state, rect2_t sta
 void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 {
 	ui_id_t id = ui_id_pointer(state);
+	ui_push_id(id);
 
 	ui_pop_sub_layer();
 	ui_pop_clip_rect(); // visual
@@ -116,6 +102,8 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 	rect2_t start_rect = state->start_rect;
 
 	float scrolling_zone_height = 0.0f;
+
+	bool suppress_scroll_animation = false;
 
 	// TODO: Horizontal
 	if (state->flags & UiScrollableRegionFlags_scroll_vertical)
@@ -136,11 +124,15 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 		if (ui->hovered_scroll_region.value == id.value)
 		{
 			float mouse_wheel = ui_mouse_wheel(true);
+
+			if (mouse_wheel != 0.0f)
+			{
+				suppress_scroll_animation = true;
+			}
+
 			state->scroll_offset.y = flt_clamp(state->scroll_offset.y - mouse_wheel, 0.0f, scrolling_zone_height);
 		}
 	}
-
-	bool suppress_scrollbar_animation = false;
 
 	if (ui_in_responder_chain(id))
 	{
@@ -181,8 +173,7 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 				state->scroll_offset.y += scroll_delta_y;
 				state->scroll_offset.y  = flt_clamp(state->scroll_offset.y, 0, scrolling_zone_height);
 
-				suppress_scrollbar_animation = true;
-				ui_set_v4(ui_child_id(id, S("offset")), make_v4(state->scroll_offset.x, state->scroll_offset.y, 0, 0));
+				suppress_scroll_animation = true;
 
 				ui_consume_event(event);
 			}
@@ -195,12 +186,11 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 	{
 		ui_id_t handle_id = ui_child_id(id, S("handle"));
 
-		//------------------------------------------------------------------------
 		// Figure out rectangles
 
 		float visible_height = rect2_height(start_rect);
 
-		float total_content_height = start_rect.max.y - (final_rect.max.y - state->interpolated_scroll_offset.y);
+		float total_content_height = start_rect.max.y - (final_rect.max.y - initial_scroll_offset.y);
 		float scrolling_zone_ratio = visible_height / total_content_height;
 
 		float scroll_offset = state->scroll_offset.y;
@@ -217,14 +207,11 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 
 		float scrollbar_movement = visible_height - scrollbar_size;
 		float scrollbar_offset   = scroll_pct*scrollbar_movement;
-		
-		/*
-		// A bit manual, I'd rather suppress the animation at the site where we're dealing with interaction
-		if (!ui_is_active(handle_id) && !suppress_scrollbar_animation)
+
+		if (!ui_is_active(handle_id) && !suppress_scroll_animation)
 		{
-			scrollbar_offset = ui_interpolate_f32(ui_child_id(id, S("scrollbar")), scrollbar_offset);
+			scrollbar_offset = ui_interpolate_f32(ui_id(S("scrollbar_offset")), scrollbar_offset);
 		}
-			*/
 
 		rect2_t handle;
 		{
@@ -233,11 +220,12 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 			rect2_cut_from_top(cut_rect, ui_sz_pix(scrollbar_size),   &handle, &cut_rect);
 		}
 
-		//------------------------------------------------------------------------
 		// Handle interaction
 
 		if (ui_is_active(handle_id))
 		{
+			suppress_scroll_animation = true;
+
 			if (ui_button_released(UiButton_left, true))
 			{
 				ui_clear_active();
@@ -251,10 +239,6 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 
 				state->scroll_offset.y = mouse_bary*scrolling_zone_height;
 
-				// TODO: This is dodgy too - I just want to say "don't interpolate this" 
-				ui_set_v4(ui_child_id(id, S("offset")), make_v4(state->scroll_offset.x, state->scroll_offset.y, 0, 0));
-
-				//------------------------------------------------------------------------
 				// Restrict and hide mouse
 
 				float restrict_min = actuating_height_min + ui->drag_anchor.y;
@@ -281,7 +265,6 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 			ui_set_next_hot(handle_id);
 		}
 
-		//------------------------------------------------------------------------
 		// Draw scrollbar
 
 		ui_style_color_t color_id = UiColor_scrollbar_foreground;
@@ -302,14 +285,27 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 		ui_pop_clip_rect();
 	}
 
-	v2_t scroll_offset_delta = sub(state->scroll_offset, initial_scroll_offset);
+	state->scroll_zone.y = scrolling_zone_height;
 
-	r_rect2_fixed_t scroll_clip_rect = rect2_to_fixed(start_rect);
+	v2_t interpolated_scroll_offset = state->scroll_offset;
+	
+	// NOTE: This is a little interesting, because I am animating only the visual offset of the scrollable
+	// region's contents now, not the actual widget positions in terms of their interaction logic. I don't
+	// think it is a problem, but it is noteworthy.
+	if (!suppress_scroll_animation)
+	{
+		interpolated_scroll_offset = ui_interpolate_v2(ui_id(S("scroll_offset")), state->scroll_offset);
+	}
+
+	v2_t scroll_offset_delta = sub(interpolated_scroll_offset, initial_scroll_offset);
+
+	rect2_fixed_t scroll_clip_rect = rect2_to_fixed(start_rect);
 
 	for (size_t i = render_commands_begin; i < render_commands_end; i++)
 	{
 		ui_render_command_t *command = &ui->render_commands.commands[i];
 		command->rect.rect = rect2_add_offset(command->rect.rect, scroll_offset_delta);
+		// goofiness continues
 		int min_y = CLAMP(command->rect.clip_rect.min_y + (int)scroll_offset_delta.y, 0, UINT16_MAX);
 		int max_y = CLAMP(command->rect.clip_rect.max_y + (int)scroll_offset_delta.y, 0, UINT16_MAX);
 		command->rect.clip_rect.min_y = (uint16_t)min_y;
@@ -317,9 +313,8 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 		command->rect.clip_rect = rect2_fixed_intersect(command->rect.clip_rect, scroll_clip_rect);
 	}
 
-	state->scroll_zone.y = scrolling_zone_height;
-
 	ui_pop_responder_stack();
+	ui_pop_id();
 }
 
 //
@@ -1785,7 +1780,7 @@ void ui_hue_picker(rect2_t rect, float *hue)
 		.color_10    = color_packed,
 		.color_11    = color_packed,
 		.color_01    = color_packed,
-		.flags       = R_UI_RECT_HUE_PICKER,
+		.flags       = UiRectFlags_hue_picker,
 	});
 
 	float indicator_offset = floorf(rect.min.y + (*hue) * (rect.max.y - rect.min.y));
@@ -1907,7 +1902,7 @@ void ui_sat_val_picker(rect2_t rect, float hue, float *sat, float *val)
 		.color_10    = color_packed,
 		.color_11    = color_packed,
 		.color_01    = color_packed,
-		.flags       = R_UI_RECT_SAT_VAL_PICKER,
+		.flags       = UiRectFlags_sat_val_picker,
 	});
 
 	float indicator_size = 8.0f;

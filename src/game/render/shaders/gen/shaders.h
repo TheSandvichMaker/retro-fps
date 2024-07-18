@@ -8,6 +8,7 @@
 #include "debug_lines.h"
 #include "fullscreen_triangle.h"
 #include "post.h"
+#include "resolve.h"
 #include "shadow.h"
 #include "ui.h"
 #include "ui_visualize_heatmap.h"
@@ -36,6 +37,8 @@ typedef enum df_shader_ident_t
 
 	// src/shaders/post.metashader
 	DfShader_post_ps,
+
+	// src/shaders/resolve.metashader
 	DfShader_resolve_msaa_ps,
 
 	// src/shaders/shadow.metashader
@@ -70,6 +73,8 @@ typedef enum df_pso_ident_t
 
 	// src/shaders/post.metashader
 	DfPso_post_process,
+
+	// src/shaders/resolve.metashader
 	DfPso_resolve_msaa,
 
 	// src/shaders/shadow.metashader
@@ -95,6 +100,7 @@ global df_pso_info_t df_psos[DfPso_COUNT];
 		compute_test_draw_parameters_t: shader_set_params__compute_test_draw_parameters_t, \
 		debug_lines_draw_parameters_t: shader_set_params__debug_lines_draw_parameters_t, \
 		post_draw_parameters_t: shader_set_params__post_draw_parameters_t, \
+		resolve_draw_parameters_t: shader_set_params__resolve_draw_parameters_t, \
 		shadow_draw_parameters_t: shader_set_params__shadow_draw_parameters_t, \
 		ui_draw_parameters_t: shader_set_params__ui_draw_parameters_t, \
 		ui_visualize_heatmap_draw_parameters_t: shader_set_params__ui_visualize_heatmap_draw_parameters_t, \

@@ -25,9 +25,6 @@ fn void delay_next_frame(float milliseconds);
 #include "map.h"
 #include "mesh.h"
 #include "physics_playground.h"
-#include "render_backend.h" // @IncludeOrder
-#include "render.h"
-#include "render_helpers.h"
 #include "ui.h"
 #include "ui_layout.h"
 #include "ui_widgets.h"
@@ -63,7 +60,7 @@ typedef struct player_t
 fn v3_t player_view_origin(player_t *player);
 fn v3_t player_view_direction(player_t *player);
 fn void player_noclip(player_t *player, float dt);
-fn void init_view_for_camera(camera_t *camera, rect2_t viewport, r_view_t *view);
+fn void get_camera_matrices(camera_t *camera, rect2_t viewport, m4x4_t *view, m4x4_t *proj);
 
 // frown
 fn bool g_cursor_locked;
