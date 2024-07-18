@@ -419,7 +419,7 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 		v2_t    popup_position = add(state->popup_position, make_v2(0, -popup_size.y));
 		rect2_t popup_rect     = rect2_from_min_dim(popup_position, popup_size);
 
-		ui_push_clip_rect(ui->ui_area, false);
+		ui_push_clip_rect_ex(ui->ui_area, UiClipRectFlag_absolute);
 
 		ui_draw_rect_shadow (popup_rect, ui_color(UiColor_window_background), 0.5f, 16.0f);
 		ui_draw_rect_outline(popup_rect, ui_color(UiColor_window_outline), 2.0f);

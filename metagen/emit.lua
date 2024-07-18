@@ -284,6 +284,12 @@ function emit.emit_bundle(context, bundle_info, output_directory_c, output_direc
 		end
 	end
 
+	-- sort cbuffers for deterministic codegen...
+
+	table.sort(cbuffers, function(a, b)
+		return a.name < b.name
+	end)
+
 	-- emit c header
 
 	io.output(output_directory_c .. bundle.name .. ".h")

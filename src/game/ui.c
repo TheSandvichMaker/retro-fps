@@ -764,26 +764,62 @@ void ui_set_font_height(float size)
 	ui->style.base_fonts[UiFont_header ] = make_font_from_memory(S("UI Header Font"), ui->style.header_font_data, ARRAY_COUNT(ranges), ranges, 1.5f*size);
 }
 
-void ui_push_clip_rect(rect2_t rect, bool intersect_with_old_clip_rect)
+void ui_push_clip_rect_ex(rect2_t rect, ui_clip_rect_flags_t flags)
 {
 	if (ALWAYS(!stack_full(ui->clip_rect_stack)))
 	{
-		r_rect2_fixed_t fixed  = rect2_to_fixed(rect);
+		r_rect2_fixed_t fixed = rect2_to_fixed(rect);
 
-		if (intersect_with_old_clip_rect)
+		if (!(flags & UiClipRectFlag_absolute))
 		{
 			fixed = rect2_fixed_intersect(fixed, ui_get_clip_rect_fixed());
 		}
 
-		stack_push(ui->clip_rect_stack, fixed);
+		if (!(flags & UiClipRectFlag_interaction_only))
+		{
+			stack_push(ui->clip_rect_stack, fixed);
+		}
+
+		if (!(flags & UiClipRectFlag_visual_only))
+		{
+			stack_push(ui->interaction_clip_rect_stack, fixed);
+		}
 	}
+
+	if (ALWAYS(!stack_full(ui->clip_rect_flags_stack)))
+	{
+		stack_push(ui->clip_rect_flags_stack, flags);
+	}
+}
+
+void ui_push_clip_rect(rect2_t rect)
+{
+	ui_push_clip_rect_ex(rect, 0);
 }
 
 void ui_pop_clip_rect(void)
 {
-	if (ALWAYS(!stack_empty(ui->clip_rect_stack)))
+	ui_clip_rect_flags_t flags = 0;
+
+	if (ALWAYS(!stack_empty(ui->clip_rect_flags_stack)))
 	{
-		stack_pop(ui->clip_rect_stack);
+		flags = stack_pop(ui->clip_rect_flags_stack);
+	}
+
+	if (!(flags & UiClipRectFlag_interaction_only))
+	{
+		if (ALWAYS(!stack_empty(ui->clip_rect_stack)))
+		{
+			stack_pop(ui->clip_rect_stack);
+		}
+	}
+
+	if (!(flags & UiClipRectFlag_visual_only))
+	{
+		if (ALWAYS(!stack_empty(ui->interaction_clip_rect_stack)))
+		{
+			stack_pop(ui->interaction_clip_rect_stack);
+		}
 	}
 }
 
@@ -1223,7 +1259,14 @@ void ui_draw_image(rect2_t rect, rhi_texture_srv_t texture)
 
 bool ui_mouse_in_rect(rect2_t rect)
 {
-	rect2_t clip_rect = ui_get_clip_rect();
+	r_rect2_fixed_t interact_clip_rect = rect2_to_fixed(ui->ui_area);
+
+	if (!stack_empty(ui->interaction_clip_rect_stack))
+	{
+		interact_clip_rect = stack_top(ui->interaction_clip_rect_stack);
+	}
+
+	rect2_t clip_rect = rect2_from_fixed(interact_clip_rect);
 	return rect2_contains_point(rect2_intersect(rect, clip_rect), ui->input.mouse_p);
 }
 
@@ -1431,7 +1474,12 @@ bool ui_has_focus(void)
 bool ui_id_has_focus(ui_id_t id)
 {
 	bool is_top_responder = !stack_empty(ui->responder_chain) && stack_top(ui->responder_chain).id.value == id.value;
-	return ui->has_focus && is_top_responder; // ui->focused_id.value == id.value;
+	return ui->has_focus && !ui->focus_on_next && is_top_responder;
+}
+
+size_t ui_next_render_command_index(void)
+{
+	return ui->render_commands.count;
 }
 
 void ui_push_responder_stack_ex(ui_id_t id, ui_responder_flags_t flags)
@@ -1458,7 +1506,6 @@ void ui_pop_responder_stack(void)
 void ui_gain_focus(ui_id_t id)
 {
 	ui->has_focus = true;
-	ui->focused_id = id;
 
 	copy_struct(&ui->responder_chain, &ui->responder_stack);
 
@@ -1909,6 +1956,15 @@ void ui_end(void)
 
 	DEBUG_ASSERT(stack_empty(ui->responder_stack));
 	stack_reset(ui->responder_stack);
+
+	if (!stack_empty(ui->responder_chain))
+	{
+		ui->last_focused_id = stack_top(ui->responder_chain).id;
+	}
+	else
+	{
+		ui->last_focused_id = UI_ID_NULL;
+	}
 
 	if (ui->has_focus && ui_key_pressed(Key_escape, true))
 	{

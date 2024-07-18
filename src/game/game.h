@@ -4,6 +4,8 @@
 
 #pragma once
 
+fn void delay_next_frame(float milliseconds);
+
 #include "action.h"
 #include "asset.h"
 #include "audio.h"

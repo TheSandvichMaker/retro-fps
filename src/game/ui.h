@@ -418,15 +418,21 @@ fn rect2_t ui_text_op                      (font_t *font, v2_t p, string_t text,
 fn v2_t    ui_text_align_p                 (font_t *font, rect2_t rect, string_t text, v2_t align);
 fn v2_t    ui_text_center_p                (font_t *font, rect2_t rect, string_t text);
 
-fn r_rect2_fixed_t ui_get_clip_rect_fixed  (void);
-fn rect2_t         ui_get_clip_rect        (void);
-fn void            ui_push_clip_rect       (rect2_t rect, bool intersect_with_old_clip_rect);
-fn void            ui_pop_clip_rect        (void);
+typedef uint32_t ui_clip_rect_flags_t;
+typedef enum ui_clip_rect_flags_enum_t
+{
+	UiClipRectFlag_absolute         = 0x1,
+	UiClipRectFlag_interaction_only = 0x2,
+	UiClipRectFlag_visual_only      = 0x4,
+} ui_clip_rect_flags_enum_t;
+
+fn r_rect2_fixed_t ui_get_clip_rect_fixed(void);
+fn rect2_t         ui_get_clip_rect      (void);
+fn void            ui_push_clip_rect_ex  (rect2_t rect, ui_clip_rect_flags_t flags);
+fn void            ui_push_clip_rect     (rect2_t rect);
+fn void            ui_pop_clip_rect      (void);
 
 fn rect2_t ui_fit_popup_rect(rect2_t area_bounds, rect2_t rect);
-
-#define UI_ClipRect(rect, interesct_with_old_clip_rect) \
-	DEFER_LOOP(ui_push_clip_rect(rect, interesct_with_old_clip_rect), ui_pop_clip_rect())
 
 fn rect2_t ui_draw_text                    (font_t *font, v2_t p, string_t text);
 fn rect2_t ui_draw_text_aligned            (font_t *font, rect2_t rect, string_t text, v2_t align);
@@ -656,7 +662,7 @@ typedef struct ui_t
 	stack_t(ui_id_t, UI_ID_STACK_COUNT) id_stack;
 	stack_t(ui_tooltip_t, UI_TOOLTIP_STACK_COUNT) tooltip_stack;
 
-	ui_id_t focused_id; // TODO: remove?
+	ui_id_t last_focused_id;
 	bool    suppress_next_tab_focus;
 
 	int     selection_index;
@@ -690,7 +696,9 @@ typedef struct ui_t
 	debug_notif_t *first_debug_notif;
 	uint64_t next_notif_id;
 
-	stack_t(r_rect2_fixed_t, UI_CLIP_RECT_STACK_COUNT) clip_rect_stack;
+	stack_t(r_rect2_fixed_t,      UI_CLIP_RECT_STACK_COUNT) clip_rect_stack;
+	stack_t(r_rect2_fixed_t,      UI_CLIP_RECT_STACK_COUNT) interaction_clip_rect_stack;
+	stack_t(ui_clip_rect_flags_t, UI_CLIP_RECT_STACK_COUNT) clip_rect_flags_stack;
     ui_render_command_list_t render_commands;
 
     size_t culled_rect_count;
@@ -710,6 +718,8 @@ fn_local arena_t *ui_frame_arena(void)
 
 fn void equip_ui  (ui_t *state);
 fn void unequip_ui(void);
+
+fn size_t ui_next_render_command_index(void);
 
 fn bool ui_is_cold         (ui_id_t id);
 fn bool ui_is_next_hot     (ui_id_t id);

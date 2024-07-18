@@ -38,6 +38,11 @@ void ui_error_widget(rect2_t rect, string_t widget_name, string_t error_message)
 // Scrollable Region
 //
 
+rect2_t ui_scrollable_region_begin(ui_scrollable_region_t *state, rect2_t start_rect)
+{
+	return ui_scrollable_region_begin_ex(state, start_rect, UiScrollableRegionFlags_scroll_both|UiScrollableRegionFlags_draw_scroll_bar|UiScrollableRegionFlags_always_draw_vertical_scroll_bar);
+}
+
 rect2_t ui_scrollable_region_begin_ex(ui_scrollable_region_t *state, rect2_t start_rect, ui_scrollable_region_flags_t flags)
 {
 	ui_id_t id = ui_id_pointer(state);
@@ -46,18 +51,22 @@ rect2_t ui_scrollable_region_begin_ex(ui_scrollable_region_t *state, rect2_t sta
 	state->flags      = flags;
 	state->start_rect = start_rect;
 
-	ui_push_clip_rect(start_rect, true);
+	// seems very stupid but ok
+	ui_push_clip_rect_ex(start_rect,  UiClipRectFlag_interaction_only);
+	ui_push_clip_rect_ex(ui->ui_area, UiClipRectFlag_visual_only|UiClipRectFlag_absolute);
 
 	v4_t offset = {0};
 	offset.xy = state->scroll_offset;
 
-	ui_id_t handle_id = ui_child_id(id, S("handle"));
+// 	ui_id_t handle_id = ui_child_id(id, S("handle"));
 
+	/*
 	// GARBAGE ALERT
 	if (!ui_is_active(handle_id))
 	{
 		offset = ui_interpolate_v4(ui_child_id(id, S("offset")), offset);
 	}
+		*/
 
 	state->interpolated_scroll_offset = offset.xy;
 	
@@ -86,12 +95,9 @@ rect2_t ui_scrollable_region_begin_ex(ui_scrollable_region_t *state, rect2_t sta
 
 	ui_push_sub_layer();
 
-	return result_rect;
-}
+	state->render_commands_start_index = ui_next_render_command_index();
 
-rect2_t ui_scrollable_region_begin(ui_scrollable_region_t *state, rect2_t start_rect)
-{
-	return ui_scrollable_region_begin_ex(state, start_rect, UiScrollableRegionFlags_scroll_both|UiScrollableRegionFlags_draw_scroll_bar);
+	return result_rect;
 }
 
 void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
@@ -99,7 +105,13 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 	ui_id_t id = ui_id_pointer(state);
 
 	ui_pop_sub_layer();
-	ui_pop_clip_rect();
+	ui_pop_clip_rect(); // visual
+	ui_pop_clip_rect(); // and interaction
+
+	size_t render_commands_begin = state->render_commands_start_index;
+	size_t render_commands_end   = ui_next_render_command_index();
+
+	v2_t initial_scroll_offset = state->scroll_offset;
 
 	rect2_t start_rect = state->start_rect;
 
@@ -206,11 +218,13 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 		float scrollbar_movement = visible_height - scrollbar_size;
 		float scrollbar_offset   = scroll_pct*scrollbar_movement;
 		
+		/*
 		// A bit manual, I'd rather suppress the animation at the site where we're dealing with interaction
 		if (!ui_is_active(handle_id) && !suppress_scrollbar_animation)
 		{
 			scrollbar_offset = ui_interpolate_f32(ui_child_id(id, S("scrollbar")), scrollbar_offset);
 		}
+			*/
 
 		rect2_t handle;
 		{
@@ -283,13 +297,24 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 
 		v4_t color = ui_interpolate_v4(ui_child_id(id, S("handle_color")), ui_color(color_id));
 
-		ui_push_clip_rect(inner_tray, true);
+		ui_push_clip_rect(inner_tray);
 		ui_draw_rect(handle, color);
-
-		//------------------------------------------------------------------------
-
 		ui_pop_clip_rect();
+	}
 
+	v2_t scroll_offset_delta = sub(state->scroll_offset, initial_scroll_offset);
+
+	r_rect2_fixed_t scroll_clip_rect = rect2_to_fixed(start_rect);
+
+	for (size_t i = render_commands_begin; i < render_commands_end; i++)
+	{
+		ui_render_command_t *command = &ui->render_commands.commands[i];
+		command->rect.rect = rect2_add_offset(command->rect.rect, scroll_offset_delta);
+		int min_y = CLAMP(command->rect.clip_rect.min_y + (int)scroll_offset_delta.y, 0, UINT16_MAX);
+		int max_y = CLAMP(command->rect.clip_rect.max_y + (int)scroll_offset_delta.y, 0, UINT16_MAX);
+		command->rect.clip_rect.min_y = (uint16_t)min_y;
+		command->rect.clip_rect.max_y = (uint16_t)max_y;
+		command->rect.clip_rect = rect2_fixed_intersect(command->rect.clip_rect, scroll_clip_rect);
 	}
 
 	state->scroll_zone.y = scrolling_zone_height;
@@ -335,7 +360,7 @@ bool ui_collapsable_region(rect2_t rect, string_t title, bool *open)
 
 void ui_header(rect2_t rect, string_t label)
 {
-	ui_push_clip_rect(rect, true);
+	ui_push_clip_rect(rect);
 
 	font_t *font = ui_font(UiFont_header);
 	ui_draw_text_default_alignment(font, rect, label);
@@ -349,7 +374,7 @@ void ui_header(rect2_t rect, string_t label)
 
 void ui_label(rect2_t rect, string_t label)
 {
-	ui_push_clip_rect(rect, true);
+	ui_push_clip_rect(rect);
 
 	rect = rect2_cut_margins(rect, ui_sz_pix(ui_scalar(UiScalar_text_margin)));
 
@@ -458,7 +483,7 @@ bool ui_button(rect2_t rect, string_t label)
 	ui_draw_rect(shadow, mul(color_interp, 0.75f));
 	ui_draw_rect(button, color_interp);
 
-	ui_push_clip_rect(button, true);
+	ui_push_clip_rect(button);
 	ui_draw_text_aligned(ui_font(UiFont_default), button, label, make_v2(0.5f, 0.5f));
 	ui_pop_clip_rect();
 
@@ -1111,7 +1136,7 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 
 	ui_draw_rect(rect, ui_color(UiColor_slider_background));
 
-	ui_push_clip_rect(rect, true);
+	ui_push_clip_rect(rect);
 
 	if (has_bounds)
 	{
@@ -1642,7 +1667,7 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *in_buffer,
 			ui_draw_rect_roundedness(caret_rect, caret_color, v4_from_scalar(0.0f));
 		}
 	}
-	else if (has_focus)
+	else if (ui_id_has_focus(id))
 	{
 		ui_draw_focus_indicator(rect);
 	}
@@ -2091,12 +2116,12 @@ bool ui_window_begin(ui_id_t id, ui_window_t *window, string_t title)
 	ui_draw_rect_roundedness_shadow(rect2_shrink(total, 1.0f), make_v4(0, 0, 0, 0), make_v4(5, 5, 5, 5), shadow_amount, 32.0f);
 	ui_draw_rect_roundedness(title_bar, interpolated_title_bar_color, make_v4(2, 0, 2, 0));
 	ui_draw_rect_roundedness(rect, ui_color(UiColor_window_background), make_v4(0, 2, 0, 2));
-	ui_push_clip_rect(title_bar, true);
+	ui_push_clip_rect(title_bar);
 	ui_draw_text(ui_font(UiFont_header), ui_text_center_p(ui_font(UiFont_header), title_bar_minus_outline, title), title);
 	ui_pop_clip_rect();
 	ui_draw_rect_roundedness_outline(total, ui_color(UiColor_window_outline), make_v4(2, 2, 2, 2), 2.0f);
 
-	ui_push_clip_rect(rect, true);
+	ui_push_clip_rect(rect);
 
 	window->focused = has_focus;
 

@@ -25,3 +25,5 @@ fn void  vm_release (void *address);
 
 fn void os_show_loud_error   (const char *fmt, ...);
 fn void os_show_loud_error_va(const char *fmt, va_list args);
+
+fn void os_sleep(float milliseconds);

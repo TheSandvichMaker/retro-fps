@@ -79,7 +79,7 @@ void editor_texture_viewer_ui(editor_texture_viewer_t *viewer, rect2_t rect)
 						}
 
 						ui_push_sub_layer();
-						ui_push_clip_rect(ui->ui_area, false);
+						ui_push_clip_rect_ex(ui->ui_area, UiClipRectFlag_absolute);
 
 						v2_t popup_p = add(ui->input.mouse_p, make_v2(16, 16));
 
@@ -143,7 +143,7 @@ void editor_texture_viewer_render(editor_texture_viewer_t *viewer, r1_view_t *vi
 			rhi_texture_srv_t texture_srv = rhi_get_texture_srv(viewer->current_texture);
 
 			ui_push_sub_layer();
-			ui_push_clip_rect(ui->ui_area, false);
+			ui_push_clip_rect_ex(ui->ui_area, UiClipRectFlag_absolute);
 
 			rect2_t area = rect2_cut_margins(ui->ui_area, ui_sz_pix(16.0f));
 

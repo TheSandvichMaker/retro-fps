@@ -511,3 +511,9 @@ uint64_t os_estimate_cpu_timer_frequency(uint64_t wait_ms)
 	}
 	return cpu_freq;
 }
+
+void os_sleep(float milliseconds)
+{
+	if (milliseconds < 0.0f) return;
+	Sleep((DWORD)milliseconds);
+}

@@ -11,6 +11,8 @@
 // @must-initialize (TODO: Deprecate?)
 // @IncludeOrder
 
+static float g_next_frame_delay_ms = 0.0f;
+
 #include "game.h"
 
 #include "action.c"
@@ -41,6 +43,11 @@
 //#include "in_game_editor.c"
 
 #include "render/r1.c"
+
+void delay_next_frame(float milliseconds)
+{
+	g_next_frame_delay_ms = milliseconds;
+}
 
 typedef struct app_state_t
 {
@@ -730,6 +737,12 @@ fn_local void app_tick(platform_tick_io_t *io)
 
 	// clamp frame time to avoid death spirals
 	double frame_time = MIN(io->frame_time, 0.1);
+
+	if (g_next_frame_delay_ms != 0.0f)
+	{
+		os_sleep(g_next_frame_delay_ms);
+		g_next_frame_delay_ms = 0.0f;
+	}
 
 	app->accumulator += frame_time;
 

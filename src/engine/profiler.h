@@ -122,7 +122,7 @@ fn_local void profiler_begin_frame(void)
 
 	if (!cpu_freq)
 	{
-		cpu_freq = os_estimate_cpu_timer_frequency(200);
+		cpu_freq = os_estimate_cpu_timer_frequency(100);
 	}
 
     copy_array(profiler_slots_read, profiler_slots, profiler_slots_count);
