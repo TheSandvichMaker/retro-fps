@@ -998,7 +998,7 @@ fn_local void d3d12_upload_texture_data(d3d12_texture_t *texture, const rhi_text
 	m_scoped_temp
 	{
 		string_t debug_name = d3d12_get_debug_name(temp, (ID3D12Object *)texture->resource);
-		log(RHI_D3D12, Spam, "Uploading texture data for texture '%.*s'", Sx(debug_name));
+		log(RHI_D3D12, Spam, "Uploading texture data for texture '%cs'", debug_name);
 	}
 
 	d3d12_upload_context_t ctx = d3d12_upload_begin(dst_size, 512);
@@ -1421,7 +1421,7 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 				d3d12_upload_texture_data(texture, initial_data);
 			}
 
-			log(RHI_D3D12, SuperSpam, "Added new texture '%.*s' (index: %u, generation: %u)", Sx(params->debug_name), result.index, result.generation);
+			log(RHI_D3D12, SuperSpam, "Added new texture '%cs' (index: %u, generation: %u)", params->debug_name, result.index, result.generation);
 		}
 	}
 
@@ -1544,7 +1544,7 @@ fn_local void d3d12_upload_buffer_data(d3d12_buffer_t *buffer, uint32_t resource
 	m_scoped_temp
 	{
 		string_t debug_name = d3d12_get_debug_name(temp, (ID3D12Object *)resource);
-		log(RHI_D3D12, Spam, "Uploading data for buffer '%.*s'[%u]", Sx(debug_name), resource_index);
+		log(RHI_D3D12, Spam, "Uploading data for buffer '%cs'[%u]", debug_name, resource_index);
 	}
 
 	d3d12_upload_context_t ctx = d3d12_upload_begin(src_size, 256);
@@ -2804,11 +2804,11 @@ rhi_shader_bytecode_t rhi_compile_shader(arena_t *arena, string_t shader_source,
 			const char *message = ID3D10Blob_GetBufferPointer(error);
 
 			bool is_fatal = FAILED(hr); 
-			string_t formatted_message = string_format(temp, "Shader compilation %s for '%.*s:%.*s' (%.*s):\n%s", 
+			string_t formatted_message = string_format(temp, "Shader compilation %s for '%cs:%cs' (%cs):\n%s", 
 													   is_fatal ? "error" : "warning", 
-													   Sx(file_name), 
-													   Sx(entry_point), 
-													   Sx(shader_model), 
+													   file_name, 
+													   entry_point, 
+													   shader_model, 
 													   message);
 
 			// A downside of these log macros is that the category and level can't be changed at runtime
@@ -2823,7 +2823,7 @@ rhi_shader_bytecode_t rhi_compile_shader(arena_t *arena, string_t shader_source,
 
 			if (is_fatal)
 			{
-				FATAL_ERROR("%.*s", Sx(formatted_message));
+				FATAL_ERROR("%cs", formatted_message);
 			}
 
 			COM_SAFE_RELEASE(error);

@@ -511,13 +511,13 @@ ui_anim_t *ui_get_anim(ui_id_t id, v4_t target)
 				active_ids[anim_index] = id;
 				result = &active_anims[anim_index];
 
-				log(UI, SuperSpam, "Spawned anim %.*s", Sx(UI_ID_GET_NAME(id)));
+				log(UI, SuperSpam, "Spawned anim %cs", UI_ID_GET_NAME(id));
 			}
 			else
 			{
 				result = &list->null;
 
-				log(UI, Warning, "Ran out of space for UI anims for ID %.*s", Sx(UI_ID_GET_NAME(id)));
+				log(UI, Warning, "Ran out of space for UI anims for ID %cs", UI_ID_GET_NAME(id));
 			}
 
 			result->t_current  = target;
@@ -1181,8 +1181,8 @@ void ui_draw_focus_indicator(rect2_t rect)
 	ui_layer_t new_layer = { .layer = old_layer.layer, .sub_layer = 255 };
 	ui_set_layer(new_layer);
 	{
-		UI_Scalar(UiScalar_roundedness, ui_scalar(UiScalar_roundedness) + 2.0)
-		ui_draw_rect_outline(rect2_add_radius(rect, v2s(2.0f)), ui_color(UiColor_focus_indicator), 2.0);
+		UI_Scalar(UiScalar_roundedness, ui_scalar(UiScalar_roundedness) + 1.0f)
+		ui_draw_rect_outline(rect2_add_radius(rect, v2s(1.0f)), ui_color(UiColor_focus_indicator), 1.0f);
 	}
 	ui_set_layer(old_layer);
 }
@@ -1638,7 +1638,6 @@ void *ui_get_state_raw(ui_id_t id, bool *first_touch, uint16_t size, ui_state_fl
 		state = simple_heap_alloc(&ui->state_allocator, real_size);
 		state->id                  = id;
 		state->size                = real_size;
-		state->created_frame_index = ui->frame_index;
 		state->flags               = flags;
 		table_insert_object(&ui->state_index, id.value, state);
 

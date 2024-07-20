@@ -449,7 +449,7 @@ void app_init(platform_init_io_t *io)
 
 	string_t startup_map = S("test");
 
-    map_t    *map    = game->map    = load_map(&game->arena, Sf("gamedata/maps/%.*s.map", Sx(startup_map)));
+    map_t    *map    = game->map    = load_map(&game->arena, Sf("gamedata/maps/%cs.map", startup_map));
     player_t *player = game->player = m_alloc_struct(&game->arena, player_t);
 
 	game->primary_camera = &game->global_camera;
@@ -457,7 +457,7 @@ void app_init(platform_init_io_t *io)
 
 	if (!map)
 	{
-		FATAL_ERROR("Failed to load map %.*s", Sx(startup_map));
+		FATAL_ERROR("Failed to load map %cs", startup_map);
 	}
 
 	for (size_t entity_index = 0; entity_index < map->entity_count; entity_index++)

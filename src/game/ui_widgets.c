@@ -38,6 +38,9 @@ void ui_error_widget(rect2_t rect, string_t widget_name, string_t error_message)
 // Scrollable Region
 //
 
+// this has some real issues but I kind of want to make it work
+#define ELIMINATE_SCROLL_REGION_FRAME_DELAY 0
+
 rect2_t ui_scrollable_region_begin(ui_scrollable_region_t *state, rect2_t start_rect)
 {
 	return ui_scrollable_region_begin_ex(state, start_rect, UiScrollableRegionFlags_scroll_both|UiScrollableRegionFlags_draw_scroll_bar|UiScrollableRegionFlags_always_draw_vertical_scroll_bar);
@@ -51,9 +54,12 @@ rect2_t ui_scrollable_region_begin_ex(ui_scrollable_region_t *state, rect2_t sta
 	state->flags      = flags;
 	state->start_rect = start_rect;
 
-	// seems very stupid but ok
+#if ELIMINATE_SCROLL_REGION_FRAME_DELAY
 	ui_push_clip_rect_ex(start_rect,  UiClipRectFlag_interaction_only);
 	ui_push_clip_rect_ex(ui->ui_area, UiClipRectFlag_visual_only|UiClipRectFlag_absolute);
+#else
+	ui_push_clip_rect(start_rect);
+#endif
 
 	v2_t    offset      = state->scroll_offset;
 	rect2_t result_rect = rect2_add_offset(start_rect, offset);
@@ -91,11 +97,15 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 	ui_push_id(id);
 
 	ui_pop_sub_layer();
+#if ELIMINATE_SCROLL_REGION_FRAME_DELAY
 	ui_pop_clip_rect(); // visual
 	ui_pop_clip_rect(); // and interaction
 
 	size_t render_commands_begin = state->render_commands_start_index;
 	size_t render_commands_end   = ui_next_render_command_index();
+#else
+	ui_pop_clip_rect();
+#endif
 
 	v2_t initial_scroll_offset = state->scroll_offset;
 
@@ -287,6 +297,7 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 
 	state->scroll_zone.y = scrolling_zone_height;
 
+#if ELIMINATE_SCROLL_REGION_FRAME_DELAY
 	v2_t interpolated_scroll_offset = state->scroll_offset;
 	
 	// NOTE: This is a little interesting, because I am animating only the visual offset of the scrollable
@@ -312,6 +323,7 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 		command->rect.clip_rect.max_y = (uint16_t)max_y;
 		command->rect.clip_rect = rect2_fixed_intersect(command->rect.clip_rect, scroll_clip_rect);
 	}
+#endif
 
 	ui_pop_responder_stack();
 	ui_pop_id();
@@ -593,258 +605,108 @@ bool ui_checkbox(rect2_t rect, bool *result_value)
 }
 
 //
-// Slider
+// "Radio Buttons" (not really)
 //
 
-fn_local void ui_slider_old_base(ui_id_t id, rect2_t rect, ui_slider_params_t *p)
+bool ui_radio_buttons(rect2_t rect, int *state, string_t *option_labels, int option_count)
 {
-	if (NEVER(!ui->initialized)) 
-		return;
+	if (!state)            { ui_error_widget(rect, S("ui_radio_buttons"), S("Passed null state pointer to ui_radio_buttons"));  return false; }
+	if (!option_labels)    { ui_error_widget(rect, S("ui_radio_buttons"), S("Passed null labels pointer to ui_radio_buttons")); return false; }
+	if (option_count <= 0) { ui_error_widget(rect, S("ui_radio_buttons"), S("Passed a count of 0 to ui_radio_buttons"));        return false; }
+
+	int current_state = state ? *state : 0;
+	int new_state = current_state;
+
+	ui_id_t id = ui_id_pointer(state);
+	ui_validate_widget(id);
 
 	ui_gain_tab_focus(id, rect);
 
-	ui_push_id(id);
+	int keyboard_activated = -1;
+	bool responder = ui_in_responder_chain(id);
 
-	if (p->flags & UiSliderFlags_inc_dec_buttons)
+	if (responder)
 	{
-		float h = rect2_height(rect);
-
-		rect2_t dec = rect2_cut_left (&rect, h);
-		rect2_t inc = rect2_cut_right(&rect, h);
-
-		//rect = rect2_cut_margins_horizontally(rect, ui_sz_pix(ui_scalar(UiScalar_widget_margin)));
-
-		float roundedness = ui_scalar(UiScalar_roundedness);
-
-		float delta = 0;
-		float base_increment = p->increment_amount;
-
-		if (ui_key_held(Key_control, false))
+		if (ui_key_pressed(Key_left, true))
 		{
-			base_increment = p->major_increment_amount;
-		}
-
-		// @UiRoundednessHack
-		UI_Scalar(UiScalar_roundedness, 0.0f)
-		UI_Color (UiColor_roundedness, make_v4(0, 0, roundedness, roundedness))
-		if (ui_button(dec, S("-")))
-		{
-			delta = -1;
-		}
-
-		// @UiRoundednessHack
-		UI_Scalar(UiScalar_roundedness, 0.0f)
-		UI_Color (UiColor_roundedness, make_v4(roundedness, roundedness, 0, 0))
-		if (ui_button(inc, S("+")))
-		{
-			delta = 1;
-		}
-
-		switch (p->type)
-		{
-			case UiSlider_f32: *p->f32.v += delta*base_increment; break;
-			case UiSlider_i32: *p->i32.v += delta*base_increment; break;
-		}
-	}
-
-	float slider_w           = rect2_width(rect);
-	float handle_w           = max(16.0f, slider_w*ui_scalar(UiScalar_slider_handle_ratio));
-	float slider_effective_w = slider_w - handle_w;
-
-	// TODO: This is needlessly confusing
-	float relative_x = CLAMP((ui->input.mouse_p.x - ui->drag_anchor.x) - rect.min.x - 0.5f*handle_w, 0.0f, slider_effective_w);
-
-	float t_slider = 0.0f;
-
-	if (ui_is_active(id))
-	{
-		t_slider = relative_x / slider_effective_w;
-		ui_set_f32(ui_child_id(id, S("t_slider")), t_slider);
-
-		switch (p->type)
-		{
-			case UiSlider_f32:
+			if (ui->selection_index > 0)
 			{
-				float value = p->f32.min + t_slider*(p->f32.max - p->f32.min);
-				*p->f32.v = p->f32.granularity*roundf(value / p->f32.granularity);
-			} break;
-
-			case UiSlider_i32:
-			{
-				*p->i32.v = p->i32.min + (int32_t)roundf(t_slider*(float)(p->i32.max - p->i32.min));
-			} break;
+				ui->selection_index -= 1;
+			}
 		}
 
-		float handle_range_min = rect.min.x + 0.5f*handle_w;
-
-		ui->cursor              = Cursor_none;
-		ui->cursor_reset_delay  = 1;
-		ui->restrict_mouse_rect = rect2_from_min_dim(
-			make_v2(ui->drag_anchor.x + handle_range_min, ui->input.mouse_p_on_lmb.y),
-			make_v2(slider_effective_w, 0));
-	}
-	else
-	{
-		switch (p->type)
+		if (ui_key_pressed(Key_right, true))
 		{
-			case UiSlider_f32:
+			if (ui->selection_index < option_count - 1)
 			{
-				t_slider = (*p->f32.v - p->f32.min) / (p->f32.max - p->f32.min);
-			} break;
-
-			case UiSlider_i32:
-			{
-				t_slider = (float)(*p->i32.v - p->i32.min) / (float)(p->i32.max - p->i32.min);
-			} break;
+				ui->selection_index += 1;
+			}
 		}
 
-		t_slider = ui_interpolate_f32(ui_child_id(id, S("t_slider")), t_slider);
-	}
-
-	t_slider = saturate(t_slider);
-
-	float handle_t = t_slider*slider_effective_w;
-
-	rect2_t body   = rect;
-	rect2_t left   = rect2_cut_left(&rect, handle_t);
-	rect2_t handle = rect2_cut_left(&rect, handle_w);
-	rect2_t right  = rect;
-
-	(void)left;
-	(void)right;
-
-	// TODO: don't hack this logic
-	if (p->flags & UiSliderFlags_inc_dec_buttons)
-	{
-		handle = rect2_cut_margins_horizontally(handle, ui_sz_pix(ui_scalar(UiScalar_widget_margin)));
-	}
-
-	ui_interaction_t interaction = ui_default_widget_behaviour(id, handle);
-
-	string_t value_text = {0};
-
-	switch (p->type)
-	{
-		case UiSlider_f32:
+		if (ui_key_pressed(Key_return, true) ||
+			ui_key_pressed(Key_space, true))
 		{
-			value_text = Sf("%.02f", *p->f32.v);
-		} break;
+			keyboard_activated = ui->selection_index;
+		}
+	}
 
-		case UiSlider_i32:
+	ui_push_responder_stack(id);
+
+	if (option_count > 0)
+	{
+		float margin       = ui_scalar(UiScalar_widget_margin);
+		float margin_space = (float)(option_count - 1)*margin;
+		float button_width = (rect2_width(rect) - margin_space) / (float)option_count;
+
+		for (int i = 0; i < option_count; i++)
 		{
-			value_text = Sf("%d", *p->i32.v);
-		} break;
+			bool is_first = i == 0;
+			bool is_last  = i == option_count - 1;
+
+			v4_t roundedness = {
+				is_last  ? ui_scalar(UiScalar_roundedness) : 0.0f,
+				is_last  ? ui_scalar(UiScalar_roundedness) : 0.0f,
+				is_first ? ui_scalar(UiScalar_roundedness) : 0.0f,
+				is_first ? ui_scalar(UiScalar_roundedness) : 0.0f,
+			};
+
+			rect2_t button_rect;
+			rect2_cut_from_left(rect, ui_sz_pix(button_width), &button_rect, &rect);
+			rect2_cut_from_left(rect, ui_sz_pix(margin), NULL, &rect);
+
+			bool active = (current_state == i);
+
+			ui_suppress_next_tab_focus();
+
+			UI_Scalar          (UiScalar_roundedness, 0.0f)
+			UI_Color           (UiColor_roundedness, roundedness)
+			UI_ColorConditional(UiColor_button_idle, ui_color(UiColor_button_active), active)
+			if (ui_button(button_rect, option_labels[i]) || (keyboard_activated == i))
+			{
+				new_state = i;
+				ui->selection_index = i;
+			}
+
+			if (responder && i == ui->selection_index)
+			{
+				ui_draw_focus_indicator(button_rect);
+			}
+		}
 	}
 
-	v4_t color = ui_animate_colors(id, interaction, 
-		ui_color(UiColor_slider_foreground),
-		ui_color(UiColor_slider_hot),
-		ui_color(UiColor_slider_active),
-		ui_color(UiColor_slider_active));
+	ui_pop_responder_stack();
 
-	if (interaction & UI_RELEASED)
+	if (state)
 	{
-		ui->set_mouse_p = add(rect2_center(handle), ui->drag_anchor);
+		*state = new_state;
 	}
 
-	float hover_lift = ui_hover_lift(id);
-
-	rect2_t shadow = handle;
-	handle = rect2_add_offset(handle, make_v2(0, hover_lift));
-
-	UI_Scalar(UiScalar_roundedness, 0.0f)
-	{
-		ui_draw_rect(body, ui_color(UiColor_slider_background));
-		ui_draw_rect(right, ui_color(UiColor_slider_background));
-	}
-
-	ui_draw_rect(shadow, mul(color, 0.75f));
-	ui_draw_rect(handle, color);
-
-	ui_draw_text_aligned(ui_font(UiFont_default), body, value_text, make_v2(0.5f, 0.5f));
-
-	ui_pop_id();
-}
-
-bool ui_slider_old_ex(rect2_t rect, float *v, float min, float max, float granularity, ui_slider_flags_t flags)
-{
-	if (NEVER(!ui->initialized)) 
-		return false;
-
-	if (NEVER(!v)) 
-		return false;
-
-	float init_v = *v;
-
-	ui_id_t id = ui_id_pointer(v);
-	ui_validate_widget(id);
-
-	// @UiHoverable
-	ui_hoverable(id, rect);
-
-	ui_slider_params_t p = {
-		.type  = UiSlider_f32,
-		.flags = flags,
-		.increment_amount       = 1,
-		.major_increment_amount = 5,
-		.f32 = {
-			.granularity = granularity,
-			.v           = v,
-			.min         = min,
-			.max         = max,
-		},
-	};
-
-	ui_slider_old_base(id, rect, &p);
-	
-	return *v != init_v;
-}
-
-bool ui_slider_old(rect2_t rect, float *v, float min, float max)
-{
-	return ui_slider_old_ex(rect, v, min, max, 0.01f, 0);
-}
-
-bool ui_slider_int_old_ex(rect2_t rect, int32_t *v, int32_t min, int32_t max, ui_slider_flags_t flags)
-{
-	if (NEVER(!ui->initialized)) 
-		return false;
-
-	if (NEVER(!v)) 
-		return false;
-
-	int32_t init_v = *v;
-
-	ui_id_t id = ui_id_pointer(v);
-	ui_validate_widget(id);
-
-	// @UiHoverable
-	ui_hoverable(id, rect);
-
-	ui_slider_params_t p = {
-		.type  = UiSlider_i32,
-		.flags = flags,
-		.increment_amount       = 1,
-		.major_increment_amount = 5,
-		.i32 = {
-			.v           = v,
-			.min         = min,
-			.max         = max,
-		},
-	};
-
-	ui_slider_old_base(id, rect, &p);
-	
-	return *v != init_v;
-}
-
-bool ui_slider_int_old(rect2_t rect, int32_t *v, int32_t min, int32_t max)
-{
-	return ui_slider_int_old_ex(rect, v, min, max, UiSliderFlags_inc_dec_buttons);
+	bool result = current_state != new_state;
+	return result;
 }
 
 //
-// Slider (new)
+// Slider
 //
 
 typedef struct ui_slider_state_t

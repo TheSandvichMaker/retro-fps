@@ -283,7 +283,7 @@ fn_local string_t stringify_flag(string_t total_string, uint32_t flags, uint32_t
 	{
 		if (total_string.count)
 		{
-			result = Sf("%.*s|%.*s", Sx(total_string), Sx(flag_string));
+			result = Sf("%cs|%cs", total_string, flag_string);
 		}
 		else
 		{
@@ -311,7 +311,7 @@ void process_asset_changes(void)
 
 		string_t path = string_normalize_path(temp, event->path);
 
-		log(Asset, Info, "File event for '%.*s': %.*s", Sx(path), Sx(flags_string));
+		log(Asset, Info, "File event for '%cs': %cs", path, flags_string);
 
 		reload_asset(asset_hash_from_string(path));
 	}

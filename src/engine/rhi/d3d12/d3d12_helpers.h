@@ -23,7 +23,7 @@
 			m_scoped_temp                                                       \
 			{                                                                   \
 				string_t hr_formatted = win32_format_error(temp, __hr);         \
-				log(RHI_D3D12, Error, in_context ": %.*s", Sx(hr_formatted));   \
+				log(RHI_D3D12, Error, in_context ": %cs", hr_formatted);   \
 			}                                                                   \
 		}                                                                       \
 	}

@@ -113,7 +113,7 @@ void loud_error_va(int line, string_t file, const char *fmt, va_list args)
 
     string_t message   = string_format_into_buffer_va(buffer, sizeof(buffer), fmt, args);
     string_t formatted = string_format_into_buffer(buffer + message.count, sizeof(buffer) - message.count, 
-                                                   "Error: %.*s\nLine: %d\nFile: %.*s\n", Sx(message), line, Sx(file));
+                                                   "Error: %cs\nLine: %d\nFile: %cs\n", message, line, file);
 
     MessageBoxA(NULL, formatted.data, "Fatal Error", MB_OK);
 	DEBUG_BREAK();
@@ -135,7 +135,7 @@ void fatal_error_va(int line, string_t file, const char *fmt, va_list args)
 
 #if DREAM_DEVELOPER
     string_t formatted = string_format_into_buffer(buffer + message.count, sizeof(buffer) - message.count, 
-                                                   "Fatal error: %.*s\nLine: %d\nFile: %.*s\n\n'Abort' to exit process, 'Retry' to break in debugger, 'Ignore' to ignore the error and continue regardless.", Sx(message), line, Sx(file));
+                                                   "Fatal error: %cs\nLine: %d\nFile: %cs\n\n'Abort' to exit process, 'Retry' to break in debugger, 'Ignore' to ignore the error and continue regardless.", message, line, file);
 
     int result = MessageBoxA(NULL, formatted.data, "Fatal Error", MB_ABORTRETRYIGNORE|MB_DEFBUTTON1|MB_SYSTEMMODAL);
 
@@ -154,7 +154,7 @@ void fatal_error_va(int line, string_t file, const char *fmt, va_list args)
 	}
 #else
     string_t formatted = string_format_into_buffer(buffer + message.count, sizeof(buffer) - message.count, 
-                                                   "Fatal error: %.*s\nLine: %d\nFile: %.*s\n", Sx(message), line, Sx(file));
+                                                   "Fatal error: %cs\nLine: %d\nFile: %cs\n", message, line, file);
 
     MessageBoxA(NULL, formatted.data, "Fatal Error", MB_OK);
 	FatalExit(1);
@@ -176,7 +176,7 @@ void win32_hresult_error_box_va(HRESULT hr, const char *message_fmt, va_list arg
 		string_t message = string_format_va  (temp, message_fmt, args);
 		string_t error   = win32_format_error(temp, hr);
 
-		string_t final = string_format(temp, "%.*s.\nHRESULT: 0x%X\nExplanation: %.*s", Sx(message), hr, Sx(error));
+		string_t final = string_format(temp, "%cs.\nHRESULT: 0x%X\nExplanation: %cs", message, hr, error);
 		MessageBoxA(NULL, final.data, "Win32 Error", MB_OK);
 	}
 }

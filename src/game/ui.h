@@ -510,11 +510,10 @@ fn void ui_hover_tooltip(string_t text);
 
 typedef struct ui_state_header_t
 {
-	ui_id_t id;
-	uint16_t size;
-	uint16_t flags;
-	uint32_t created_frame_index;
-	uint32_t last_touched_frame_index;
+	ui_id_t  id;                         // 8
+	uint16_t size;                       // 10
+	uint16_t flags;                      // 12
+	uint32_t last_touched_frame_index;   // 16
 } ui_state_header_t;
 
 #define UI_TOOLTIP_STACK_COUNT (16)

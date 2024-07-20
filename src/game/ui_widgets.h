@@ -70,6 +70,12 @@ fn bool ui_button(rect2_t rect, string_t label);
 fn bool ui_checkbox(rect2_t rect, bool *result_value);
 
 //
+// "Radio Buttons" (not really)
+//
+
+fn bool ui_radio_buttons(rect2_t rect, int *state, string_t *labels, int count);
+
+//
 // Slider
 //
 
@@ -87,43 +93,6 @@ typedef enum ui_slider_flags_t
 {
 	UiSliderFlags_inc_dec_buttons = 0x1,
 } ui_slider_flags_t;
-
-typedef struct ui_slider_params_t
-{
-	ui_slider_type_t  type;
-	ui_slider_flags_t flags;
-
-	float       increment_amount;
-	float major_increment_amount;
-
-	union
-	{
-		struct
-		{
-			float granularity;
-			float *v;
-			float min;
-			float max;
-		} f32;
-
-		struct
-		{
-			int32_t *v;
-			int32_t min;
-			int32_t max;
-		} i32;
-	};
-} ui_slider_params_t;
-
-fn void ui_slider_old_base  (ui_id_t id, rect2_t rect, ui_slider_params_t *p);
-fn bool ui_slider_old_ex    (rect2_t rect, float *v, float min, float max, float granularity, ui_slider_flags_t flags);
-fn bool ui_slider_old       (rect2_t rect, float *v, float min, float max);
-fn bool ui_slider_old_int_ex(rect2_t rect, int32_t *v, int32_t min, int32_t max, ui_slider_flags_t flags);
-fn bool ui_slider_old_int   (rect2_t rect, int32_t *v, int32_t min, int32_t max);
-
-//
-// Slider (new)
-//
 
 typedef struct ui_slider_parameters_t
 {

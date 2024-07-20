@@ -184,7 +184,7 @@ d3d12_descriptor_t d3d12_allocate_descriptor_persistent(d3d12_descriptor_heap_t 
 
 	if (index >= heap->capacity)
 	{
-		FATAL_ERROR("Ran out of persistent descriptors in descriptor heap '%.*s'!", Sx(heap->debug_name));
+		FATAL_ERROR("Ran out of persistent descriptors in descriptor heap '%cs'!", heap->debug_name);
 	}
 
 	d3d12_descriptor_t result = {

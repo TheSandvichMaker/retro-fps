@@ -119,7 +119,7 @@ void map_parse_error(map_parser_t *parser, string_t error)
         }
     }
 
-    debug_print("parser error at line %d col %d: %.*s\n", line, col, Sx(error));
+    debug_print("parser error at line %d col %d: %cs\n", line, col, error);
     longjmp(THREAD_CONTEXT->jmp, 1);
 }
 
@@ -845,8 +845,8 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
 			m_scoped_temp
 			{
 				// TODO: pretty sad... handle file formats properly...
-				asset_hash_t texture_png = asset_hash_from_string(string_format(temp, "gamedata/textures/%.*s.png", Sx(plane->texture)));
-				asset_hash_t texture_tga = asset_hash_from_string(string_format(temp, "gamedata/textures/%.*s.tga", Sx(plane->texture)));
+				asset_hash_t texture_png = asset_hash_from_string(string_format(temp, "gamedata/textures/%cs.png", plane->texture));
+				asset_hash_t texture_tga = asset_hash_from_string(string_format(temp, "gamedata/textures/%cs.tga", plane->texture));
 				// TODO ALSO: String + formatting helper function for asset hashes
 
 				image_info_t image_info = {0};
@@ -1346,7 +1346,7 @@ map_t *load_map(arena_t *arena, string_t path)
 
 	if (map)
 	{
-		debug_print("Map '%.*s' loaded in %.02f seconds.\n", Sx(path), time);
+		debug_print("Map '%s' loaded in %.02f seconds.\n", path, time);
 	}
 
     // write out map texture manifest
@@ -1366,11 +1366,11 @@ map_t *load_map(arena_t *arena, string_t path)
             string_t texture_name = string_path_leaf(texture_path);
 
             string_t directory = string_path_directory(texture_path);
-            directory = Sf("texture_dump/%.*s", Sx(directory));
+            directory = Sf("texture_dump/%cs", directory);
 
             fs_create_directory_recursive(directory);
 
-            string_t copy_dst = Sf("%.*s/%.*s", Sx(directory), Sx(texture_name));
+            string_t copy_dst = Sf("%cs/%cs", directory, texture_name);
 
             fs_copy(texture_path, copy_dst);
         }

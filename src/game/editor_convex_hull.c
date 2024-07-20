@@ -280,14 +280,10 @@ void editor_do_convex_hull_debugger_window(editor_convex_hull_debugger_t *debugg
 {
 	(void)window;
 
-	ui_scrollable_region_flags_t scroll_flags = 
-		UiScrollableRegionFlags_scroll_vertical|
-		UiScrollableRegionFlags_draw_scroll_bar;
-
 	rect2_t rect = window->window.rect;
 	rect = rect2_shrink(rect, 1.0f);
 
-	rect2_t content_rect = ui_scrollable_region_begin_ex(&window->scroll_region, rect, scroll_flags);
+	rect2_t content_rect = ui_scrollable_region_begin(&window->scroll_region, rect);
 
 	content_rect = rect2_shrink(content_rect, 1.0f);
 

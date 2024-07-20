@@ -197,7 +197,7 @@ void process_pack_job(job_context_t *job_context, void *userdata)
 				// TODO: There is a totally unnecessary copy into temp with this call, 
 				// just call image loading libraries in this code directly!
 				image_t image = load_image_from_disk(temp, job->path, 4);
-				ASSERT_MSG(image.pixels, "Failed to read image %.*s!", Sx(job->path));
+				ASSERT_MSG(image.pixels, "Failed to read image %cs!", job->path);
 
 				size_t image_footprint = image.info.h*image.pitch;
 
@@ -223,11 +223,11 @@ void process_pack_job(job_context_t *job_context, void *userdata)
 				// TODO: There is a totally unnecessary copy into temp with this call, 
 				// just call audio loading code in this code directly!
 				waveform_t waveform = load_waveform_from_disk(temp, job->path);
-				ASSERT_MSG(waveform.frames, "Failed to read waveform %.*s!", Sx(job->path));
+				ASSERT_MSG(waveform.frames, "Failed to read waveform %cs!", job->path);
 
 				ASSERT_MSG(waveform.sample_rate == DREAM_MIX_SAMPLE_RATE, 
-						   "Sound %.*s has the wrong sample rate. Expected %u, but it's %u!", 
-						   Sx(job->path), DREAM_MIX_SAMPLE_RATE, waveform.sample_rate);
+						   "Sound %cs has the wrong sample rate. Expected %u, but it's %u!", 
+						   job->path, DREAM_MIX_SAMPLE_RATE, waveform.sample_rate);
 
 				uint32_t sample_count = (uint32_t)(waveform.channel_count*waveform.frame_count);
 				size_t sound_footprint = sample_count*sizeof(uint16_t);
@@ -245,7 +245,7 @@ void process_pack_job(job_context_t *job_context, void *userdata)
 			} break;
 		}
 
-		log(AssetPacker, Spam, "Processed file %.*s", Sx(job->path));
+		log(AssetPacker, Spam, "Processed file %cs", job->path);
 
 		m_scope_end(temp);
 	}

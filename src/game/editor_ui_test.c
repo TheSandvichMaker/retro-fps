@@ -1,14 +1,7 @@
 void editor_do_ui_test_window(editor_ui_test_state_t *state, editor_window_t *window)
 {
-	rect2_t window_rect = rect2_cut_margins(window->window.rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)));
-
-	ui_scrollable_region_flags_t scroll_flags = 
-		UiScrollableRegionFlags_scroll_vertical|
-		UiScrollableRegionFlags_draw_scroll_bar;
-
-	rect2_t rect = window_rect;
-
-	rect2_t content_rect = ui_scrollable_region_begin_ex(&window->scroll_region, rect, scroll_flags);
+	rect2_t window_rect  = rect2_cut_margins(window->window.rect, ui_sz_pix(ui_scalar(UiScalar_outer_window_margin)));
+	rect2_t content_rect = ui_scrollable_region_begin(&window->scroll_region, window_rect);
 
 	ui_row_builder_t builder = ui_make_row_builder(content_rect);
 
