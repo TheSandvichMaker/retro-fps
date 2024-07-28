@@ -694,6 +694,9 @@ void r1_post_process(rhi_command_list_t *list, r1_view_t *view)
 	size_t downsample_steps = (size_t)cvar_read_i32(&cvar_r1_bloom_downsample_steps);
 	size_t upsample_steps   = (size_t)cvar_read_i32(&cvar_r1_bloom_upsample_steps);
 
+	if (downsample_steps > 8) downsample_steps = 8;
+	if (  upsample_steps > 8)   upsample_steps = 8;
+
 	R1_TIMED_REGION(list, S("Bloom Generation"))
 	{
 		rhi_texture_t bloom_in = view->targets.rt_hdr_resolved;

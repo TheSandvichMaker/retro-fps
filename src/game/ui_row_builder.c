@@ -273,8 +273,9 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 	ui_id_t popup_id = ui_id(S("popup"));
 
 	// This code is evidence that we need some input handling unification
-	if ((ui_is_hot(id) && ui_button_pressed(UiButton_left, true)) ||
-		(ui_in_responder_chain(id) && ui_key_type_pressed(UiKeyType_activate, true)))
+	if (!state->popup_open &&
+		((ui_is_hot(id) && ui_button_pressed(UiButton_left, true)) ||
+		 (ui_in_responder_chain(id) && ui_key_type_pressed(UiKeyType_activate, true))))
 	{
 		popup_opened_this_frame = true;
 
@@ -290,12 +291,17 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 		ui_draw_focus_indicator(widget_rect);
 	}
 
+	if (ui_is_top_responder(popup_id))
+	{
+		ui->focus_on_next = true;
+	}
+
 	float popup_openness = ui_interpolate_f32(ui_child_id(id, S("openness")), state->popup_open);
 
 	if (popup_opened_this_frame || popup_openness > 0.001f)
 	{
 		ui_push_sub_layer();
-		ui_push_responder_stack_ex(popup_id, UiResponderFlags_create_tab_cycle);
+		ui_push_responder_stack_ex(popup_id, UiResponderFlags_create_tab_cycle|UiResponderFlags_container);
 
 		if (state->popup_open)
 		{
@@ -306,7 +312,7 @@ void ui_row_color_picker(ui_row_builder_t *builder, string_t label, v4_t *color)
 
 				ui_remove_from_responder_chain(popup_id);
 			}
-			else if (ui_key_pressed(Key_return, true))
+			else if (ui_key_type_pressed(UiKeyType_activate, true))
 			{
 				state->popup_open = false;
 

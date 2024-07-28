@@ -74,7 +74,7 @@
 
 typedef struct string_t
 {
-    char  *data;
+    char *data;
     size_t count;
 } string_t;
 

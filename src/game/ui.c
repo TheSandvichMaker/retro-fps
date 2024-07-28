@@ -1177,14 +1177,17 @@ void ui_draw_debug_rect(rect2_t rect, v4_t color)
 
 void ui_draw_focus_indicator(rect2_t rect)
 {
-	ui_layer_t old_layer = ui_get_layer();
-	ui_layer_t new_layer = { .layer = old_layer.layer, .sub_layer = 255 };
-	ui_set_layer(new_layer);
+	if (ui->is_keyboard_navigating)
 	{
-		UI_Scalar(UiScalar_roundedness, ui_scalar(UiScalar_roundedness) + 1.0f)
-		ui_draw_rect_outline(rect2_add_radius(rect, v2s(1.0f)), ui_color(UiColor_focus_indicator), 1.0f);
+		ui_layer_t old_layer = ui_get_layer();
+		ui_layer_t new_layer = { .layer = old_layer.layer, .sub_layer = 255 };
+		ui_set_layer(new_layer);
+		{
+			UI_Scalar(UiScalar_roundedness, ui_scalar(UiScalar_roundedness) + 1.0f)
+			ui_draw_rect_outline(rect2_add_radius(rect, v2s(1.0f)), ui_color(UiColor_focus_indicator), 1.0f);
+		}
+		ui_set_layer(old_layer);
 	}
-	ui_set_layer(old_layer);
 }
 
 void ui_draw_rect_outline(rect2_t rect, v4_t color, float width)
@@ -1459,6 +1462,7 @@ void ui_set_next_hot(ui_id_t id)
 void ui_set_active(ui_id_t id)
 {
 	ui->active = id;
+	ui->is_keyboard_navigating = false;
 	ui_gain_focus(id);
 }
 
@@ -1503,7 +1507,7 @@ void ui_push_responder_stack_ex(ui_id_t id, ui_responder_flags_t flags)
 
 void ui_push_responder_stack(ui_id_t id)
 {
-	ui_push_responder_stack_ex(id, 0);
+	ui_push_responder_stack_ex(id, UiResponderFlags_container);
 }
 
 void ui_pop_responder_stack(void)
@@ -1545,6 +1549,12 @@ bool ui_in_responder_chain(ui_id_t id)
 	return result;
 }
 
+bool ui_is_top_responder(ui_id_t id)
+{
+	bool result = !stack_empty(ui->responder_chain) && stack_top(ui->responder_chain).id.value == id.value;
+	return result;
+}
+
 void ui_remove_from_responder_chain(ui_id_t id)
 {
 	for (size_t i = 0; i < stack_count(ui->responder_chain); i++)
@@ -1557,8 +1567,10 @@ void ui_remove_from_responder_chain(ui_id_t id)
 	}
 }
 
-void ui_gain_tab_focus(ui_id_t id, rect2_t rect)
+bool ui_gain_tab_focus(ui_id_t id, rect2_t rect)
 {
+	bool result = false;
+
 	bool suppress_tab_focus = ui->suppress_next_tab_focus;
 
 	// This implementation seems goofy... But the behavior is correct.
@@ -1602,17 +1614,26 @@ void ui_gain_tab_focus(ui_id_t id, rect2_t rect)
 				.kind = UiEvent_focus_rectangle,
 				.rect = rect,
 			});
+
+			result = true;
 		}
 
 		if (ui_id_has_focus(id) && ui_key_pressed(Key_tab, true))
 		{
-			if (ui_key_held(Key_shift, false))
+			if (!ui->is_keyboard_navigating)
 			{
-				ui->tab_focus_id = ui->last_id;
+				ui->is_keyboard_navigating = true;
 			}
 			else
 			{
-				ui->focus_on_next = true;
+				if (ui_key_held(Key_shift, false))
+				{
+					ui->tab_focus_id = ui->last_id;
+				}
+				else
+				{
+					ui->focus_on_next = true;
+				}
 			}
 		}
 
@@ -1620,6 +1641,8 @@ void ui_gain_tab_focus(ui_id_t id, rect2_t rect)
 	}
 
 	ui->suppress_next_tab_focus = false;
+
+	return result;
 }
 
 void ui_suppress_next_tab_focus(void)
@@ -1978,12 +2001,22 @@ void ui_end(void)
 
 	if (ui->has_focus && ui_key_pressed(Key_escape, true))
 	{
-		if (!stack_empty(ui->responder_chain))
+		if (ui->is_keyboard_navigating)
 		{
-			stack_pop(ui->responder_chain);
+			ui->is_keyboard_navigating = false;
 		}
+		else
+		{
+			if (!stack_empty(ui->responder_chain))
+			{
+				do 
+				{
+					stack_pop(ui->responder_chain);
+				} while(!stack_empty(ui->responder_chain) && (stack_top(ui->responder_chain).flags & UiResponderFlags_container));
+			}
 
-		ui->has_focus = !stack_empty(ui->responder_chain);
+			ui->has_focus = !stack_empty(ui->responder_chain);
+		}
 	}
 
 	// If at this point a button was pressed and it wasn't consumed by anyone, we must've clicked on nothingness

@@ -466,9 +466,7 @@ bool ui_button(rect2_t rect, string_t label)
 		}
 	}
 
-	if (ui_in_responder_chain(id) && 
-        (ui_key_pressed(Key_return, true) ||
-         ui_key_pressed(Key_space, true)))
+	if (ui_in_responder_chain(id) && ui_key_type_pressed(UiKeyType_activate, true))
 	{
 		result = true;
 	}
@@ -554,8 +552,7 @@ bool ui_checkbox(rect2_t rect, bool *result_value)
 
 	if (ui_in_responder_chain(id))
 	{
-		if (ui_key_pressed(Key_return, true) ||
-			ui_key_pressed(Key_space, true))
+		if (ui_key_type_pressed(UiKeyType_activate, true))
 		{
 			result = true;
 		}
@@ -608,16 +605,21 @@ bool ui_checkbox(rect2_t rect, bool *result_value)
 // "Radio Buttons" (not really)
 //
 
-bool ui_radio_buttons(rect2_t rect, int *state, string_t *option_labels, int option_count)
+typedef struct ui_radio_buttons_state_t
 {
-	if (!state)            { ui_error_widget(rect, S("ui_radio_buttons"), S("Passed null state pointer to ui_radio_buttons"));  return false; }
+	int selection_index;
+} ui_radio_buttons_state_t;
+
+bool ui_radio_buttons(rect2_t rect, int *selected, string_t *option_labels, int option_count)
+{
+	if (!selected)         { ui_error_widget(rect, S("ui_radio_buttons"), S("Passed null state pointer to ui_radio_buttons"));  return false; }
 	if (!option_labels)    { ui_error_widget(rect, S("ui_radio_buttons"), S("Passed null labels pointer to ui_radio_buttons")); return false; }
 	if (option_count <= 0) { ui_error_widget(rect, S("ui_radio_buttons"), S("Passed a count of 0 to ui_radio_buttons"));        return false; }
 
-	int current_state = state ? *state : 0;
-	int new_state = current_state;
+	int current_selected = selected ? *selected : 0;
+	int new_selected     = current_selected;
 
-	ui_id_t id = ui_id_pointer(state);
+	ui_id_t id = ui_id_pointer(selected);
 	ui_validate_widget(id);
 
 	ui_gain_tab_focus(id, rect);
@@ -625,28 +627,29 @@ bool ui_radio_buttons(rect2_t rect, int *state, string_t *option_labels, int opt
 	int keyboard_activated = -1;
 	bool responder = ui_in_responder_chain(id);
 
+	ui_radio_buttons_state_t *state = ui_get_state(id, NULL, ui_radio_buttons_state_t);
+
 	if (responder)
 	{
 		if (ui_key_pressed(Key_left, true))
 		{
-			if (ui->selection_index > 0)
+			if (state->selection_index > 0)
 			{
-				ui->selection_index -= 1;
+				state->selection_index -= 1;
 			}
 		}
 
 		if (ui_key_pressed(Key_right, true))
 		{
-			if (ui->selection_index < option_count - 1)
+			if (state->selection_index < option_count - 1)
 			{
-				ui->selection_index += 1;
+				state->selection_index += 1;
 			}
 		}
 
-		if (ui_key_pressed(Key_return, true) ||
-			ui_key_pressed(Key_space, true))
+		if (ui_key_type_pressed(UiKeyType_activate, true))
 		{
-			keyboard_activated = ui->selection_index;
+			keyboard_activated = state->selection_index;
 		}
 	}
 
@@ -674,7 +677,7 @@ bool ui_radio_buttons(rect2_t rect, int *state, string_t *option_labels, int opt
 			rect2_cut_from_left(rect, ui_sz_pix(button_width), &button_rect, &rect);
 			rect2_cut_from_left(rect, ui_sz_pix(margin), NULL, &rect);
 
-			bool active = (current_state == i);
+			bool active = (current_selected == i);
 
 			ui_suppress_next_tab_focus();
 
@@ -683,11 +686,11 @@ bool ui_radio_buttons(rect2_t rect, int *state, string_t *option_labels, int opt
 			UI_ColorConditional(UiColor_button_idle, ui_color(UiColor_button_active), active)
 			if (ui_button(button_rect, option_labels[i]) || (keyboard_activated == i))
 			{
-				new_state = i;
-				ui->selection_index = i;
+				new_selected = i;
+				state->selection_index = i;
 			}
 
-			if (responder && i == ui->selection_index)
+			if (responder && i == state->selection_index)
 			{
 				ui_draw_focus_indicator(button_rect);
 			}
@@ -696,12 +699,12 @@ bool ui_radio_buttons(rect2_t rect, int *state, string_t *option_labels, int opt
 
 	ui_pop_responder_stack();
 
-	if (state)
+	if (selected)
 	{
-		*state = new_state;
+		*selected = new_selected;
 	}
 
-	bool result = current_state != new_state;
+	bool result = current_selected != new_selected;
 	return result;
 }
 
@@ -957,9 +960,7 @@ bool ui_slider_base(rect2_t rect, const ui_slider_parameters_t *p)
 				ui_set_f32(ui_id(S("display_value")), new_value);
 			}
 
-            if (ui_key_held(Key_control, false) && 
-                (ui_key_pressed(Key_return, true) ||
-                 ui_key_pressed(Key_space, true)))
+            if (ui_key_held(Key_control, false) && ui_key_type_pressed(UiKeyType_activate, true))
             {
                 ui_gain_focus(text_input_id);
 				state->text_input.count = 0;
@@ -1212,8 +1213,7 @@ ui_text_edit_result_t ui_text_edit_ex(rect2_t rect, dynamic_string_t *in_buffer,
 
 	if (has_focus && !state->actively_editing)
 	{
-		if (ui_key_pressed(Key_return, true) ||
-			ui_key_pressed(Key_space, true))
+		if (ui_key_type_pressed(UiKeyType_activate, true))
 		{
 			state->actively_editing = true;
 		}
@@ -1944,6 +1944,11 @@ bool ui_window_begin(ui_id_t id, ui_window_t *window, string_t title)
 	title_bar_minus_outline.max.y -= 2.0f;
 
 	bool has_focus = ui_in_responder_chain(id); // /*ui_has_focus() &&*/ (window == editor->focus_window);
+
+	if (has_focus && stack_top(ui->responder_chain).id.value == id.value)
+	{
+		ui->focus_on_next = true;
+	}
 
 	float focus_t = ui_interpolate_f32(ui_id(S("focus")), has_focus);
 

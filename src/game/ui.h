@@ -614,6 +614,7 @@ typedef uint32_t ui_responder_flags_t;
 typedef enum ui_responder_flags_enum_t
 {
 	UiResponderFlags_create_tab_cycle = 0x1,
+	UiResponderFlags_container        = 0x2,
 } ui_responder_flags_enum_t;
 
 typedef struct ui_responder_t
@@ -688,6 +689,8 @@ typedef struct ui_t
 	ui_id_t last_id;
 	ui_id_t tab_focus_id;
 
+	bool    is_keyboard_navigating;
+
 	// TODO: Think about adding mouse-hover based responder chain stuff. That way mouse clicks could flow to parent widgets too.
 	stack_t(ui_responder_t, UI_ID_STACK_COUNT) responder_stack;
 	stack_t(ui_responder_t, UI_ID_STACK_COUNT) responder_chain;
@@ -749,6 +752,7 @@ fn void ui_push_responder_stack_ex(ui_id_t id, ui_responder_flags_t flags);
 fn void ui_push_responder_stack(ui_id_t id);
 fn void ui_pop_responder_stack(void);
 fn bool ui_in_responder_chain(ui_id_t id);
+fn bool ui_is_top_responder(ui_id_t id);
 
 #define UI_Layer() \
 	DEFER_LOOP(ui_push_sub_layer(), ui_pop_sub_layer())
@@ -773,7 +777,7 @@ fn void ui_clear_active    (void);
 fn bool ui_has_focus              (void);
 fn bool ui_id_has_focus           (ui_id_t id);
 fn void ui_gain_focus             (ui_id_t id);
-fn void ui_gain_tab_focus         (ui_id_t id, rect2_t rect);
+fn bool ui_gain_tab_focus         (ui_id_t id, rect2_t rect);
 fn void ui_suppress_next_tab_focus(void);
 
 fn void ui_hoverable       (ui_id_t id, rect2_t rect);
