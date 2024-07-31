@@ -148,7 +148,7 @@ r1_state_t *r1_make(void)
 		asset_image_t *image = get_image_blocking(hash);
 
 		r1->blue_noise    [i] = image->rhi_texture;
-		r1->blue_noise_srv[i] = rhi_get_texture_srv(r1->blue_noise[i]);
+		r1->blue_noise_srv[i] = RESOURCE_HANDLE_VALID(image->rhi_texture) ? rhi_get_texture_srv(r1->blue_noise[i]) : r1->black_texture_srv;
 	}
 
 	//------------------------------------------------------------------------

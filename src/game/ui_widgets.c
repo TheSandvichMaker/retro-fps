@@ -218,10 +218,12 @@ void ui_scrollable_region_end(ui_scrollable_region_t *state, rect2_t final_rect)
 		float scrollbar_movement = visible_height - scrollbar_size;
 		float scrollbar_offset   = scroll_pct*scrollbar_movement;
 
+		/*
 		if (!ui_is_active(handle_id) && !suppress_scroll_animation)
 		{
 			scrollbar_offset = ui_interpolate_f32(ui_id(S("scrollbar_offset")), scrollbar_offset);
 		}
+		*/
 
 		rect2_t handle;
 		{
