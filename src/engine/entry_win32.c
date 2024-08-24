@@ -44,6 +44,32 @@ extern __declspec(dllexport) uint32_t AmdPowerXpressRequestHighPerformance = 1;
 //
 //
 
+// Martins snippet for disabling/enabling turbo boost:
+
+#include <powrprof.h>
+#pragma comment (lib, "powrprof")
+
+global GUID* g_current_scheme;
+global DWORD g_current_mode;
+
+fn_local void win32_disable_turbo_boost(void)
+{
+    PowerGetActiveScheme(NULL, &g_current_scheme);
+    PowerReadACValueIndex(NULL, g_current_scheme, &GUID_PROCESSOR_SETTINGS_SUBGROUP, &GUID_PROCESSOR_PERF_BOOST_MODE, &g_current_mode);
+    PowerWriteACValueIndex(NULL, g_current_scheme, &GUID_PROCESSOR_SETTINGS_SUBGROUP, &GUID_PROCESSOR_PERF_BOOST_MODE, PROCESSOR_PERF_BOOST_MODE_DISABLED);
+    PowerSetActiveScheme(NULL, g_current_scheme);
+}
+
+fn_local void win32_restore_turbo_boost(void)
+{
+    PowerWriteACValueIndex(NULL, g_current_scheme, &GUID_PROCESSOR_SETTINGS_SUBGROUP, &GUID_PROCESSOR_PERF_BOOST_MODE, g_current_mode);
+	// force enable:
+    //PowerWriteACValueIndex(NULL, g_current_scheme, &GUID_PROCESSOR_SETTINGS_SUBGROUP, &GUID_PROCESSOR_PERF_BOOST_MODE, PROCESSOR_PERF_BOOST_MODE_ENABLED);
+    PowerSetActiveScheme(NULL, g_current_scheme);
+    LocalFree(g_current_scheme);
+    g_current_scheme = NULL;
+}
+
 global IGameInput *game_input;
 
 global arena_t win32_arena;
@@ -281,6 +307,26 @@ typedef struct window_user_data_t
 
 	win32_input_context_t *input_context;
 } window_user_data_t;
+
+fn_local void enumerate_all_display_resolutions_for_current_display(void)
+{
+	DWORD index = 0;
+
+	for (;;)
+	{
+		DEVMODEA dev_mode = { .dmSize = sizeof(DEVMODEA) };
+		BOOL result = EnumDisplaySettingsA(NULL, index, &dev_mode);
+
+		debug_print("Device %s - resolution: %u x %u\n", dev_mode.dmDeviceName, dev_mode.dmPelsWidth, dev_mode.dmPelsHeight);
+
+		index += 1;
+
+		if (!result)
+		{
+			break;
+		}
+	}
+}
 
 fn_local LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 {
@@ -520,35 +566,36 @@ int wWinMain(HINSTANCE instance,
              PWSTR     command_line, 
              int       command_show)
 {
-    IGNORED(instance);
-    IGNORED(prev_instance);
+
+	IGNORED(instance);
+	IGNORED(prev_instance);
 
 	//GameInputCreate(&game_input);
 
-    int argc;
-    wchar_t **argv_wide = CommandLineToArgvW(command_line, &argc);
+	int argc;
+	wchar_t **argv_wide = CommandLineToArgvW(command_line, &argc);
 
-    string_t *argv = m_alloc_array(&win32_arena, argc, string_t);
-    for (int i = 0; i < argc; i++)
-    {
-        argv[i] = utf8_from_utf16(&win32_arena, string16_from_cstr(argv_wide[i]));
-    }
+	string_t *argv = m_alloc_array(&win32_arena, argc, string_t);
+	for (int i = 0; i < argc; i++)
+	{
+		argv[i] = utf8_from_utf16(&win32_arena, string16_from_cstr(argv_wide[i]));
+	}
 
-    bool enable_d3d_debug = false;
-    bool enable_d3d_gbv   = false;
+	bool enable_d3d_debug = false;
+	bool enable_d3d_gbv   = false;
 
-    for (int i = 0; i < argc; i++)
-    {
-        if (string_match(argv[i], S("-d3ddebug")))
-        {
-            enable_d3d_debug = true;
-        }
+	for (int i = 0; i < argc; i++)
+	{
+		if (string_match(argv[i], S("-d3ddebug")))
+		{
+			enable_d3d_debug = true;
+		}
 
-        if (string_match(argv[i], S("-d3dgbv")))
-        {
-            enable_d3d_gbv = true;
-        }
-    }
+		if (string_match(argv[i], S("-d3dgbv")))
+		{
+			enable_d3d_gbv = true;
+		}
+	}
 
 	cvar_init_system();
 	platform_init((size_t)argc, argv, &hooks);
@@ -560,54 +607,54 @@ int wWinMain(HINSTANCE instance,
 
 	start_audio_thread(hooks.tick_audio);
 
-    // create window
+	// create window
 
 	HWND window = NULL;
-    {
-        int desktop_w = GetSystemMetrics(SM_CXFULLSCREEN);
+	{
+		int desktop_w = GetSystemMetrics(SM_CXFULLSCREEN);
 		(void)desktop_w;
-        int desktop_h = GetSystemMetrics(SM_CYFULLSCREEN);
+		int desktop_h = GetSystemMetrics(SM_CYFULLSCREEN);
 		(void)desktop_h;
 
-        int w = 4*desktop_w / 5;
-        int h = 4*desktop_h / 5;
+		int w = 4*desktop_w / 5;
+		int h = 4*desktop_h / 5;
 
-        WNDCLASSEXW wclass = 
-        {
-            .cbSize        = sizeof(wclass),
-            .style         = CS_HREDRAW|CS_VREDRAW,
-            .lpfnWndProc   = window_proc,
-            .hIcon         = LoadIconW(NULL, L"APPICON"),
-            .hCursor       = NULL, 
-            .lpszClassName = L"retro_window_class",
-        };
+		WNDCLASSEXW wclass = 
+		{
+			.cbSize        = sizeof(wclass),
+			.style         = CS_HREDRAW|CS_VREDRAW,
+			.lpfnWndProc   = window_proc,
+			.hIcon         = LoadIconW(NULL, L"APPICON"),
+			.hCursor       = NULL, 
+			.lpszClassName = L"retro_window_class",
+		};
 
-        if (!RegisterClassExW(&wclass))
-        {
-            FATAL_ERROR("Failed to register window class");
-        }
+		if (!RegisterClassExW(&wclass))
+		{
+			FATAL_ERROR("Failed to register window class");
+		}
 
-        RECT wrect = {
-            .left   = 0,
-            .top    = 0,
-            .right  = w,
-            .bottom = h,
-        };
+		RECT wrect = {
+			.left   = 0,
+			.top    = 0,
+			.right  = w,
+			.bottom = h,
+		};
 
-        AdjustWindowRect(&wrect, WS_OVERLAPPEDWINDOW, FALSE);
+		AdjustWindowRect(&wrect, WS_OVERLAPPEDWINDOW, FALSE);
 
-        window = CreateWindowExW(0, L"retro_window_class", L"retro fps",
-                                 WS_OVERLAPPEDWINDOW,
-                                 32, 32,
-                                 wrect.right - wrect.left,
-                                 wrect.bottom - wrect.top,
-                                 NULL, NULL, NULL, NULL);
+		window = CreateWindowExW(0, L"retro_window_class", L"retro fps",
+			WS_OVERLAPPEDWINDOW,
+			32, 32,
+			wrect.right - wrect.left,
+			wrect.bottom - wrect.top,
+			NULL, NULL, NULL, NULL);
 
-        if (!window)
-        {
-            FATAL_ERROR("Failed to create window");
-        }
-    }
+		if (!window)
+		{
+			FATAL_ERROR("Failed to create window");
+		}
+	}
 
 	// it's d3d12 time
 
@@ -638,9 +685,9 @@ int wWinMain(HINSTANCE instance,
 		return 1;
 	}
 
-    POINT prev_cursor_point;
-    GetCursorPos(&prev_cursor_point);
-    ScreenToClient(window, &prev_cursor_point);
+	POINT prev_cursor_point;
+	GetCursorPos(&prev_cursor_point);
+	ScreenToClient(window, &prev_cursor_point);
 
 	platform_cursor_t last_cursor = Cursor_arrow;
 
@@ -657,7 +704,7 @@ int wWinMain(HINSTANCE instance,
 
 	SetWindowLongPtrW(window, GWLP_USERDATA, (LONG_PTR)&window_user_data);
 
-    ShowWindow(window, command_show);
+	ShowWindow(window, command_show);
 
 	input_t *input  = input_context.input;
 
@@ -677,10 +724,10 @@ int wWinMain(HINSTANCE instance,
 
 	void *app_state = init_io.app_state;
 
-    // message loop
-    bool running = true;
-    while (running)
-    {
+	// message loop
+	bool running = true;
+	while (running)
+	{
 		rhi_wait_on_swap_chain(rhi_window);
 
 		profiler_begin_frame();
@@ -785,7 +832,7 @@ int wWinMain(HINSTANCE instance,
 			};
 
 			RECT restrict_rect_screen = win32_client_rect_to_screen(window, restrict_rect_client);
-            ClipCursor(&restrict_rect_screen);
+			ClipCursor(&restrict_rect_screen);
 		}
 
 		if (tick_io.set_mouse_p.x >= 0.0f &&
@@ -829,7 +876,7 @@ int wWinMain(HINSTANCE instance,
 		last_cursor = cursor;
 
 		m_reset_temp_arenas();
-    }
+	}
 
 	rhi_flush_everything();
 

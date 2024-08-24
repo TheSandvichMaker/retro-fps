@@ -2049,7 +2049,7 @@ fn_local lab_t oklab_from_linear_srgb(v3_t c)
     };
 }
 
-v3_t linear_srgb_from_oklab(lab_t c) 
+fn_local v3_t linear_srgb_from_oklab(lab_t c) 
 {
     float l_ = c.L + 0.3963377774f * c.a + 0.2158037573f * c.b;
     float m_ = c.L - 0.1055613458f * c.a - 0.0638541728f * c.b;
@@ -2073,7 +2073,7 @@ typedef struct lch_t
 	float h;
 } lch_t;
 
-lch_t oklch_from_oklab(lab_t c)
+fn_local lch_t oklch_from_oklab(lab_t c)
 {
 	lch_t result = {
 		.L = c.L,
@@ -2083,7 +2083,7 @@ lch_t oklch_from_oklab(lab_t c)
 	return result;
 }
 
-lab_t oklab_from_oklch(lch_t c)
+fn_local lab_t oklab_from_oklch(lch_t c)
 {
 	float cos_h, sin_h;
 	sincos_ss(c.h, &cos_h, &sin_h);
@@ -2096,12 +2096,12 @@ lab_t oklab_from_oklch(lch_t c)
 	return result;
 }
 
-lch_t oklch_from_linear_srgb(v3_t c)
+fn_local lch_t oklch_from_linear_srgb(v3_t c)
 {
 	return oklch_from_oklab(oklab_from_linear_srgb(c));
 }
 
-v3_t linear_srgb_from_oklch(lch_t c)
+fn_local v3_t linear_srgb_from_oklch(lch_t c)
 {
 	return linear_srgb_from_oklab(oklab_from_oklch(c));
 }

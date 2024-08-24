@@ -37,36 +37,36 @@ fn_local uint64_t next_pow2(uint64_t x)
 
 // these macros would be easier to write if I used a sentinel for the doubly linked lists, but that has its own complications that I don't always want
 
-#define dll_push_front(f, l, n) \
-	do {                        \
-		if (!(f))               \
-		{                       \
-			ASSERT(!(l));       \
-			(f) = (l) = (n);    \
-		}                       \
-		else                    \
-		{                       \
-			(f)->prev = (n);    \
-			(n)->next = (f);    \
-			(n)->prev = NULL;   \
-			(f) = (n);          \
-		}                       \
+#define dll_push_front(f, l, n)                     \
+	do {                                            \
+		if (!(f))                                   \
+		{                                           \
+			ASSERT(!(l));                           \
+			(f) = (l) = (n);                        \
+		}                                           \
+		else                                        \
+		{                                           \
+			(f)->prev = (n);                        \
+			(n)->next = (f);                        \
+			(n)->prev = NULL;                       \
+			(f) = (n);                              \
+		}                                           \
 	} while (0)
 
-#define dll_push_back(f, l, n) \
-	do {                       \
-		if (!(f))              \
-		{                      \
-			ASSERT(!(l));      \
-			(f) = (l) = (n);   \
-		}                      \
-		else                   \
-		{                      \
-			(n)->prev = (l);   \
-			(n)->next = NULL;  \
-			(l)->next = (n);   \
-			(l) = (n);         \
-		}                      \
+#define dll_push_back(f, l, n)                      \
+	do {                                            \
+		if (!(f))                                   \
+		{                                           \
+			ASSERT(!(l));                           \
+			(f) = (l) = (n);                        \
+		}                                           \
+		else                                        \
+		{                                           \
+			(n)->prev = (l);                        \
+			(n)->next = NULL;                       \
+			(l)->next = (n);                        \
+			(l) = (n);                              \
+		}                                           \
 	} while (0)
 
 #define dll_insert_before(f, l, i, n)               \
@@ -95,18 +95,18 @@ fn_local uint64_t next_pow2(uint64_t x)
         if ((n) == (l)) (l) = (n)->prev;            \
     } while (0)
 
-#define sll_append(fd, ld, fs, ls) \
-    do {                           \
-        if (!(fd))                 \
-        {                          \
-            (fd) = (fs);           \
-            (ld) = (ls);           \
-        }                          \
-        else                       \
-        {                          \
-            (ld)->next = (fs);     \
-            (ld) = (ls);           \
-        }                          \
+#define sll_append(fd, ld, fs, ls)                  \
+    do {                                            \
+        if (!(fd))                                  \
+        {                                           \
+            (fd) = (fs);                            \
+            (ld) = (ls);                            \
+        }                                           \
+        else                                        \
+        {                                           \
+            (ld)->next = (fs);                      \
+            (ld) = (ls);                            \
+        }                                           \
     } while(0)
 
 #define has_flags_any(field, flags) (!!((field) & (flags)))

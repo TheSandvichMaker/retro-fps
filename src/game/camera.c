@@ -2,6 +2,7 @@
 // Copyright 2024 by Daniël Cornelisse, All Rights Reserved.
 // ============================================================
 
+CVAR_F32_EX(cvar_camera_mouse_look_speed,              "camera.mouse_look_speed",              0.1f, 0.01f, 0.2f);
 CVAR_F32_EX(cvar_camera_digital_look_speed,            "camera.digital_look_speed",            3.5f, 0.1f, 15.0f);
 CVAR_F32_EX(cvar_camera_digital_look_speed_multiplier, "camera.digital_look_speed_multiplier", 2.0f, 1.0f, 4.0f);
 
@@ -26,8 +27,8 @@ void update_camera_rotation(camera_t *camera, float dt)
 	if (action_held(Action_look_up   )) dp.y += digital_speed;
 	if (action_held(Action_look_down )) dp.y -= digital_speed;
 
-    float look_speed_x = 0.1f;
-    float look_speed_y = 0.1f;
+    float look_speed_x = cvar_read_f32(&cvar_camera_mouse_look_speed);
+    float look_speed_y = look_speed_x;
 
     camera->yaw   -= look_speed_x*dp.x;
     camera->pitch -= look_speed_y*dp.y;

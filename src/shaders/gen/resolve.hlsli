@@ -9,8 +9,10 @@ struct resolve_draw_parameters_t
 	uint2 pad0;
 	df::Resource< Texture2DMS< float > > depth_buffer;
 	uint3 pad1;
-	df::Resource< Texture2DMS< float3 > > hdr_color;
+	df::Resource< Texture3D< float4 > > fogmap;
 	uint3 pad2;
+	df::Resource< Texture2DMS< float3 > > hdr_color;
+	uint3 pad3;
 	df::Resource< Texture2D< float > > shadow_map;
 };
 

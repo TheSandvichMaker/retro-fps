@@ -29,7 +29,7 @@ float4 post_ps(fullscreen_triangle_vs_out_t IN) : SV_Target
 	[branch]
 	if (draw.bloom_amount > 0.0)
 	{
-		float3 bloom = draw.bloom0.Get().SampleLevel(df::s_linear_clamped, uv, 0);
+		float3 bloom = draw.bloom.Get().SampleLevel(df::s_linear_clamped, uv, 0);
 
 #if BLOOM_BLEND == 0
 		color = lerp(color, bloom, draw.bloom_amount);

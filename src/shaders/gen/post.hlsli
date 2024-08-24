@@ -4,7 +4,7 @@
 
 struct post_draw_parameters_t
 {
-	df::Resource< Texture2D< float3 > > bloom0;
+	df::Resource< Texture2D< float3 > > bloom;
 	float bloom_amount;
 	uint2 pad0;
 	df::Resource< Texture2D< float4 > > blue_noise;

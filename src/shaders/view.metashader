@@ -8,6 +8,8 @@
 			sun_matrix               = float4x4,
 			sun_direction            = float3,
 			sun_color                = float3,
+			fog_offset               = float3,
+			fog_dim                  = float3,
 			view_size                = float2,
 			fog_density              = float,
 			fog_absorption           = float,

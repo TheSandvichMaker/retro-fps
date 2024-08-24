@@ -13,6 +13,7 @@ typedef enum log_level_t
 	LogLevel_Warning,
 	LogLevel_ValidationFailure,
 	LogLevel_Error,
+	LogLevel_FatalError,
 	LogLevel_COUNT,
 } log_level_t;
 
@@ -20,7 +21,7 @@ extern string_t log_level_to_string[];
 
 typedef enum log_category_t
 {
-	LogCat_None          = 0,
+	LogCat_None = 0,
 
 	LogCat_Misc,
 	LogCat_ActionSystem,
@@ -59,9 +60,9 @@ fn void log_   (const log_loc_t *loc, log_category_t cat, log_level_t level, con
 fn void log_va_(const log_loc_t *loc, log_category_t cat, log_level_t level, const char *fmt, va_list args);
 
 #if DREAM_SLOW
-#define LOGS_SLOW(cat, level, message)     logs  (cat, level, message)
-#define LOG_SLOW(cat, level, fmt, ...)     log   (cat, level, fmt, ##__VA_ARGS__)
-#define LOG_VA_SLOW(cat, level, fmt, args) log_va(cat, level, fmt, args)
+#define logs_slow(cat, level, message)     logs  (cat, level, message)
+#define log_slow(cat, level, fmt, ...)     log   (cat, level, fmt, ##__VA_ARGS__)
+#define log_va_slow(cat, level, fmt, args) log_va(cat, level, fmt, args)
 #else
 #define logs_slow(...)     
 #define log_slow(...)     

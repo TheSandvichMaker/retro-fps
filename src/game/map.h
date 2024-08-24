@@ -120,7 +120,8 @@ typedef struct map_t
     uint32_t fogmap_w;
     uint32_t fogmap_h;
     uint32_t fogmap_d;
-    texture_handle_t fogmap;
+    // texture_handle_t fogmap;
+	rhi_texture_t fogmap;
 
     v3_t fogmap_offset;
     v3_t fogmap_dim;

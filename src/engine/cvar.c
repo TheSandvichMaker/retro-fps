@@ -51,11 +51,11 @@ null_term_string_t cvar_kind_to_string(cvar_kind_t kind)
 
 	switch (kind)
 	{
-		case CVarKind_NONE:    result = S("<none>"); break;
-		case CVarKind_bool:    result = S("bool");   break;
-		case CVarKind_i32:     result = S("i32");    break;
-		case CVarKind_f32:     result = S("f32");    break;
-		case CVarKind_string:  result = S("string"); break;
+		case CVarKind_none:    result = S("<none>");  break;
+		case CVarKind_bool:    result = S("bool");    break;
+		case CVarKind_i32:     result = S("i32");     break;
+		case CVarKind_f32:     result = S("f32");     break;
+		case CVarKind_string:  result = S("string");  break;
 		case CVarKind_command: result = S("command"); break;
 		INVALID_DEFAULT_CASE;
 	}
@@ -69,7 +69,7 @@ null_term_string_t cvar_kind_to_string_with_indefinite_article(cvar_kind_t kind)
 
 	switch (kind)
 	{
-		case CVarKind_NONE:    result = S("<none>");    break;
+		case CVarKind_none:    result = S("<none>");    break;
 		case CVarKind_bool:    result = S("a bool");    break;
 		case CVarKind_i32:     result = S("an i32");    break;
 		case CVarKind_f32:     result = S("an f32");    break;
@@ -81,100 +81,138 @@ null_term_string_t cvar_kind_to_string_with_indefinite_article(cvar_kind_t kind)
 	return result;
 }
 
-fn_local void cvar_validate_and_register(cvar_t *cvar, cvar_kind_t expected_kind)
+fn_local bool cvar_validate_and_register(cvar_t *cvar, cvar_kind_t expected_kind)
 {
-	ASSERT(g_cvars.initialized);
+	bool initialized = g_cvars.initialized;
 
-	ASSERT_MSG(cvar->kind == expected_kind, 
-		"Tried to read cvar %cs as %cs but it's %cs", 
-		cvar->key,
-		cvar_kind_to_string_with_indefinite_article(expected_kind),
-		cvar_kind_to_string_with_indefinite_article(cvar->kind));
+	if (!initialized)
+	{
+		log(CVar, Error, "CVar subsystem is not initialized!");
+	}
+
+	bool valid = (cvar->kind == expected_kind);
+
+	if (!valid)
+	{
+		log(CVar, Error, 
+			"Tried to read cvar %cs as %cs but it's %cs", 
+			cvar->key,
+			cvar_kind_to_string_with_indefinite_article(expected_kind),
+			cvar_kind_to_string_with_indefinite_article(cvar->kind));
+	}
+
+	bool result = initialized & valid;
 
 	if (!(cvar->flags & CVarFlag_registered))
 	{
 		log(CVar, Warning, "Lazily registered cvar '%cs'", cvar->key);
 		cvar_register(cvar);
 	}
+
+	return result;
 }
 
 bool cvar_read_bool(cvar_t *cvar)
 {
-	cvar_validate_and_register(cvar, CVarKind_bool);
-	return cvar->as.boolean;
+	if (cvar_validate_and_register(cvar, CVarKind_bool)) 
+	{
+		return cvar->as.boolean; 
+	}
+	return cvar->as_default.boolean;
 }
 
 int32_t cvar_read_i32(cvar_t *cvar)
 {
-
-	cvar_validate_and_register(cvar, CVarKind_i32);
-	return cvar->as.i32;
+	if (cvar_validate_and_register(cvar, CVarKind_i32))
+	{
+		return cvar->as.i32;
+	}
+	return cvar->as_default.i32;
 }
 
 float cvar_read_f32(cvar_t *cvar)
 {
-	cvar_validate_and_register(cvar, CVarKind_f32);
-	return cvar->as.f32;
+	if (cvar_validate_and_register(cvar, CVarKind_f32))
+	{
+		return cvar->as.f32;
+	}
+	return cvar->as_default.f32;
 }
 
 string_t cvar_read_string(cvar_t *cvar)
 {
-	cvar_validate_and_register(cvar, CVarKind_string);
-	return cvar->as.string;
+	if (cvar_validate_and_register(cvar, CVarKind_string))
+	{
+		return cvar->as.string;
+	}
+	return cvar->as_default.string;
 }
 
 void cvar_write_bool(cvar_t *cvar, bool value)
 {
-	cvar_validate_and_register(cvar, CVarKind_bool);
-	cvar->as.boolean = value;
+	if (cvar_validate_and_register(cvar, CVarKind_bool))
+	{
+		cvar->as.boolean = value;
+	}
 }
 
 void cvar_write_i32(cvar_t *cvar, int32_t value)
 {
-	cvar_validate_and_register(cvar, CVarKind_i32);
-	cvar->as.i32 = value;
+	if (cvar_validate_and_register(cvar, CVarKind_i32))
+	{
+		cvar->as.i32 = value;
+	}
 }
 
 void cvar_write_f32(cvar_t *cvar, float value)
 {
-	cvar_validate_and_register(cvar, CVarKind_f32);
-	cvar->as.f32 = value;
+	if (cvar_validate_and_register(cvar, CVarKind_f32))
+	{
+		cvar->as.f32 = value;
+	}
 }
 
 void cvar_write_string(cvar_t *cvar, string_t string)
 {
-	cvar_validate_and_register(cvar, CVarKind_string);
-
-	cvar_string_block_t *old_block = cvar->string_block;
-
-	uint16_t string_block_header_size = offsetof(cvar_string_block_t, bytes);
-
-	if (NEVER(string.count > UINT16_MAX - string_block_header_size))
+	if (cvar_validate_and_register(cvar, CVarKind_string))
 	{
-		string.count = UINT16_MAX - string_block_header_size;
-	}
+		cvar_string_block_t *old_block = cvar->string_block;
 
-	uint16_t block_size = (uint16_t)(string_block_header_size + string.count);
-	cvar->string_block       = simple_heap_alloc(&g_cvars.string_allocator, block_size);
-	cvar->string_block->size = block_size;
+		uint16_t string_block_header_size = offsetof(cvar_string_block_t, bytes);
 
-	memcpy(cvar->string_block->bytes, string.data, string.count);
+		if (NEVER(string.count > UINT16_MAX - string_block_header_size))
+		{
+			string.count = UINT16_MAX - string_block_header_size;
+		}
 
-	cvar->as.string = (string_t){ .data = cvar->string_block->bytes, .count = string.count };
+		uint16_t block_size = (uint16_t)(string_block_header_size + string.count);
+		cvar->string_block       = simple_heap_alloc(&g_cvars.string_allocator, block_size);
+		cvar->string_block->size = block_size;
 
-	if (old_block)
-	{
-		simple_heap_free(&g_cvars.string_allocator, old_block, old_block->size);
+		memcpy(cvar->string_block->bytes, string.data, string.count);
+
+		cvar->as.string = (string_t){ .data = cvar->string_block->bytes, .count = string.count };
+
+		if (old_block)
+		{
+			simple_heap_free(&g_cvars.string_allocator, old_block, old_block->size);
+		}
 	}
 }
 
 void cvar_execute_command(cvar_t *cvar, string_t arguments)
 {
-	cvar_validate_and_register(cvar, CVarKind_command);
-
-	ASSERT(cvar->as.command);
-
-	cvar->as.command(arguments);
+	if (cvar_validate_and_register(cvar, CVarKind_command))
+	{
+		if (cvar->as.command)
+		{
+			cvar->as.command(arguments);
+		}
+		else
+		{
+			log(CVar, Error, "Cvar '%cs' has no command bound to it!", cvar->key);
+		}
+	}
 }
 
 bool cvar_is_default(cvar_t *cvar)

@@ -10,13 +10,15 @@ struct view_parameters_t
 	float4x4 world_to_view;
 	float3 fog_ambient_inscattering;
 	float fog_absorption;
-	float3 sun_color;
+	float3 fog_dim;
 	float fog_density;
-	float3 sun_direction;
+	float3 fog_offset;
 	float fog_phase_k;
-	float2 view_size;
+	float3 sun_color;
 	float fog_scattering;
+	float3 sun_direction;
 	uint frame_index;
+	float2 view_size;
 	uint refresh_rate;
 };
 

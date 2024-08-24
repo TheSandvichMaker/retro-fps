@@ -142,6 +142,35 @@ function Texture2DMS(format, ex)
 	}
 end
 
+function Texture3D(format, ex)
+	local format_hlsl = "float4"
+
+	if format then 
+		assert(format.hlsl_name, "Invalid type passed to Texture3D")
+		format_hlsl = format.hlsl_name
+	end
+
+	local may_be_null = false
+
+	if ex ~= nil then
+		if ex.may_be_null == true then
+			may_be_null = true
+		end
+	end
+
+	return shader_resource {
+		resource_type = "texture",
+		access        = "read",
+		multisample   = false,
+		may_be_null   = may_be_null,
+		size          = 1,
+		align_legacy  = 4, -- NOTE: my resources are 16 byte aligned with legacy cb packing because they're structs, even though they should be able to be packed tightly because they're just indices...
+		align         = 1,
+		hlsl_name     = "df::Resource< Texture3D< " .. format_hlsl .. " > >",
+		c_name        = "rhi_texture_srv_t",
+	}
+end
+
 -- PSOs
 
 function pso_fullscreen(ps, pf)

@@ -9,8 +9,10 @@ typedef struct resolve_draw_parameters_t
 	v2u_t pad0;
 	rhi_texture_srv_t depth_buffer;
 	v3u_t pad1;
-	rhi_texture_srv_t hdr_color;
+	rhi_texture_srv_t fogmap;
 	v3u_t pad2;
+	rhi_texture_srv_t hdr_color;
+	v3u_t pad3;
 	rhi_texture_srv_t shadow_map;
 } resolve_draw_parameters_t;
 

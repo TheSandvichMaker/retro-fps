@@ -2,7 +2,7 @@
 
 void shader_set_params__post_draw_parameters_t(rhi_command_list_t *list, uint32_t slot, post_draw_parameters_t *params)
 {
-	rhi_validate_texture_srv(params->bloom0, S("post_draw_parameters_t::bloom0"), 0);
+	rhi_validate_texture_srv(params->bloom, S("post_draw_parameters_t::bloom"), 0);
 	rhi_validate_texture_srv(params->blue_noise, S("post_draw_parameters_t::blue_noise"), 0);
 	rhi_validate_texture_srv(params->resolved_color, S("post_draw_parameters_t::resolved_color"), 0);
 	rhi_set_parameters(list, slot, params, sizeof(*params));
@@ -40,7 +40,7 @@ void shader_set_params__post_draw_parameters_t(rhi_command_list_t *list, uint32_
 	"	[branch]\n" \
 	"	if (draw.bloom_amount > 0.0)\n" \
 	"	{\n" \
-	"		float3 bloom = draw.bloom0.Get().SampleLevel(df::s_linear_clamped, uv, 0);\n" \
+	"		float3 bloom = draw.bloom.Get().SampleLevel(df::s_linear_clamped, uv, 0);\n" \
 	"\n" \
 	"#if BLOOM_BLEND == 0\n" \
 	"		color = lerp(color, bloom, draw.bloom_amount);\n" \

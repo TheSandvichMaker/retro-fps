@@ -74,6 +74,9 @@ typedef struct r1_state_t
 	rhi_texture_t     black_texture;
 	rhi_texture_srv_t black_texture_srv;
 
+	rhi_texture_t     black_texture_3d;
+	rhi_texture_srv_t black_texture_3d_srv;
+
 	rhi_texture_t     missing_texture;
 	rhi_texture_srv_t missing_texture_srv;
 
@@ -175,3 +178,5 @@ typedef struct r1_push_constants_t
 #define r1_set_pass_params(list, params) shader_set_params(list, R1ParameterSlot_pass, params)
 #define r1_set_view_params(list, params) shader_set_params(list, R1ParameterSlot_view, params)
 
+#define r1_fullscreen_pass(list, rt, pso, draw_params) do { r1_set_draw_params(list, draw_params); r1_fullscreen_pass_(list, rt, pso); } while(0)
+fn void r1_fullscreen_pass_(rhi_command_list_t *list, rhi_texture_t rt, df_pso_ident_t pso);

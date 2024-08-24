@@ -18,6 +18,14 @@ float henyey_greenstein(float3 v, float3 l, float k)
     return (1.0 / (4*PI))*(numerator / denominator);
 }
 
+float3 sample_fog_map(float3 p)
+{
+	Texture3D<float4> fogmap = draw.fogmap.Get();
+
+    float3 sample_p = (p - view.fog_offset) / view.fog_dim + 0.5f;
+    return fogmap.SampleLevel(df::s_linear_border, sample_p, 0).rgb;
+}
+
 float4 integrate_fog(float2 uv, uint2 co, float dither, int sample_index)
 {
     float density = view.fog_density;
@@ -58,7 +66,7 @@ float4 integrate_fog(float2 uv, uint2 co, float dither, int sample_index)
 
         transmission *= exp(-density*extinction*step_size);
 
-        float3 direct_light = rcp(4.0*PI)*ambient;
+        float3 direct_light = rcp(4.0f*PI)*(sample_fog_map(p) + ambient);
 
         float sun_shadow = SampleSunShadow(draw.shadow_map.Get(), p);
         direct_light += view.sun_color*sun_shadow*sun_phase;

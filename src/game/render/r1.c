@@ -118,6 +118,26 @@ r1_state_t *r1_make(void)
 
 	r1->black_texture_srv = rhi_get_texture_srv(r1->black_texture);
 
+	// Black, 3D
+	// NOTE: This and the 2D one could just be the same texture with different SRVs.
+
+	r1->black_texture_3d = rhi_create_texture(&(rhi_create_texture_params_t){
+	    .debug_name = S("tex_builtin_black"),
+		.dimension = RhiTextureDimension_3d,
+		.width     = 1,
+		.height    = 1,
+		.depth     = 1,
+		.format    = PixelFormat_r8g8b8a8_unorm,
+		.initial_data = &(rhi_texture_data_t){
+			.subresources      = (uint32_t *[]) { &black_pixel },
+			.subresource_count = 1,
+			.row_stride        = sizeof(black_pixel),
+			.slice_stride      = sizeof(black_pixel),
+		},
+	});
+
+	r1->black_texture_3d_srv = rhi_get_texture_srv(r1->black_texture_3d);
+
 	// Missing
 
 	uint32_t missing_texture_pixels[] = {
@@ -311,6 +331,20 @@ r1_stats_t r1_report_stats(arena_t *arena)
 
 //------------------------------------------------------------------------
 
+void r1_fullscreen_pass_(rhi_command_list_t *list, rhi_texture_t rt, df_pso_ident_t pso)
+{
+	ASSERT(df_psos[pso].vs_index == DfShader_fullscreen_triangle_vs);
+
+	rhi_simple_graphics_pass_begin(list, rt, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
+	{
+		r1_set_pso(list, pso);
+		rhi_draw(list, 3, 0);
+	}
+	rhi_graphics_pass_end(list);
+}
+
+//------------------------------------------------------------------------
+
 r1_view_t r1_create_view(rhi_window_t window)
 {
 	PROFILE_FUNC_BEGIN;
@@ -454,7 +488,7 @@ void r1_begin_frame(void)
 
 fn_local void r1_render_sun_shadows(rhi_command_list_t *list, map_t *map);
 fn_local void r1_render_map        (rhi_command_list_t *list, r1_view_t *view, map_t *map);
-fn_local void r1_post_process      (rhi_command_list_t *list, r1_view_t *view);
+fn_local void r1_post_process      (rhi_command_list_t *list, r1_view_t *view, map_t *map);
 fn_local void r1_render_debug_lines(rhi_command_list_t *list, r1_view_t *view);
 
 void r1_render_game_view(rhi_command_list_t *list, r1_view_t *view, map_t *map)
@@ -486,6 +520,8 @@ void r1_render_game_view(rhi_command_list_t *list, r1_view_t *view, map_t *map)
 		.fog_scattering           = view->scene.fog_scattering,
 		.fog_phase_k              = view->scene.fog_phase_k,
 		.fog_ambient_inscattering = view->scene.fog_ambient_inscattering,
+		.fog_offset               = map->fogmap_offset,
+		.fog_dim                  = map->fogmap_dim,
 		.frame_index              = r1->frame_index,
 		.refresh_rate             = 60, // TODO: don't hardcore
 	};
@@ -506,7 +542,7 @@ void r1_render_game_view(rhi_command_list_t *list, r1_view_t *view, map_t *map)
 		log(Renderer, Warning, "No map passed to r1_render_game_view");
 	}
 
-	r1_post_process(list, view);
+	r1_post_process(list, view, map);
 
 	PROFILE_FUNC_END;
 }
@@ -665,30 +701,26 @@ void r1_render_debug_lines(rhi_command_list_t *list, r1_view_t *view)
 	PROFILE_FUNC_END;
 }
 
-void r1_post_process(rhi_command_list_t *list, r1_view_t *view)
+void r1_post_process(rhi_command_list_t *list, r1_view_t *view, map_t *map)
 {
 	PROFILE_FUNC_BEGIN;
 
 	R1_TIMED_REGION(list, S("Resolve MSAA"))
 	{
-		rhi_simple_graphics_pass_begin(list, view->targets.rt_hdr_resolved, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
-		{
-			r1_set_pso(list, DfPso_resolve_msaa);
+		uint32_t blue_noise_index = r1->frame_index % ARRAY_COUNT(r1->blue_noise);
 
-			uint32_t blue_noise_index = r1->frame_index % ARRAY_COUNT(r1->blue_noise);
+		rhi_texture_srv_t fogmap_srv = RESOURCE_HANDLE_VALID(map->fogmap) ? rhi_get_texture_srv(map->fogmap) : r1->black_texture_3d_srv;
 
-			resolve_draw_parameters_t draw_parameters = {
-				.hdr_color    = rhi_get_texture_srv(view->targets.rt_hdr),
-				.depth_buffer = rhi_get_texture_srv(view->targets.depth_stencil),
-				.shadow_map   = rhi_get_texture_srv(r1->shadow_map),
-				.blue_noise   = r1->blue_noise_srv[blue_noise_index],
-				.sample_count = r1->multisample_count,
-			};
-			r1_set_draw_params(list, &draw_parameters);
+		resolve_draw_parameters_t draw_parameters = {
+			.hdr_color    = rhi_get_texture_srv(view->targets.rt_hdr),
+			.depth_buffer = rhi_get_texture_srv(view->targets.depth_stencil),
+			.shadow_map   = rhi_get_texture_srv(r1->shadow_map),
+			.fogmap       = fogmap_srv,
+			.blue_noise   = r1->blue_noise_srv[blue_noise_index],
+			.sample_count = r1->multisample_count,
+		};
 
-			rhi_draw(list, 3, 0);
-		}
-		rhi_graphics_pass_end(list);
+		r1_fullscreen_pass(list, view->targets.rt_hdr_resolved, DfPso_resolve_msaa, &draw_parameters);
 	}
 
 	size_t downsample_steps = (size_t)cvar_read_i32(&cvar_r1_bloom_downsample_steps);
@@ -712,19 +744,11 @@ void r1_post_process(rhi_command_list_t *list, r1_view_t *view)
 			v2_t in_size     = make_v2((float)in_desc->width, (float)in_desc->height);
 			v2_t in_size_inv = div(1.0f, in_size);
 
-			rhi_simple_graphics_pass_begin(list, bloom_rt, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
-			{
-				r1_set_pso(list, DfPso_bloom_blur);
-
-				bloom_draw_parameters_t draw_parameters = {
-					.tex_color    = rhi_get_texture_srv(bloom_in),
-					.inv_tex_size = in_size_inv,
-				};
-				r1_set_draw_params(list, &draw_parameters);
-
-				rhi_draw(list, 3, 0);
-			}
-			rhi_graphics_pass_end(list);
+			bloom_draw_parameters_t draw_parameters = {
+				.tex_color    = rhi_get_texture_srv(bloom_in),
+				.inv_tex_size = in_size_inv,
+			};
+			r1_fullscreen_pass(list, bloom_rt, DfPso_bloom_blur, &draw_parameters);
 
 			bloom_in = bloom_rt;
 		}
@@ -740,19 +764,11 @@ void r1_post_process(rhi_command_list_t *list, r1_view_t *view)
 			v2_t in_size     = make_v2((float)in_desc->width, (float)in_desc->height);
 			v2_t in_size_inv = div(1.0f, in_size);
 
-			rhi_simple_graphics_pass_begin(list, bloom_rt, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
-			{
-				r1_set_pso(list, DfPso_bloom_blur);
-
-				bloom_draw_parameters_t draw_parameters = {
-					.tex_color    = rhi_get_texture_srv(bloom_in),
-					.inv_tex_size = in_size_inv,
-				};
-				r1_set_draw_params(list, &draw_parameters);
-
-				rhi_draw(list, 3, 0);
-			}
-			rhi_graphics_pass_end(list);
+			bloom_draw_parameters_t draw_parameters = {
+				.tex_color    = rhi_get_texture_srv(bloom_in),
+				.inv_tex_size = in_size_inv,
+			};
+			r1_fullscreen_pass(list, bloom_rt, DfPso_bloom_blur, &draw_parameters);
 
 			bloom_in = bloom_rt;
 		}
@@ -760,30 +776,21 @@ void r1_post_process(rhi_command_list_t *list, r1_view_t *view)
 
 	R1_TIMED_REGION(list, S("Post Process"))
 	{
-		rhi_simple_graphics_pass_begin(list, view->targets.rt_window, (rhi_texture_t){0}, RhiPrimitiveTopology_trianglelist);
+		float bloom_amount = cvar_read_f32(&cvar_r1_bloom_amount);
+
+		if (cvar_read_bool(&cvar_r1_bloom_preview))
 		{
-			r1_set_pso(list, DfPso_post_process);
-
-			uint32_t blue_noise_index = r1->frame_index % ARRAY_COUNT(r1->blue_noise);
-
-			float bloom_amount = cvar_read_f32(&cvar_r1_bloom_amount);
-
-			if (cvar_read_bool(&cvar_r1_bloom_preview))
-			{
-				bloom_amount = 1.0;
-			}
-
-			post_draw_parameters_t draw_parameters = {
-				.blue_noise     = r1->blue_noise_srv[blue_noise_index],
-				.resolved_color = rhi_get_texture_srv(view->targets.rt_hdr_resolved),
-				.bloom0         = rhi_get_texture_srv(view->targets.bloom_targets[downsample_steps - upsample_steps]),
-				.bloom_amount   = bloom_amount,
-			};
-			r1_set_draw_params(list, &draw_parameters);
-
-			rhi_draw(list, 3, 0);
+			bloom_amount = 1.0;
 		}
-		rhi_graphics_pass_end(list);
+
+		post_draw_parameters_t draw_parameters = {
+			.blue_noise     = r1->blue_noise_srv[r1->frame_index % ARRAY_COUNT(r1->blue_noise)],
+			.resolved_color = rhi_get_texture_srv(view->targets.rt_hdr_resolved),
+			.bloom          = rhi_get_texture_srv(view->targets.bloom_targets[downsample_steps - upsample_steps]),
+			.bloom_amount   = bloom_amount,
+		};
+
+		r1_fullscreen_pass(list, view->targets.rt_window, DfPso_post_process, &draw_parameters);
 	}
 
 	PROFILE_FUNC_END;

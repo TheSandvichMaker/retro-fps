@@ -984,9 +984,6 @@ fn_local void d3d12_upload_texture_data(d3d12_texture_t *texture, const rhi_text
 	ASSERT(data->subresource_count <= 1);
 
 	// TODO: Mipmaps upload
-	// TODO: 3D textures
-
-	ASSERT(texture->desc.dimension == RhiTextureDimension_2d);
 
 	D3D12_RESOURCE_DESC d3d_desc;
 	ID3D12Resource_GetDesc(texture->resource, &d3d_desc);
@@ -1010,12 +1007,17 @@ fn_local void d3d12_upload_texture_data(d3d12_texture_t *texture, const rhi_text
 	size_t dst_stride  = dst_layout.Footprint.RowPitch;
 	size_t copy_stride = MIN(src_stride, dst_stride); // TODO: should really be texture width times bytes per pixel
 
-	for (size_t y = 0; y < texture->desc.height; y++)
-	{
-		copy_memory(dst, src, copy_stride);
+	ASSERT(texture->desc.depth >= 1);
 
-		src += src_stride;
-		dst += dst_stride;
+	for (size_t z = 0; z < texture->desc.depth; z++)
+	{
+		for (size_t y = 0; y < texture->desc.height; y++)
+		{
+			copy_memory(dst, src, copy_stride);
+
+			src += src_stride;
+			dst += dst_stride;
+		}
 	}
 
 	D3D12_TEXTURE_COPY_LOCATION dst_loc = {
@@ -1383,15 +1385,29 @@ rhi_texture_t rhi_create_texture(const rhi_create_texture_params_t *params)
 					case DXGI_FORMAT_R24G8_TYPELESS: srv_format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS; break; // TODO: Stencil SRVs
 				}
 
-				ASSERT(params->dimension == RhiTextureDimension_2d); // TODO: other dimensions
+				D3D12_SRV_DIMENSION srv_view_dimension = D3D12_SRV_DIMENSION_UNKNOWN;
+
+				if (multisampled)
+				{
+					ASSERT_MSG(params->dimension == RhiTextureDimension_2d, "Multisampled textures have to be 2D!");
+					srv_view_dimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
+				}
+				else
+				{
+					switch (params->dimension)
+					{
+						case RhiTextureDimension_1d: srv_view_dimension = D3D12_SRV_DIMENSION_TEXTURE1D; break;
+						case RhiTextureDimension_2d: srv_view_dimension = D3D12_SRV_DIMENSION_TEXTURE2D; break;
+						case RhiTextureDimension_3d: srv_view_dimension = D3D12_SRV_DIMENSION_TEXTURE3D; break;
+					}
+				}
 
 				D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc = {
 					.Format                  = srv_format,
-					.ViewDimension           = (multisampled ? 
-												D3D12_SRV_DIMENSION_TEXTURE2DMS : 
-												D3D12_SRV_DIMENSION_TEXTURE2D),
+					.ViewDimension           = srv_view_dimension,
 					.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-					.Texture2D = {
+					// NOTE: It is fine to just set it as Texture1D, the member layout is the same for 1D, 2D, and 3D
+					.Texture1D = {
 						.MipLevels = (UINT)-1,
 					},
 				};

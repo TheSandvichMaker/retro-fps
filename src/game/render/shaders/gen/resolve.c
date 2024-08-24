@@ -4,6 +4,7 @@ void shader_set_params__resolve_draw_parameters_t(rhi_command_list_t *list, uint
 {
 	rhi_validate_texture_srv(params->blue_noise, S("resolve_draw_parameters_t::blue_noise"), 0);
 	rhi_validate_texture_srv(params->depth_buffer, S("resolve_draw_parameters_t::depth_buffer"), RhiValidateTextureSrv_is_msaa);
+	rhi_validate_texture_srv(params->fogmap, S("resolve_draw_parameters_t::fogmap"), 0);
 	rhi_validate_texture_srv(params->hdr_color, S("resolve_draw_parameters_t::hdr_color"), RhiValidateTextureSrv_is_msaa);
 	rhi_validate_texture_srv(params->shadow_map, S("resolve_draw_parameters_t::shadow_map"), 0);
 	rhi_set_parameters(list, slot, params, sizeof(*params));
@@ -28,6 +29,14 @@ void shader_set_params__resolve_draw_parameters_t(rhi_command_list_t *list, uint
 	"    float numerator = (1.0 - k*k);\n" \
 	"    float denominator = square(1.0 - k*dot(l, v));\n" \
 	"    return (1.0 / (4*PI))*(numerator / denominator);\n" \
+	"}\n" \
+	"\n" \
+	"float3 sample_fog_map(float3 p)\n" \
+	"{\n" \
+	"	Texture3D<float4> fogmap = draw.fogmap.Get();\n" \
+	"\n" \
+	"    float3 sample_p = (p - view.fog_offset) / view.fog_dim + 0.5f;\n" \
+	"    return fogmap.SampleLevel(df::s_linear_border, sample_p, 0).rgb;\n" \
 	"}\n" \
 	"\n" \
 	"float4 integrate_fog(float2 uv, uint2 co, float dither, int sample_index)\n" \
@@ -70,7 +79,7 @@ void shader_set_params__resolve_draw_parameters_t(rhi_command_list_t *list, uint
 	"\n" \
 	"        transmission *= exp(-density*extinction*step_size);\n" \
 	"\n" \
-	"        float3 direct_light = rcp(4.0*PI)*ambient;\n" \
+	"        float3 direct_light = rcp(4.0f*PI)*(sample_fog_map(p) + ambient);\n" \
 	"\n" \
 	"        float sun_shadow = SampleSunShadow(draw.shadow_map.Get(), p);\n" \
 	"        direct_light += view.sun_color*sun_shadow*sun_phase;\n" \

@@ -4,7 +4,7 @@ typedef void (*cvar_command_t)(string_t arguments);
 
 typedef enum cvar_kind_t
 {
-	CVarKind_NONE,
+	CVarKind_none,
 
 	CVarKind_bool,
 	CVarKind_i32,

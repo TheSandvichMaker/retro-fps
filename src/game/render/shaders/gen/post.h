@@ -4,7 +4,7 @@
 
 typedef struct post_draw_parameters_t
 {
-	rhi_texture_srv_t bloom0;
+	rhi_texture_srv_t bloom;
 	float bloom_amount;
 	v2u_t pad0;
 	rhi_texture_srv_t blue_noise;

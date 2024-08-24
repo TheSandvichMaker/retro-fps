@@ -45,10 +45,10 @@ static v3_t evaluate_lighting(lum_thread_context_t *thread, lum_params_t *params
 
         v3_t light_p = random_point_on_light(&thread->entropy, light);
 
-        v3_t  light_vector   = sub(light_p, hit_p);
-        float light_distance = flt_max(0.0001f, vlen(light_vector));
-        v3_t light_direction = div(light_vector, light_distance);
-        float light_ndotl    = dot(hit_n, light_direction);
+        v3_t  light_vector    = sub(light_p, hit_p);
+        float light_distance  = flt_max(0.0001f, vlen(light_vector));
+        v3_t  light_direction = div(light_vector, light_distance);
+        float light_ndotl     = dot(hit_n, light_direction);
 
         lum_light_sample_t *sample = &samples[sample_count++];
         sample->d = light_direction;
@@ -498,6 +498,7 @@ static void lum_job(job_context_t *job_context, void *userdata)
 		},
 	});
 
+	// FIXME: Don't block...
 	rhi_wait_on_texture_upload(lightmap_rhi);
 
 	poly->lightmap_rhi = lightmap_rhi;
@@ -646,29 +647,33 @@ static void trace_volumetric_lighting_job(job_context_t *job_context, void *user
         *dst++ = (v4_t){.xyz=lighting, .w0=1.0}; // pack_r11g11b10f(lighting);
     }
 
-#if 0
-    if (RESOURCE_HANDLE_VALID(map->fogmap))
-    {
-        render->destroy_texture(map->fogmap);
-    }
-#endif
+	if (RESOURCE_HANDLE_VALID(map->fogmap))
+	{
+		rhi_destroy_texture(map->fogmap);
+	}
+	
+	rhi_texture_t fogmap_texture = rhi_create_texture(&(rhi_create_texture_params_t){
+		.debug_name = S("tex_fogmap"),
+		.dimension  = RhiTextureDimension_3d,
+		.width      = width,
+		.height     = height,
+		.depth      = depth,
+		.mip_levels = 1,
+		.format     = PixelFormat_r32g32b32a32_float,
+		.initial_data = &(rhi_texture_data_t){
+			.subresources = (void *[]){
+				fogmap,
+			},
+			.subresource_count = 1,
+			.row_stride   = sizeof(fogmap[0])*width,
+			.slice_stride = sizeof(fogmap[0])*width*height,
+		},
+	});
 
-#if 0
-    map->fogmap = render->upload_texture(&(r_upload_texture_t) {
-        .desc = {
-            .type        = R_TEXTURE_TYPE_3D,
-            .format      = R_PIXEL_FORMAT_R32G32B32A32F,
-            .w           = width,
-            .h           = height,
-            .d           = depth,
-        },
-        .data = {
-            .pitch       = sizeof(fogmap[0])*width,
-            .slice_pitch = sizeof(fogmap[0])*width*height,
-            .pixels      = fogmap,
-        },
-    });
-#endif
+	// FIXME: Don't want
+	rhi_wait_on_texture_upload(fogmap_texture);
+
+	map->fogmap = fogmap_texture;
 
 done:
 	atomic_fetch_add(&state->jobs_completed, 1);
