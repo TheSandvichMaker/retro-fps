@@ -598,6 +598,7 @@ void r1_render_map(rhi_command_list_t *list, r1_view_t *view, map_t *map)
 		rhi_graphics_pass_begin(list, &(rhi_graphics_pass_params_t){
 			.render_targets[0] = {
 				.texture = rt,
+				.op = RhiPassOp_clear,
 			},
 			.depth_stencil = {
 				.texture     = view->targets.depth_stencil,

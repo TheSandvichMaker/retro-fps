@@ -1,22 +1,22 @@
-void cvar_init_system(void)
+void cvar_state_init(cvar_state_t *cvar_state)
 {
-	ASSERT(!g_cvars.initialized);
+	ASSERT(!cvar_state->initialized);
 
-	simple_heap_init(&g_cvars.string_allocator, &g_cvars.arena);
+	simple_heap_init(&cvar_state->string_allocator, &cvar_state->arena);
 
-	g_cvars.initialized = true;
+	cvar_state->initialized = true;
 }
 
 void cvar_register(cvar_t *cvar)
 {
-	ASSERT(g_cvars.initialized);
+	ASSERT(g_cvars->initialized);
 
 	if (ALWAYS(!(cvar->flags & CVarFlag_registered)))
 	{
 		m_scoped_temp
 		{
 			string_t key_lower = string_to_lower(temp, cvar->key);
-			table_insert_object(&g_cvars.cvar_table, string_hash(key_lower), cvar);
+			table_insert_object(&g_cvars->cvar_table, string_hash(key_lower), cvar);
 		}
 
 		cvar->flags |= CVarFlag_registered;
@@ -25,14 +25,14 @@ void cvar_register(cvar_t *cvar)
 
 cvar_t *cvar_find(string_t key)
 {
-	ASSERT(g_cvars.initialized);
+	ASSERT(g_cvars->initialized);
 
 	cvar_t *result = NULL;
 
 	m_scoped_temp
 	{
 		string_t key_lower = string_to_lower(temp, key);
-		result = table_find_object(&g_cvars.cvar_table, string_hash(key_lower));
+		result = table_find_object(&g_cvars->cvar_table, string_hash(key_lower));
 
 		DEBUG_ASSERT(string_match_nocase(result->key, key_lower));
 	}
@@ -42,7 +42,7 @@ cvar_t *cvar_find(string_t key)
 
 size_t get_cvar_count(void)
 {
-	return g_cvars.cvar_table.load;
+	return g_cvars->cvar_table.load;
 }
 
 null_term_string_t cvar_kind_to_string(cvar_kind_t kind)
@@ -83,7 +83,7 @@ null_term_string_t cvar_kind_to_string_with_indefinite_article(cvar_kind_t kind)
 
 fn_local bool cvar_validate_and_register(cvar_t *cvar, cvar_kind_t expected_kind)
 {
-	bool initialized = g_cvars.initialized;
+	bool initialized = g_cvars->initialized;
 
 	if (!initialized)
 	{
@@ -186,7 +186,7 @@ void cvar_write_string(cvar_t *cvar, string_t string)
 		}
 
 		uint16_t block_size = (uint16_t)(string_block_header_size + string.count);
-		cvar->string_block       = simple_heap_alloc(&g_cvars.string_allocator, block_size);
+		cvar->string_block       = simple_heap_alloc(&g_cvars->string_allocator, block_size);
 		cvar->string_block->size = block_size;
 
 		memcpy(cvar->string_block->bytes, string.data, string.count);
@@ -195,7 +195,7 @@ void cvar_write_string(cvar_t *cvar, string_t string)
 
 		if (old_block)
 		{
-			simple_heap_free(&g_cvars.string_allocator, old_block, old_block->size);
+			simple_heap_free(&g_cvars->string_allocator, old_block, old_block->size);
 		}
 	}
 }
@@ -275,7 +275,7 @@ void cvar_reset_to_default(cvar_t *cvar)
 
 			if (cvar->string_block)
 			{
-				simple_heap_free(&g_cvars.string_allocator, cvar->string_block, cvar->string_block->size);
+				simple_heap_free(&g_cvars->string_allocator, cvar->string_block, cvar->string_block->size);
 				cvar->string_block = NULL;
 			}
 		} break;
@@ -284,5 +284,24 @@ void cvar_reset_to_default(cvar_t *cvar)
 
 table_iter_t cvar_iter(void)
 {
-	return table_iter(&g_cvars.cvar_table);
+	return table_iter(&g_cvars->cvar_table);
+}
+
+void equip_cvar_state(cvar_state_t *cvar_state)
+{
+	if (cvar_state)
+	{
+		VERIFY(!g_cvars);
+	}
+	else
+	{
+		VERIFY(g_cvars);
+	}
+
+	g_cvars = cvar_state;
+}
+
+void unequip_cvar_state(void)
+{
+	equip_cvar_state(NULL);
 }

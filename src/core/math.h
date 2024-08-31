@@ -1986,6 +1986,28 @@ fn_local void plane_from_points(v3_t a, v3_t b, v3_t c, plane_t *p)
     p->d = dot(p->n, a);
 }
 
+fn_local bool intersect_three_planes(plane_t a, plane_t b, plane_t c, v3_t *out_point)
+{
+	float det = dot(cross(a.n, b.n), c.n);
+
+	bool result = abs_ss(det) > 0.001f;
+
+	if (result)
+	{
+		v3_t num = v3_add3(
+			mul(a.d, cross(b.n, c.n)),
+			mul(b.d, cross(c.n, a.n)),
+			mul(c.d, cross(a.n, b.n)));
+		*out_point = div(num, det);
+	}
+	else
+	{
+		*out_point = (v3_t){0, 0, 0};
+	}
+
+	return result;
+}
+
 fn_local float triangle_area(v3_t a, v3_t b, v3_t c)
 {
 	v3_t ab = sub(b, a);

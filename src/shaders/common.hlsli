@@ -171,6 +171,11 @@ float SampleSunShadow(Texture2D<float> sun_shadowmap, float3 world_p)
     return sun_shadow;
 }
 
+float scene_depth_from_device_z(float device_z)
+{
+	return 1.0 / device_z;
+}
+
 float2 SvPositionToClip(float2 sv_position)
 { 
 	return 2.0f*(sv_position / view.view_size) - 1.0f;

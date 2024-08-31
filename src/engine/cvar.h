@@ -83,7 +83,11 @@ typedef struct cvar_state_t
 	simple_heap_t string_allocator;
 } cvar_state_t;
 
-global cvar_state_t g_cvars;
+// global cvar_state_t g_cvars;
+thread_local cvar_state_t *g_cvars;
+
+fn void equip_cvar_state(cvar_state_t *cvar_state);
+fn void unequip_cvar_state(void);
 
 #define CVAR_BOOL(in_variable, in_key, in_default_value)                      \
 	global cvar_t in_variable = {                                             \
@@ -149,7 +153,7 @@ global cvar_state_t g_cvars;
 																 \
 	void PASTE(in_variable, _func)(string_t arguments)
 
-fn void cvar_init_system(void);
+fn void cvar_state_init(cvar_state_t *cvar_state);
 
 fn void    cvar_register (cvar_t *cvar);
 fn cvar_t *cvar_find     (string_t key);

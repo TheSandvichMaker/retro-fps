@@ -747,6 +747,7 @@ bool bake_finalize(lum_bake_state_t *state)
     } 
     else if (!(flags & LumStateFlag_finalized) && bake_jobs_completed(state))
 	{
+		/*
 		lum_debug_data_t *debug = &state->results.debug;
 
 		for (size_t i = 0; i < state->thread_count; i++)
@@ -760,6 +761,7 @@ bool bake_finalize(lum_bake_state_t *state)
 			// TODO: Copy debug data to state arena
 			// m_release(&thread_context->arena);
 		}
+		*/
 
 		state->end_time = os_hires_time();
 		state->final_bake_time = os_seconds_elapsed(state->start_time, state->end_time);

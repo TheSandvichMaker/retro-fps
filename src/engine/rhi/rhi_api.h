@@ -6,8 +6,48 @@
 
 #include "rhi_formats.h"
 
+//
+// CONSTANTS
+//
+
 enum { RhiMaxRenderTargetCount  = 8       };
 enum { RhiTransientHeapNodeSize = MB(256) }; // needs to be quite big to support MSAA render targets... :( think on that
+
+//
+// TYPES
+//
+
+// implementation specific
+typedef struct rhi_state_t rhi_state_t;
+
+//
+// handles
+//
+
+DEFINE_HANDLE_TYPE(rhi_window_t);
+DEFINE_HANDLE_TYPE(rhi_buffer_t);
+DEFINE_HANDLE_TYPE(rhi_texture_t);
+DEFINE_HANDLE_TYPE(rhi_pso_t);
+
+//
+// init
+//
+
+typedef struct rhi_init_params_t
+{
+	uint32_t frame_latency;
+} rhi_init_params_t;
+
+typedef enum rhi_backend_t
+{
+	RhiBackend_none  = 0,
+	RhiBackend_d3d12 = 1,
+	RhiBackend_COUNT,
+} rhi_backend_t;
+
+//
+// stats
+//
 
 typedef struct rhi_allocation_stats_t
 {
@@ -29,96 +69,14 @@ typedef struct rhi_allocation_stats_t
 	uint64_t persistent_dsv_count;
 } rhi_allocation_stats_t;
 
-fn void rhi_get_allocation_stats(rhi_allocation_stats_t *stats);
-
-typedef struct rhi_init_params_t
-{
-	uint32_t frame_latency;
-} rhi_init_params_t;
-
-typedef enum rhi_backend_t
-{
-	RhiBackend_none  = 0,
-	RhiBackend_d3d12 = 1,
-	RhiBackend_COUNT,
-} rhi_backend_t;
-
-DEFINE_HANDLE_TYPE(rhi_window_t);
-DEFINE_HANDLE_TYPE(rhi_buffer_t);
-DEFINE_HANDLE_TYPE(rhi_texture_t);
-DEFINE_HANDLE_TYPE(rhi_pso_t);
-
-fn void rhi_resize_window(rhi_window_t window, uint32_t new_width, uint32_t new_height);
-fn rhi_texture_t rhi_get_current_backbuffer(rhi_window_t window);
-fn v2_t rhi_get_window_client_size(rhi_window_t window);
-
 typedef struct rhi_frame_statistics_t
 {
 	uint64_t sync_cpu_time;
 } rhi_frame_statistics_t;
 
-fn uint64_t rhi_get_frame_sync_cpu_freq(void);
-fn bool rhi_get_frame_statistics(rhi_window_t window, rhi_frame_statistics_t *statistics);
-fn void rhi_wait_on_swap_chain(rhi_window_t window);
-fn bool rhi_get_window_fullscreen(rhi_window_t window);
-fn void rhi_set_window_fullscreen(rhi_window_t window, bool fullscreen);
-
 //
 // resources
 //
-
-typedef struct rhi_texture_srv_t
-{
-	uint32_t index;
-} rhi_texture_srv_t;
-
-typedef struct rhi_buffer_srv_t
-{
-	uint32_t index;
-} rhi_buffer_srv_t;
-
-typedef struct rhi_buffer_uav_t
-{
-	uint32_t index;
-} rhi_buffer_uav_t;
-
-typedef enum rhi_texture_usage_t
-{
-	RhiTextureUsage_render_target = 0x1,
-	RhiTextureUsage_depth_stencil = 0x2,
-	RhiTextureUsage_uav           = 0x4,
-	RhiTextureUsage_deny_srv      = 0x8, // srv is allowed by default :)
-} rhi_texture_usage_t;
-
-typedef enum rhi_texture_dimension_t
-{
-	RhiTextureDimension_unknown = 0,
-	RhiTextureDimension_1d      = 1,
-	RhiTextureDimension_2d      = 2,
-	RhiTextureDimension_3d      = 3,
-} rhi_texture_dimension_t;
-
-typedef struct rhi_texture_desc_t
-{
-	string_t                debug_name;
-	rhi_texture_dimension_t dimension;
-	uint32_t                width;
-	uint32_t                height;
-	uint32_t                depth;
-	uint32_t                mip_levels;
-	pixel_format_t          format;
-	uint32_t                sample_count;
-	rhi_texture_usage_t     usage_flags;
-} rhi_texture_desc_t;
-
-fn const rhi_texture_desc_t *rhi_get_texture_desc(rhi_texture_t texture);
-
-typedef struct rhi_texture_data_t
-{
-	void    **subresources;
-	uint32_t  subresource_count, offset;
-	uint32_t  row_stride, slice_stride;
-} rhi_texture_data_t;
 
 typedef enum rhi_resource_flags_t
 {
@@ -132,50 +90,11 @@ typedef enum rhi_resource_lifetime_t
 	RhiResourceLifetime_COUNT,
 } rhi_resource_lifetime_t;
 
-typedef struct rhi_create_texture_params_t
-{
-	string_t                debug_name;
-	rhi_resource_lifetime_t lifetime;
-
-	rhi_texture_dimension_t dimension;
-
-	uint32_t                width;
-	uint32_t                height;
-	uint32_t                depth;
-	uint32_t                mip_levels;
-	uint32_t                multisample_count;
-
-	rhi_resource_flags_t    flags;
-
-	rhi_texture_usage_t     usage;
-	pixel_format_t          format;
-
-	v4_t                    optimized_clear_value;
-
-	rhi_texture_data_t     *initial_data;
-} rhi_create_texture_params_t;
-
 typedef enum rhi_upload_frequency_t
 {
 	RhiUploadFreq_frame,
 	RhiUploadFreq_background,
 } rhi_upload_frequency_t;
-
-fn rhi_texture_t     rhi_create_texture         (const rhi_create_texture_params_t *params);
-fn void              rhi_destroy_texture        (rhi_texture_t handle);
-fn void              rhi_upload_texture_data    (rhi_texture_t texture, const rhi_texture_data_t *data);
-fn bool              rhi_texture_upload_complete(rhi_texture_t texture);
-fn void              rhi_wait_on_texture_upload (rhi_texture_t texture);
-fn rhi_texture_srv_t rhi_get_texture_srv        (rhi_texture_t texture);
-
-typedef uint32_t rhi_validate_texture_srv_flags_t;
-typedef enum rhi_validate_texture_srv_flags_enum_t
-{
-	RhiValidateTextureSrv_is_msaa     = 0x1,
-	RhiValidateTextureSrv_may_be_null = 0x2,
-} rhi_validate_texture_srv_flags_enum_t;
-
-fn void rhi_validate_texture_srv(rhi_texture_srv_t srv, string_t context, rhi_validate_texture_srv_flags_t flags);
 
 typedef enum rhi_heap_kind_t
 {
@@ -185,6 +104,20 @@ typedef enum rhi_heap_kind_t
 
 	RhiHeapKind_COUNT,
 } rhi_heap_kind_t;
+
+//
+// buffers
+//
+
+typedef struct rhi_buffer_srv_t
+{
+	uint32_t index;
+} rhi_buffer_srv_t;
+
+typedef struct rhi_buffer_uav_t
+{
+	uint32_t index;
+} rhi_buffer_uav_t;
 
 typedef struct rhi_buffer_data_t
 {
@@ -236,20 +169,91 @@ typedef struct rhi_buffer_desc_t
 	rhi_resource_flags_t    flags;
 } rhi_buffer_desc_t;
 
-fn rhi_buffer_t     rhi_create_buffer(const rhi_create_buffer_params_t *params);
-fn void             rhi_upload_buffer_data(rhi_buffer_t buffer, size_t dst_offset, const void *src, size_t src_size, rhi_upload_frequency_t frequency);
-fn rhi_buffer_srv_t rhi_get_buffer_srv(rhi_buffer_t buffer);
-fn rhi_buffer_uav_t rhi_get_buffer_uav(rhi_buffer_t handle);
-fn void             rhi_validate_buffer_srv(rhi_buffer_srv_t srv, string_t context); // tries to verify that this srv is valid
-fn void             rhi_destroy_buffer(rhi_buffer_t handle);
-fn const rhi_buffer_desc_t *rhi_get_buffer_desc(rhi_buffer_t buffer);
+//
+// textures
+//
 
-fn void *rhi_begin_buffer_upload  (rhi_buffer_t buffer, size_t offset, size_t size, rhi_upload_frequency_t frequency);
-fn void  rhi_end_buffer_upload    (rhi_buffer_t buffer);
-fn void  rhi_wait_on_buffer_upload(rhi_buffer_t buffer);
+typedef struct rhi_parameters_t
+{
+	void *host;
+	uint32_t offset;
+	uint32_t size;
+} rhi_parameters_t;
 
-fn void *rhi_map  (rhi_buffer_t buffer);
-fn void  rhi_unmap(rhi_buffer_t buffer);
+typedef struct rhi_texture_srv_t
+{
+	uint32_t index;
+} rhi_texture_srv_t;
+
+typedef enum rhi_texture_usage_t
+{
+	RhiTextureUsage_render_target = 0x1,
+	RhiTextureUsage_depth_stencil = 0x2,
+	RhiTextureUsage_uav           = 0x4,
+	RhiTextureUsage_deny_srv      = 0x8, // srv is allowed by default :)
+} rhi_texture_usage_t;
+
+typedef enum rhi_texture_dimension_t
+{
+	RhiTextureDimension_unknown = 0,
+	RhiTextureDimension_1d      = 1,
+	RhiTextureDimension_2d      = 2,
+	RhiTextureDimension_3d      = 3,
+} rhi_texture_dimension_t;
+
+typedef struct rhi_texture_desc_t
+{
+	string_t                debug_name;
+	rhi_texture_dimension_t dimension;
+	uint32_t                width;
+	uint32_t                height;
+	uint32_t                depth;
+	uint32_t                mip_levels;
+	pixel_format_t          format;
+	uint32_t                sample_count;
+	rhi_texture_usage_t     usage_flags;
+} rhi_texture_desc_t;
+
+typedef struct rhi_texture_data_t
+{
+	void    **subresources;
+	uint32_t  subresource_count, offset;
+	uint32_t  row_stride, slice_stride;
+} rhi_texture_data_t;
+
+typedef struct rhi_create_texture_params_t
+{
+	string_t                debug_name;
+	rhi_resource_lifetime_t lifetime;
+
+	rhi_texture_dimension_t dimension;
+
+	uint32_t                width;
+	uint32_t                height;
+	uint32_t                depth;
+	uint32_t                mip_levels;
+	uint32_t                multisample_count;
+
+	rhi_resource_flags_t    flags;
+
+	rhi_texture_usage_t     usage;
+	pixel_format_t          format;
+
+	v4_t                    optimized_clear_value;
+
+	rhi_texture_data_t     *initial_data;
+} rhi_create_texture_params_t;
+
+typedef uint32_t rhi_validate_texture_srv_flags_t;
+typedef enum rhi_validate_texture_srv_flags_enum_t
+{
+	RhiValidateTextureSrv_is_msaa     = 0x1,
+	RhiValidateTextureSrv_may_be_null = 0x2,
+} rhi_validate_texture_srv_flags_enum_t;
+
+//
+// shaders
+//
 
 typedef struct rhi_shader_bytecode_t
 {
@@ -257,14 +261,8 @@ typedef struct rhi_shader_bytecode_t
 	size_t         count;
 } rhi_shader_bytecode_t;
 
-fn rhi_shader_bytecode_t rhi_compile_shader(arena_t *arena,
-											string_t shader_source,  // source code in utf8
-											string_t file_name,      // shader file name only used for debug
-											string_t entry_point,
-											string_t shader_model);
-
 //
-// graphics
+// PSO graphics
 //
 
 typedef struct rhi_command_list_t rhi_command_list_t;
@@ -324,7 +322,6 @@ typedef enum rhi_blend_t
 
 	RhiBlend_COUNT,
 } rhi_blend_t;
-
 
 typedef enum rhi_blend_op_t
 {
@@ -488,7 +485,9 @@ typedef struct rhi_create_graphics_pso_params_t
 	uint32_t           multisample_quality;
 } rhi_create_graphics_pso_params_t;
 
-fn rhi_pso_t rhi_create_graphics_pso(const rhi_create_graphics_pso_params_t *params);
+//
+// PSO compute
+//
 
 typedef struct rhi_compute_pso_params_t
 {
@@ -496,9 +495,9 @@ typedef struct rhi_compute_pso_params_t
 	rhi_shader_bytecode_t cs;
 } rhi_compute_pso_params_t;
 
-fn rhi_pso_t rhi_create_compute_pso(const rhi_compute_pso_params_t *params);
-
-fn void rhi_destroy_pso(rhi_pso_t pso);
+//
+// graphics pass
+//
 
 typedef enum rhi_pass_op_t
 {
@@ -541,6 +540,10 @@ typedef struct rhi_graphics_pass_params_t
 	rect2i_t                 scissor_rect;
 } rhi_graphics_pass_params_t;
 
+//
+// compute pass
+//
+
 typedef struct rhi_compute_pass_params_t
 {
 	uint32_t       buffer_uavs_count;
@@ -550,17 +553,108 @@ typedef struct rhi_compute_pass_params_t
 	rhi_texture_t *texture_uavs;
 } rhi_compute_pass_params_t;
 
+//
+// THREAD STATE
+//
+
+thread_local rhi_state_t *g_rhi;
+
+fn void rhi_equip_state  (rhi_state_t *rhi_state);
+fn void rhi_unequip_state(void);
+
+//
+// FUNCTIONS
+//
+
+//
+// (de)initialization
+//
+
+fn rhi_state_t *rhi_init  (const rhi_init_params_t *params);
+fn void         rhi_deinit(rhi_state_t *rhi_state);
+
+//
+// window
+//
+
+fn rhi_window_t  rhi_init_window           (void *window_handle);
+fn void          rhi_deinit_window         (rhi_window_t window);
+fn void          rhi_resize_window         (rhi_window_t window, uint32_t new_width, uint32_t new_height);
+fn rhi_texture_t rhi_get_current_backbuffer(rhi_window_t window);
+fn v2_t          rhi_get_window_client_size(rhi_window_t window);
+fn bool          rhi_get_frame_statistics  (rhi_window_t window, rhi_frame_statistics_t *statistics);
+fn bool          rhi_get_window_fullscreen (rhi_window_t window);
+fn void          rhi_set_window_fullscreen (rhi_window_t window, bool fullscreen);
+fn void          rhi_wait_on_swap_chain    (rhi_window_t window);
+
+//
+// stats
+//
+
+fn uint64_t rhi_get_frame_sync_cpu_freq(void);
+fn void     rhi_get_allocation_stats   (rhi_allocation_stats_t *stats);
+
+//
+// buffers
+//
+
+fn rhi_buffer_t             rhi_create_buffer        (const rhi_create_buffer_params_t *params);
+fn void                     rhi_destroy_buffer       (rhi_buffer_t handle);
+fn void                     rhi_upload_buffer_data   (rhi_buffer_t buffer, size_t dst_offset, const void *src, size_t src_size, rhi_upload_frequency_t frequency);
+fn rhi_buffer_srv_t         rhi_get_buffer_srv       (rhi_buffer_t buffer);
+fn rhi_buffer_uav_t         rhi_get_buffer_uav       (rhi_buffer_t handle);
+fn const rhi_buffer_desc_t *rhi_get_buffer_desc      (rhi_buffer_t buffer);
+fn void                     rhi_validate_buffer_srv  (rhi_buffer_srv_t srv, string_t context);
+fn void                    *rhi_begin_buffer_upload  (rhi_buffer_t buffer, size_t offset, size_t size, rhi_upload_frequency_t frequency);
+fn void                     rhi_end_buffer_upload    (rhi_buffer_t buffer);
+fn void                     rhi_wait_on_buffer_upload(rhi_buffer_t buffer);
+fn void                    *rhi_map                  (rhi_buffer_t buffer);
+fn void                     rhi_unmap                (rhi_buffer_t buffer);
+
+// TODO: Replace with something that does not expose pool_iter_t directly
+fn pool_iter_t rhi_buffer_iter(void);
+
+//
+// textures
+//
+
+fn rhi_texture_t             rhi_create_texture         (const rhi_create_texture_params_t *params);
+fn void                      rhi_destroy_texture        (rhi_texture_t handle);
+fn void                      rhi_upload_texture_data    (rhi_texture_t texture, const rhi_texture_data_t *data);
+fn bool                      rhi_texture_upload_complete(rhi_texture_t texture);
+fn void                      rhi_wait_on_texture_upload (rhi_texture_t texture);
+fn rhi_texture_srv_t         rhi_get_texture_srv        (rhi_texture_t texture);
+fn const rhi_texture_desc_t *rhi_get_texture_desc       (rhi_texture_t texture);
+fn void                      rhi_validate_texture_srv   (rhi_texture_srv_t srv, string_t context, rhi_validate_texture_srv_flags_t flags);
+
+// TODO: Replace with something that does not expose pool_iter_t directly
+fn pool_iter_t rhi_texture_iter(void);
+
+//
+// shaders
+//
+
+fn rhi_shader_bytecode_t rhi_compile_shader(arena_t *arena,
+											string_t shader_source,  // source code in utf8
+											string_t file_name,      // shader file name only used for debug
+											string_t entry_point,
+											string_t shader_model);
+
+//
+// PSOs
+//
+
+fn rhi_pso_t rhi_create_graphics_pso(const rhi_create_graphics_pso_params_t *params);
+fn rhi_pso_t rhi_create_compute_pso (const rhi_compute_pso_params_t *params);
+fn void      rhi_destroy_pso        (rhi_pso_t pso);
+
+//
+// drawing
+//
+
 fn void rhi_set_parameters(rhi_command_list_t *list, uint32_t slot, void *parameters, uint32_t size);
 
-// temporary!
-
-typedef struct rhi_parameters_t
-{
-	void *host;
-	uint32_t offset;
-	uint32_t size;
-} rhi_parameters_t;
-
+// temporary?
 fn rhi_parameters_t rhi_alloc_parameters(uint32_t size);
 
 fn void                rhi_begin_frame        (void);
@@ -578,69 +672,19 @@ fn void                rhi_end_frame          (void);
 
 fn void rhi_flush_everything(void);
 
-fn void rhi_begin_region(rhi_command_list_t *list, string_t region);
-fn void rhi_end_region  (rhi_command_list_t *list);
-fn void rhi_marker      (rhi_command_list_t *list, string_t marker);
+//
+// telemetry / profiling
+//
 
+fn void      rhi_begin_region           (rhi_command_list_t *list, string_t region);
+fn void      rhi_end_region             (rhi_command_list_t *list);
+fn void      rhi_marker                 (rhi_command_list_t *list, string_t marker);
 fn void      rhi_init_timestamps        (uint32_t max_timestamps_per_frame_count);
 fn void      rhi_record_timestamp       (rhi_command_list_t *list, uint32_t index);
 fn uint64_t  rhi_get_timestamp_frequency(void);
 fn uint64_t *rhi_begin_read_timestamps  (void);
 fn void      rhi_end_read_timestamps    (void);
 
-//
-// draw packet API
-//
+// TODO:
 
-typedef struct rhi_indirect_draw_t
-{
-	uint32_t vertex_count;
-	uint32_t instance_count;
-	 int32_t vertex_offset;
-	uint32_t instance_offset;
-} rhi_indirect_draw_t;
-
-typedef struct rhi_indirect_draw_indexed_t
-{
-	uint32_t index_count;
-	uint32_t instance_count;
-	uint32_t index_offset;
-	 int32_t vertex_offset;
-	uint32_t instance_offset;
-} rhi_indirect_draw_indexed_t;
-
-typedef struct rhi_draw_packet_t
-{
-								 // 32 bit handles - 64 bit handles
-	rhi_pso_t    pso;            // 4                8
-	rhi_buffer_t args_buffer;    // 8                16
-	uint32_t     args_offset;    // 12               20
-	rhi_buffer_t index_buffer;   // 16               24
-	uint32_t     push_constants; // 20               28
-	uint32_t     params[3];      // 32               48
-} rhi_draw_packet_t;
-
-typedef struct rhi_draw_stream_t
-{
-	uint32_t           count;
-	rhi_draw_packet_t *packets;
-} rhi_draw_stream_t;
-
-typedef struct rhi_draw_stream_params_t
-{
-	rhi_graphics_pass_color_attachment_t         render_targets[RhiMaxRenderTargetCount];
-	rhi_graphics_pass_depth_stencil_attachment_t depth_stencil;
-
-	rhi_primitive_topology_t topology;
-	rhi_viewport_t           viewport;
-	rect2i_t                 scissor_rect;
-
-	void *push_constants_buffer;
-} rhi_draw_stream_params_t;
-
-fn void rhi_draw_stream(const rhi_draw_stream_t *stream, const rhi_draw_stream_params_t *params);
-
-// fn void rhi_do_test_stuff(rhi_command_list_t *list, rhi_texture_t color_hdr, rhi_texture_t rt, rhi_pso_t pso);
-
-fn pool_iter_t rhi_texture_iter(void);
-fn pool_iter_t rhi_buffer_iter(void);
+#include "rhi_draw_stream_api.h"

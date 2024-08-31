@@ -96,7 +96,7 @@ typedef struct d3d12_frame_state_t
 	d3d12_transient_heap_allocator_t transient_resource_allocator;
 } d3d12_frame_state_t;
 
-typedef struct rhi_state_d3d12_t
+typedef struct rhi_state_t
 {
 	bool initialized;
 	bool debug_layer_enabled;
@@ -160,9 +160,7 @@ typedef struct rhi_state_d3d12_t
 	pool_t psos;
 
 	rhi_allocation_stats_t allocation_stats;
-} rhi_state_d3d12_t;
-
-global rhi_state_d3d12_t g_rhi;
+} rhi_state_t;
 
 typedef struct rhi_init_params_d3d12_t
 {

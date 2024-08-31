@@ -88,6 +88,8 @@ typedef enum asset_job_kind_t
 
 typedef struct asset_job_t
 {
+	rhi_state_t *rhi_state;
+
 	asset_job_kind_t kind;
 	asset_slot_t    *asset;
 } asset_job_t;
@@ -98,6 +100,11 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 
 	asset_job_t  *job   = userdata;
 	asset_slot_t *asset = job->asset;
+
+	if (job->rhi_state)
+	{
+		rhi_equip_state(job->rhi_state);
+	}
 
 	bool success = mutex_try_lock(&asset->mutex);
 	ASSERT(success); // there should be no contention on assets...
@@ -183,6 +190,11 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 	}
 
 	mutex_unlock(&asset->mutex);
+
+	if (job->rhi_state)
+	{
+		rhi_unequip_state();
+	}
 }
 
 static void preload_asset_info(asset_slot_t *asset)
@@ -340,6 +352,8 @@ string_t get_asset_path_on_disk(asset_hash_t hash)
 
 static asset_slot_t *get_or_load_asset_async(asset_hash_t hash, asset_kind_t kind)
 {
+	ASSERT(g_rhi);
+
 	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
 	if (asset && asset->kind == kind)
 	{
@@ -352,6 +366,7 @@ static asset_slot_t *get_or_load_asset_async(asset_hash_t hash, asset_kind_t kin
 			atomic_compare_exchange_strong(&asset->state, &state, new_state))
 		{
 			asset_job_t job = {
+				.rhi_state = g_rhi,
 				.kind  = ASSET_JOB_LOAD_FROM_DISK,
 				.asset = asset,
 			};
@@ -363,6 +378,8 @@ static asset_slot_t *get_or_load_asset_async(asset_hash_t hash, asset_kind_t kin
 
 static asset_slot_t *get_or_load_asset_blocking(asset_hash_t hash, asset_kind_t kind)
 {
+	ASSERT(g_rhi);
+
 	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
 	if (asset && asset->kind == kind)
 	{
@@ -375,6 +392,7 @@ static asset_slot_t *get_or_load_asset_blocking(asset_hash_t hash, asset_kind_t 
 			atomic_compare_exchange_strong(&asset->state, &state, new_state))
 		{
 			asset_job_t job = {
+				.rhi_state = NULL,
 				.kind  = ASSET_JOB_LOAD_FROM_DISK,
 				.asset = asset,
 			};
@@ -388,6 +406,8 @@ static asset_slot_t *get_or_load_asset_blocking(asset_hash_t hash, asset_kind_t 
 
 void reload_asset(asset_hash_t hash)
 {
+	ASSERT(g_rhi);
+
 	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
 	if (asset)
 	{
@@ -400,6 +420,7 @@ void reload_asset(asset_hash_t hash)
 			atomic_compare_exchange_strong(&asset->state, &state, new_state))
 		{
 			asset_job_t job = {
+				.rhi_state = g_rhi,
 				.kind  = ASSET_JOB_LOAD_FROM_DISK,
 				.asset = asset,
 			};

@@ -19,6 +19,7 @@
 #include <dbghelp.h>
 #include <shellapi.h>
 #include <GameInput.h>
+#include <wia.h>
 
 #pragma warning(pop)
 
@@ -523,6 +524,7 @@ fn_local LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 
 		case WM_SIZE:
 		{
+			/*
 			uint32_t new_width  = LOWORD(lparam);
 			uint32_t new_height = HIWORD(lparam);
 
@@ -530,6 +532,7 @@ fn_local LRESULT window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
 			{
 				rhi_resize_window(user->rhi_window, new_width, new_height);
 			}
+			*/
 		} break;
 
         default:
@@ -597,7 +600,6 @@ int wWinMain(HINSTANCE instance,
 		}
 	}
 
-	cvar_init_system();
 	platform_init((size_t)argc, argv, &hooks);
 
 	if (!hooks.tick && !hooks.tick_audio)
@@ -658,6 +660,7 @@ int wWinMain(HINSTANCE instance,
 
 	// it's d3d12 time
 
+	/*
 	bool d3d12_success = rhi_init_d3d12(&(rhi_init_params_d3d12_t){
 		.base = {
 			.frame_latency = 2,
@@ -684,6 +687,7 @@ int wWinMain(HINSTANCE instance,
 	{
 		return 1;
 	}
+		*/
 
 	POINT prev_cursor_point;
 	GetCursorPos(&prev_cursor_point);
@@ -698,7 +702,7 @@ int wWinMain(HINSTANCE instance,
 	};
 
 	window_user_data_t window_user_data = {
-		.rhi_window    = rhi_window,
+		// .rhi_window    = rhi_window,
 		.input_context = &input_context,
 	};
 
@@ -710,15 +714,19 @@ int wWinMain(HINSTANCE instance,
 
 	hires_time_t current_time = os_hires_time();
 
-	uint64_t last_frame_sync_time = 0;
+	//uint64_t last_frame_sync_time = 0;
 
+	/*
 	rhi_frame_statistics_t frame_stats;
 	if (rhi_get_frame_statistics(rhi_window, &frame_stats))
 	{
 		last_frame_sync_time = frame_stats.sync_cpu_time;
 	}
+		*/
 
-	platform_init_io_t init_io = {0};
+	platform_init_io_t init_io = {
+		.os_window_handle = window,
+	};
 
 	hooks.init(&init_io);
 
@@ -728,7 +736,7 @@ int wWinMain(HINSTANCE instance,
 	bool running = true;
 	while (running)
 	{
-		rhi_wait_on_swap_chain(rhi_window);
+		// rhi_wait_on_swap_chain(rhi_window);
 
 		profiler_begin_frame();
 
@@ -738,6 +746,7 @@ int wWinMain(HINSTANCE instance,
 
 		// subsitute frame time with exact vsync timing when possible
 
+		/*
 		rhi_frame_statistics_t frame_stats;
 		if (rhi_get_frame_statistics(rhi_window, &frame_stats))
 		{
@@ -747,6 +756,7 @@ int wWinMain(HINSTANCE instance,
 
 			last_frame_sync_time = this_frame_sync_time;
 		}
+			*/
 
 		//
 
@@ -791,7 +801,8 @@ int wWinMain(HINSTANCE instance,
 			.has_focus     = input_context.has_focus,
 			.frame_time    = frame_time,
 			.input         = input,
-			.rhi_window    = rhi_window,
+			// .rhi_window    = rhi_window,
+			.os_window_handle = window,
 			.cursor_locked = input_context.cursor_locked,
 			.set_mouse_p   = { -1, -1 },
 		};

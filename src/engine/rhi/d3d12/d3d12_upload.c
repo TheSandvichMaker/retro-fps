@@ -64,7 +64,7 @@ bool d3d12_upload_ring_buffer_init(ID3D12Device *device, d3d12_upload_ring_buffe
 
 fn_local bool d3d12_retire_one_upload_submission(bool wait_if_needed)
 {
-	d3d12_upload_ring_buffer_t *ring_buffer = &g_rhi.upload_ring_buffer;
+	d3d12_upload_ring_buffer_t *ring_buffer = &g_rhi->upload_ring_buffer;
 
 	size_t retired_submission_index = ring_buffer->submission_tail % ARRAY_COUNT(ring_buffer->submissions);
 	d3d12_upload_submission_t *retired_submission = &ring_buffer->submissions[retired_submission_index];
@@ -94,7 +94,7 @@ void d3d12_retire_ring_buffer_entries(void)
 {
 	PROFILE_FUNC_BEGIN;
 
-	d3d12_upload_ring_buffer_t *ring_buffer = &g_rhi.upload_ring_buffer;
+	d3d12_upload_ring_buffer_t *ring_buffer = &g_rhi->upload_ring_buffer;
 
 	mutex_lock(&ring_buffer->mutex);
 
@@ -120,7 +120,7 @@ void d3d12_retire_ring_buffer_entries(void)
 
 d3d12_upload_context_t d3d12_upload_begin(size_t size, size_t align)
 {
-	d3d12_upload_ring_buffer_t *ring_buffer = &g_rhi.upload_ring_buffer;
+	d3d12_upload_ring_buffer_t *ring_buffer = &g_rhi->upload_ring_buffer;
 
 	// TODO: Handle resizing the ring buffer?
 	ASSERT_MSG(size <= ring_buffer->capacity, "The upload ring buffer is too small for your upload!");
@@ -225,7 +225,7 @@ uint64_t d3d12_upload_end(const d3d12_upload_context_t *ctx)
 {
 	ASSERT(ctx);
 
-	d3d12_upload_ring_buffer_t *ring_buffer = &g_rhi.upload_ring_buffer;
+	d3d12_upload_ring_buffer_t *ring_buffer = &g_rhi->upload_ring_buffer;
 
 	d3d12_upload_submission_t *submission = ctx->submission;
 
@@ -254,7 +254,7 @@ uint64_t d3d12_upload_end(const d3d12_upload_context_t *ctx)
 
 void d3d12_flush_ring_buffer_uploads(void)
 {
-	d3d12_upload_ring_buffer_t *ring_buffer = &g_rhi.upload_ring_buffer;
+	d3d12_upload_ring_buffer_t *ring_buffer = &g_rhi->upload_ring_buffer;
 
 	uint64_t fence_value = ID3D12Fence_GetCompletedValue(ring_buffer->fence);
 

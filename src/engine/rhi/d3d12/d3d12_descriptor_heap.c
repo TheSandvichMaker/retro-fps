@@ -244,10 +244,10 @@ void d3d12_free_descriptor_persistent(d3d12_descriptor_heap_t *heap, uint32_t in
 
 		heap->pending_free_indices[pending_index] = (d3d12_pending_free_t){
 			.index       = index,
-			.frame_index = g_rhi.fence_value + g_rhi.frame_latency,
+			.frame_index = g_rhi->fence_value + g_rhi->frame_latency,
 		};
 
-		log(RHI_D3D12, SuperSpam, "Deferred descriptor %u to be freed at frame index %llu, current frame index: %llu", index, g_rhi.fence_value + g_rhi.frame_latency, g_rhi.frame_index);
+		log(RHI_D3D12, SuperSpam, "Deferred descriptor %u to be freed at frame index %llu, current frame index: %llu", index, g_rhi->fence_value + g_rhi->frame_latency, g_rhi->frame_index);
 
 #if DREAM_SLOW
 		NULLIFY_HANDLE(&heap->debug_buffer_map [index]);

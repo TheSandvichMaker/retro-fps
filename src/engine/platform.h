@@ -267,6 +267,7 @@ typedef struct input_t
 typedef struct platform_init_io_t 
 {
 	void *app_state;
+	void *os_window_handle;
 } platform_init_io_t;
 
 typedef struct platform_tick_io_t
@@ -278,7 +279,8 @@ typedef struct platform_tick_io_t
 	double   frame_time;
 	input_t *input;
 
-	rhi_window_t rhi_window;
+	// rhi_window_t rhi_window;
+	void *os_window_handle;
 
 	// in-out
 	bool              cursor_locked;

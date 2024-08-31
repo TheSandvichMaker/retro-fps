@@ -39,7 +39,7 @@ float4 integrate_fog(float2 uv, uint2 co, float dither, int sample_index)
 	camera_ray(uv, o, d);
 
 	float max_march_distance = 1024.0;
-	int   steps              = 1;
+	int   steps              = 4;
 
 	float t_step = 1.0 / float(steps);
 	float depth  = 1.0 / draw.depth_buffer.Get().Load(co, sample_index);

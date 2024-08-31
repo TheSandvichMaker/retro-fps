@@ -110,7 +110,7 @@ string_t d3d12_get_debug_name(arena_t *arena, ID3D12Object *object)
 
 void d3d12_deferred_release(IUnknown *resource)
 {
-	d3d12_deferred_release_queue_t *queue = &g_rhi.deferred_release_queue;
+	d3d12_deferred_release_queue_t *queue = &g_rhi->deferred_release_queue;
 
 	// TODO: lock-free
 
@@ -118,9 +118,9 @@ void d3d12_deferred_release(IUnknown *resource)
 
 	d3d12_deferred_release_t *release = &queue->queue[queue->head++ % ARRAY_COUNT(queue->queue)];
 	release->resource    = resource;
-	release->frame_index = g_rhi.fence_value + g_rhi.frame_latency;
+	release->frame_index = g_rhi->fence_value + g_rhi->frame_latency;
 
-	log(RHI_D3D12, SuperSpam, "Deferred release of resource to frame index %llu, current frame index: %llu", release->frame_index, g_rhi.frame_index);
+	log(RHI_D3D12, SuperSpam, "Deferred release of resource to frame index %llu, current frame index: %llu", release->frame_index, g_rhi->frame_index);
 
 	mutex_unlock(&queue->mutex);
 }
@@ -129,7 +129,7 @@ void d3d12_flush_deferred_release_queue(uint64_t frame_index)
 {
 	PROFILE_FUNC_BEGIN;
 
-	d3d12_deferred_release_queue_t *queue = &g_rhi.deferred_release_queue;
+	d3d12_deferred_release_queue_t *queue = &g_rhi->deferred_release_queue;
 
 	mutex_lock(&queue->mutex);
 
@@ -163,6 +163,6 @@ void d3d12_flush_deferred_release_queue(uint64_t frame_index)
 
 uint32_t d3d12_resource_index(rhi_resource_flags_t flags)
 {
-	uint32_t resource_index = (flags & RhiResourceFlag_dynamic) ? g_rhi.frame_index % g_rhi.frame_latency : 0;
+	uint32_t resource_index = (flags & RhiResourceFlag_dynamic) ? g_rhi->frame_index % g_rhi->frame_latency : 0;
 	return resource_index;
 }

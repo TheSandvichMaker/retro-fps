@@ -610,23 +610,11 @@ static void generate_map_geometry(arena_t *arena, map_t *map)
             plane_from_points(plane1->a, plane1->b, plane1->c, &p1);
             plane_from_points(plane2->a, plane2->b, plane2->c, &p2);
 
-            mat_t m = {
-                .m = 4,
-                .n = 3,
-                .e = (float[4*3]){
-                    p0.n.x, p1.n.x, p2.n.x,
-                    p0.n.y, p1.n.y, p2.n.y,
-                    p0.n.z, p1.n.z, p2.n.z,
-                    p0.d,   p1.d,   p2.d,
-                },
-            };
-
-            float x[3];
-            if (solve_system_of_equations(&m, x))
+			v3_t position;
+			if (intersect_three_planes(p0, p1, p2, &position))
             {
                 uint16_t index = (uint16_t)sb_count(brush_positions);
 
-                v3_t position = { x[0], x[1], x[2] };
                 sb_push(brush_positions, position);
 
                 sb_push(plane_index_buffers[plane0_index], index);
@@ -1346,7 +1334,7 @@ map_t *load_map(arena_t *arena, string_t path)
 
 	if (map)
 	{
-		debug_print("Map '%s' loaded in %.02f seconds.\n", path, time);
+		debug_print("Map '%cs' loaded in %.04f seconds.\n", path, time);
 	}
 
     // write out map texture manifest

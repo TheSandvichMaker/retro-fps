@@ -57,7 +57,11 @@ typedef struct app_state_t
 	editor_t        *editor;
 	console_t       *console;
 	ui_t            *ui;
+	rhi_state_t     *rhi_state;
 	r1_state_t      *r1;
+	cvar_state_t     cvar_state;
+
+	rhi_window_t rhi_window;
 } app_state_t;
 
 v3_t player_view_origin(player_t *player)
@@ -393,10 +397,21 @@ global action_system_t g_game_action_system = {0};
 
 void app_init(platform_init_io_t *io)
 {
-	register_player_cvars();
-
 	app_state_t *app = m_bootstrap(app_state_t, arena);
 	io->app_state = app;
+
+	cvar_state_init(&app->cvar_state);
+	equip_cvar_state(&app->cvar_state);
+
+	app->rhi_state = rhi_init(&(rhi_init_params_t){
+		.frame_latency = 2,
+	});
+
+	rhi_equip_state(app->rhi_state);
+
+	app->rhi_window = rhi_init_window(io->os_window_handle);
+
+	register_player_cvars();
 
 	app->ui = m_alloc_struct(&app->arena, ui_t);
 
@@ -491,6 +506,8 @@ void app_init(platform_init_io_t *io)
 
 	unequip_action_system();
 	unequip_gamestate();
+	rhi_unequip_state();
+	unequip_cvar_state();
 }
 
 fn_local void tick_game(gamestate_t *game, float dt)
@@ -702,7 +719,9 @@ fn_local void app_tick(platform_tick_io_t *io)
 	gamestate_t     *game           = app->game;
 	action_system_t *action_system  = app->action_system;
 	ui_t            *the_ui         = app->ui;
-	//r1_state_t       *r1             = app->r1;
+	cvar_state_t    *cvar_state     = &app->cvar_state;
+
+	equip_cvar_state(cvar_state);
 
 	equip_action_system(action_system);
 	suppress_actions(!io->has_focus || the_ui->has_focus);
@@ -755,34 +774,40 @@ fn_local void app_tick(platform_tick_io_t *io)
 	unequip_gamestate();
 	unequip_action_system();
 
-	rhi_window_t window = io->rhi_window;
-	v2_t client_size = rhi_get_window_client_size(window);
-
     PROFILE_BEGIN(tick_ui);
 
-	// needed for r1_report_stats
-	r1_equip(app->r1);
+	rhi_equip_state(app->rhi_state);
 	{
-		tick_ui(io, app, io->input, client_size, (float)frame_time);
+		rhi_window_t window = app->rhi_window;
+		v2_t client_size = rhi_get_window_client_size(window);
+
+		// needed for r1_report_stats
+		r1_equip(app->r1);
+		{
+			tick_ui(io, app, io->input, client_size, (float)frame_time);
+		}
+		r1_unequip();
+
+		PROFILE_END(tick_ui);
+
+		rhi_begin_frame();
+
+		r1_equip(app->r1);
+		{
+			r1_begin_frame();
+			render_game(game, window, &the_ui->render_commands);
+		}
+		r1_unequip();
+
+		rhi_end_frame();
 	}
-	r1_unequip();
-
-    PROFILE_END(tick_ui);
-
-	rhi_begin_frame();
-
-	r1_equip(app->r1);
-	{
-		r1_begin_frame();
-		render_game(game, window, &the_ui->render_commands);
-	}
-	r1_unequip();
-
-	rhi_end_frame();
+	rhi_unequip_state();
 
 	process_asset_changes();
 
 	io->cursor_locked = !the_ui->has_focus;
+
+	unequip_cvar_state();
 }
 
 static void app_mix_audio(platform_audio_io_t *io)

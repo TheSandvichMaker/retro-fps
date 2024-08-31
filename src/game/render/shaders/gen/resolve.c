@@ -52,7 +52,7 @@ void shader_set_params__resolve_draw_parameters_t(rhi_command_list_t *list, uint
 	"	camera_ray(uv, o, d);\n" \
 	"\n" \
 	"	float max_march_distance = 1024.0;\n" \
-	"	int   steps              = 1;\n" \
+	"	int   steps              = 4;\n" \
 	"\n" \
 	"	float t_step = 1.0 / float(steps);\n" \
 	"	float depth  = 1.0 / draw.depth_buffer.Get().Load(co, sample_index);\n" \
