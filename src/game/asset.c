@@ -68,14 +68,119 @@ typedef struct asset_slot_t
 	};
 } asset_slot_t;
 
-asset_image_t missing_image;
-waveform_t    missing_waveform;
+static void preload_asset_info(asset_slot_t *asset)
+{
+	switch (asset->kind)
+	{
+		case AssetKind_image:
+		{
+			asset_image_t *image = &asset->image;
 
-static arena_t        asset_arena;
-static pool_t         asset_store = INIT_POOL(asset_slot_t);
-static table_t        asset_index;
-static asset_config_t asset_config;
-static file_watcher_t asset_watcher;
+			m_scoped_temp
+			{
+				stbi_arena = temp;
+
+				string_t path = string_from_storage(asset->path);
+
+				int x, y, comp;
+				if (stbi_info(string_null_terminate(temp, path).data, &x, &y, &comp))
+				{
+					image->w             = (uint32_t)x;
+					image->h             = (uint32_t)y;
+					// image->channel_count = (uint32_t)comp;
+				}
+			}
+		} break;
+
+        case AssetKind_waveform:
+        {
+            asset->waveform = load_waveform_info_from_disk(string_from_storage(asset->path));
+        } break;
+
+		case AssetKind_map:
+		{
+			// do nothing, for now
+		} break;
+        
+        INVALID_DEFAULT_CASE;
+	}
+
+	atomic_fetch_or(&asset->state, AssetState_info_resident);
+}
+
+asset_system_t *asset_system_make(void)
+{
+	asset_system_t *assets = m_bootstrap(asset_system_t, arena);
+	assets->asset_store = (pool_t)INIT_POOL(asset_slot_t);
+
+	assets->asset_config.mix_sample_rate = DREAM_MIX_SAMPLE_RATE;
+
+	m_scoped_temp
+	{
+		for (fs_entry_t *entry = fs_scan_directory(temp, S("gamedata"), FsScanDirectory_recursive);
+			 entry;
+			 entry = fs_entry_next(entry))
+		{
+			if (entry->kind == FsEntryKind_directory)
+				continue;
+
+			asset_kind_t kind = AssetKind_none;
+
+			string_t ext = string_extension(entry->name);
+			if (string_match_nocase(ext, S(".png")) ||
+			    string_match_nocase(ext, S(".jpg")) ||
+				string_match_nocase(ext, S(".tga")))
+			{
+				kind = AssetKind_image;
+			}
+			else if (string_match_nocase(ext, S(".wav")))
+			{
+				kind = AssetKind_waveform;
+			}
+			else if (string_match_nocase(ext, S(".map")))
+			{
+				kind = AssetKind_map;
+			}
+
+			if (kind)
+			{
+				asset_slot_t *asset = pool_add(&assets->asset_store);
+				asset->hash  = asset_hash_from_string(entry->path);
+				asset->kind  = kind;
+				asset->state = AssetState_on_disk;
+				string_into_storage(asset->path, entry->path);
+
+				table_insert_object(&assets->asset_index, asset->hash.value, asset);
+
+				preload_asset_info(asset); // stuff like image dimensions we'd like to know right away
+			}
+		}
+	}
+
+	file_watcher_init(&assets->asset_watcher);
+	file_watcher_add_directory(&assets->asset_watcher, S("gamedata"));
+
+	return assets;
+}
+
+void asset_system_equip(asset_system_t *assets)
+{
+	if (g_assets) { VERIFY(!assets); }
+	else          { VERIFY( assets); }
+
+	g_assets = assets;
+}
+
+void asset_system_unequip(void)
+{
+	asset_system_equip(NULL);
+}
+
+asset_system_t *asset_system_get(void)
+{
+	ASSERT(g_assets);
+	return g_assets;
+}
 
 typedef enum asset_job_kind_t
 {
@@ -197,130 +302,23 @@ static void asset_job_proc(job_context_t *context, void *userdata)
 	}
 }
 
-static void preload_asset_info(asset_slot_t *asset)
-{
-	switch (asset->kind)
-	{
-		case AssetKind_image:
-		{
-			asset_image_t *image = &asset->image;
-
-			m_scoped_temp
-			{
-				stbi_arena = temp;
-
-				string_t path = string_from_storage(asset->path);
-
-				int x, y, comp;
-				if (stbi_info(string_null_terminate(temp, path).data, &x, &y, &comp))
-				{
-					image->w             = (uint32_t)x;
-					image->h             = (uint32_t)y;
-					// image->channel_count = (uint32_t)comp;
-				}
-			}
-		} break;
-
-        case AssetKind_waveform:
-        {
-            asset->waveform = load_waveform_info_from_disk(string_from_storage(asset->path));
-        } break;
-
-		case AssetKind_map:
-		{
-			// do nothing, for now
-		} break;
-        
-        INVALID_DEFAULT_CASE;
-	}
-
-	atomic_fetch_or(&asset->state, AssetState_info_resident);
-}
-
-void initialize_asset_system(const asset_config_t *config)
-{
-    copy_struct(&asset_config, config);
-
-	m_scoped_temp
-	{
-		for (fs_entry_t *entry = fs_scan_directory(temp, S("gamedata"), FsScanDirectory_recursive);
-			 entry;
-			 entry = fs_entry_next(entry))
-		{
-			if (entry->kind == FsEntryKind_directory)
-				continue;
-
-			asset_kind_t kind = AssetKind_none;
-
-			string_t ext = string_extension(entry->name);
-			if (string_match_nocase(ext, S(".png")) ||
-			    string_match_nocase(ext, S(".jpg")) ||
-				string_match_nocase(ext, S(".tga")))
-			{
-				kind = AssetKind_image;
-			}
-			else if (string_match_nocase(ext, S(".wav")))
-			{
-				kind = AssetKind_waveform;
-			}
-			else if (string_match_nocase(ext, S(".map")))
-			{
-				kind = AssetKind_map;
-			}
-
-			if (kind)
-			{
-				asset_slot_t *asset = pool_add(&asset_store);
-				asset->hash  = asset_hash_from_string(entry->path);
-				asset->kind  = kind;
-				asset->state = AssetState_on_disk;
-				string_into_storage(asset->path, entry->path);
-
-				table_insert_object(&asset_index, asset->hash.value, asset);
-
-				preload_asset_info(asset); // stuff like image dimensions we'd like to know right away
-			}
-		}
-	}
-
-	file_watcher_init(&asset_watcher);
-	file_watcher_add_directory(&asset_watcher, S("gamedata"));
-}
-
-fn_local string_t stringify_flag(string_t total_string, uint32_t flags, uint32_t flag, string_t flag_string)
-{
-	string_t result = total_string;
-
-	if (flags & flag)
-	{
-		if (total_string.count)
-		{
-			result = Sf("%cs|%cs", total_string, flag_string);
-		}
-		else
-		{
-			result = flag_string;
-		}
-	}
-
-	return result;
-}
-
 void process_asset_changes(void)
 {
+	asset_system_t *assets = asset_system_get();
+
 	// TODO: Don't spam reloads right away
 
 	m_scoped_temp
-	for (file_event_t *event = file_watcher_get_events(&asset_watcher, temp); 
+	for (file_event_t *event = file_watcher_get_events(&assets->asset_watcher, temp); 
 		 event;
 		 event = event->next)
 	{
-		string_t flags_string = {0};
-		flags_string = stringify_flag(flags_string, event->flags, FileEvent_Added, S("Added"));
-		flags_string = stringify_flag(flags_string, event->flags, FileEvent_Removed, S("Removed"));
-		flags_string = stringify_flag(flags_string, event->flags, FileEvent_Modified, S("Modified"));
-		flags_string = stringify_flag(flags_string, event->flags, FileEvent_Renamed, S("Renamed"));
-
+		string_list_t list = {0};
+		if (event->flags & FileEvent_Added)    slist_appends(&list, temp, S("Added"));
+		if (event->flags & FileEvent_Removed)  slist_appends(&list, temp, S("Removed"));
+		if (event->flags & FileEvent_Modified) slist_appends(&list, temp, S("Modified"));
+		if (event->flags & FileEvent_Renamed)  slist_appends(&list, temp, S("Renamed"));
+		string_t flags_string = slist_flatten_with_separator(&list, temp, S("|"), 0);
 		string_t path = string_normalize_path(temp, event->path);
 
 		log(Asset, Info, "File event for '%cs': %cs", path, flags_string);
@@ -331,15 +329,19 @@ void process_asset_changes(void)
 
 bool asset_exists(asset_hash_t hash, asset_kind_t kind)
 {
-	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
+	asset_system_t *assets = asset_system_get();
+
+	asset_slot_t *asset = table_find_object(&assets->asset_index, hash.value);
 	return asset && asset->kind == kind;
 }
 
 string_t get_asset_path_on_disk(asset_hash_t hash)
 {
+	asset_system_t *assets = asset_system_get();
+
     string_t result = {0};
 
-	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
+	asset_slot_t *asset = table_find_object(&assets->asset_index, hash.value);
 
     int64_t state = asset->state;
     if (state >= AssetState_on_disk) // not sure this greater than thing is a great(er than) idea
@@ -352,9 +354,9 @@ string_t get_asset_path_on_disk(asset_hash_t hash)
 
 static asset_slot_t *get_or_load_asset_async(asset_hash_t hash, asset_kind_t kind)
 {
-	ASSERT(g_rhi);
+	asset_system_t *assets = asset_system_get();
 
-	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
+	asset_slot_t *asset = table_find_object(&assets->asset_index, hash.value);
 	if (asset && asset->kind == kind)
 	{
 		uint32_t state     = asset->state;
@@ -366,7 +368,7 @@ static asset_slot_t *get_or_load_asset_async(asset_hash_t hash, asset_kind_t kin
 			atomic_compare_exchange_strong(&asset->state, &state, new_state))
 		{
 			asset_job_t job = {
-				.rhi_state = g_rhi,
+				.rhi_state = NON_NULL(g_rhi),
 				.kind  = ASSET_JOB_LOAD_FROM_DISK,
 				.asset = asset,
 			};
@@ -378,9 +380,9 @@ static asset_slot_t *get_or_load_asset_async(asset_hash_t hash, asset_kind_t kin
 
 static asset_slot_t *get_or_load_asset_blocking(asset_hash_t hash, asset_kind_t kind)
 {
-	ASSERT(g_rhi);
+	asset_system_t *assets = asset_system_get();
 
-	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
+	asset_slot_t *asset = table_find_object(&assets->asset_index, hash.value);
 	if (asset && asset->kind == kind)
 	{
 		uint32_t state     = asset->state;
@@ -406,9 +408,9 @@ static asset_slot_t *get_or_load_asset_blocking(asset_hash_t hash, asset_kind_t 
 
 void reload_asset(asset_hash_t hash)
 {
-	ASSERT(g_rhi);
+	asset_system_t *assets = asset_system_get();
 
-	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
+	asset_slot_t *asset = table_find_object(&assets->asset_index, hash.value);
 	if (asset)
 	{
 		uint32_t state     = asset->state;
@@ -420,7 +422,7 @@ void reload_asset(asset_hash_t hash)
 			atomic_compare_exchange_strong(&asset->state, &state, new_state))
 		{
 			asset_job_t job = {
-				.rhi_state = g_rhi,
+				.rhi_state = NON_NULL(g_rhi),
 				.kind  = ASSET_JOB_LOAD_FROM_DISK,
 				.asset = asset,
 			};
@@ -444,9 +446,11 @@ asset_image_t *get_image(asset_hash_t hash)
 
 image_info_t get_image_info(asset_hash_t hash)
 {
+	asset_system_t *assets = asset_system_get();
+
 	image_info_t result = {0};
 
-	asset_slot_t *asset = table_find_object(&asset_index, hash.value);
+	asset_slot_t *asset = table_find_object(&assets->asset_index, hash.value);
 	if (asset && asset->kind == AssetKind_image)
 	{
 		result.w      = asset->image.w;

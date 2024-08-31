@@ -60,6 +60,7 @@ typedef struct app_state_t
 	rhi_state_t     *rhi_state;
 	r1_state_t      *r1;
 	cvar_state_t     cvar_state;
+	asset_system_t  *assets;
 
 	rhi_window_t rhi_window;
 } app_state_t;
@@ -448,11 +449,9 @@ void app_init(platform_init_io_t *io)
 
 	init_game_job_queues();
 
-	initialize_asset_system(&(asset_config_t){
-        .mix_sample_rate = DREAM_MIX_SAMPLE_RATE,
-    });
+	app->assets = asset_system_make();
 
-	// pack_assets(S("../sources"));
+	asset_system_equip(app->assets);
 
 	gamestate_t *game = app->game = m_bootstrap(gamestate_t, arena);
 	equip_gamestate(game);
@@ -506,6 +505,7 @@ void app_init(platform_init_io_t *io)
 
 	unequip_action_system();
 	unequip_gamestate();
+	asset_system_unequip();
 	rhi_unequip_state();
 	unequip_cvar_state();
 }
@@ -722,6 +722,7 @@ fn_local void app_tick(platform_tick_io_t *io)
 	cvar_state_t    *cvar_state     = &app->cvar_state;
 
 	equip_cvar_state(cvar_state);
+	asset_system_equip(app->assets);
 
 	equip_action_system(action_system);
 	suppress_actions(!io->has_focus || the_ui->has_focus);
@@ -807,6 +808,7 @@ fn_local void app_tick(platform_tick_io_t *io)
 
 	io->cursor_locked = !the_ui->has_focus;
 
+	asset_system_unequip();
 	unequip_cvar_state();
 }
 

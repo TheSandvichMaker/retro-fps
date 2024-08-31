@@ -56,4 +56,6 @@ typedef struct debug_break_state_t
 	} while (false)
 
 #define VERIFY(expr) if (!(expr)) { DEBUG_BREAK(); }
-#define VERIFY_ONCE(expr) if (!(expr)) { DEBUG_BREAK_ONCE(NULL); }
+#define VERIFY_ONCE(expr) if (!(expr)) { DEBUG_BREAK_ONCE(); }
+
+#define NON_NULL(ptr) (ASSERT_MSG(ptr, STRINGIFY(ptr) " can't be null!"), ptr)

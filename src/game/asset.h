@@ -119,7 +119,26 @@ typedef struct asset_config_t
     uint32_t mix_sample_rate;
 } asset_config_t;
 
-fn void initialize_asset_system(const asset_config_t *config);
+typedef struct asset_system_t
+{
+	asset_image_t  missing_image;
+	waveform_t     missing_waveform;
+
+	arena_t        arena;
+	pool_t         asset_store;
+	table_t        asset_index;
+	asset_config_t asset_config;
+	file_watcher_t asset_watcher;
+} asset_system_t;
+
+thread_local asset_system_t *g_assets;
+
+fn void asset_system_equip  (asset_system_t *assets);
+fn void asset_system_unequip(void);
+fn asset_system_t *asset_system_get(void);
+
+fn asset_system_t *asset_system_make(void);
+
 fn void process_asset_changes(void);
 
 // fn from here on out because d3d11.c is using some of these.
